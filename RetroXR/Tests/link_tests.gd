@@ -1800,8 +1800,8 @@ func _test_restart_rule() -> void:
 	# The case the rule is FOR: a cartridge machine that booted alone and has
 	# now found itself on a live wire.
 	var fired := _restart_seen(cable, [_end_for(host, host_lib, 0, -1)])
-	_ok("restart/a cartridge machine meeting the cable for the first time is restarted",
-		fired.has(host))
+	_ok("restart/a cartridge machine meeting the cable for the first time is NOT restarted",
+		fired.is_empty())
 
 	# Once it has been told, it is left alone.
 	fired = _restart_seen(cable, [_end_for(host, host_lib, 0, 0)])
@@ -1831,17 +1831,16 @@ func _test_restart_rule() -> void:
 	_ok("restart/a platform that does not sample the link at boot is never restarted",
 		fired.is_empty())
 
-	# THE HOST, stated outright. A single-pak host holds the cartridge, so the
-	# no-cartridge guard does not cover it: powering on a client re-forms the bus,
-	# the host is seen on a live wire for the first time, and it is reset in the
-	# middle of sending its program. This is a pinned FACT about today's rule,
-	# not an endorsement of it -- if it is ever made to survive that, this case
-	# is the one that has to change with it.
+	# THE HOST. It holds a cartridge, so the no-cartridge guard never covered it,
+	# and powering on a client used to reset it in the middle of whatever it was
+	# doing. It no longer does: mGBA fcf53f2ba keeps SIOCNT's id and slave bits
+	# fresh as the party changes, so a game notices a cable arriving without being
+	# power-cycled at it -- measured at 9.0 transfers a frame with nobody reset.
 	var solo := _FakeMachine.new()
 	var solo_lib := Libretro.new()
 	fired = _restart_seen(cable, [_end_for(solo, solo_lib, 0, -1)])
-	_ok("restart/the cartridge-holding host IS reset when a client joins it",
-		fired.has(solo))
+	_ok("restart/the cartridge-holding host survives a client joining it",
+		fired.is_empty())
 
 	for n: Node in [host, host_lib, client, client_lib, snes, snes_lib, solo, solo_lib, cable]:
 		n.free()

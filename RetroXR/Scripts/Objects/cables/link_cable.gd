@@ -385,10 +385,38 @@ func _restart(members: Array[Dictionary]) -> void:
 		var had: int = int(end.get("live_seat", NO_SEAT))
 		if had == seat:
 			continue
+		# Only a machine whose player number MOVED, never one meeting the cable
+		# for the first time.
+		#
+		# Both used to reset, on the grounds that a GBA reads the cable once at
+		# boot and caches the answer. That was true, and it was a driver fault
+		# rather than a fact about the hardware: SIOCNT's id and slave bits are
+		# decided by the cable, and the netlink driver only refreshed them when
+		# the guest happened to WRITE SIOCNT, which a game sitting on a menu does
+		# not do. A machine that booted with an empty socket therefore stayed
+		# marked a slave for ever, and a slave never originates a transfer.
+		# Fixed in mGBA fcf53f2ba, and measured after it: a lead seated around a
+		# running pair now carries 9.0 transfers a frame with NOBODY reset, in
+		# both orders a room can produce. So this branch is a power cycle that
+		# buys nothing, and it cost whatever the player was doing.
+		#
+		# The renumber below is a different matter and was measured separately:
+		# move a playing pair's seats and the traffic stops dead and never comes
+		# back -- 5110 messages before, 5110 after, three watch steps later still
+		# 5110, with both cores at 59.8 fps and the bus still reporting two peers.
+		# The control rules out the bus: re-declaring the SAME group from the SAME
+		# anchor, so that no seat moves, leaves the session running at 9.0. It is
+		# the player number changing under a game that it cannot survive, which is
+		# unsurprising -- no cable can do that to real hardware. Only a reset
+		# recovers it, so this stays. Both cases are pinned in link_tests, and
+		# mario_link_probe carries the two orders that measured them.
+		if had == NO_SEAT:
+			lib.set_meta(LIVE_SEAT, seat)
+			continue
 		lib.set_meta(LIVE_SEAT, seat)
 		lib.RequestReset()
 		var machine: Node = end["machine"]
-		var why := "so it can see the cable" if had == NO_SEAT 			else "so it can be player %d rather than player %d" % [seat + 1, had + 1]
+		var why := "so it can be player %d rather than player %d" % [seat + 1, had + 1]
 		print("[LinkCable] restarted %s %s" % [
 			machine.name if machine != null and is_instance_valid(machine) else "a machine", why])
 		machine_restarted.emit(machine)
