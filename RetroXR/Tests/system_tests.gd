@@ -95,6 +95,7 @@ func _ready() -> void:
 	await _test_playstation_hardware()
 	await _test_power_led()
 	await _test_save_state_gates()
+	await _test_sram_paths()
 	_test_libretro_port_routing()
 	_test_port_device_cache()
 	_test_cabinet_lookup()
@@ -1470,3 +1471,101 @@ func _test_save_state_gates() -> void:
 
 	sys.queue_free()
 	await get_tree().process_frame
+
+
+# ── Where a save is written ───────────────────────────────────────────────────
+#
+# _compose_sram_path decides which file on disk backs a running machine, and
+# every other path function is built on it. Getting it wrong does not crash --
+# it writes the save somewhere else, or reads a different card's, and the player
+# finds out later. Nothing covered it.
+#
+# Pure: no disk is touched here. _card_path_for_run and _mount_core_cards are
+# deliberately NOT exercised -- the first calls SramPaths.ensure_card, which
+# creates a card image, and the second reaches CoreOptionsStore, which writes
+# the player's real core_options. Both want a scratch fixture of their own.
+
+class _StubCard extends Node3D:
+	var card_id := ""
+	var family := ""
+	var minted := false
+
+
+func _test_sram_paths() -> void:
+	var sys_scene := load("res://Scenes/Objects/system.tscn") as PackedScene
+	if sys_scene == null:
+		return
+	var psx: Node3D = sys_scene.instantiate()
+	psx.systemid = "playstation"
+	add_child(psx)
+	for i in range(20):
+		await get_tree().process_frame
+
+	# Neither half of the pair is optional: a core with no game, or a game with
+	# no core, has nowhere to put a save and must say so rather than guess.
+	psx.rom_path = ""
+	_eq("sram/no game means no save file",
+		psx._compose_sram_path("pcsx_rearmed"), "")
+	psx.rom_path = "/nonexistent/__sram_selftest.bin"
+	_eq("sram/no core means no save file either",
+		psx._compose_sram_path(""), "")
+
+	# A machine that takes cards saves to the CARD, keyed on the card's own id
+	# and family -- not on the game. That is what lets one card carry saves for
+	# several games and follow the player between machines.
+	psx._snapped_memcards[0] = null
+	_eq("sram/a card machine with an empty slot has nowhere to write",
+		psx._compose_sram_path("pcsx_rearmed"), "")
+
+	var card := _StubCard.new()
+	card.card_id = "__sram_selftest_card"
+	card.family = "playstation"
+	add_child(card)
+	psx._snapped_memcards[0] = card
+	_eq("sram/a seated card is where the save goes",
+		psx._compose_sram_path("pcsx_rearmed"),
+		SramPaths.card_save_path("playstation", "__sram_selftest_card"))
+	# And it does not depend on the game: the same card under a different ROM
+	# is the same file, which is the whole point of a memory card.
+	psx.rom_path = "/nonexistent/__a_different_game.bin"
+	_eq("sram/the same card backs a different game",
+		psx._compose_sram_path("pcsx_rearmed"),
+		SramPaths.card_save_path("playstation", "__sram_selftest_card"))
+
+	psx._snapped_memcards[0] = null
+	card.queue_free()
+	psx.queue_free()
+
+	# A cartridge machine is the other rule: the save belongs to the CARTRIDGE,
+	# keyed on the core and the ROM as well, so two copies of one game on two
+	# carts keep separate saves.
+	var nes: Node3D = sys_scene.instantiate()
+	nes.systemid = "nes"
+	add_child(nes)
+	for i in range(20):
+		await get_tree().process_frame
+	nes.rom_path = "/nonexistent/__sram_selftest.nes"
+	_eq("sram/a cartridge machine with no cartridge has nowhere to write",
+		nes._compose_sram_path("fceumm"), "")
+
+	var cart := _StubCart.new()
+	cart.save_id = "__sram_selftest_cart"
+	add_child(cart)
+	nes._snapped_cartridge = cart
+	_eq("sram/a seated cartridge saves against core and rom",
+		nes._compose_sram_path("fceumm"),
+		SramPaths.cart_save_path("fceumm", "/nonexistent/__sram_selftest.nes",
+			"__sram_selftest_cart"))
+	# Unlike a card, this one DOES move with the game.
+	_ok("sram/and a different rom is a different file",
+		nes._compose_sram_path("fceumm")
+			!= SramPaths.cart_save_path("fceumm", "/other.nes", "__sram_selftest_cart"))
+
+	nes._snapped_cartridge = null
+	cart.queue_free()
+	nes.queue_free()
+	await get_tree().process_frame
+
+
+class _StubCart extends Node3D:
+	var save_id := ""
