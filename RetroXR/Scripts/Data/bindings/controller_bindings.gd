@@ -166,7 +166,22 @@ const WIIMOTE_SOURCE_LABELS: Dictionary = {
 ## hardware — the core takes a shake as one, so it is one here.
 const WIIMOTE_CONTROLS: Array[String] = [
     "a", "b", "one", "two", "plus", "minus", "home", "shake",
+    "up", "down", "left", "right",
 ]
+
+
+## RetroPad target -> the Wii Remote control it drives, for the Controls page.
+##
+## The diagram is anchored on RetroPad targets because one table serves both the
+## XR and the physical-pad sections, but the REMOTE is bound by control name, so
+## the page needs to cross between them. Derived from Wiimote.DESKTOP_BUTTON_MAP
+## would be circular here (this file is below that one), so it is stated, and
+## binding_tests checks the two agree.
+const WIIMOTE_CONTROL_OF_TARGET: Dictionary = {
+    "b": "b", "a": "a", "x": "one", "y": "two",
+    "start": "plus", "select": "minus", "r3": "home", "r2": "shake",
+    "up": "up", "down": "down", "left": "left", "right": "right",
+}
 
 ## Default Nunchuk map, read by the OFF hand. Only C and Z are bindable; the
 ## stick is always the stick and the shake is a real gesture, not an input.

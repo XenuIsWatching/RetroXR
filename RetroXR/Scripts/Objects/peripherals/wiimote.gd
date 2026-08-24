@@ -1175,6 +1175,19 @@ func _button_mask(pressed: Dictionary) -> int:
 		"plus":  ControllerBindings.JOYPAD_R if nc else ControllerBindings.JOYPAD_START,
 		"home":  ControllerBindings.JOYPAD_R3,
 		"shake": ControllerBindings.JOYPAD_R2,
+		# The cross, so a hand input bound to a direction really works it. The
+		# Controls page has always promised this -- "the D-pad is driven by the
+		# thumbstick unless you bind a button to it" -- and for a Wii Remote it
+		# was not true: the remote resolves its own layer, and this table, which
+		# is where that layer turns into libretro bits, had no directions in it.
+		# A player who bound grip to Up got nothing and no error.
+		#
+		# These are ORed with the stick below rather than replacing it, so binding
+		# one direction does not cost you the other three.
+		"up":    ControllerBindings.JOYPAD_UP,
+		"down":  ControllerBindings.JOYPAD_DOWN,
+		"left":  ControllerBindings.JOYPAD_LEFT,
+		"right": ControllerBindings.JOYPAD_RIGHT,
 	}
 	var mask := 0
 	for key: String in bits:

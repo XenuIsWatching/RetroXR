@@ -57,6 +57,8 @@ func _ready() -> void:
 	_test_wii_layers_survive_a_save()
 	_test_console_pad_art()
 	_test_the_editor_writes_the_nunchuk_layer()
+	_test_the_wii_diagram_writes_the_wiimote_layer()
+	_test_wii_target_table_matches_the_remote()
 	_test_pad_art_variants()
 	_test_wii_pad_art()
 	_test_desktop_layers()
@@ -433,6 +435,59 @@ func _test_the_editor_writes_the_nunchuk_layer() -> void:
 		other._controls_opts.has("stick:stick_left")
 			and other._controls_opts.has("stick:stick_right"))
 	other.queue_free()
+
+
+## The remote's picture must edit the map the remote READS.
+##
+## This is the defect the stick rows were a corner of: wiimote.gd resolves
+## get_for_system(...)["wiimote"] and nothing else, so a diagram writing the
+## joypad map was eleven live-looking dropdowns that changed nothing.
+func _test_the_wii_diagram_writes_the_wiimote_layer() -> void:
+	_clear()
+	var ed := ControlsBindingEditor.new()
+	add_child(ed)
+	ed._systemid = "wii"
+	ed._build_xr_controls(ed)
+
+	# The picture is anchored on RetroPad targets; the remote is bound by control
+	# name. "x" is the 1 button, and grip carries it by default.
+	_eq("wii-xr/the picture reads the remote's own map",
+		ed._wiimote_source_for("x"), "grip")
+	_eq("wii-xr/and B is the trigger", ed._wiimote_source_for("b"), "trigger")
+
+	# Moving a control takes the source off whatever it was on, and lands in the
+	# layer the remote reads.
+	ed._on_console_xr_changed("x", "by_button")
+	var stored: Dictionary = ControllerBindings.get_for_system("wii")["wiimote"]
+	_eq("wii-xr/a change lands in the wiimote layer", str(stored.get("by_button")), "one")
+	_eq("wii-xr/and the source it displaced is freed", str(stored.get("grip")), "none")
+	_eq("wii-xr/the picture agrees afterwards", ed._wiimote_source_for("x"), "by_button")
+
+	# It must NOT have gone into the joypad map, which is the map that was being
+	# written before and the one the remote never reads.
+	var joypad: Dictionary = ControllerBindings.get_for_system("wii")["buttons"]
+	_eq("wii-xr/and not into the joypad map",
+		int(joypad.get("right_grip", -99)),
+		int((ControllerBindings.DEFAULT_BUTTON_MAP as Dictionary).get("right_grip", -99)))
+
+	# Every control the picture draws can be bound, including the cross. The page
+	# has always said the D-pad is bindable; for this remote it was not.
+	var unbindable: Array = []
+	for control: String in ConsolePadArt.controls("wii"):
+		if String(ControllerBindings.WIIMOTE_CONTROL_OF_TARGET.get(control, "")).is_empty():
+			unbindable.append(control)
+	_eq("wii-xr/every drawn control maps to a remote control", unbindable, [])
+	ed.queue_free()
+
+
+## The crossing table and the remote's own desktop map must agree, since they are
+## two statements of the same fact in files that cannot import each other.
+func _test_wii_target_table_matches_the_remote() -> void:
+	for retro_name: String in Wiimote.DESKTOP_BUTTON_MAP:
+		var target := retro_name.trim_prefix("RETRO_JOYPAD_").to_lower()
+		_eq("wii-xr/%s agrees with DESKTOP_BUTTON_MAP" % target,
+			str(ControllerBindings.WIIMOTE_CONTROL_OF_TARGET.get(target, "")),
+			str(Wiimote.DESKTOP_BUTTON_MAP[retro_name]))
 
 
 func _test_pad_art_variants() -> void:
