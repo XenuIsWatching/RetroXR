@@ -273,20 +273,36 @@ func _build_xr_controls(vbox: VBoxContainer) -> void:
 
 	# ── Analog Sticks ─────────────────────────────────────────────────────────
 	vbox.add_child(HSeparator.new())
-	vbox.add_child(MenuStyle.label("Analog Sticks", 18, MenuStyle.COLOR_LICENSE))
 
-	for stick: String in ["stick_left", "stick_right"]:
-		var s_label := "Left Stick" if stick == "stick_left" else "Right Stick"
-		var def_target := "left+dpad" if stick == "stick_left" else "right"
-		var current_target: String = _edit_stick_map.get(stick, def_target)
-		var captured_stick := stick
-		vbox.add_child(_make_vr_dropdown_row(
-			"stick:" + stick, s_label, _STICK_OPTIONS, current_target,
-			func(v: Variant) -> void:
-				_edit_stick_map[captured_stick] = v as String
-				_apply_xr_bindings(),
-			3
-		))
+	# A Wii Remote has no analog stick, so it is offered none. The two rows below
+	# route a thumbstick to the RetroPad's left or right analog, and a Wii Remote
+	# has a D-PAD and nothing else — its Nunchuk's one stick is the Nunchuk's, and
+	# is not bindable either.
+	#
+	# They were not merely meaningless there, they were INERT: the remote resolves
+	# its own layer and reads _wiimote_map["stick"], never the joypad stick map,
+	# so moving either dropdown changed nothing at all. Two controls that look
+	# live and do nothing are worse than two that are missing.
+	if _systemid == "wii":
+		vbox.add_child(MenuStyle.label("Control Stick", 18, MenuStyle.COLOR_LICENSE))
+		vbox.add_child(_hint("The Wii Remote has a D-pad and no analog stick, so "
+			+ "the thumbstick of the hand holding it works the D-pad. A Nunchuk "
+			+ "brings its own stick, on the hand holding that."))
+	else:
+		vbox.add_child(MenuStyle.label("Analog Sticks", 18, MenuStyle.COLOR_LICENSE))
+
+		for stick: String in ["stick_left", "stick_right"]:
+			var s_label := "Left Stick" if stick == "stick_left" else "Right Stick"
+			var def_target := "left+dpad" if stick == "stick_left" else "right"
+			var current_target: String = _edit_stick_map.get(stick, def_target)
+			var captured_stick := stick
+			vbox.add_child(_make_vr_dropdown_row(
+				"stick:" + stick, s_label, _STICK_OPTIONS, current_target,
+				func(v: Variant) -> void:
+					_edit_stick_map[captured_stick] = v as String
+					_apply_xr_bindings(),
+				3
+			))
 
 	# ── The Nunchuk ───────────────────────────────────────────────────────────
 	# Only for the platform that has one. Rows and not a diagram: there are three

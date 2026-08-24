@@ -412,7 +412,27 @@ func _test_the_editor_writes_the_nunchuk_layer() -> void:
 	_ok("editor/there is a row for C", ed._controls_opts.has("nc:c"))
 	_ok("editor/and one for Z", ed._controls_opts.has("nc:z"))
 	_ok("editor/and none for the stick", not ed._controls_opts.has("nc:stick"))
+
+	# A Wii Remote has a D-pad and no analog stick, and the two joypad stick rows
+	# are not merely meaningless on that page — the remote reads its own layer and
+	# never the joypad stick map, so they were live-looking controls that did
+	# nothing at all.
+	_ok("editor/the wii page offers no left stick row",
+		not ed._controls_opts.has("stick:stick_left"))
+	_ok("editor/nor a right stick row",
+		not ed._controls_opts.has("stick:stick_right"))
 	ed.queue_free()
+
+	# A platform whose pad really has sticks still gets them, so the case above is
+	# a gate rather than a deletion.
+	var other := ControlsBindingEditor.new()
+	add_child(other)
+	other._systemid = SYS_A
+	other._build_xr_controls(other)
+	_ok("editor/a platform with sticks still gets its rows",
+		other._controls_opts.has("stick:stick_left")
+			and other._controls_opts.has("stick:stick_right"))
+	other.queue_free()
 
 
 func _test_pad_art_variants() -> void:
