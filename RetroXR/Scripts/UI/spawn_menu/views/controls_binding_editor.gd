@@ -58,11 +58,17 @@ var _pad_status_label: Label = null
 # The console's own pad, when this platform has art for one. Null on the global
 # page and on any platform ConsolePadArt does not cover.
 var _console_xr_diagram: ConsolePadDiagram = null
+## Every XR console diagram on the page — one per way the hardware is held. The
+## Wii draws two; every other console draws one, which is _console_xr_diagram.
+## They share a binding map, so a change on any of them refreshes all of them.
+var _console_xr_diagrams: Array[ConsolePadDiagram] = []
 var _console_pad_diagram: ConsolePadDiagram = null
 
 ## The desktop key map's diagram, and action -> control so a completed capture
 ## can find the row that asked for it.
 var _desktop_diagram: ConsolePadDiagram = null
+## Every desktop diagram on the page, for the same reason as _console_xr_diagrams.
+var _desktop_diagrams: Array[ConsolePadDiagram] = []
 var _desktop_control_of: Dictionary = {}
 
 
@@ -194,27 +200,43 @@ func _build_xr_controls(vbox: VBoxContainer) -> void:
 		# be read: for each button the hardware HAS, what drives it. The generic
 		# picture below offers all sixteen RetroPad bits, which on a console with
 		# four buttons is mostly choices that do nothing.
-		var row := ConsolePadArt.row(_systemid)
-		vbox.add_child(MenuStyle.label(String(row["label"]), 18, MenuStyle.COLOR_LICENSE))
 		# The d-pad rows read None on a fresh map and that is not a fault: the
 		# thumbstick drives the d-pad through the stick routing below, not through
 		# any button source. Say so, rather than leaving four empty-looking rows.
 		vbox.add_child(_hint("Pick which VR controller input works each button. "
 			+ "The D-pad is driven by the thumbstick unless you bind a button to it."))
 
-		_console_xr_diagram = ConsolePadDiagram.new()
-		_console_xr_diagram.custom_minimum_size = Vector2(0, _CONSOLE_DIAGRAM_H)
-		_console_xr_diagram.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		vbox.add_child(_console_xr_diagram)
-		_console_xr_diagram.setup(_systemid, _xr_source_options(), _xr_current_by_control())
-		_console_xr_diagram.binding_changed.connect(_on_console_xr_changed)
-		# Some pads carry a note about how the hardware is actually handled — the
-		# Wii Remote's buttons being pokeable with the free hand, for one. It lives
-		# on the ConsolePadArt row next to the art it describes, so adding one for
-		# another console needs no change here.
-		var pad_note := String(row.get("note", ""))
-		if not pad_note.is_empty():
-			vbox.add_child(_hint(pad_note))
+		# One diagram per way the hardware is HELD, not per platform. A Wii Remote
+		# upright and the same remote turned sideways drive the same RetroPad bits
+		# and print different names on them, so one picture cannot be right for
+		# both. Every other console answers with a single key and is untouched.
+		#
+		# They share one binding map on purpose: the console does the relabelling,
+		# so a change made on either picture is the same change. The dropdowns are
+		# registered per variant and reset drives them all.
+		for art_key: String in ConsolePadArt.variants_for(_systemid):
+			var row := ConsolePadArt.row(art_key)
+			vbox.add_child(MenuStyle.label(String(row["label"]), 18, MenuStyle.COLOR_LICENSE))
+
+			var diagram := ConsolePadDiagram.new()
+			diagram.custom_minimum_size = Vector2(0, _CONSOLE_DIAGRAM_H)
+			diagram.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			vbox.add_child(diagram)
+			diagram.setup(art_key, _xr_source_options(), _xr_current_by_control(art_key))
+			diagram.binding_changed.connect(_on_console_xr_changed)
+			_console_xr_diagrams.append(diagram)
+			# The first one is the platform's own, and is what the rest of this
+			# class means when it says "the" console diagram.
+			if _console_xr_diagram == null:
+				_console_xr_diagram = diagram
+
+			# Some pads carry a note about how the hardware is actually handled —
+			# the Wii Remote's buttons being pokeable with the free hand, for one.
+			# It lives on the ConsolePadArt row next to the art it describes, so
+			# adding one for another console needs no change here.
+			var pad_note := String(row.get("note", ""))
+			if not pad_note.is_empty():
+				vbox.add_child(_hint(pad_note))
 	else:
 		vbox.add_child(MenuStyle.label("XR Joypad Buttons", 18, MenuStyle.COLOR_LICENSE))
 
@@ -313,6 +335,8 @@ func _reset_label() -> String:
 func _build_desktop_controls(vbox: VBoxContainer) -> void:
 	_rebind_buttons.clear()
 	_desktop_control_of.clear()
+	_desktop_diagrams.clear()
+	_desktop_diagram = null
 	DesktopBindings.apply_for_system(_systemid)
 
 	# A platform with a pad of its own gets it; anything else binds the generic
@@ -323,16 +347,35 @@ func _build_desktop_controls(vbox: VBoxContainer) -> void:
 	vbox.add_child(_hint("Press a button below, then press the key or mouse button "
 		+ "you want on it. Escape cancels."))
 
-	_desktop_diagram = ConsolePadDiagram.new()
-	_desktop_diagram.custom_minimum_size = Vector2(0, _DESKTOP_DIAGRAM_H)
-	_desktop_diagram.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(_desktop_diagram)
-	_desktop_diagram.setup(pad_id, [], _desktop_current_by_control(pad_id),
-		ConsolePadDiagram.RowKind.BIND)
-	_desktop_diagram.bind_requested.connect(_on_desktop_bind_requested)
-
-	for control: String in _desktop_diagram.controls():
-		_desktop_control_of[_desktop_action_for(control)] = control
+	# One picture per way the hardware is HELD, same as the XR section. The keys
+	# are bound once and every picture shows them, because the console is what
+	# relabels the bits — see ConsolePadArt.variants_for.
+	var pad_keys: Array = ConsolePadArt.variants_for(_systemid)
+	if pad_keys.is_empty():
+		pad_keys = [pad_id]
+	for i: int in pad_keys.size():
+		var key: String = pad_keys[i]
+		var diagram := ConsolePadDiagram.new()
+		diagram.custom_minimum_size = Vector2(0, _DESKTOP_DIAGRAM_H)
+		diagram.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if i > 0:
+			vbox.add_child(MenuStyle.label(String(ConsolePadArt.row(key)["label"]),
+				18, MenuStyle.COLOR_LICENSE))
+		vbox.add_child(diagram)
+		diagram.setup(key, [], _desktop_current_by_control(key),
+			ConsolePadDiagram.RowKind.BIND)
+		diagram.bind_requested.connect(_on_desktop_bind_requested)
+		_desktop_diagrams.append(diagram)
+		# The FIRST picture owns the action lookup. Every variant shows the same
+		# actions under different names, so letting a later one overwrite the map
+		# would point a completed capture at the row that happens to be last.
+		if _desktop_diagram == null:
+			_desktop_diagram = diagram
+			for control: String in diagram.controls():
+				_desktop_control_of[_desktop_action_for(control)] = control
+		var pad_note := String(ConsolePadArt.row(key).get("note", ""))
+		if i > 0 and not pad_note.is_empty():
+			vbox.add_child(_hint(pad_note))
 
 	# Anything the generic pad has no anchor for — the analog stick directions and
 	# the light-gun trigger — still has to be bindable, so it stays a list.
@@ -437,8 +480,14 @@ func on_rebind_complete(action: String, _event: InputEvent) -> void:
 	# The capture wrote straight into the InputMap, so the binding is already
 	# live; what is left is telling the row and putting it on disk in THIS
 	# editor's scope rather than always the global one.
-	if is_instance_valid(_desktop_diagram) and _desktop_control_of.has(action):
-		_desktop_diagram.set_bind_label(String(_desktop_control_of[action]), label)
+	# Every picture, not just the first. The variants show the same key under
+	# different names, so relabelling one leaves the others reading the key that
+	# was there before the capture.
+	if _desktop_control_of.has(action):
+		var control := String(_desktop_control_of[action])
+		for d: ConsolePadDiagram in _desktop_diagrams:
+			if is_instance_valid(d) and d.controls().has(control):
+				d.set_bind_label(control, label)
 	var btn: Button = _rebind_buttons.get(action) as Button
 	if is_instance_valid(btn):
 		btn.text = label
@@ -457,9 +506,9 @@ func _on_desktop_controls_reset() -> void:
 		DesktopBindings.clear_system_override(_systemid)
 		DesktopBindings.apply_for_system(_systemid)
 
-	if is_instance_valid(_desktop_diagram):
-		var pad_id := _systemid if ConsolePadArt.has(_systemid) else ConsolePadArt.RETROPAD
-		_desktop_diagram.refresh(_desktop_current_by_control(pad_id))
+	for d: ConsolePadDiagram in _desktop_diagrams:
+		if is_instance_valid(d):
+			d.refresh(_desktop_current_by_control(d.systemid()))
 	for action: String in _rebind_buttons:
 		var btn: Button = _rebind_buttons[action] as Button
 		if is_instance_valid(btn):
@@ -507,8 +556,7 @@ func _on_controls_reset() -> void:
 	for src: String in _LIGHTGUN_SOURCE_ORDER:
 		_reset_vr_dropdown("gun:" + src, _edit_lightgun_map.get(src, -1))
 	_reset_vr_dropdown("gun:stick", str(_edit_lightgun_map.get("stick", "dpad")))
-	if is_instance_valid(_console_xr_diagram):
-		_console_xr_diagram.refresh(_xr_current_by_control())
+	_refresh_console_xr_diagrams()
 	_apply_xr_bindings()
 
 
@@ -571,9 +619,29 @@ func _xr_source_for_bit(bit: int) -> String:
 	return ""
 
 
-func _xr_current_by_control() -> Dictionary:
+## Repaint every console diagram from the one shared binding map.
+##
+## All of them, not just the platform's own. The Wii's upright and sideways
+## pictures show the SAME bits under different names, so a change made on either
+## has to land on both — repainting only the first leaves the other showing what
+## the map used to say, which reads as a binding that did not take.
+func _refresh_console_xr_diagrams() -> void:
+	for d: ConsolePadDiagram in _console_xr_diagrams:
+		if is_instance_valid(d):
+			d.refresh(_xr_current_by_control(d.systemid()))
+
+
+## What each control on ONE picture currently reads.
+##
+## Keyed by art key rather than by systemid, because a variant carries a
+## different set of controls in a different order — and asking the platform for
+## them would fill a sideways diagram from the upright one's list, which is a
+## picture whose rows do not match its own anchors.
+func _xr_current_by_control(art_key: String = "") -> Dictionary:
+	if art_key.is_empty():
+		art_key = _systemid
 	var out: Dictionary = {}
-	for control: String in ConsolePadArt.controls(_systemid):
+	for control: String in ConsolePadArt.controls(art_key):
 		out[control] = _xr_source_for_bit(ConsolePadArt.bit_of(control))
 	return out
 
@@ -599,8 +667,7 @@ func _on_console_xr_changed(control: String, id: Variant) -> void:
 	if not src.is_empty():
 		_edit_button_map[src] = bit
 	_apply_xr_bindings()
-	if is_instance_valid(_console_xr_diagram):
-		_console_xr_diagram.refresh(_xr_current_by_control())
+	_refresh_console_xr_diagrams()
 
 
 ## Same rule, but duplicates are cleared only across the controls this pad SHOWS.

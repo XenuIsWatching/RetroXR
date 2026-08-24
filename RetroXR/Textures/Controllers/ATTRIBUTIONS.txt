@@ -114,6 +114,19 @@ wii_remote.svg
              diagram binds; there is no wordmark on the shell and none was added.
 
 
+wii_remote_sideways.svg
+-----------------------
+  THE SAME DRAWING as wii_remote.svg, turned a quarter turn counter-clockwise by
+  Tools/gen_wii_remote_sideways.py, for the page that shows a remote held in two
+  hands. Same origin and same licences as above; it adds no third source.
+
+  Re-run that script rather than editing this file, and re-run it AFTER
+  gen_wii_remote_art.py if the upright diagram is ever regenerated -- it reads
+  its input from the upright one. It also prints the anchor block, which is not
+  the upright anchors moved but moved AND re-keyed: a sideways remote drives the
+  same RetroPad bits under different names.
+
+
 wii_marks/wii_mark_*.svg
 ------------------------
   CUT OUT of wii_remote.svg above by Tools/gen_wii_face_marks.py, one per cap,

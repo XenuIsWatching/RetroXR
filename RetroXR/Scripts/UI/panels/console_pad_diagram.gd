@@ -80,6 +80,13 @@ const COL_GAP := 16.0
 const EDGE_PAD := 24.0
 
 var _systemid := ""
+
+
+## The ConsolePadArt key this diagram was built from. Not always a systemid:
+## a platform held more than one way draws a variant key per way, and a
+## caller repainting the page needs to ask for the right one's controls.
+func systemid() -> String:
+	return _systemid
 var _row: Dictionary = {}
 var _rows: Dictionary = {}      # control -> VRDropdown (DROPDOWN) or HBox (BIND)
 var _anchor_px: Dictionary = {}

@@ -56,6 +56,7 @@ func _ready() -> void:
 	_test_overridden_systems()
 	_test_wii_layers_survive_a_save()
 	_test_console_pad_art()
+	_test_pad_art_variants()
 	_test_wii_pad_art()
 	_test_desktop_layers()
 	_test_desktop_legacy_file()
@@ -372,6 +373,87 @@ func _test_overridden_systems() -> void:
 ## The Wii Remote's diagram, and the one thing about it that can silently rot:
 ## the art speaks RETROPAD targets while the remote itself speaks the names
 ## printed on its shell, and the two have to agree about which cap is which.
+# ---------------------------------------------------------------------------
+# A console can be held more than one way, and each way relabels the same
+# RetroPad bits. Those are art VARIANTS, not platforms, and the difference is
+# load-bearing: a variant that answered has() would grow a tile in the platform
+# grid for a console nobody owns.
+# ---------------------------------------------------------------------------
+
+func _test_pad_art_variants() -> void:
+	_ok("variant/sideways is not a platform",
+		not ConsolePadArt.has(ConsolePadArt.WII_SIDEWAYS))
+	_ok("variant/nor is the generic pad", not ConsolePadArt.has(ConsolePadArt.RETROPAD))
+	_ok("variant/but it has a row", not ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS).is_empty())
+	_ok("variant/and its art loads",
+		ResourceLoader.exists(String(ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS)["art"])))
+
+	# The Wii draws two pictures; everyone else draws one; the global page draws
+	# none. Order matters — the upright remote is the one a player meets first.
+	_eq("variant/the wii lists both ways it is held",
+		ConsolePadArt.variants_for("wii"), ["wii", ConsolePadArt.WII_SIDEWAYS])
+	_eq("variant/a one-way console lists just itself",
+		ConsolePadArt.variants_for("nes"), ["nes"])
+	_eq("variant/the global scope lists none", ConsolePadArt.variants_for(""), [])
+
+	# Same bits, different names. Sideways is a picture and a set of labels, not a
+	# second binding map, so it must carry exactly the controls the upright remote
+	# does — a variant that dropped one would leave that button unbindable on a
+	# page the player might be looking at.
+	var upright := ConsolePadArt.controls("wii").duplicate()
+	var sideways := ConsolePadArt.controls(ConsolePadArt.WII_SIDEWAYS).duplicate()
+	upright.sort()
+	sideways.sort()
+	_eq("variant/sideways carries the same controls as upright", sideways, upright)
+
+	# Every control is drawn and every drawn control is listed. A missing anchor
+	# is a lead to nowhere; a missing row entry is a control the page will not
+	# draw, which is a control the player cannot rebind.
+	var anchors: Dictionary = ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS)["anchors"]
+	var glyphs: Dictionary = ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS)["glyphs"]
+	var missing_anchor: Array = []
+	var missing_glyph: Array = []
+	for control: String in sideways:
+		if not anchors.has(control):
+			missing_anchor.append(control)
+		if not glyphs.has(control):
+			missing_glyph.append(control)
+	_eq("variant/every sideways control has an anchor", missing_anchor, [])
+	_eq("variant/and a glyph", missing_glyph, [])
+	_eq("variant/and no anchor is left unlisted", anchors.size(), sideways.size())
+
+	# The re-keying, which is the whole reason this variant exists and the one
+	# thing no picture can check. Dolphin's descWiimoteSideways puts 1 on B and 2
+	# on A, so the anchors for b and a must sit where 1 and 2 are drawn — which
+	# is the far end of the shell, past the speaker, not up by the d-pad.
+	_ok("variant/b points at the 1 button, away from the d-pad",
+		(anchors["b"] as Vector2).x > 0.6)
+	_ok("variant/a points at the 2 button, further still",
+		(anchors["a"] as Vector2).x > (anchors["b"] as Vector2).x)
+	_ok("variant/x points at the A button, up by the d-pad",
+		(anchors["x"] as Vector2).x < 0.4)
+
+	# A lead crosses another when the anchors' left-to-right order disagrees with
+	# the row's. Ties are the trap: two controls at the same x are decided by
+	# which is NEARER the row, because the shorter drop slants harder.
+	for side: String in ["top", "bottom"]:
+		var listed: Array = ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS)[side]
+		var crossings := 0
+		for i: int in listed.size():
+			for j: int in range(i + 1, listed.size()):
+				var a: Vector2 = anchors[listed[i]]
+				var b: Vector2 = anchors[listed[j]]
+				if a.x > b.x:
+					crossings += 1
+				elif is_equal_approx(a.x, b.x):
+					# Same x: the one closer to this row must come first.
+					var a_near: float = a.y if side == "bottom" else -a.y
+					var b_near: float = b.y if side == "bottom" else -b.y
+					if a_near < b_near:
+						crossings += 1
+		_eq("variant/no leads cross on the %s row" % side, crossings, 0)
+
+
 func _test_wii_pad_art() -> void:
 	_ok("wii/has a pad", ConsolePadArt.has("wii"))
 	_ok("wii/the art loads",

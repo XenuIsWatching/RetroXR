@@ -22,6 +22,19 @@ extends RefCounted
 ## still serve it.
 const RETROPAD := "__retropad"
 
+## A Wii Remote turned on its side, held in two hands like an NES pad.
+##
+## A VARIANT, not a platform: one console can be held more than one way, and each
+## way relabels the same RetroPad bits differently, so the page needs a picture
+## per way rather than a picture per systemid. Keyed like RETROPAD is — off the
+## systemid namespace, so has() keeps answering false and the platform grid does
+## not grow a phantom tile.
+const WII_SIDEWAYS := "wii#sideways"
+
+## Every key in _ROWS that is NOT a platform. has() must answer false for all of
+## them; row(), controls() and texture() serve them like any other.
+const _VARIANTS: Array = [RETROPAD, WII_SIDEWAYS]
+
 const _ROWS: Dictionary = {
 	# The generic pad, for scopes that are not one console: the desktop key map on
 	# the global Controls page binds RetroPad buttons, not a NES's. Keyed by a
@@ -177,13 +190,93 @@ const _ROWS: Dictionary = {
 		"note": "In VR you can press the remote's own buttons directly: hold it "
 			+ "in one hand and poke them with the other.",
 	},
+	# The same remote, turned on its side and held in two hands like an NES pad.
+	#
+	# The RetroPad bits do not move — Dolphin's descWiimoteSideways keeps every
+	# one of them and changes what it MEANS, doing the remap internally — so this
+	# is a picture and a set of labels, not a second binding map. Whatever a
+	# player binds above works here too.
+	#
+	# What DOES move is which physical button each bit points at, so the anchors
+	# are re-keyed rather than merely rotated:
+	#
+	#     upright    b -> B(trigger)   a -> A     x -> 1     y -> 2
+	#     sideways   b -> 1            a -> 2     x -> A     y -> B(trigger)
+	#
+	# and the cross turns with the shell, so "up" takes the old "right" position
+	# and round. Both the art and this block come out of
+	# Tools/gen_wii_remote_sideways.py, which rotates the upright drawing and
+	# prints these numbers — the re-keying is the half no one can check by eye.
+	WII_SIDEWAYS: {
+		"label": "Wii Remote (sideways)",
+		"art": "res://Textures/Controllers/wii_remote_sideways.svg",
+		"tint": false,
+		# Rows, not columns: rotating the shell makes the art 4:1 landscape, and
+		# columns down either side of a wide, short picture would leave every lead
+		# crossing the middle of it.
+		"layout": "rows",
+		"anchors": {
+			"b": Vector2(0.7350, 0.4893),
+			"a": Vector2(0.8205, 0.4893),
+			"x": Vector2(0.3161, 0.4919),
+			"y": Vector2(0.3922, 0.4919),
+			"up": Vector2(0.1679, 0.3500),
+			"down": Vector2(0.1679, 0.6341),
+			"left": Vector2(0.1232, 0.4923),
+			"right": Vector2(0.2125, 0.4923),
+			"select": Vector2(0.4801, 0.7570),
+			"r3": Vector2(0.4801, 0.4915),
+			"start": Vector2(0.4801, 0.2260),
+		},
+		# Ordered by the anchor's x so no lead crosses another — with one tie to
+		# break. minus and home sit at the SAME x (they were a horizontal row on
+		# the upright shell and are a vertical stack here), so ordering by x alone
+		# does not decide them, and the wrong order really does cross: the lower
+		# anchor has less height to cover, so it slants harder and overtakes the
+		# higher one on the way to a further slot. The one nearer the row takes
+		# the nearer slot.
+		"top": ["left", "up", "x", "start", "b"],
+		"bottom": ["down", "right", "y", "select", "r3", "a"],
+		# The four face buttons say what they say when the remote is sideways,
+		# which is the whole reason this picture exists. The d-pad and the three
+		# below it are unchanged: Dolphin rotates the cross internally, so the
+		# player still presses "up" for up.
+		"glyphs": {
+			"up": "wii_dpad_up_outline",
+			"down": "wii_dpad_down_outline",
+			"left": "wii_dpad_left_outline",
+			"right": "wii_dpad_right_outline",
+			"b": "wii_button_1_outline",
+			"a": "wii_button_2_outline",
+			"x": "wii_button_a_outline",
+			"y": "wii_button_b_outline",
+			"select": "wii_button_minus_outline",
+			"start": "wii_button_plus_outline",
+			"r3": "wii_button_home_outline",
+		},
+		"note": "Hold the remote in both hands, like a plain pad. Grab it with "
+			+ "your second hand and it turns sideways by itself; let go and it "
+			+ "turns back. The buttons keep whatever you bound above — the "
+			+ "console is the one relabelling them, not the room.",
+	},
 }
 
 
 ## True when this platform has a pad of its own to draw. The generic pad is not
 ## a platform, so it never answers true here.
 static func has(systemid: String) -> bool:
-	return not systemid.is_empty() and systemid != RETROPAD and _ROWS.has(systemid)
+	return not systemid.is_empty() and not _VARIANTS.has(systemid) and _ROWS.has(systemid)
+
+
+## The art keys to draw for one scope, in the order they should be stacked.
+##
+## A platform is usually one picture and answers with just itself. The Wii is
+## held two ways that relabel the same bits — upright in one hand, sideways in
+## two — and neither picture is right for the other, so it answers with both.
+static func variants_for(systemid: String) -> Array:
+	if systemid == "wii":
+		return ["wii", WII_SIDEWAYS]
+	return [systemid] if has(systemid) else []
 
 
 ## The row for a platform, or an empty Dictionary.

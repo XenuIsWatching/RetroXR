@@ -95,10 +95,19 @@ func _run() -> void:
 	for i in 20:
 		await get_tree().process_frame
 
-	if _scroll > 0 and view is ScrollContainer:
-		(view as ScrollContainer).scroll_vertical = _scroll
-		for i in 8:
-			await get_tree().process_frame
+	if view is ScrollContainer:
+		var sc := view as ScrollContainer
+		var bar := sc.get_v_scroll_bar()
+		# Printed because a scroll past the end CLAMPS rather than erroring, so
+		# two different --scroll values quietly produce the same picture and it
+		# reads as a change that did not take.
+		print("[controls] scrollable 0..%d (page %d)"
+			% [int(bar.max_value - bar.page), int(bar.page)])
+		if _scroll > 0:
+			sc.scroll_vertical = _scroll
+			for i in 8:
+				await get_tree().process_frame
+			print("[controls] scrolled to %d" % sc.scroll_vertical)
 
 	await RenderingServer.frame_post_draw
 	await get_tree().process_frame
