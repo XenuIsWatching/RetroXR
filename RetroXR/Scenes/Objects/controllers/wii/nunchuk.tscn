@@ -71,6 +71,7 @@ surface_material_override/0 = SubResource("Mat_shell")
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, -0.0709, 0)
 
 [node name="GrabPoint" type="Marker3D" parent="." unique_id=1464527405]
+transform = Transform3D(1, 0, 0, 0, 0.70710677, -0.70710677, 0, 0.70710677, 0.70710677, 0, 0, 0.012)
 visible = false
 script = ExtResource("3_grabpoint")
 

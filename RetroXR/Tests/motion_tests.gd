@@ -46,6 +46,7 @@ func _ready() -> void:
 		await _test_top_right_reads_left()
 		await _test_always_one_g_at_rest()
 		await _test_smoothing_settles_on_rest()
+		await _test_a_held_nunchuk_hangs_nose_down()
 		await _test_both_devices_agree_in_one_attitude()
 	if _wants("clock"):
 		await _test_a_carried_nunchuk_reads_the_path_it_is_carried_on()
@@ -212,6 +213,39 @@ func _test_top_right_reads_left() -> void:
 ## same axis names, so their answers must be equal — whatever those answers are.
 ## No knowledge of either shell's authored orientation is needed to say so, which
 ## is exactly why this case survives the mistake that produced the others.
+## How the shell sits in the hand, which nothing else here can see.
+##
+## Every other case poses the Nunchuk directly and asks what it reports, so the
+## GRAB POINT is invisible to all of them: it could be identity, or inverted, and
+## they would all still pass. It is the one thing standing between a tracked hand
+## and the attitude the core is told about.
+##
+## A band and not a number. A Nunchuk hangs nose-down out of a fist, which is
+## what is being asserted; exactly how far is a question about how a controller
+## sits in a hand, and only somebody wearing the headset can answer it. Pinning
+## 45.0 here would turn a tuning change into a failing test for no gain.
+func _test_a_held_nunchuk_hangs_nose_down() -> void:
+	var nc := await _at_rest_nunchuk()
+	var gp := nc.get_node("GrabPoint") as Node3D
+
+	# xr-tools places a held object so its grab point lands on the hand's pose,
+	# so a neutral hand leaves the shell wearing the grab point's inverse.
+	nc.global_transform = Transform3D(gp.transform.basis.inverse(), Vector3.ZERO)
+	_settle(nc)
+	var a := nc.accel_in_nunchuk_frame()
+
+	# +Y is BACK and +Z is UP, so gravity leaning off the device's front is a nose
+	# tipped down. Level reads (0, 0, 1); straight up the nose reads (0, -1, 0).
+	var pitch := rad_to_deg(atan2(-a.y, a.z))
+	_ok("a held Nunchuk hangs nose-down in the hand",
+		pitch > 30.0 and pitch < 60.0, "pitch %+.1f deg" % pitch)
+	# Not merely off-level: the sign is the half that was wrong for years, when a
+	# nose-down grab and a nose-up frame very nearly cancelled.
+	_ok("and nose-DOWN rather than tipped back", a.y < 0.0,
+		"back axis reads %+.3f" % a.y)
+	nc.queue_free()
+
+
 func _test_both_devices_agree_in_one_attitude() -> void:
 	var nc := await _at_rest_nunchuk()
 	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
