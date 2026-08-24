@@ -27,11 +27,6 @@
 class_name LinkCable
 extends CompositeCable
 
-## A machine on this wire has been thrown back to its boot logo so that it can
-## see the cable. Nothing in the room listens yet; it is emitted because this is
-## the one thing this class does that a player did not ask for, and a room that
-## wants to say so on screen should not have to scrape the log for it.
-signal machine_restarted(machine: Node)
 
 ## The pair currently joined, as [{libretro, port}, {libretro, port}], so a pull
 ## can be undone against the same machines and the same sockets that were joined,
@@ -296,130 +291,6 @@ func _join(group: Array[Dictionary]) -> void:
 	_log_ends("joined", _linked)
 
 
-## Platforms that read their link once, on the way up.
-##
-## A Game Boy Advance samples SIOCNT's "all GBAs ready" bit while it boots and
-## caches the answer, so a lead pushed in afterwards reaches a machine that has
-## already decided it is alone.
-##
-## A Game Boy decides nothing. Its serial port is self-synchronising and a game
-## looks at it when the player asks to link, which is when the cable turns up in
-## real life: both Pokemon players are hours into a save by the time they walk
-## into the Cable Club. Resetting one there would throw the session away to
-## repair a fault it does not have.
-const SAMPLES_LINK_AT_BOOT: Array = ["game_boy_advance"]
-
-
-## Power-cycle a machine that was already running when the cable arrived.
-##
-## A GBA reads whether anything is on the other end ONCE, while it boots, and
-## never asks again: it samples the ready line about a third of a second in and
-## caches the answer for the rest of the session. Cable two handhelds together
-## after either of them has got past that moment and the link is live, both cores
-## are on the bus, both read two peers, and the game still refuses multiplayer
-## with a rejection noise -- because it decided before the cable existed.
-##
-## Measured, not guessed: the same two machines and the same ROM run 9 transfers
-## a frame when both are switched on with the lead already in, and exactly zero
-## when the lead goes in afterwards. A reset is what closes the gap.
-##
-## Real hardware behaves the same way, which is why the instruction on the box is
-## to connect the cable BEFORE switching on, and why a player who forgets reaches
-## for the power switch. The room does it for them, because the alternative is a
-## cable that looks perfect and silently does nothing.
-##
-## Only machines that have NOT been on a live wire since their core started.
-##
-## A console that has already been linked knows the port is live, so pulling the
-## lead and pushing it back in must not throw its game away. That is the ordinary
-## thing a player does to a cable, and losing a single-player run to it would be
-## worse than the fault this repairs.
-##
-## Marked as having seen a live port on the way out, which is what stops this
-## repeating: after the restart the machine boots INTO a working link, so that is
-## true by the time it matters. Without it the rule fed itself and the pair sat
-## restarting each other for ever.
-##
-## No "is it still booting" exemption, because there is nothing to hang one on:
-## the frame count carries across a core starting rather than beginning again, so
-## a console switched on a moment ago is indistinguishable from one that has been
-## running all afternoon. Restarting a machine that had not sampled its link yet
-## costs it a second of boot logo and guarantees it comes up with the link live,
-## which is the outcome wanted either way.
-func _restart(members: Array[Dictionary]) -> void:
-	for end: Dictionary in members:
-		var lib: Libretro = end["libretro"]
-		if not is_instance_valid(lib):
-			continue
-		var machine_node: Node = end["machine"]
-		var systemid: String = ""
-		var loaded_rom: String = ""
-		if machine_node != null and is_instance_valid(machine_node):
-			systemid = str(machine_node.get("systemid"))
-			loaded_rom = str(machine_node.get("rom_path"))
-		if not SAMPLES_LINK_AT_BOOT.has(systemid):
-			continue
-		# Never a machine with no cartridge in it.
-		#
-		# Everything below is about a GAME that has gone past the screen where it
-		# would have offered multiplayer, and a power cycle is the only way the
-		# room can get it back there. A machine with nothing in it is not playing
-		# a game: it is sitting in the BIOS handshake, whose whole job is to poll
-		# the link waiting to be sent a program, so it re-reads the cable by
-		# design and needs no persuading.
-		#
-		# And the reset is not the cheap "second of boot logo" this rule assumes
-		# it is. Single-cartridge play downloads a program into this machine's
-		# RAM, and that program IS its entire state -- there is no cartridge
-		# underneath to come back to, so there is no "wanted either way" about
-		# it. Resetting drops the handheld to the no-cartridge screen and the
-		# host has to send the whole program again.
-		#
-		# That is what made single-pak play so unreliable: seating the last lead,
-		# or powering another machine on, re-forms the bus and renumbers the
-		# seats, and the renumber reset clients that had already been sent their
-		# copy.
-		if loaded_rom.is_empty():
-			continue
-		var seat: int = int(end.get("seat", NO_SEAT))
-		var had: int = int(end.get("live_seat", NO_SEAT))
-		if had == seat:
-			continue
-		# Only a machine whose player number MOVED, never one meeting the cable
-		# for the first time.
-		#
-		# Both used to reset, on the grounds that a GBA reads the cable once at
-		# boot and caches the answer. That was true, and it was a driver fault
-		# rather than a fact about the hardware: SIOCNT's id and slave bits are
-		# decided by the cable, and the netlink driver only refreshed them when
-		# the guest happened to WRITE SIOCNT, which a game sitting on a menu does
-		# not do. A machine that booted with an empty socket therefore stayed
-		# marked a slave for ever, and a slave never originates a transfer.
-		# Fixed in mGBA fcf53f2ba, and measured after it: a lead seated around a
-		# running pair now carries 9.0 transfers a frame with NOBODY reset, in
-		# both orders a room can produce. So this branch is a power cycle that
-		# buys nothing, and it cost whatever the player was doing.
-		#
-		# The renumber below is a different matter and was measured separately:
-		# move a playing pair's seats and the traffic stops dead and never comes
-		# back -- 5110 messages before, 5110 after, three watch steps later still
-		# 5110, with both cores at 59.8 fps and the bus still reporting two peers.
-		# The control rules out the bus: re-declaring the SAME group from the SAME
-		# anchor, so that no seat moves, leaves the session running at 9.0. It is
-		# the player number changing under a game that it cannot survive, which is
-		# unsurprising -- no cable can do that to real hardware. Only a reset
-		# recovers it, so this stays. Both cases are pinned in link_tests, and
-		# mario_link_probe carries the two orders that measured them.
-		if had == NO_SEAT:
-			lib.set_meta(LIVE_SEAT, seat)
-			continue
-		lib.set_meta(LIVE_SEAT, seat)
-		lib.RequestReset()
-		var machine: Node = end["machine"]
-		var why := "so it can be player %d rather than player %d" % [seat + 1, had + 1]
-		print("[LinkCable] restarted %s %s" % [
-			machine.name if machine != null and is_instance_valid(machine) else "a machine", why])
-		machine_restarted.emit(machine)
 
 
 func _log_ends(verb: String, ends: Array[Dictionary]) -> void:
@@ -520,10 +391,7 @@ var _junction_up := Vector3.UP
 ## not offer to send the game at all. Measured on the two-machine probe with the
 ## seats reversed: zero bytes of program cross the wire and the host sends 24
 ## messages in half a minute, against tens of thousands the right way round.
-const LIVE_SEAT := "link_live_seat"
 
-## No seat: never been on a live bus, or has been switched off since.
-const NO_SEAT := -1
 
 ## Physics frames to wait before saying the wire again.
 ##
@@ -589,35 +457,16 @@ func _watch() -> void:
 		return
 
 	var live: Array[Dictionary] = []
-	for seat in range(_linked.size()):
-		var end: Dictionary = _linked[seat]
+	for end: Dictionary in _linked:
 		var lib: Libretro = end["libretro"]
 		var machine: Node = end["machine"]
 		if not is_instance_valid(lib) or machine == null or not is_instance_valid(machine):
 			continue
 		if not machine.is_powered_on:
-			# A machine switched off starts its next session knowing nothing.
-			lib.set_meta(LIVE_SEAT, NO_SEAT)
 			continue
 		if lib.LinkPeerCount(end["port"]) < 2:
-			# Nor does a machine whose wire has gone quiet under it. The lead may
-			# still be in its socket while the bus it was on has fallen apart, and
-			# a seat remembered across that gap is the same stale answer
-			# _disconnect clears above -- it just arrives by a different route.
-			lib.set_meta(LIVE_SEAT, NO_SEAT)
 			continue
-		var seen := end.duplicate()
-		# The seat is this machine's position in the bus order, which is the
-		# player number the hardware gives it: index zero is player one.
-		seen["seat"] = seat
-		# Read BEFORE the seat is recorded below. The machine that has just
-		# gained a peer, or just been handed a different seat, is exactly the one
-		# that may need restarting, and recording first would have it report that
-		# it had been sitting there all along.
-		seen["live_seat"] = int(lib.get_meta(LIVE_SEAT, NO_SEAT))
-		if lib.LinkPeerCount(end["port"]) >= 2:
-			lib.set_meta(LIVE_SEAT, seat)
-		live.append(seen)
+		live.append(end)
 
 	# Every running machine on one wire must see every other running machine on
 	# it. Anything else means the bus has forgotten a wire the room still has.
@@ -632,19 +481,6 @@ func _watch() -> void:
 				_resolve()
 				return
 
-	# Anyone on a live wire whose seat is not the seat they booted into has to
-	# look again, which covers both a machine that has never been on a live wire
-	# and one whose player number just changed under it. The seat was read above
-	# BEFORE it was recorded, so a machine that has just gained its peer still
-	# reports not having had one.
-	#
-	# Deliberately not "has the number of running machines gone up". That looked
-	# equivalent and was not: it needed a record of who was here BEFORE, and there
-	# is no before when the lead is first pushed in. Plugging one into two
-	# consoles that were already running -- the most ordinary thing anyone does
-	# with a cable -- restarted neither of them, and the link carried nothing.
-	if live.size() >= 2:
-		_restart(live)
 
 
 func _ride_junction() -> void:
@@ -723,9 +559,6 @@ func _disconnect() -> void:
 			# meeting the cable again, which mGBA fcf53f2ba made work without being
 			# thrown back to its boot logo.
 			#
-			# Clearing this can only ever cause FEWER resets, never more, because
-			# NO_SEAT is the branch that returns early.
-			end["libretro"].set_meta(LIVE_SEAT, NO_SEAT)
 			end["libretro"].LinkDisconnect(end["port"])
 	# After the disconnects, so the count reported is the one that resulted.
 	_log_ends("parted", ends)

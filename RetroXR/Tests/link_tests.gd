@@ -54,7 +54,7 @@ func _ready() -> void:
 	await _test_psx_lead_will_seat()
 	await _test_psx_cable_joins_a_pair()
 	await _test_every_lead_states_its_bus()
-	_test_restart_rule()
+	_test_no_reset_path()
 	print("[link] ---- %d passed, %d failed ----" % [_pass, _fail])
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -1757,119 +1757,41 @@ func _nearest_av_gap(machine: Node3D, x: float) -> float:
 	return best if is_finite(best) else INF
 
 
-# -- Who a re-formed bus power-cycles ----------------------------------------
-# _restart exists so a cartridge game that has gone past the screen where it
-# would have offered multiplayer gets another chance at it. These pin exactly
-# which machines that reaches, because the rule is destructive and asymmetric:
-# a reset costs a game with a cartridge a boot logo, and costs a machine whose
-# whole state arrived down the wire everything it had.
+# -- The cable never power-cycles anybody -------------------------------------
+# A console rebooting itself is not something a link cable does. GBATEK has the
+# roles physical and live -- SIOCNT bit 2 is the SI terminal, "0=Parent,
+# 1=Child" -- and the ID bits "undefined until the first transfer has
+# completed", so they are a result of each transfer rather than a setting. Games
+# are written to cope: the homebrew LinkCable library carries a timeout in
+# "frames without receiving data from other player before marking them as
+# disconnected", and 0xFFFF is the reserved value for a client that is not
+# there. If a game cannot cope it shows a link error and the player decides.
 #
-# Driven through _restart directly rather than through _watch, because _watch
-# reads LinkPeerCount off a running core and these must stay core-free. What
-# _watch decides is the `seat`/`live_seat` pair in each entry, and that is what
-# is varied here.
-
-const NO_SEAT_SENTINEL := -1
-
-
-class _FakeMachine extends Node:
-	var systemid := "game_boy_advance"
-	var rom_path := "/roms/game.gba"
-	var is_powered_on := true
-
-
-func _restart_seen(cable: LinkCable, ends: Array) -> Array:
-	var fired: Array = []
-	var tap := func(m: Node) -> void: fired.append(m)
-	cable.machine_restarted.connect(tap)
-	var typed: Array[Dictionary] = []
-	for e: Dictionary in ends:
-		typed.append(e)
-	cable._restart(typed)
-	cable.machine_restarted.disconnect(tap)
-	return fired
-
-
-func _end_for(machine: _FakeMachine, lib: Libretro, seat: int, live_seat: int) -> Dictionary:
-	return {"libretro": lib, "machine": machine, "port": 0,
-		"seat": seat, "live_seat": live_seat}
-
-
-func _test_restart_rule() -> void:
-	var cable := LinkCable.new()
-	var host := _FakeMachine.new()
-	var host_lib := Libretro.new()
-
-	# The case the rule is FOR: a cartridge machine that booted alone and has
-	# now found itself on a live wire.
-	var fired := _restart_seen(cable, [_end_for(host, host_lib, 0, -1)])
-	_ok("restart/a cartridge machine meeting the cable for the first time is NOT restarted",
-		fired.is_empty())
-
-	# Once it has been told, it is left alone.
-	fired = _restart_seen(cable, [_end_for(host, host_lib, 0, 0)])
-	_ok("restart/and is not restarted again at the same seat", fired.is_empty())
-
-	# A renumber. Two pairs merging into one four-way bus moves seats under
-	# machines that were already playing.
-	fired = _restart_seen(cable, [_end_for(host, host_lib, 2, 0)])
-	_ok("restart/a cartridge machine whose seat changed is restarted", fired.has(host))
-
-	# The single-pak client. Nothing to reboot into, and the program it was sent
-	# is its entire state, so neither branch may reach it.
-	var client := _FakeMachine.new()
-	client.rom_path = ""
-	var client_lib := Libretro.new()
-	fired = _restart_seen(cable, [_end_for(client, client_lib, 1, -1)])
-	_ok("restart/a machine with no cartridge is not restarted on first sight of the cable",
-		fired.is_empty())
-	fired = _restart_seen(cable, [_end_for(client, client_lib, 3, 1)])
-	_ok("restart/nor when its seat changes under it", fired.is_empty())
-
-	# Only the platform whose games sample the link at boot.
-	var snes := _FakeMachine.new()
-	snes.systemid = "super_nintendo"
-	var snes_lib := Libretro.new()
-	fired = _restart_seen(cable, [_end_for(snes, snes_lib, 0, -1)])
-	_ok("restart/a platform that does not sample the link at boot is never restarted",
-		fired.is_empty())
-
-	# THE HOST. It holds a cartridge, so the no-cartridge guard never covered it,
-	# and powering on a client used to reset it in the middle of whatever it was
-	# doing. It no longer does: mGBA fcf53f2ba keeps SIOCNT's id and slave bits
-	# fresh as the party changes, so a game notices a cable arriving without being
-	# power-cycled at it -- measured at 9.0 transfers a frame with nobody reset.
-	var solo := _FakeMachine.new()
-	var solo_lib := Libretro.new()
-	fired = _restart_seen(cable, [_end_for(solo, solo_lib, 0, -1)])
-	_ok("restart/the cartridge-holding host survives a client joining it",
-		fired.is_empty())
-
-	# A PULLED lead must not leave a seat behind.
-	#
-	# This is the case that actually power-cycled machines in a real session. Two
-	# pairs were playing, every lead came out, and all four went back in as one
-	# chain; the two that returned at player three and four were reset "so it can
-	# be player 3 rather than player 1", against a seat they had held before the
-	# cable was ever unplugged. There was no link in between for a renumber to
-	# happen across -- the link went down and came back, which is the first-sight
-	# case and needs no reset.
-	var pulled := _FakeMachine.new()
-	var pulled_lib := Libretro.new()
-	pulled_lib.set_meta("link_live_seat", 0)
-	var lead: LinkCable = load(CABLE_SCENE).instantiate()
-	add_child(lead)
-	lead._linked = [_end_for(pulled, pulled_lib, 0, 0)] as Array[Dictionary]
-	lead._disconnect()
-	_eq("restart/pulling the lead forgets the seat a machine was playing at",
-		int(pulled_lib.get_meta("link_live_seat", NO_SEAT_SENTINEL)), -1)
-	# ...so coming back somewhere else is a first sight, not a renumber.
-	fired = _restart_seen(cable, [_end_for(pulled, pulled_lib, 2,
-		int(pulled_lib.get_meta("link_live_seat", NO_SEAT_SENTINEL)))])
-	_ok("restart/so returning at a different seat is not a renumber",
-		fired.is_empty())
-	lead.queue_free()
-
-	for n: Node in [host, host_lib, client, client_lib, snes, snes_lib, solo, solo_lib,
-			pulled, pulled_lib, cable]:
-		n.free()
+# The room used to power-cycle a machine on two occasions, and both are gone:
+#
+#   meeting the cable for the first time -- a driver fault, not the hardware.
+#   SIOCNT's id and slave bits are decided by the cable and were only refreshed
+#   when the guest WROTE SIOCNT, which a game waiting on a menu does not do, so
+#   a machine that booted with an empty socket stayed marked a slave for ever
+#   and a slave never originates. mGBA fcf53f2ba. Measured after it: a lead
+#   seated around a running pair carries 9.0 transfers a frame, nobody reset.
+#
+#   its seat moving -- real, and unsurvivable: move a playing pair's seats and
+#   the traffic stops dead for 3600 frames. But a reset does not rescue that
+#   session either, and it destroys anything else the machine was holding,
+#   including a single-cartridge program that only exists in its RAM.
+#
+# So there is no reset path left, and this is the case that says so. It fails
+# the moment one is reintroduced, which no functional assertion can do once the
+# mechanism it watched is gone.
+func _test_no_reset_path() -> void:
+	var cable: LinkCable = load(CABLE_SCENE).instantiate()
+	_ok("reset/the cable declares no machine_restarted signal",
+		not cable.has_signal("machine_restarted"))
+	_ok("reset/and carries no _restart", not cable.has_method("_restart"))
+	var found := false
+	for m: Dictionary in cable.get_method_list():
+		if str(m.get("name", "")).contains("restart"):
+			found = true
+	_ok("reset/nor anything else named for one", not found)
+	cable.free()

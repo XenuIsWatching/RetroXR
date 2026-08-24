@@ -32,7 +32,6 @@ var _opt_backup := ""
 var _restored := false
 var _systems: Array[RetroSystem] = []
 var _cables: Array[Node3D] = []
-var _restarted: Array[String] = []
 
 
 func _ready() -> void:
@@ -106,8 +105,6 @@ func _run() -> void:
 	await _settle(4)
 	_eq("one end in a socket is still nobody", _peers(0), 0)
 
-	lead.machine_restarted.connect(func(m: Node) -> void: _restarted.append(m.name))
-	_restarted.clear()
 	(ports[1] as XRToolsSnapZone).pick_up_object(lead.get_node("PlugB0"))
 	await _settle(4)
 	_eq("both ends in leaves machine 0 on a bus of two", _peers(0), 2)
@@ -115,15 +112,17 @@ func _run() -> void:
 	_eq("machine 2 is untouched", _peers(2), 0)
 
 	# Both machines were already running when the lead went in, so both have to
-	# be thrown back to their boot logos: a GBA reads whether anything is out
-	# there once, and neither of them was linked when it did. This is the most
-	# ordinary thing anyone does with a cable, and it used to restart neither,
-	# because the rule asked whether the number of running machines had gone up
-	# and there is no BEFORE when a lead is first pushed in.
+	# be left alone. This is the most ordinary thing anyone does with a cable and
+	# it must not cost anybody their game.
+	#
+	# Both used to be power-cycled here, because a GBA was thought to read whether
+	# anything was out there once and cache it. That was a driver fault rather
+	# than a fact about the hardware: SIOCNT's id and slave bits are decided by
+	# the cable, and the netlink driver only refreshed them when the guest wrote
+	# SIOCNT, which a game on a menu does not do. mGBA fcf53f2ba fixed it, and a
+	# lead seated around a running pair now carries 9.0 transfers a frame with
+	# nobody reset.
 	await _settle(10)
-	_ok("plugging a lead into two running machines restarts both",
-		_restarted.has("GBA0") and _restarted.has("GBA1"),
-		"restarted: %s" % str(_restarted))
 
 	# ── Pulling a plug ────────────────────────────────────────────────────────
 	# The diegetic action and the emulated one are the same action, which is the
@@ -147,7 +146,6 @@ func _run() -> void:
 	# Switched on one at a time and far enough apart to matter, which is what the
 	# room really does: a restored scene powers its machines up in sequence, so
 	# the first one is always alone at the moment it decides.
-	_restarted.clear()
 	_systems[0].power_off()
 	_systems[1].power_off()
 	await _idle(20)
@@ -159,34 +157,22 @@ func _run() -> void:
 	_eq("a power cycle leaves them cabled", _peers(0), 2)
 	_eq("as seen from the other one", _peers(1), 2)
 
-	# The machine that booted alone has to be thrown back to its boot logo, or it
-	# refuses multiplayer for the rest of the session with every count in the room
-	# reading correctly. The one that arrived second saw a live port on its way up
-	# and must be left alone.
-	_ok("the machine that booted alone was restarted", _restarted.has("GBA0"),
-		"restarted: %s" % str(_restarted))
-	# At most once each. The rule marks a machine as having seen a live port on
-	# the way out, so it cannot feed itself; without that the pair sat restarting
-	# each other for ever, which looks from the room like two consoles stuck on
-	# their boot logos.
-	var once := true
-	for machine_name in ["GBA0", "GBA1", "GBA2"]:
-		if _restarted.count(machine_name) > 1:
-			once = false
-	_ok("and nobody was restarted twice", once, "restarted: %s" % str(_restarted))
+	# The machine that booted alone is left alone too. It used to be thrown back
+	# to its boot logo so it would re-read the port; it no longer needs to, and
+	# the room has no business power-cycling a console at all. A link that changes
+	# under a running game is the game's to notice -- that is what 0xFFFF and its
+	# own timeout are for -- and if it cannot, it shows a link error and the
+	# player decides, which is what real hardware leaves you with.
 
 	# ── Re-seating a lead that was already live ───────────────────────────────
 	# The ordinary thing a player does to a cable. Both machines have been linked
 	# since they started, so they know the port is live and must NOT be thrown
 	# away: losing a run to a wiggled plug is worse than the fault above.
 	await _settle(120)
-	_restarted.clear()
 	await _pull(lead.get_node("PlugB0") as RcaPlug)
 	(ports[1] as XRToolsSnapZone).pick_up_object(lead.get_node("PlugB0"))
 	await _settle(60)
 	_eq("re-seating the lead joins them again", _peers(0), 2)
-	_ok("and throws nobody's game away doing it", _restarted.is_empty(),
-		"restarted: %s" % str(_restarted))
 
 	# ── A third player, through the junction ──────────────────────────────────
 	# The junction is a socket on a lead rather than on a machine, so the walk
