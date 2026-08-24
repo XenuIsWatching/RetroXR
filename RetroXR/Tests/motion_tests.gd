@@ -58,6 +58,10 @@ func _ready() -> void:
 		_test_the_extension_takes_a_sub_device()
 		await _test_bare_remote()
 		await _test_a_seated_nunchuk()
+		await _test_two_hands_turn_it_sideways()
+		await _test_a_real_release_turns_it_back()
+		await _test_a_nunchuk_beats_a_second_hand()
+		await _test_a_dongle_has_its_own_sideways_id()
 		await _test_a_nunchuk_behind_a_dongle()
 		await _test_pulling_the_extension()
 
@@ -458,6 +462,137 @@ func _test_a_seated_nunchuk() -> void:
 	_ok("so it will send a second accelerometer", wm._has_nunchuk())
 	wm.queue_free()
 	nc.queue_free()
+
+
+# ── Held in two hands ────────────────────────────────────────────────────────
+# A second hand on the remote is how a player asks for sideways. The core has to
+# be told, because it swaps the d-pad's bitmasks and renames four buttons — none
+# of which the room can do on its behalf.
+
+
+## Put the remote in one hand, two, or none.
+##
+## A REAL XRToolsGrabDriver carrying real Grabs, because _grab_driver is typed
+## and will not take a stand-in. Grabber only needs a Node3D — it asks that node
+## for a pickup and a controller and is content with null for both — so a plain
+## Node3D stands in for a hand without a headset anywhere.
+func _hold(wm: Wiimote, hands: int) -> void:
+	if hands == 0:
+		wm._grab_driver = null
+		wm._refresh_device_type()
+		return
+	var driver := XRToolsGrabDriver.new()
+	# The driver reports releases as "<target> > <hand> released", so a driver
+	# built without one dies on target.name the moment a hand lets go.
+	driver.target = wm
+	driver.primary = Grab.new(Grabber.new(_hand()), wm, null, false)
+	if hands >= 2:
+		driver.secondary = Grab.new(Grabber.new(_hand()), wm, null, false)
+	wm._grab_driver = driver
+	wm._refresh_device_type()
+
+
+func _hand() -> Node3D:
+	var n := Node3D.new()
+	add_child(n)
+	return n
+
+
+func _test_two_hands_turn_it_sideways() -> void:
+	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
+	add_child(wm)
+	await get_tree().process_frame
+
+	_hold(wm, 1)
+	_ok("one hand leaves the remote upright",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_hold(wm, 2)
+	_ok("a second hand turns it sideways",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+	# The half with no signal behind it: xr-tools emits `grabbed` for a second
+	# hand and nothing at all for a second RELEASE, so a remote that only watched
+	# the signals would turn sideways and stay there.
+	_hold(wm, 1)
+	_ok("letting the second hand go turns it back",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_hold(wm, 0)
+	_ok("and putting it down leaves it upright",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	wm.queue_free()
+
+
+## The WIRING, as opposed to the rule the cases above pin.
+##
+## _hold calls _refresh_device_type itself, so it proves what the remote decides
+## and nothing about what makes it decide. This one lets a hand go through the
+## real let_go and checks the device followed — which is the half that has no
+## signal behind it and would otherwise be discovered by a player.
+func _test_a_real_release_turns_it_back() -> void:
+	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
+	add_child(wm)
+	await get_tree().process_frame
+
+	var first := _hand()
+	var second := _hand()
+	var driver := XRToolsGrabDriver.new()
+	driver.target = wm
+	driver.primary = Grab.new(Grabber.new(first), wm, null, false)
+	driver.secondary = Grab.new(Grabber.new(second), wm, null, false)
+	wm._grab_driver = driver
+	wm._refresh_device_type()
+	_ok("two real grabs read as sideways",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+
+	wm.let_go(second, Vector3.ZERO, Vector3.ZERO)
+	_ok("and a real release of the second hand turns it upright again",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	wm.queue_free()
+
+
+func _test_a_nunchuk_beats_a_second_hand() -> void:
+	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
+	var nc: Nunchuk = NUNCHUK_SCENE.instantiate()
+	add_child(wm)
+	add_child(nc)
+	await get_tree().process_frame
+	wm._on_extension_seated(nc)
+
+	# You cannot hold a Nunchuk and the far end of the remote with the same hand,
+	# and the core has no id for the combination either — so the Nunchuk wins and
+	# the second hand is just a second hand.
+	_hold(wm, 2)
+	_ok("a Nunchuk outranks a two-handed grab",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_NC)
+	_ok("and the remote still reports its Nunchuk", wm._has_nunchuk())
+
+	# Pull it and the same two hands mean sideways after all.
+	wm._on_extension_removed()
+	_hold(wm, 2)
+	_ok("pulling it lets the two hands mean sideways",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+	wm.queue_free()
+	nc.queue_free()
+
+
+func _test_a_dongle_has_its_own_sideways_id() -> void:
+	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
+	var mp: MotionPlus = MOTION_PLUS_SCENE.instantiate()
+	add_child(wm)
+	add_child(mp)
+	await get_tree().process_frame
+	wm._on_extension_seated(mp)
+
+	_hold(wm, 1)
+	_ok("a dongle alone is a MotionPlus remote",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP)
+	# Four ids became six for this reason: sideways and the dongle are independent
+	# of each other, so every combination needs its own, and falling back to the
+	# plain sideways id would silently detach a MotionPlus the room can see.
+	_hold(wm, 2)
+	_ok("a dongle held in two hands has an id of its own",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP_SW)
+	wm.queue_free()
+	mp.queue_free()
 
 
 func _test_a_nunchuk_behind_a_dongle() -> void:

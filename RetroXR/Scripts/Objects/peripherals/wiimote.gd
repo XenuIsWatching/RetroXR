@@ -40,9 +40,21 @@ const MOTION_PLUS_PLUG_SYSTEMID := "wii_motion_plus"
 # every extension can still be plugged in behind it. What the id buys is the
 # emulated dongle: the core attaches MotionPlus for a _MP id and detaches it
 # otherwise, which is what makes the accessory in the room mean something.
+#
+# The _SW pair is the same remote held SIDEWAYS, in two hands like a plain pad.
+# It is a device id and not a setting because the core has to know: it swaps the
+# d-pad's bitmasks, renames four buttons and turns the emulated remote's
+# orientation, none of which a frontend can do on the core's behalf.
+#
+# There is deliberately no sideways-with-Nunchuk id, because there is no such
+# way to hold one -- the Nunchuk needs the hand that would be on the other end
+# of the remote. _refresh_device_type resolves the clash in favour of the
+# Nunchuk, which is the half a player physically plugged in.
 const RETRO_DEVICE_WIIMOTE := 1
+const RETRO_DEVICE_WIIMOTE_SW := 513
 const RETRO_DEVICE_WIIMOTE_NC := 769
 const RETRO_DEVICE_WIIMOTE_MP := 1793
+const RETRO_DEVICE_WIIMOTE_MP_SW := 2049
 const RETRO_DEVICE_WIIMOTE_MP_NC := 2305
 
 ## Analog range libretro expects on a stick axis.
@@ -310,6 +322,10 @@ func wants_ray_handoff() -> bool:
 func _ready() -> void:
 	super._ready()
 	press_to_hold = false
+	# A second hand on the remote is how a player asks for sideways, so the grab
+	# has to accept one rather than ignoring it. SECOND and not SWAP: SWAP would
+	# hand the whole remote to the new hand instead of letting both hold it.
+	second_hand_grab = SecondHandGrab.SECOND
 	add_to_group("spawned")
 	add_to_group(ControllerBindings.CONSUMER_GROUP)
 	grabbed.connect(_on_grabbed_signal)
@@ -611,13 +627,38 @@ func _has_nunchuk() -> bool:
 ## Announce whatever is currently hanging off this remote, as one of the four ids
 ## the core understands. Called from every path that can change the chain, so the
 ## mapping from hardware to id lives in exactly one place.
+## A Nunchuk BEATS a two-handed grab, and the order below is the whole rule.
+##
+## Both hands on the remote is how a player asks for sideways, but a Nunchuk in
+## one of them means that hand is not free — you cannot hold a Nunchuk and the
+## far end of the remote at once. The core has no id for the combination either.
+## So a seated Nunchuk wins and the second hand is just a second hand.
 func _refresh_device_type() -> void:
 	var dev := RETRO_DEVICE_WIIMOTE
 	if _motion_plus != null:
-		dev = RETRO_DEVICE_WIIMOTE_MP_NC if _nunchuk != null else RETRO_DEVICE_WIIMOTE_MP
+		if _nunchuk != null:
+			dev = RETRO_DEVICE_WIIMOTE_MP_NC
+		elif _is_held_in_two_hands():
+			dev = RETRO_DEVICE_WIIMOTE_MP_SW
+		else:
+			dev = RETRO_DEVICE_WIIMOTE_MP
 	elif _nunchuk != null:
 		dev = RETRO_DEVICE_WIIMOTE_NC
+	elif _is_held_in_two_hands():
+		dev = RETRO_DEVICE_WIIMOTE_SW
 	_set_device_type(dev)
+
+
+## True when both hands have hold of the remote.
+##
+## Asked of the grab driver rather than tracked with a counter of our own: the
+## driver already owns the answer, and a counter kept alongside it goes wrong the
+## first time a hand is taken away by something other than a release — a teleport,
+## a scene change, the object being freed under the hand.
+func _is_held_in_two_hands() -> bool:
+	if _grab_driver == null:
+		return false
+	return _grab_driver.secondary != null
 
 
 ## Re-announce the slot when the extension changes. The core rebuilds the whole
@@ -646,7 +687,10 @@ func _set_device_type(dev: int) -> void:
 
 # ── Toggle-hold (mirrors LightGun) ────────────────────────────────────────────
 
+## Also fires for the SECOND hand — xr-tools emits grabbed for both — which is
+## what turns the remote sideways.
 func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
+	_refresh_device_type()
 	if _hint:
 		_hint.on_grabbed(by)
 	_set_face_buttons_active(true)
@@ -664,6 +708,17 @@ func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
 	_set_model_visible(ctrl, false)
 	_update_pointer_block(ctrl, true)
 	_update_locomotion_block()
+
+
+## Turning sideways back again, which has no signal of its own.
+##
+## xr-tools emits `grabbed` for a second hand but nothing for a second RELEASE:
+## let_go removes the grab and returns early while a primary is still holding, so
+## `dropped` fires only when the LAST hand lets go. Watching the signals alone
+## would turn the remote sideways and never turn it back.
+func let_go(by: Node3D, p_linear_velocity: Vector3, p_angular_velocity: Vector3) -> void:
+	super.let_go(by, p_linear_velocity, p_angular_velocity)
+	_refresh_device_type()
 
 
 func _on_dropped_signal(_pickable: Node3D) -> void:
