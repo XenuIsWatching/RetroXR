@@ -31,6 +31,12 @@
 extends Node
 
 
+## A systemid no console has, so seeding a default core for it cannot shadow one
+## the player chose. Never a real platform: core_defaults.json is the player's
+## own file and the only one _resolve_core() will read.
+const _RESOLVE_SYS := "__resolve_selftest"
+
+
 ## A stand-in for a cartridge or a memory card: the system only ever reads named
 ## properties off the seated object, so a Node3D carrying them is enough.
 class FakeSeated extends Node3D:
@@ -801,11 +807,42 @@ func _test_core_resolution() -> void:
 
 	sys.core_name = "some_core"
 	_eq("resolve/a named core wins", sys._resolve_core(), "some_core")
+
+	# The fallback reads core_defaults.json, and NOTHING seeds that file --
+	# OPTIONS > Cores writes it when a player picks a default, and until someone
+	# does there is no file and every system resolves to "". So asserting that a
+	# real system has a non-empty default passes on a machine that has been used
+	# and fails on every fresh one, which is what CI reported.
+	#
+	# Write a default of its own instead, under a systemid no console uses, and
+	# put the file back byte for byte. CoreDefaults.default_path() is derived from
+	# the core root and cannot be pointed at a scratch dir, so the player's real
+	# file is the only one there is to write.
+	var path := CoreDefaults.default_path()
+	var had := FileAccess.file_exists(path)
+	var before := FileAccess.get_file_as_bytes(path) if had else PackedByteArray()
+	var seeded := CoreDefaults.new()
+	seeded.setup(path)
+	seeded.set_default_core(_RESOLVE_SYS, "selftest_core")
+	seeded.save()
+
 	sys.core_name = ""
-	_ok("resolve/a known system falls back to its default",
-		not sys._resolve_core().is_empty())
+	sys.systemid = _RESOLVE_SYS
+	_eq("resolve/a system with a default falls back to it",
+		sys._resolve_core(), "selftest_core")
 	sys.systemid = ""
 	_eq("resolve/nothing to go on", sys._resolve_core(), "")
+
+	if had:
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		f.store_buffer(before)
+		f.close()
+	else:
+		DirAccess.remove_absolute(path)
+	_eq("resolve/the player's own defaults are put back",
+		FileAccess.file_exists(path), had)
+	if had:
+		_ok("resolve/byte for byte", FileAccess.get_file_as_bytes(path) == before)
 
 	sys.core_directory = "C:/somewhere/libretro"
 	_eq("resolve/a named directory wins", sys._resolve_dir(), "C:/somewhere/libretro")
@@ -1395,6 +1432,13 @@ func _test_save_state_gates() -> void:
 		return
 	var sys: Node3D = sys_scene.instantiate()
 	sys.systemid = "nes"
+	# NAMED, not resolved. Every gate below asks _resolve_core(), which falls back
+	# to the player's core_defaults.json -- so on a machine where nobody has
+	# picked a default the core came back empty, load_state answered "no game is
+	# inserted" about a machine holding one, and the case about a core that cannot
+	# serialize skipped itself. None of these gates is about core resolution, and
+	# the guard that used to hide that is gone with this line.
+	sys.core_name = "__state_selftest_core"
 	add_child(sys)
 	for i in range(20):
 		await get_tree().process_frame
@@ -1421,11 +1465,10 @@ func _test_save_state_gates() -> void:
 	# A core that answered "I cannot serialize" is remembered STATICALLY, because
 	# it is a property of the core and not of this cabinet. Put it back after.
 	var core: String = sys._resolve_core()
-	if not core.is_empty():
-		SaveStateController._cores_without_states[core] = true
-		_eq("state/a core that cannot serialize is remembered",
-			str(sys.can_capture_state()["reason"]), "this core cannot save states")
-		SaveStateController._cores_without_states.erase(core)
+	SaveStateController._cores_without_states[core] = true
+	_eq("state/a core that cannot serialize is remembered",
+		str(sys.can_capture_state()["reason"]), "this core cannot save states")
+	SaveStateController._cores_without_states.erase(core)
 
 	# ── Answers exactly once ──
 	var answers: Array = []
