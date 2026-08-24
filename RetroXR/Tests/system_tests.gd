@@ -574,8 +574,8 @@ func _test_seated_content() -> void:
 	# Nothing seated: the file on disk is all there is to go on.
 	_eq("content/label falls back to the file", sys._content_label(), "Duck Hunt (World)")
 	_eq("content/system falls back to the machine", sys._resolve_systemid(), "nes")
-	_eq("content/no cart means no save slot", sys._sram_slot(), "")
-	_eq("content/no cart means no save path", sys._compose_sram_path("fceumm"), "")
+	_eq("content/no cart means no save slot", sys._memcards._sram_slot(), "")
+	_eq("content/no cart means no save path", sys._memcards._compose_sram_path("fceumm"), "")
 
 	var cart := FakeSeated.new()
 	cart.game_label = "Duck Hunt"
@@ -587,8 +587,8 @@ func _test_seated_content() -> void:
 	# A Famicom Disk System disc in a NES: the disc decides, because that is what
 	# picks the core and the save location.
 	_eq("content/cart names the system", sys._resolve_systemid(), "fds")
-	_eq("content/cart names the save slot", sys._sram_slot(), "dh-001")
-	_ok("content/cart has a save path", not sys._compose_sram_path("fceumm").is_empty())
+	_eq("content/cart names the save slot", sys._memcards._sram_slot(), "dh-001")
+	_ok("content/cart has a save path", not sys._memcards._compose_sram_path("fceumm").is_empty())
 
 	# A blank label is not a label — the file name is better than an empty plate.
 	cart.game_label = ""
@@ -598,9 +598,9 @@ func _test_seated_content() -> void:
 
 	# No core resolved and no ROM are both "nothing to persist", not a path built
 	# out of empty strings.
-	_eq("content/no core means no save path", sys._compose_sram_path(""), "")
+	_eq("content/no core means no save path", sys._memcards._compose_sram_path(""), "")
 	sys.rom_path = ""
-	_eq("content/no rom means no save path", sys._compose_sram_path("fceumm"), "")
+	_eq("content/no rom means no save path", sys._memcards._compose_sram_path("fceumm"), "")
 
 	cart.free()
 	sys.free()
@@ -1240,7 +1240,7 @@ func _test_memcard_presence() -> void:
 
 	# A card seated before the machine starts.
 	var card := Node3D.new()
-	psx._snapped_memcards[0] = card
+	psx._memcards._snapped_memcards[0] = card
 	var seated := psx._removable_media_options("pcsx_rearmed")
 	_eq("memcard/a seated card types the slot",
 		seated.get("pcsx_rearmed_memcard1", ""), "libretro")
@@ -1260,7 +1260,7 @@ func _test_memcard_presence() -> void:
 	# The runtime half. It reaches for the live core, so on a machine that is not
 	# running it must do nothing at all rather than fault -- which is also what
 	# guards the case where the option arrives before a core exists to take it.
-	psx._set_card_presence(0, false)
+	psx._memcards._set_card_presence(0, false)
 	_ok("memcard/presence on a machine that is off does nothing",
 		not psx.is_powered_on)
 
@@ -1505,34 +1505,34 @@ func _test_sram_paths() -> void:
 	# no core, has nowhere to put a save and must say so rather than guess.
 	psx.rom_path = ""
 	_eq("sram/no game means no save file",
-		psx._compose_sram_path("pcsx_rearmed"), "")
+		psx._memcards._compose_sram_path("pcsx_rearmed"), "")
 	psx.rom_path = "/nonexistent/__sram_selftest.bin"
 	_eq("sram/no core means no save file either",
-		psx._compose_sram_path(""), "")
+		psx._memcards._compose_sram_path(""), "")
 
 	# A machine that takes cards saves to the CARD, keyed on the card's own id
 	# and family -- not on the game. That is what lets one card carry saves for
 	# several games and follow the player between machines.
-	psx._snapped_memcards[0] = null
+	psx._memcards._snapped_memcards[0] = null
 	_eq("sram/a card machine with an empty slot has nowhere to write",
-		psx._compose_sram_path("pcsx_rearmed"), "")
+		psx._memcards._compose_sram_path("pcsx_rearmed"), "")
 
 	var card := _StubCard.new()
 	card.card_id = "__sram_selftest_card"
 	card.family = "playstation"
 	add_child(card)
-	psx._snapped_memcards[0] = card
+	psx._memcards._snapped_memcards[0] = card
 	_eq("sram/a seated card is where the save goes",
-		psx._compose_sram_path("pcsx_rearmed"),
+		psx._memcards._compose_sram_path("pcsx_rearmed"),
 		SramPaths.card_save_path("playstation", "__sram_selftest_card"))
 	# And it does not depend on the game: the same card under a different ROM
 	# is the same file, which is the whole point of a memory card.
 	psx.rom_path = "/nonexistent/__a_different_game.bin"
 	_eq("sram/the same card backs a different game",
-		psx._compose_sram_path("pcsx_rearmed"),
+		psx._memcards._compose_sram_path("pcsx_rearmed"),
 		SramPaths.card_save_path("playstation", "__sram_selftest_card"))
 
-	psx._snapped_memcards[0] = null
+	psx._memcards._snapped_memcards[0] = null
 	card.queue_free()
 	psx.queue_free()
 
@@ -1546,19 +1546,19 @@ func _test_sram_paths() -> void:
 		await get_tree().process_frame
 	nes.rom_path = "/nonexistent/__sram_selftest.nes"
 	_eq("sram/a cartridge machine with no cartridge has nowhere to write",
-		nes._compose_sram_path("fceumm"), "")
+		nes._memcards._compose_sram_path("fceumm"), "")
 
 	var cart := _StubCart.new()
 	cart.save_id = "__sram_selftest_cart"
 	add_child(cart)
 	nes._snapped_cartridge = cart
 	_eq("sram/a seated cartridge saves against core and rom",
-		nes._compose_sram_path("fceumm"),
+		nes._memcards._compose_sram_path("fceumm"),
 		SramPaths.cart_save_path("fceumm", "/nonexistent/__sram_selftest.nes",
 			"__sram_selftest_cart"))
 	# Unlike a card, this one DOES move with the game.
 	_ok("sram/and a different rom is a different file",
-		nes._compose_sram_path("fceumm")
+		nes._memcards._compose_sram_path("fceumm")
 			!= SramPaths.cart_save_path("fceumm", "/other.nes", "__sram_selftest_cart"))
 
 	nes._snapped_cartridge = null
