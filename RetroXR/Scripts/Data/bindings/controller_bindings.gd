@@ -197,29 +197,58 @@ static func _save_file(data: Dictionary) -> void:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 ## Save global (fallback) bindings. Existing per-system profiles are preserved.
-static func save_global(button_map: Dictionary, stick_map: Dictionary, lightgun_map: Dictionary) -> void:
+##
+## The wiimote and nunchuk layers are OPTIONAL, and null means "leave whatever is
+## stored alone" rather than "clear it". They are written from a different page
+## from the other three, so a caller that has no Nunchuk map to offer must not
+## take the stored one with it.
+static func save_global(button_map: Dictionary, stick_map: Dictionary, lightgun_map: Dictionary,
+        wiimote_map: Variant = null, nunchuk_map: Variant = null) -> void:
     var data := _load_file()
     if not data.has("global"):
         data["global"] = {}
     data["global"]["buttons"] = button_map
     data["global"]["sticks"] = stick_map
     data["global"]["lightgun"] = lightgun_map
+    if wiimote_map != null:
+        data["global"]["wiimote"] = wiimote_map
+    if nunchuk_map != null:
+        data["global"]["nunchuk"] = nunchuk_map
     _save_file(data)
 
 
 ## Save per-system bindings. Falls back to save_global if systemid is empty.
-static func save_for_system(systemid: String, button_map: Dictionary, stick_map: Dictionary, lightgun_map: Dictionary) -> void:
+##
+## A profile is written WHOLE — that is what makes it pin a platform against
+## later global edits — and the whole has five layers, not three. Replacing the
+## entry with only buttons/sticks/lightgun is what used to destroy a stored
+## Nunchuk map every time any other binding on that platform was saved: binding
+## one thing silently reset another page, on a store the player never sees.
+##
+## So the two Wii layers are carried over from what is already there when the
+## caller does not supply them. Everything else is still replaced outright.
+static func save_for_system(systemid: String, button_map: Dictionary, stick_map: Dictionary,
+        lightgun_map: Dictionary, wiimote_map: Variant = null,
+        nunchuk_map: Variant = null) -> void:
     if systemid.is_empty():
-        save_global(button_map, stick_map, lightgun_map)
+        save_global(button_map, stick_map, lightgun_map, wiimote_map, nunchuk_map)
         return
     var data := _load_file()
     if not data.has("per_system"):
         data["per_system"] = {}
-    data["per_system"][systemid] = {
+    var previous: Dictionary = (data["per_system"] as Dictionary).get(systemid, {}) as Dictionary
+    var entry := {
         "buttons":  button_map,
         "sticks":   stick_map,
         "lightgun": lightgun_map,
     }
+    var wiimote: Variant = wiimote_map if wiimote_map != null else previous.get("wiimote")
+    var nunchuk: Variant = nunchuk_map if nunchuk_map != null else previous.get("nunchuk")
+    if wiimote != null:
+        entry["wiimote"] = wiimote
+    if nunchuk != null:
+        entry["nunchuk"] = nunchuk
+    data["per_system"][systemid] = entry
     _save_file(data)
 
 

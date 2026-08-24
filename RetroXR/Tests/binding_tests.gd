@@ -54,6 +54,7 @@ func _ready() -> void:
 	_test_clear_restores_global()
 	_test_empty_systemid_is_global()
 	_test_overridden_systems()
+	_test_wii_layers_survive_a_save()
 	_test_console_pad_art()
 	_test_wii_pad_art()
 	_test_desktop_layers()
@@ -519,6 +520,60 @@ func _test_wii_pad_art() -> void:
 	_eq("art/a pad with no glyphs of its own falls back to the shared map",
 		_glyph_stem(nes_diagram, "start"), "playstation3_button_start_outline")
 	nes_diagram.queue_free()
+
+
+# ---------------------------------------------------------------------------
+# The wiimote and nunchuk layers are stored beside buttons/sticks/lightgun and
+# resolved by the same merge, but they are written by a DIFFERENT page. That
+# makes them the one thing a save can silently take with it.
+# ---------------------------------------------------------------------------
+
+func _test_wii_layers_survive_a_save() -> void:
+	_clear()
+
+	# A per-platform Nunchuk map, written whole the way an override is.
+	var nunchuk := {"c": "grip", "z": "by_button"}
+	var wiimote := {"shake": "grip"}
+	var a := _xr_profile("right_grip", ControllerBindings.JOYPAD_R2)
+	ControllerBindings.save_for_system(SYS_A, a[0], a[1], a[2], wiimote, nunchuk)
+
+	_eq("wii/the nunchuk layer round-trips",
+		str((ControllerBindings.get_for_system(SYS_A)["nunchuk"] as Dictionary).get("c")),
+		"grip")
+	_eq("wii/and the wiimote layer with it",
+		str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
+		"grip")
+
+	# THE GUARD. Saving any OTHER binding for the same platform used to replace
+	# the whole per-system entry with buttons/sticks/lightgun, taking these two
+	# layers with it — so binding one thing silently reset another page. A caller
+	# that has no Nunchuk map to offer must leave the stored one alone.
+	var b := _xr_profile("left_grip", ControllerBindings.JOYPAD_L2)
+	ControllerBindings.save_for_system(SYS_A, b[0], b[1], b[2])
+
+	_eq("wii/an unrelated save leaves the nunchuk layer standing",
+		str((ControllerBindings.get_for_system(SYS_A)["nunchuk"] as Dictionary).get("c")),
+		"grip")
+	_eq("wii/and the wiimote layer standing",
+		str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
+		"grip")
+	_eq("wii/while the new binding did take",
+		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("left_grip")),
+		ControllerBindings.JOYPAD_L2)
+
+	# The global layer has the same shape and the same hazard.
+	ControllerBindings.save_global(a[0], a[1], a[2], wiimote, nunchuk)
+	var g := _xr_profile("right_trigger", ControllerBindings.JOYPAD_A)
+	ControllerBindings.save_global(g[0], g[1], g[2])
+	_eq("wii/a global save leaves the global nunchuk layer standing",
+		str((ControllerBindings.get_global()["nunchuk"] as Dictionary).get("z")),
+		"by_button")
+
+	# And a platform with no Nunchuk map of its own still reads the global one,
+	# which is what makes the layer worth storing per platform at all.
+	_eq("wii/another platform falls back to the global nunchuk map",
+		str((ControllerBindings.get_for_system(SYS_B)["nunchuk"] as Dictionary).get("c")),
+		"grip")
 
 
 func _test_console_pad_art() -> void:
