@@ -1412,19 +1412,19 @@ func _test_save_state_gates() -> void:
 	_ok("state/a running machine with a game can capture",
 		bool(sys.can_capture_state()["ok"]), str(sys.can_capture_state()))
 
-	sys._capture_id = "__in_flight"
+	sys._save_state._capture_id = "__in_flight"
 	_eq("state/one capture at a time",
 		str(sys.can_capture_state()["reason"]), "a save state is already being written")
-	sys._capture_id = ""
+	sys._save_state._capture_id = ""
 
 	# A core that answered "I cannot serialize" is remembered STATICALLY, because
 	# it is a property of the core and not of this cabinet. Put it back after.
 	var core: String = sys._resolve_core()
 	if not core.is_empty():
-		RetroSystem._cores_without_states[core] = true
+		SaveStateController._cores_without_states[core] = true
 		_eq("state/a core that cannot serialize is remembered",
 			str(sys.can_capture_state()["reason"]), "this core cannot save states")
-		RetroSystem._cores_without_states.erase(core)
+		SaveStateController._cores_without_states.erase(core)
 
 	# ── Answers exactly once ──
 	var answers: Array = []
@@ -1459,14 +1459,14 @@ func _test_save_state_gates() -> void:
 	# In-flight wins over everything else, so a second press cannot start a
 	# second read over the top of the first.
 	loads.clear()
-	sys._load_id = "__already_loading"
+	sys._save_state._load_id = "__already_loading"
 	sys.load_state("second-press")
 	_eq("state/one load at a time", loads.size(), 1)
 	_eq("state/and the second press is the one refused",
 		str((loads[0] as Array)[0]), "second-press")
 	_eq("state/for the right reason",
 		str((loads[0] as Array)[2]), "a save state is already loading")
-	sys._load_id = ""
+	sys._save_state._load_id = ""
 
 	sys.queue_free()
 	await get_tree().process_frame
