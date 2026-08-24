@@ -77,6 +77,15 @@ var _renumber := false
 ## the SAME anchor, so the seats do not move and only the re-declaration is
 ## tested. Tells a renumber apart from a bus rebuild.
 var _regroup := false
+## WHEN the seats move: "play" (default) mid-match, or "lobby" at the pairing
+## screen. The distinction is the whole question. A game in a running match
+## cannot be handed a new player number -- no cable can do that to real hardware
+## either, since re-chaining means unplugging -- so a stall there proves nothing
+## about whether the machine is broken. A game sitting on its pairing screen is
+## polling by design, and if it picks the renumber up from there then a seat
+## change costs a player the walk back to that screen and nothing more, which is
+## what decides whether the room still has to power-cycle anybody.
+var _reseat_at := "play"
 var _film_frame := 0
 
 
@@ -159,6 +168,9 @@ func _run() -> void:
 			order = arg.substr(8)
 	_renumber = order == "cable-first-renumber"
 	_regroup = order == "cable-first-regroup"
+	for arg in _args():
+		if arg.begins_with("--reseat-at="):
+			_reseat_at = arg.substr(12)
 	for i in range(20):
 		await get_tree().process_frame
 
@@ -290,6 +302,12 @@ func _run() -> void:
 			break
 	_shot("e_lobby")
 
+	# Both machines are paired and sitting on the lobby, which is the screen a game
+	# polls the cable from. Moving the seats HERE is the case the room actually
+	# produces -- machines are cabled up during setup, not mid-match.
+	if (_renumber or _regroup) and _reseat_at == "lobby":
+		_reseat(_m[1] if _renumber else _m[0])
+
 	# Both players are on the lobby now. Start takes the master through to the
 	# Mario Bros. mode screen, where Classic or Battle is chosen, and A takes it.
 	#
@@ -338,7 +356,7 @@ func _run() -> void:
 		# still has to is the question, so this does the renumber and resets
 		# NOBODY, and the per-step sent counts below say whether the link
 		# survived it.
-		if (_renumber or _regroup) and step == 2:
+		if (_renumber or _regroup) and _reseat_at == "play" and step == 2:
 			_reseat(_m[1] if _renumber else _m[0])
 		var machine: Libretro = script[step][0]
 		var mask: int = script[step][1]
