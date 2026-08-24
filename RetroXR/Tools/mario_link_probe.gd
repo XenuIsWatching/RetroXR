@@ -71,6 +71,12 @@ var _b: Libretro = null
 var _wall_prev := 0
 var _frames_prev: Array[int] = []
 var _filming := false
+## Set by --order=cable-first-renumber: move every machine's seat mid-play.
+var _renumber := false
+## Set by --order=cable-first-regroup: the control. Re-declare the SAME bus with
+## the SAME anchor, so the seats do not move and only the re-declaration is
+## tested. Tells a renumber apart from a bus rebuild.
+var _regroup := false
 var _film_frame := 0
 
 
@@ -151,12 +157,14 @@ func _run() -> void:
 	for arg in _args():
 		if arg.begins_with("--order="):
 			order = arg.substr(8)
+	_renumber = order == "cable-first-renumber"
+	_regroup = order == "cable-first-regroup"
 	for i in range(20):
 		await get_tree().process_frame
 
 	var joined := false
 	match order:
-		"cable-first":
+		"cable-first", "cable-first-renumber", "cable-first-regroup":
 			# A saved room restores its leads before anything is powered up, then
 			# the player switches two handhelds on one after the other.
 			joined = _cable()
@@ -321,6 +329,17 @@ func _run() -> void:
 		script.append([_m[i], BTN_LEFT | BTN_A, "p%d_left_jump" % (i + 1)])
 	script.append([null, 0, "idle"])
 	for step in range(script.size()):
+		# Move everyone's seat, once, on a session that is already trading.
+		#
+		# This is the half of LinkCable._restart that nothing had ever measured.
+		# Two cabled pairs merging into one wider bus renumbers machines that are
+		# mid-game -- a session log shows a machine that was player one becoming
+		# player three -- and the room's answer is to power-cycle them. Whether it
+		# still has to is the question, so this does the renumber and resets
+		# NOBODY, and the per-step sent counts below say whether the link
+		# survived it.
+		if (_renumber or _regroup) and step == 2:
+			_reseat(_m[1] if _renumber else _m[0])
 		var machine: Libretro = script[step][0]
 		var mask: int = script[step][1]
 		if machine != null:
@@ -406,6 +425,36 @@ func _cable() -> bool:
 ## Every machine except the one that owns the clock.
 func _guests() -> Array:
 	return _m.slice(1)
+
+
+## Hand every machine a different seat, with no reset anywhere.
+##
+## Anchored on machine 1 rather than machine 0, because LinkConnectGroup makes
+## the CALLER seat zero: re-declaring the same set from a different anchor moves
+## every machine's player number and takes the clock away from whoever had it,
+## which is exactly what a merge does to the pair that was already playing.
+##
+## The membership is deliberately unchanged. A machine appearing or disappearing
+## would also change the transfer length and the peer count, and then a stall
+## could be blamed on either; this moves the seats and nothing else.
+##
+## READ THE PER-MACHINE COUNTS, NOT THE SUMMARY, in this mode. The summary
+## divides _a's sent count by the rate a MASTER sends at, two messages per
+## transfer against a slave's one -- and the whole point here is that _a stops
+## being the master half way through. A perfectly healthy link therefore reports
+## about half its real rate and fails the run, which is a false negative, not a
+## finding. The true rate is (both machines' deltas) / 3 for a pair.
+func _reseat(anchor: Libretro) -> void:
+	var others: Array = []
+	var ports := PackedInt32Array()
+	ports.append(0)
+	for k in range(_m.size()):
+		if _m[k] != anchor:
+			others.append(_m[k])
+			ports.append(0)
+	var before: int = _a.LinkSent(0)
+	var ok: bool = anchor.LinkConnectGroup(others, ports)
+	print("[mario] RESEAT  group=%s  anchor=m%d  nobody reset  (sent so far %d)" % [str(ok), _m.find(anchor), before])
 
 
 ## Wait for a number of EMULATED frames on the slowest machine.
