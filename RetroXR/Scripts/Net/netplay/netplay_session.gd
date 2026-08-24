@@ -1265,10 +1265,7 @@ func schedule_disk_op(system: Object, op: int, md5: String, index: int) -> void:
 	var frame := _complete_upto + _delay + DISK_LEAD
 	_disc_serial += 1
 	var serial := _disc_serial
-	var waiting := _participating_remote_peers()
-	if not waiting.is_empty():
-		_disc_waiting[serial] = waiting
-		_disc_deadlines[serial] = _now() + OP_ACK_TIMEOUT_MS
+	var waiting := _op_arm(_disc_waiting, _disc_deadlines, serial)
 	print("[Netplay] disc op %d/%d machine=%d (md5 %s…) @frame %d; waiting=%s" % [
 		serial, op, machine_index, md5.left(8), frame, str(waiting.keys())])
 	if not _apply_disk_op(machine_index, op, md5, index, frame):
@@ -1289,21 +1286,12 @@ func _np_disk(serial: int, machine_index: int, op: int, md5: String,
 
 @rpc("any_peer", "call_remote", "reliable", CH_CONTROL)
 func _np_disk_ready(serial: int) -> void:
-	if not _nm.is_host() or not _disc_waiting.has(serial):
-		return
-	var waiting: Dictionary = _disc_waiting[serial]
-	waiting.erase(multiplayer.get_remote_sender_id())
-	if waiting.is_empty():
-		_disc_waiting.erase(serial)
-		_disc_deadlines.erase(serial)
-		print("[Netplay] disc op %d acknowledged by every peer" % serial)
+	_op_ack(_disc_waiting, _disc_deadlines, serial, "disc op")
 
 
 @rpc("any_peer", "call_remote", "reliable", CH_CONTROL)
 func _np_disk_failed(serial: int, reason: String) -> void:
-	if not _nm.is_host() or not _disc_waiting.has(serial):
-		return
-	stop("disc op %d failed: %s" % [serial, reason])
+	_op_fail(_disc_waiting, serial, "disc op", reason)
 
 
 func _apply_disk_op(machine_index: int, op: int, md5: String, index: int,
@@ -1343,10 +1331,7 @@ func schedule_reset(system: Object) -> void:
 	var frame := _complete_upto + _delay + RESET_LEAD
 	_reset_serial += 1
 	var serial := _reset_serial
-	var waiting := _participating_remote_peers()
-	if not waiting.is_empty():
-		_reset_waiting[serial] = waiting
-		_reset_deadlines[serial] = _now() + OP_ACK_TIMEOUT_MS
+	var waiting := _op_arm(_reset_waiting, _reset_deadlines, serial)
 	print("[Netplay] reset %d machine=%d @frame %d; waiting=%s" % [
 		serial, machine_index, frame, str(waiting.keys())])
 	if not _apply_reset(machine_index, frame):
@@ -1366,21 +1351,12 @@ func _np_reset(serial: int, machine_index: int, frame: int) -> void:
 
 @rpc("any_peer", "call_remote", "reliable", CH_CONTROL)
 func _np_reset_ready(serial: int) -> void:
-	if not _nm.is_host() or not _reset_waiting.has(serial):
-		return
-	var waiting: Dictionary = _reset_waiting[serial]
-	waiting.erase(multiplayer.get_remote_sender_id())
-	if waiting.is_empty():
-		_reset_waiting.erase(serial)
-		_reset_deadlines.erase(serial)
-		print("[Netplay] reset %d acknowledged by every peer" % serial)
+	_op_ack(_reset_waiting, _reset_deadlines, serial, "reset")
 
 
 @rpc("any_peer", "call_remote", "reliable", CH_CONTROL)
 func _np_reset_failed(serial: int, reason: String) -> void:
-	if not _nm.is_host() or not _reset_waiting.has(serial):
-		return
-	stop("reset %d failed: %s" % [serial, reason])
+	_op_fail(_reset_waiting, serial, "reset", reason)
 
 
 func _apply_reset(machine_index: int, frame: int) -> bool:
@@ -1455,10 +1431,7 @@ func schedule_link_op(system: Object, op: int, members: Array, ports: Array) -> 
 		port_ids.append(int(pt))
 	_link_serial += 1
 	var serial := _link_serial
-	var waiting := _participating_remote_peers()
-	if not waiting.is_empty():
-		_link_waiting[serial] = waiting
-		_link_deadlines[serial] = _now() + OP_ACK_TIMEOUT_MS
+	var waiting := _op_arm(_link_waiting, _link_deadlines, serial)
 	print("[Netplay] link op %d/%d over machines %s @frame %d; waiting=%s" % [
 		serial, op, str(member_ids), frame, str(waiting.keys())])
 	if not _apply_link_op(op, member_ids, port_ids, frame):
@@ -1637,21 +1610,12 @@ func _np_link(serial: int, op: int, members: PackedInt32Array,
 
 @rpc("any_peer", "call_remote", "reliable", CH_CONTROL)
 func _np_link_ready(serial: int) -> void:
-	if not _nm.is_host() or not _link_waiting.has(serial):
-		return
-	var waiting: Dictionary = _link_waiting[serial]
-	waiting.erase(multiplayer.get_remote_sender_id())
-	if waiting.is_empty():
-		_link_waiting.erase(serial)
-		_link_deadlines.erase(serial)
-		print("[Netplay] link op %d acknowledged by every peer" % serial)
+	_op_ack(_link_waiting, _link_deadlines, serial, "link op")
 
 
 @rpc("any_peer", "call_remote", "reliable", CH_CONTROL)
 func _np_link_failed(serial: int, reason: String) -> void:
-	if not _nm.is_host() or not _link_waiting.has(serial):
-		return
-	stop("link op %d failed: %s" % [serial, reason])
+	_op_fail(_link_waiting, serial, "link op", reason)
 
 
 ## Queue the op until the frame gate is about to release `frame`.  Scheduling it
@@ -2075,16 +2039,64 @@ func _check_stall() -> void:
 		_np_frame_req.rpc_id(1, _next_post)
 
 
+# ── One deterministic operation, three kinds ──────────────────────────────────
+#
+# A disc swap, a reset and a link change are the same protocol wearing different
+# payloads: the host picks a frame, tells every participating peer, and holds
+# the operation open until all of them acknowledge or one fails. Godot needs a
+# distinct method name per RPC, so the three families keep their own entry
+# points and share everything behind them.
+#
+# The six dictionaries stay separate rather than folding into one table. The
+# teardown paths clear them by name and netplay_tests drives them by name, and
+# neither is worth churning to save three declarations.
+
+## Claim a serial and start waiting on every participating peer. Returns the
+## peers to send to, which is empty in a solo session -- and an operation with
+## nobody to wait for is armed with no deadline on purpose, so a single player
+## cannot time out against themselves.
+func _op_arm(waiting_by_serial: Dictionary, deadlines: Dictionary,
+		serial: int) -> Dictionary:
+	var waiting := _participating_remote_peers()
+	if not waiting.is_empty():
+		waiting_by_serial[serial] = waiting
+		deadlines[serial] = _now() + OP_ACK_TIMEOUT_MS
+	return waiting
+
+
+## One peer acknowledged. Clears the operation once the last one has.
+func _op_ack(waiting_by_serial: Dictionary, deadlines: Dictionary,
+		serial: int, label: String) -> void:
+	if not _nm.is_host() or not waiting_by_serial.has(serial):
+		return
+	var waiting: Dictionary = waiting_by_serial[serial]
+	waiting.erase(multiplayer.get_remote_sender_id())
+	if waiting.is_empty():
+		waiting_by_serial.erase(serial)
+		deadlines.erase(serial)
+		print("[Netplay] %s %d acknowledged by every peer" % [label, serial])
+
+
+## One peer could not apply it, so the session ends. There is no recovery: that
+## peer's cores are now in a state the others' are not, and carrying on would
+## desync every frame after this one.
+func _op_fail(waiting_by_serial: Dictionary, serial: int, label: String,
+		reason: String) -> void:
+	if not _nm.is_host() or not waiting_by_serial.has(serial):
+		return
+	stop("%s %d failed: %s" % [label, serial, reason])
+
+
 func _expired_operation(now: int) -> String:
-	for serial: int in _link_deadlines:
-		if now >= int(_link_deadlines[serial]):
-			return "link operation %d acknowledgement timed out" % serial
-	for serial: int in _disc_deadlines:
-		if now >= int(_disc_deadlines[serial]):
-			return "disc operation %d acknowledgement timed out" % serial
-	for serial: int in _reset_deadlines:
-		if now >= int(_reset_deadlines[serial]):
-			return "reset %d acknowledgement timed out" % serial
+	# The wording is load-bearing: "link operation" and "disc operation" here
+	# against "link op" and "disc op" in the acknowledgement log. Both are
+	# asserted, so they are listed rather than derived from one name.
+	for entry: Array in [[_link_deadlines, "link operation"],
+			[_disc_deadlines, "disc operation"], [_reset_deadlines, "reset"]]:
+		var deadlines: Dictionary = entry[0]
+		for serial: int in deadlines:
+			if now >= int(deadlines[serial]):
+				return "%s %d acknowledgement timed out" % [entry[1], serial]
 	return ""
 
 
