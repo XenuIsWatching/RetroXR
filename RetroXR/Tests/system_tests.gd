@@ -94,6 +94,7 @@ func _ready() -> void:
 	await _test_analog_mode_switch()
 	await _test_playstation_hardware()
 	await _test_power_led()
+	await _test_save_state_gates()
 	_test_libretro_port_routing()
 	_test_port_device_cache()
 	_test_cabinet_lookup()
@@ -1374,3 +1375,98 @@ func _test_power_led() -> void:
 			is_equal_approx(lens.emission_energy_multiplier, 0.0))
 		sys.queue_free()
 		await get_tree().process_frame
+
+
+# ── Save-state gates ──────────────────────────────────────────────────────────
+#
+# Everything the save-state path decides BEFORE it needs a core, which is all of
+# it bar the serialize itself. capture_state and load_state both promise in their
+# docstrings to "answer exactly once, always" -- a panel button stays greyed for
+# ever on a missing answer and double-fires on two, and neither had a test.
+#
+# Written against the code as it stands, deliberately, so it can be run before
+# and after the block moves out of RetroSystem. A characterisation test written
+# afterwards only proves the new code agrees with itself.
+
+func _test_save_state_gates() -> void:
+	var sys_scene := load("res://Scenes/Objects/system.tscn") as PackedScene
+	if sys_scene == null:
+		return
+	var sys: Node3D = sys_scene.instantiate()
+	sys.systemid = "nes"
+	add_child(sys)
+	for i in range(20):
+		await get_tree().process_frame
+
+	# ── Refusals, in the order the gate checks them ──
+	sys.rom_path = ""
+	sys.is_powered_on = false
+	_eq("state/no cartridge is the first refusal",
+		str(sys.can_capture_state()["reason"]), "no game is inserted")
+
+	sys.rom_path = "/nonexistent/__state_selftest.nes"
+	_eq("state/then a machine that is off",
+		str(sys.can_capture_state()["reason"]), "the machine is off")
+
+	sys.is_powered_on = true
+	_ok("state/a running machine with a game can capture",
+		bool(sys.can_capture_state()["ok"]), str(sys.can_capture_state()))
+
+	sys._capture_id = "__in_flight"
+	_eq("state/one capture at a time",
+		str(sys.can_capture_state()["reason"]), "a save state is already being written")
+	sys._capture_id = ""
+
+	# A core that answered "I cannot serialize" is remembered STATICALLY, because
+	# it is a property of the core and not of this cabinet. Put it back after.
+	var core: String = sys._resolve_core()
+	if not core.is_empty():
+		RetroSystem._cores_without_states[core] = true
+		_eq("state/a core that cannot serialize is remembered",
+			str(sys.can_capture_state()["reason"]), "this core cannot save states")
+		RetroSystem._cores_without_states.erase(core)
+
+	# ── Answers exactly once ──
+	var answers: Array = []
+	sys.state_captured.connect(func(id: String, ok: bool, reason: String) -> void:
+		answers.append([id, ok, reason]))
+	sys.rom_path = ""
+	sys.capture_state("wanted-id")
+	_eq("state/a refused capture answers once", answers.size(), 1)
+	if answers.size() == 1:
+		_eq("state/and answers about the id that was asked for",
+			str((answers[0] as Array)[0]), "wanted-id")
+		_ok("state/and answers not-ok", not bool((answers[0] as Array)[1]))
+		_eq("state/carrying the reason the gate gave",
+			str((answers[0] as Array)[2]), "no game is inserted")
+
+	# ── Load refusals, all synchronous ──
+	var loads: Array = []
+	sys.state_loaded.connect(func(id: String, ok: bool, reason: String) -> void:
+		loads.append([id, ok, reason]))
+
+	sys.load_state("whatever")
+	_eq("state/loading with no cartridge answers once", loads.size(), 1)
+	_eq("state/and says so", str((loads[0] as Array)[2]), "no game is inserted")
+
+	loads.clear()
+	sys.rom_path = "/nonexistent/__state_selftest.nes"
+	sys.load_state("__no_such_state")
+	_eq("state/a state that is not on disk answers once", loads.size(), 1)
+	_eq("state/and says which way it failed",
+		str((loads[0] as Array)[2]), "that save state is missing")
+
+	# In-flight wins over everything else, so a second press cannot start a
+	# second read over the top of the first.
+	loads.clear()
+	sys._load_id = "__already_loading"
+	sys.load_state("second-press")
+	_eq("state/one load at a time", loads.size(), 1)
+	_eq("state/and the second press is the one refused",
+		str((loads[0] as Array)[0]), "second-press")
+	_eq("state/for the right reason",
+		str((loads[0] as Array)[2]), "a save state is already loading")
+	sys._load_id = ""
+
+	sys.queue_free()
+	await get_tree().process_frame
