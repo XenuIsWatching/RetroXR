@@ -111,7 +111,7 @@ func _test_anchor() -> void:
 	_clear()
 
 	# The persisted-size bug: a set restored at 2.1x has ALREADY been placed where
-	# that size belongs, so the first _apply_scale — the one _ready makes — must
+	# that size belongs, so the first TvResize.apply() — the one _ready makes — must
 	# only put the size on the node. Correcting a scale the node never wore lifts
 	# the set again on every load.
 	var restored := TV_SCENE.instantiate() as RetroTV
@@ -136,8 +136,8 @@ func _test_riders() -> void:
 	# The collider's bottom, not the geometry's. tv.tscn's lowest mesh is the
 	# options-panel quad about a metre down; answering with that lifts the set far
 	# further than it grew and starts the standing ray inside the table.
-	_close(tv._local_bottom_y(), BOTTOM, "riders/the bottom is the collider's")
-	_close(tv._collider_height(), BOX.y, "riders/the height is the collider's")
+	_close(tv._resize._local_bottom_y(), BOTTOM, "riders/the bottom is the collider's")
+	_close(tv._resize._collider_height(), BOX.y, "riders/the height is the collider's")
 
 	var top := tv.global_position.y + BOX.y * 0.5
 	var on := _box(Vector3(0, top + 0.01, 0), Vector3(0.1, 0.1, 0.1))
@@ -145,7 +145,7 @@ func _test_riders() -> void:
 	var under := _box(Vector3(0, tv.global_position.y - 0.5, 0), Vector3(0.1, 0.1, 0.1))
 	await _settle()
 
-	var found := tv._riders(1.0)
+	var found := tv._resize._riders(1.0)
 	_ok(found.has(on), "riders/a box resting on top is found")
 	_ok(not found.has(beside), "riders/a box beside the set is not")
 	_ok(not found.has(under), "riders/a box under the set is not")
@@ -155,13 +155,13 @@ func _test_riders() -> void:
 	# wants to be shoved.
 	on.freeze = true
 	await _settle()
-	_ok(not tv._riders(1.0).has(on), "riders/a frozen body is left alone")
+	_ok(not tv._resize._riders(1.0).has(on), "riders/a frozen body is left alone")
 	on.freeze = false
 
 	# World geometry cannot ride anything.
 	var slab := _static_box(Vector3(0.15, top + 0.01, 0), Vector3(0.1, 0.1, 0.1))
 	await _settle()
-	var with_static := tv._riders(1.0)
+	var with_static := tv._resize._riders(1.0)
 	_ok(not with_static.has(slab), "riders/a static body is not a rider")
 	_ok(with_static.has(on), "riders/and the real rider is still found beside it")
 
@@ -170,8 +170,8 @@ func _test_riders() -> void:
 	var high := _box(Vector3(0, tv.global_position.y + BOX.y + 0.01, 0),
 		Vector3(0.1, 0.1, 0.1))
 	await _settle()
-	_ok(tv._riders(2.0).has(high), "riders/the query uses the size it was given")
-	_ok(not tv._riders(1.0).has(high), "riders/and not the one the set is wearing")
+	_ok(tv._resize._riders(2.0).has(high), "riders/the query uses the size it was given")
+	_ok(not tv._resize._riders(1.0).has(high), "riders/and not the one the set is wearing")
 	_clear()
 
 
@@ -224,7 +224,7 @@ func _test_carry() -> void:
 	var gone := _box(Vector3(9, 9, 9), Vector3(0.1, 0.1, 0.1))
 	var list: Array[RigidBody3D] = [gone]
 	gone.free()
-	tv3._carry_riders(list, 0.5)
+	tv3._resize._carry_riders(list, 0.5)
 	_ok(true, "carry/a freed rider does not take the resize with it")
 	_clear()
 
@@ -236,11 +236,11 @@ func _test_standing() -> void:
 	_floor(0.0)
 	tv.global_position = Vector3(0, -BOTTOM, 0)
 	await _settle()
-	_ok(tv._is_standing_on_something(), "standing/a set on the floor is standing")
+	_ok(tv._resize._is_standing_on_something(), "standing/a set on the floor is standing")
 
 	tv.global_position = Vector3(0, 2.0, 0)
 	await _settle()
-	_ok(not tv._is_standing_on_something(), "standing/a set in the air is not")
+	_ok(not tv._resize._is_standing_on_something(), "standing/a set in the air is not")
 
 	# Cast from the BASE, not the origin. A big cabinet's origin is most of a
 	# metre above its feet, so an origin cast reads a 5x set as standing while it
@@ -248,12 +248,12 @@ func _test_standing() -> void:
 	tv.set_tv_scale(5.0)
 	tv.global_position = Vector3(0, 0.0, 0)
 	await _settle()
-	_ok(not tv._is_standing_on_something(),
+	_ok(not tv._resize._is_standing_on_something(),
 		"standing/a big set with its ORIGIN on the floor is not standing")
 
 	tv.global_position = Vector3(0, -BOTTOM * 5.0, 0)
 	await _settle()
-	_ok(tv._is_standing_on_something(),
+	_ok(tv._resize._is_standing_on_something(),
 		"standing/the same set standing on its base is")
 	_clear()
 
@@ -268,16 +268,16 @@ func _test_jam() -> void:
 
 	# The box is shrunk by _JAM_DEPTH and lifted off the supporting surface, so
 	# merely standing on the floor is not a jam.
-	_ok(not tv._is_jammed(), "jam/resting on a surface is not a jam")
+	_ok(not tv._resize._is_jammed(), "jam/resting on a surface is not a jam")
 
 	# A wall the set only reaches once it has grown.
 	_wall()
 	await _settle()
-	_ok(not tv._is_jammed(), "jam/a wall the set does not reach is not a jam")
+	_ok(not tv._resize._is_jammed(), "jam/a wall the set does not reach is not a jam")
 
 	tv.set_tv_scale(2.0)
 	await _settle()
-	_ok(tv._is_jammed(), "jam/the same wall once the set has grown into it is")
+	_ok(tv._resize._is_jammed(), "jam/the same wall once the set has grown into it is")
 
 	# Static only. A prop that has come to rest against the cabinet also shows up
 	# in the query, and counting it would park the set for as long as anything is
@@ -285,7 +285,7 @@ func _test_jam() -> void:
 	tv.set_tv_scale(1.0)
 	_box(Vector3(BOX.x * 0.5, -BOTTOM, 0), Vector3(0.3, 0.3, 0.3))
 	await _settle()
-	_ok(not tv._is_jammed(), "jam/a loose prop overlapping the set is not a jam")
+	_ok(not tv._resize._is_jammed(), "jam/a loose prop overlapping the set is not a jam")
 	_clear()
 
 
@@ -303,13 +303,13 @@ func _test_park() -> void:
 
 	tv.set_tv_scale(2.0)
 	_ok(tv.freeze, "park/a standing, jammed set is parked")
-	_ok(tv._parked_by_resize, "park/and the park is recorded as ours")
+	_ok(tv._resize._parked_by_resize, "park/and the park is recorded as ours")
 
 	# Released the moment it is not needed, or a set shrunk back sits frozen at
 	# 1.0x with nothing holding it there.
 	tv.set_tv_scale(1.0)
 	_ok(not tv.freeze, "park/shrinking clear of the wall releases the park")
-	_ok(not tv._parked_by_resize, "park/and clears the record")
+	_ok(not tv._resize._parked_by_resize, "park/and clears the record")
 	_clear()
 
 	# On open floor there is no penetration to evict, so the body is left to
@@ -333,7 +333,23 @@ func _test_park() -> void:
 	held.freeze = true
 	held.set_tv_scale(2.0)
 	_ok(held.freeze, "park/a held set keeps the hold's freeze")
-	_ok(not held._parked_by_resize, "park/and is not recorded as parked by us")
+	_ok(not held._resize._parked_by_resize, "park/and is not recorded as parked by us")
+	_clear()
+
+	# Picking a parked set up ends the park by definition — the grab driver owns
+	# the pose from here. The set has to hear about it, because XRToolsPickable
+	# snapshots freeze into restore_freeze BEFORE `grabbed` fires: leaving our park
+	# in that snapshot restores it on release and the set hangs in mid-air.
+	var lifted := await _tv(false)
+	_floor(0.0)
+	_wall()
+	lifted.global_position = Vector3(0, -BOTTOM, 0)
+	await _settle()
+	lifted.set_tv_scale(2.0)
+	_ok(lifted._resize._parked_by_resize, "park/parked, ready to be picked up")
+	_ok(lifted._resize.clear_park(), "park/a grab is told there was a park to clear")
+	_ok(not lifted._resize._parked_by_resize, "park/and the park is gone")
+	_ok(not lifted._resize.clear_park(), "park/a grab with no park is told so")
 	_clear()
 
 	await _test_park_revalidation()
@@ -346,31 +362,31 @@ func _test_park_revalidation() -> void:
 	tv.global_position = Vector3(0, -BOTTOM, 0)
 	await _settle()
 	tv.set_tv_scale(2.0)
-	_ok(tv._parked_by_resize, "park/parked, ready to revalidate")
+	_ok(tv._resize._parked_by_resize, "park/parked, ready to revalidate")
 
 	# A parked body is frozen, so it has no gravity to notice with — nothing else
 	# would ever tell it the floor had gone.
 	for i in range(20):
-		tv._release_park_if_unsupported()
-	_ok(tv._parked_by_resize, "park/a still-supported park survives revalidation")
+		tv._resize.revalidate_park()
+	_ok(tv._resize._parked_by_resize, "park/a still-supported park survives revalidation")
 
 	# The set revalidates itself every frame, so the interval case has to own the
 	# counter and must not await: three physics frames of the TV's own _process is
 	# most of the way through an interval on its own, and the release it then makes
 	# is the RIGHT one arriving before the case can look.
 	ground.free()
-	tv._park_check_frame = 0
-	tv._release_park_if_unsupported()
-	_ok(tv._parked_by_resize, "park/the release waits for its check interval")
-	for i in range(RetroTV._PARK_CHECK_FRAMES):
-		tv._release_park_if_unsupported()
-	_ok(not tv._parked_by_resize, "park/a park over an empty floor is released")
+	tv._resize._park_check_frame = 0
+	tv._resize.revalidate_park()
+	_ok(tv._resize._parked_by_resize, "park/the release waits for its check interval")
+	for i in range(TvResize._PARK_CHECK_FRAMES):
+		tv._resize.revalidate_park()
+	_ok(not tv._resize._parked_by_resize, "park/a park over an empty floor is released")
 	_ok(not tv.freeze, "park/and the set is handed back to physics")
 
 	# Nothing to do when the freeze was never ours.
 	tv.freeze = true
 	for i in range(20):
-		tv._release_park_if_unsupported()
+		tv._resize.revalidate_park()
 	_ok(tv.freeze, "park/revalidation leaves a freeze that is not ours alone")
 	_clear()
 
