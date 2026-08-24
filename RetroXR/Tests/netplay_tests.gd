@@ -383,16 +383,16 @@ func _test_wire() -> void:
 	for vals: Array in [[0, 0, 0, 0, 0], [0xFFFF, 32767, -32768, 1, -1],
 			[0x8001, -32768, 32767, -12345, 12345], [1 << 15, 100, -200, 300, -400]]:
 		var buf := StreamPeerBuffer.new()
-		np._put_port(buf, 3, vals)
+		NetplayWire.put_port(buf, 3, vals)
 		buf.seek(0)
 		_eq(buf.get_u8(), 3, "wire/port %s keeps its index" % str(vals[0]))
-		_eq(np._get_port(buf), vals, "wire/port %s round-trips" % str(vals))
+		_eq(NetplayWire.get_port(buf), vals, "wire/port %s round-trips" % str(vals))
 
 	# Aux is per port: two accelerometers, two gyros and four IR/touch points.
 	# Exercise every signed field and the last pointer so an offset error cannot
 	# silently leave Wii MotionPlus or one IR blob local-only.
-	var aux_zero: Array = np._aux_default()
-	var aux_full: Array = np._aux_default()
+	var aux_zero: Array = NetplayWire.aux_default()
+	var aux_full: Array = NetplayWire.aux_default()
 	aux_full[0] = 0xFF
 	for i in range(1, 13):
 		aux_full[i] = -30000 + i * 4000
@@ -402,32 +402,32 @@ func _test_wire() -> void:
 		aux_full[i] = 1
 	for aux: Array in [aux_zero, aux_full]:
 		var buf2 := StreamPeerBuffer.new()
-		np._put_aux(buf2, aux)
+		NetplayWire.put_aux(buf2, aux)
 		# Against the CONSTANT the readers budget with, not against a number
 		# written out here — the two disagreeing is the bug this pins down.
 		_eq(buf2.get_size(), NetplaySession.AUX_BYTES_PER_PORT,
 			"wire/aux is exactly the size every reader budgets for")
 		buf2.seek(0)
-		_eq(np._get_aux(buf2), aux, "wire/aux %s round-trips" % str(aux))
+		_eq(NetplayWire.get_aux(buf2), aux, "wire/aux %s round-trips" % str(aux))
 
 	# The pressed flag is a bit, not a number: anything non-zero has to come back
 	# as exactly 1 or the two peers fold different values into their CRCs.
 	var bufp := StreamPeerBuffer.new()
-	var pressed_aux: Array = np._aux_default()
+	var pressed_aux: Array = NetplayWire.aux_default()
 	pressed_aux[0] = 1 << 7
 	pressed_aux[24] = 99
-	np._put_aux(bufp, pressed_aux)
+	NetplayWire.put_aux(bufp, pressed_aux)
 	bufp.seek(0)
-	_eq(np._get_aux(bufp)[24], 1, "wire/a pressed pointer normalises to 1")
+	_eq(NetplayWire.get_aux(bufp)[24], 1, "wire/a pressed pointer normalises to 1")
 
 	# Keyboard: keycode plus a down bit plus a character, per slot.
 	var keys: Array = [65 | 65536, 97, 66, 98]
 	var bufk := StreamPeerBuffer.new()
-	np._put_keys(bufk, keys)
+	NetplayWire.put_keys(bufk, keys)
 	_eq(bufk.get_size(), NetplaySession.KEY_BYTES,
 		"wire/keys are exactly the size every reader budgets for")
 	bufk.seek(0)
-	var got: Array = np._get_keys(bufk)
+	var got: Array = NetplayWire.get_keys(bufk)
 	_eq(got.size(), NetplaySession.KEY_SLOTS * 2, "wire/keys unpack to every slot")
 	_eq(got[0], 65 | 65536, "wire/a key-down survives with its down bit")
 	_eq(got[1], 97, "wire/and its character")
@@ -441,9 +441,9 @@ func _test_wire() -> void:
 	for i in range(NetplaySession.KEY_SLOTS * 2 + 4):
 		many.append(100 + i)
 	var bufo := StreamPeerBuffer.new()
-	np._put_keys(bufo, many)
+	NetplayWire.put_keys(bufo, many)
 	bufo.seek(0)
-	var over: Array = np._get_keys(bufo)
+	var over: Array = NetplayWire.get_keys(bufo)
 	_eq(over[0], 100, "wire/an overfull key block keeps its first slot")
 	_eq(over[NetplaySession.KEY_SLOTS * 2 - 1], 100 + NetplaySession.KEY_SLOTS * 2 - 1,
 		"wire/and its last")
@@ -460,18 +460,26 @@ func _test_wire() -> void:
 		one.put_u16(0)
 		one.put_16(0); one.put_16(0); one.put_16(0); one.put_16(0)
 	for _p in range(NetplaySession.PORTS_PER_MACHINE):
-		np._put_aux(one, np._aux_default())
-	np._put_keys(one, [])
+		NetplayWire.put_aux(one, NetplayWire.aux_default())
+	NetplayWire.put_keys(one, [])
 	_eq(one.get_size(), 4 + 2 * 10 + NetplaySession.AUX_BYTES + NetplaySession.KEY_BYTES,
 		"wire/a broadcast frame is exactly the size the client budgets for")
+	# And the shared function agrees with the bytes actually produced. The line
+	# above keeps its arithmetic written out ON PURPOSE: if both the writer and
+	# the reader ask the same function, a wrong function is invisible to them
+	# both. This is the independent oracle, and that is the whole point.
+	_eq(NetplayWire.broadcast_frame_bytes(2, 1), one.get_size(),
+		"wire/broadcast_frame_bytes matches what the writer produced")
 
 	var inp := StreamPeerBuffer.new()
 	inp.put_u32(7)
 	inp.put_u8(1)
-	np._put_port(inp, 0, [0, 0, 0, 0, 0])
+	NetplayWire.put_port(inp, 0, [0, 0, 0, 0, 0])
 	for _p in range(NetplaySession.PORTS_PER_MACHINE):
-		np._put_aux(inp, np._aux_default())
-	np._put_keys(inp, [])
+		NetplayWire.put_aux(inp, NetplayWire.aux_default())
+	NetplayWire.put_keys(inp, [])
+	_eq(NetplayWire.local_frame_bytes(1, 1), inp.get_size(),
+		"wire/local_frame_bytes matches what the writer produced")
 	_eq(inp.get_size(), 4 + 1 + 11 + NetplaySession.AUX_BYTES + NetplaySession.KEY_BYTES,
 		"wire/and an input frame is the size the host budgets for")
 
@@ -488,7 +496,7 @@ func _test_wire() -> void:
 
 	# The assembled frame is one flat int array with a fixed layout; the gate
 	# indexes straight into it, so a field landing one slot over is silent.
-	var port0_aux: Array = np._aux_default()
+	var port0_aux: Array = NetplayWire.aux_default()
 	port0_aux[0] = 0x91
 	port0_aux[1] = 11
 	port0_aux[7] = -12
@@ -512,10 +520,10 @@ func _test_wire() -> void:
 	# anchor handheld's tilt into every core and discarded the far machine's.
 	var far_wire_machine := Node.new()
 	np._group = [self, far_wire_machine]
-	var near_aux: Array = np._aux_default()
+	var near_aux: Array = NetplayWire.aux_default()
 	near_aux[0] = 1
 	near_aux[1] = 10
-	var far_aux: Array = np._aux_default()
+	var far_aux: Array = NetplayWire.aux_default()
 	far_aux[0] = 1 << 4
 	far_aux[13] = 40
 	far_aux[14] = 50

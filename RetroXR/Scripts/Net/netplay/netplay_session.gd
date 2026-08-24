@@ -59,7 +59,7 @@ const STATE_COMPRESSION := FileAccess.COMPRESSION_ZSTD
 ## Ports per machine, and the stride of a global port index. A session over a
 ## cabled pair has two machines' pads in one frame, so a port is identified by
 ## machine * PORTS_PER_MACHINE + port rather than by port alone.
-const PORTS_PER_MACHINE := 4
+const PORTS_PER_MACHINE := NetplayWire.PORTS_PER_MACHINE
 
 ## Host: a spectator picked up a pad and wants in, and this session can only
 ## admit them by starting again. The machine asks the people playing.
@@ -158,10 +158,10 @@ var _local_identities: Array = []
 # pointer/IR contacts. Layout is flags, accel[2]*xyz, gyro[2]*xyz, pointer[4]*
 # {x,y,pressed}. Flags bits 0..1 = accel, 2..3 = gyro, 4..7 = pointer valid.
 # Values are milli-g / centi-radians-per-second / signed libretro coordinates.
-const AUX_SENSOR_COUNT := 2
-const AUX_POINTER_COUNT := 4
-const AUX_INTS_PER_PORT := 25
-const AUX_INTS := PORTS_PER_MACHINE * AUX_INTS_PER_PORT
+const AUX_SENSOR_COUNT := NetplayWire.AUX_SENSOR_COUNT
+const AUX_POINTER_COUNT := NetplayWire.AUX_POINTER_COUNT
+const AUX_INTS_PER_PORT := NetplayWire.AUX_INTS_PER_PORT
+const AUX_INTS := NetplayWire.AUX_INTS
 var _local_aux: Dictionary = {}             # global port -> Array(25)
 var _local_aux_by_frame: Dictionary = {}    # frame -> {global port -> Array(25)}
 var _recv_aux: Dictionary = {}              # host: frame -> {global port -> Array(25)}
@@ -171,7 +171,7 @@ var _drain_ports: Dictionary = {}          # port -> true
 # Keyboard events (RetroKeyboard / desktop typing): queued transitions, packed
 # up to KEY_SLOTS per scheduled frame as [keycode|down<<16, character] pairs.
 # Like aux, supplied by the port-0 owner. Overflow rolls to the next frame.
-const KEY_SLOTS := 4
+const KEY_SLOTS := NetplayWire.KEY_SLOTS
 ## Wire sizes of the two fixed blocks that follow a frame's ports. Named
 ## because every reader has to check it has them before unpacking, and the
 ## three call sites used to carry the number by hand: they said 15 where
@@ -179,9 +179,9 @@ const KEY_SLOTS := 4
 ## produced and bailed out on the LAST frame of every packet. The redundancy
 ## window hid it for streamed frames and could not hide it for a re-request,
 ## which sends one frame and had it dropped every time.
-const AUX_BYTES_PER_PORT := 45
-const AUX_BYTES := PORTS_PER_MACHINE * AUX_BYTES_PER_PORT
-const KEY_BYTES := KEY_SLOTS * 4
+const AUX_BYTES_PER_PORT := NetplayWire.AUX_BYTES_PER_PORT
+const AUX_BYTES := NetplayWire.AUX_BYTES
+const KEY_BYTES := NetplayWire.KEY_BYTES
 var _local_keys: Dictionary = {}             # machine -> pending [packed, char] pairs
 var _local_keys_by_frame: Dictionary = {}    # frame -> {machine -> Array}
 var _recv_keys: Dictionary = {}              # host: frame -> {machine -> Array}
@@ -1004,13 +1004,6 @@ func _capture_local() -> Dictionary:
 	return out
 
 
-func _aux_default() -> Array:
-	var out: Array = []
-	out.resize(AUX_INTS_PER_PORT)
-	out.fill(0)
-	return out
-
-
 func _global_port(system: Object, local_port: int) -> int:
 	var machine_index := _group.find(system)
 	return -1 if machine_index < 0 or local_port < 0 or local_port >= PORTS_PER_MACHINE \
@@ -1033,7 +1026,7 @@ func set_aux_sensor(system: Object, local_port: int, sensor_index: int,
 		return true
 	if sensor_index < 0 or sensor_index >= AUX_SENSOR_COUNT:
 		return true
-	var aux: Array = _local_aux.get(port, _aux_default())
+	var aux: Array = _local_aux.get(port, NetplayWire.aux_default())
 	var flag_bit := sensor_index + (2 if gyro else 0)
 	var base := (7 if gyro else 1) + sensor_index * 3
 	aux[0] = int(aux[0]) | (1 << flag_bit)
@@ -1058,7 +1051,7 @@ func set_aux_pointer(system: Object, local_port: int, pointer_index: int,
 		return true
 	if pointer_index < 0 or pointer_index >= AUX_POINTER_COUNT:
 		return true
-	var aux: Array = _local_aux.get(port, _aux_default())
+	var aux: Array = _local_aux.get(port, NetplayWire.aux_default())
 	var base := 13 + pointer_index * 3
 	aux[0] = int(aux[0]) | (1 << (4 + pointer_index))
 	aux[base] = px
@@ -1831,7 +1824,7 @@ func _schedule_local() -> void:
 		var aux_frame := {}
 		var keys_frame := {}
 		for port: int in _local_ports:
-			aux_frame[port] = (_local_aux.get(port, _aux_default()) as Array).duplicate()
+			aux_frame[port] = (_local_aux.get(port, NetplayWire.aux_default()) as Array).duplicate()
 		for machine_index in range(_group.size()):
 			if not _local_ports.has(machine_index * PORTS_PER_MACHINE):
 				continue
@@ -1858,8 +1851,8 @@ func _schedule_local() -> void:
 func _send_local_window() -> void:
 	if _local_ports.is_empty():
 		return
-	var frame_bytes := 5 + _local_ports.size() * 11 \
-		+ _machine_count() * (AUX_BYTES + KEY_BYTES)
+	var frame_bytes := NetplayWire.local_frame_bytes(
+		_local_ports.size(), _machine_count())
 	var window := _unreliable_frame_window(frame_bytes)
 	var first := maxi(_next_post, _sched_frame - window)
 	var buf := StreamPeerBuffer.new()
@@ -1875,14 +1868,14 @@ func _send_local_window() -> void:
 		buf.put_u32(f)
 		buf.put_u8(inp.size())
 		for port: int in inp:
-			_put_port(buf, port, inp[port])
+			NetplayWire.put_port(buf, port, inp[port])
 		var aux_frame: Dictionary = _local_aux_by_frame.get(f, {})
 		var keys_frame: Dictionary = _local_keys_by_frame.get(f, {})
 		for machine_index in range(_group.size()):
 			for local_port in range(PORTS_PER_MACHINE):
 				var global_port := machine_index * PORTS_PER_MACHINE + local_port
-				_put_aux(buf, aux_frame.get(global_port, _aux_default()))
-			_put_keys(buf, keys_frame.get(machine_index, []))
+				NetplayWire.put_aux(buf, aux_frame.get(global_port, NetplayWire.aux_default()))
+			NetplayWire.put_keys(buf, keys_frame.get(machine_index, []))
 	_np_input.rpc_id(1, buf.data_array)
 
 
@@ -1907,7 +1900,7 @@ func _np_input(bytes: PackedByteArray) -> void:
 			if buf.get_available_bytes() < 11:
 				return
 			var port := buf.get_u8()
-			var vals := _get_port(buf)
+			var vals := NetplayWire.get_port(buf)
 			# Only accept from the peer that owns the port on THAT frame (honours a
 			# pending handoff), and only for frames not yet assembled.
 			if _owner_for_frame(port, f) == sender and f > _complete_upto:
@@ -1916,13 +1909,13 @@ func _np_input(bytes: PackedByteArray) -> void:
 			return
 		for machine_index in range(_machine_count()):
 			for local_port in range(PORTS_PER_MACHINE):
-				var aux := _get_aux(buf)
+				var aux := NetplayWire.get_aux(buf)
 				var aux_port := machine_index * PORTS_PER_MACHINE + local_port
 				if _owner_for_frame(aux_port, f) == sender and f > _complete_upto:
 					if not _recv_aux.has(f):
 						_recv_aux[f] = {}
 					_recv_aux[f][aux_port] = aux
-			var keys := _get_keys(buf)
+			var keys := NetplayWire.get_keys(buf)
 			# Keyboard state is global to a core and rides with port 0's owner.
 			var global_port := machine_index * PORTS_PER_MACHINE
 			if _owner_for_frame(global_port, f) == sender and f > _complete_upto:
@@ -1957,8 +1950,8 @@ func _frame_ready(f: int) -> bool:
 
 
 func _broadcast_frames() -> void:
-	var frame_bytes := 4 + _all_ports.size() * 10 \
-		+ _machine_count() * (AUX_BYTES + KEY_BYTES)
+	var frame_bytes := NetplayWire.broadcast_frame_bytes(
+		_all_ports.size(), _machine_count())
 	var window := _unreliable_frame_window(frame_bytes)
 	var first := maxi(_next_post, _complete_upto - window + 1)
 	var buf := StreamPeerBuffer.new()
@@ -1979,8 +1972,8 @@ func _broadcast_frames() -> void:
 			buf.put_16(flat[base + 3]); buf.put_16(flat[base + 4])
 		for machine_index in range(_machine_count()):
 			for local_port in range(PORTS_PER_MACHINE):
-				_put_aux(buf, _aux_of(flat, machine_index, local_port))
-			_put_keys(buf, _keys_of(flat, machine_index))
+				NetplayWire.put_aux(buf, _aux_of(flat, machine_index, local_port))
+			NetplayWire.put_keys(buf, _keys_of(flat, machine_index))
 	_np_frame.rpc(buf.data_array)
 
 
@@ -2008,8 +2001,8 @@ func _ingest_frame_packet(bytes: PackedByteArray) -> void:
 		return
 	var nframes := buf.get_u8()
 	for _i in range(nframes):
-		var need := 4 + _all_ports.size() * 10 \
-			+ _machine_count() * (AUX_BYTES + KEY_BYTES)
+		var need := NetplayWire.broadcast_frame_bytes(
+			_all_ports.size(), _machine_count())
 		if buf.get_available_bytes() < need:
 			return
 		var f := int(buf.get_u32())
@@ -2023,11 +2016,11 @@ func _ingest_frame_packet(bytes: PackedByteArray) -> void:
 		for machine_index in range(_machine_count()):
 			var tail := _machine_tail_offset(machine_index)
 			for local_port in range(PORTS_PER_MACHINE):
-				var aux := _get_aux(buf)
+				var aux := NetplayWire.get_aux(buf)
 				var aux_base := tail + local_port * AUX_INTS_PER_PORT
 				for i in range(AUX_INTS_PER_PORT):
 					flat[aux_base + i] = int(aux[i])
-			var keys := _get_keys(buf)
+			var keys := NetplayWire.get_keys(buf)
 			for i in range(KEY_SLOTS * 2):
 				flat[tail + AUX_INTS + i] = int(keys[i])
 		if f >= _next_post and not _frames.has(f):
@@ -2119,8 +2112,8 @@ func _np_frame_req(frame: int) -> void:
 			buf.put_16(flat[base + 3]); buf.put_16(flat[base + 4])
 		for machine_index in range(_machine_count()):
 			for local_port in range(PORTS_PER_MACHINE):
-				_put_aux(buf, _aux_of(flat, machine_index, local_port))
-			_put_keys(buf, _keys_of(flat, machine_index))
+				NetplayWire.put_aux(buf, _aux_of(flat, machine_index, local_port))
+			NetplayWire.put_keys(buf, _keys_of(flat, machine_index))
 	_np_frame_reliable.rpc_id(sender, buf.data_array)
 
 
@@ -2135,14 +2128,14 @@ func _np_input_req(frame: int) -> void:
 	buf.put_u32(frame)
 	buf.put_u8(inp.size())
 	for port: int in inp:
-		_put_port(buf, port, inp[port])
+		NetplayWire.put_port(buf, port, inp[port])
 	var aux_frame: Dictionary = _local_aux_by_frame.get(frame, {})
 	var keys_frame: Dictionary = _local_keys_by_frame.get(frame, {})
 	for machine_index in range(_machine_count()):
 		for local_port in range(PORTS_PER_MACHINE):
 			var global_port := machine_index * PORTS_PER_MACHINE + local_port
-			_put_aux(buf, aux_frame.get(global_port, _aux_default()))
-		_put_keys(buf, keys_frame.get(machine_index, []))
+			NetplayWire.put_aux(buf, aux_frame.get(global_port, NetplayWire.aux_default()))
+		NetplayWire.put_keys(buf, keys_frame.get(machine_index, []))
 	_np_input.rpc_id(1, buf.data_array)
 
 
@@ -2901,7 +2894,7 @@ func _flat_from_frame(pm: Dictionary, aux_by_port: Dictionary,
 		var keys: Array = keys_by_machine.get(machine_index, [])
 		for local_port in range(PORTS_PER_MACHINE):
 			var global_port := machine_index * PORTS_PER_MACHINE + local_port
-			var aux: Array = aux_by_port.get(global_port, _aux_default())
+			var aux: Array = aux_by_port.get(global_port, NetplayWire.aux_default())
 			var aux_base := tail + local_port * AUX_INTS_PER_PORT
 			for i in range(AUX_INTS_PER_PORT):
 				flat[aux_base + i] = int(aux[i])
@@ -2939,69 +2932,6 @@ func _keys_of(flat: PackedInt32Array, machine_index: int) -> Array:
 	var out: Array = []
 	for i in range(KEY_SLOTS * 2):
 		out.append(flat[base + i] if base + i < flat.size() else 0)
-	return out
-
-
-func _put_port(buf: StreamPeerBuffer, port: int, v: Array) -> void:
-	buf.put_u8(port)
-	buf.put_u16(int(v[0]) & 0xFFFF)
-	buf.put_16(int(v[1])); buf.put_16(int(v[2]))
-	buf.put_16(int(v[3])); buf.put_16(int(v[4]))
-
-
-func _get_port(buf: StreamPeerBuffer) -> Array:
-	return [buf.get_u16(), buf.get_16(), buf.get_16(), buf.get_16(), buf.get_16()]
-
-
-## One port's aux wire block: flags, accel+gyro for two sensor indices, then
-## four pointer contacts. All analogue values are signed 16-bit quantities.
-func _put_aux(buf: StreamPeerBuffer, aux: Array) -> void:
-	buf.put_u8(int(aux[0]) & 0xFF)
-	for i in range(1, 13):
-		buf.put_16(int(aux[i]))
-	for pointer_index in range(AUX_POINTER_COUNT):
-		var base := 13 + pointer_index * 3
-		buf.put_16(int(aux[base]))
-		buf.put_16(int(aux[base + 1]))
-		buf.put_u8(1 if int(aux[base + 2]) != 0 else 0)
-
-
-func _get_aux(buf: StreamPeerBuffer) -> Array:
-	var out := _aux_default()
-	out[0] = buf.get_u8()
-	for i in range(1, 13):
-		out[i] = buf.get_16()
-	for pointer_index in range(AUX_POINTER_COUNT):
-		var base := 13 + pointer_index * 3
-		out[base] = buf.get_16()
-		out[base + 1] = buf.get_16()
-		out[base + 2] = buf.get_u8()
-	return out
-
-
-## Key-event wire block (KEY_SLOTS x 4 bytes): u16 keycode|down<<15... packed
-## as u16 (keycode | down<<15) + u16 character per slot; keycode 0 = empty.
-func _put_keys(buf: StreamPeerBuffer, kv: Array) -> void:
-	for slot in range(KEY_SLOTS):
-		var packed := 0
-		var ch := 0
-		if slot * 2 + 1 < kv.size() or slot * 2 < kv.size():
-			var p := int(kv[slot * 2]) if slot * 2 < kv.size() else 0
-			ch = int(kv[slot * 2 + 1]) if slot * 2 + 1 < kv.size() else 0
-			packed = (p & 0x7FFF) | (0x8000 if (p & 65536) != 0 else 0)
-		buf.put_u16(packed)
-		buf.put_u16(ch & 0xFFFF)
-
-
-func _get_keys(buf: StreamPeerBuffer) -> Array:
-	var out: Array = []
-	for _slot in range(KEY_SLOTS):
-		var packed := buf.get_u16()
-		var ch := buf.get_u16()
-		var keycode := packed & 0x7FFF
-		var down := (packed & 0x8000) != 0
-		out.append(keycode | (65536 if down else 0))
-		out.append(ch)
 	return out
 
 
