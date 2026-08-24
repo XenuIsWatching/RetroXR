@@ -86,6 +86,24 @@ var _regroup := false
 ## change costs a player the walk back to that screen and nothing more, which is
 ## what decides whether the room still has to power-cycle anybody.
 var _reseat_at := "play"
+## Frames to sit and WATCH after the seats move, before the run carries on.
+##
+## A console reset is not what hardware does when a link changes under it. GBATEK
+## has the roles as physical and live -- SIOCNT bit 2 is the SI terminal, "0=
+## Parent, 1=Child", and the master's SI is always low -- and the ID bits are "
+## undefined until the first transfer has completed", so they are a RESULT of
+## each transfer rather than a setting. Games are expected to cope: the homebrew
+## LinkCable library carries a timeout, "maximum number of frames without
+## receiving data from other player before marking them as disconnected or
+## resetting the connection", and 0xFFFF is the reserved value for a client that
+## is not there.
+##
+## So a renumbered party should be expected to notice and re-establish IN ITS OWN
+## TIME, and the first measurement of this watched only 600 frames, which is ten
+## seconds and no evidence at all about a timeout longer than that. This is the
+## knob that tells a game that has hung apart from a game that has not been given
+## long enough.
+var _reseat_settle := 0
 var _film_frame := 0
 
 
@@ -171,6 +189,8 @@ func _run() -> void:
 	for arg in _args():
 		if arg.begins_with("--reseat-at="):
 			_reseat_at = arg.substr(12)
+		if arg.begins_with("--reseat-settle="):
+			_reseat_settle = int(arg.substr(16))
 	for i in range(20):
 		await get_tree().process_frame
 
@@ -306,7 +326,7 @@ func _run() -> void:
 	# polls the cable from. Moving the seats HERE is the case the room actually
 	# produces -- machines are cabled up during setup, not mid-match.
 	if (_renumber or _regroup) and _reseat_at == "lobby":
-		_reseat(_m[1] if _renumber else _m[0])
+		await _reseat(_m[1] if _renumber else _m[0])
 
 	# Both players are on the lobby now. Start takes the master through to the
 	# Mario Bros. mode screen, where Classic or Battle is chosen, and A takes it.
@@ -357,7 +377,7 @@ func _run() -> void:
 		# NOBODY, and the per-step sent counts below say whether the link
 		# survived it.
 		if (_renumber or _regroup) and _reseat_at == "play" and step == 2:
-			_reseat(_m[1] if _renumber else _m[0])
+			await _reseat(_m[1] if _renumber else _m[0])
 		var machine: Libretro = script[step][0]
 		var mask: int = script[step][1]
 		if machine != null:
@@ -473,6 +493,19 @@ func _reseat(anchor: Libretro) -> void:
 	var before: int = _a.LinkSent(0)
 	var ok: bool = anchor.LinkConnectGroup(others, ports)
 	print("[mario] RESEAT  group=%s  anchor=m%d  nobody reset  (sent so far %d)" % [str(ok), _m.find(anchor), before])
+	if _reseat_settle <= 0:
+		return
+	# Sit and watch. Reported in slices so a recovery that takes twenty seconds is
+	# visible as the moment it happens rather than as one number at the end.
+	var slice := 300
+	var waited := 0
+	while waited < _reseat_settle:
+		await _wait_frames(mini(slice, _reseat_settle - waited))
+		waited += slice
+		var counts := PackedStringArray()
+		for k in _m.size():
+			counts.append(str(_m[k].LinkSent(0)))
+		print("[mario] SETTLE +%d frames  sent=%s" % [waited, "/".join(counts)])
 
 
 ## Wait for a number of EMULATED frames on the slowest machine.
