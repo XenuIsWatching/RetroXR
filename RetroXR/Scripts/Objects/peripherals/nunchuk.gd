@@ -406,17 +406,39 @@ func _update_accel(delta: float) -> void:
 
 ## The reading in the Nunchuk's own axes, in g, ready for the core.
 ##
-## Godot has +X right, +Y up, -Z forward; Dolphin's IMUAccelerometer has +X
-## LEFT, +Y BACK, +Z UP. That makes the swap (-x, z, y), which is the same one
-## the remote applies to its own reading — not because the two are
-## interchangeable but because both shells are authored the same way up. The
-## Nunchuk's stick end is its +Y and its C/Z face is its -Z, so the device's own
-## up and forward are Godot's, exactly as the remote's are. Held upright at
-## rest this returns (0, 0, 1).
+## Dolphin's IMUAccelerometer is +X LEFT, +Y BACK, +Z UP — see the group's own
+## constructor, which subtracts Right from Left, Forward from Backward and Down
+## from Up — and its resting default is (0, 0, +1g). So a device lying flat and
+## right side up must read (0, 0, 1), and every axis below is fixed by that.
+##
+## The swap is NOT the remote's. It cannot be, and the reason is the one thing
+## worth carrying away from here: the two shells are authored in DIFFERENT
+## attitudes. The remote lies down — nose at -Z, buttons at +Y — so its own up
+## and forward already are Godot's, and (-x, z, y) is right for it. This shell
+## STANDS UP: gen_nunchuk.gd runs the spine along Y with the nose at +0.056 and
+## the cord's tail at -0.057, and sets the stick into the +Z face with C and Z
+## in the -Z brow.
+##
+## So the Nunchuk's up is its +Z, not its +Y. Its rest pose is the model turned
+## Rx(-90) — stick up, buttons down, spine level — which is the pose
+## Tools/nunchuk_views.gd calls "the pose every reference photograph of this
+## thing is taken in", and in it this returns (0, 0, 1).
+##
+## It read (0, 1, 0) there until 2026-08-24, because it borrowed the remote's
+## swap on the stated grounds that both shells were authored the same way up.
+## They are not. The reading was a quarter turn out about X for as long as the
+## Nunchuk has had an accelerometer: at rest the core was told gravity pointed
+## out of the device's BACK, so a Nunchuk lying on a table looked to a game like
+## one held nose-up that never came level.
+##
+## The check that finds this class of bug, and the one that missed it: put the
+## remote and the Nunchuk in the SAME attitude and compare. Nose straight up,
+## both must answer (0, -1, 0). Reading either device's mapping on its own
+## cannot tell you anything, because either is self-consistent.
 func accel_in_nunchuk_frame() -> Vector3:
 	var a := MotionFilter.deadband_motion(_accel_smoothed, G)
 	var local := global_transform.basis.orthonormalized().inverse() * (a / G)
-	return Vector3(-local.x, local.z, local.y)
+	return Vector3(-local.x, -local.y, local.z)
 
 
 ## Lean the stick the way the thumb is pushing it.

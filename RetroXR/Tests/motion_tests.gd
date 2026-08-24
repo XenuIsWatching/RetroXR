@@ -40,11 +40,13 @@ func _ready() -> void:
 
 	if _wants("accel"):
 		await _test_at_rest_upright()
+		await _test_as_authored_is_not_at_rest()
 		await _test_at_rest_inverted()
-		await _test_top_forward_reads_back()
+		await _test_nose_up_reads_forward()
 		await _test_top_right_reads_left()
 		await _test_always_one_g_at_rest()
 		await _test_smoothing_settles_on_rest()
+		await _test_both_devices_agree_in_one_attitude()
 	if _wants("clock"):
 		await _test_a_carried_nunchuk_reads_the_path_it_is_carried_on()
 		await _test_a_gentle_carry_keeps_the_pose()
@@ -109,48 +111,127 @@ func _settle(nc: Nunchuk) -> void:
 		nc._update_accel(1.0 / 60.0)
 
 
+## The Nunchuk's REST attitude, as a rotation of the model.
+##
+## Not the identity, and that is the whole of what these cases got wrong until
+## 2026-08-24. gen_nunchuk.gd authors this shell STANDING ON ITS TAIL — spine
+## along Y, nose at +0.056, cord tail at -0.057, stick set into the +Z face — so
+## the model at identity is a Nunchuk balanced on its cable, not one at rest.
+##
+## Rest is how the thing lies on a table: spine level, stick up, buttons down.
+## That is Rx(-90) from the model, which is also exactly the attitude
+## Tools/nunchuk_views.gd calls "the pose every reference photograph of this
+## thing is taken in". In it, the device's own axes line up with the world's:
+## up is +Y, back is +Z, left is -X.
+const REST := Vector3(-PI / 2.0, 0.0, 0.0)
+
+
+func _rest_basis() -> Basis:
+	return Basis(Vector3.RIGHT, REST.x)
+
+
 func _test_at_rest_upright() -> void:
+	var nc := await _at_rest_nunchuk()
+	nc.global_transform = Transform3D(_rest_basis(), Vector3.ZERO)
+	_settle(nc)
+	# Lying flat and right side up, which is the attitude Dolphin's own resting
+	# default describes — IMUAccelerometer returns (0, 0, +1g) when nothing is
+	# bound to it. Anything else here means the core is told a Nunchuk sitting on
+	# a table is being held at an angle.
+	_vec_ok("at rest, flat and stick up, reads one g on the up axis",
+		nc.accel_in_nunchuk_frame(), Vector3(0, 0, 1))
+	nc.queue_free()
+
+
+func _test_as_authored_is_not_at_rest() -> void:
 	var nc := await _at_rest_nunchuk()
 	nc.global_transform = Transform3D.IDENTITY
 	_settle(nc)
-	# Stick end up, which is the device's own up, so gravity is felt entirely
-	# along it. This is also the reading the GDExtension serves when nothing has
-	# ever driven the sensor, which is what makes it the right default.
-	_vec_ok("upright at rest reads one g on the up axis",
-		nc.accel_in_nunchuk_frame(), Vector3(0, 0, 1))
+	# The model at identity is stood on its cable end, nose at the ceiling. The
+	# sky is then off the device's NOSE, and the nose is its forward, so the
+	# reading is one g along -back. This case exists to stop the identity pose
+	# ever being mistaken for rest again: it read (0, 0, 1) here for as long as
+	# the mapping was a quarter turn out, which is precisely what made the error
+	# invisible.
+	_vec_ok("stood on its tail reads one g on the forward axis",
+		nc.accel_in_nunchuk_frame(), Vector3(0, -1, 0))
 	nc.queue_free()
 
 
 func _test_at_rest_inverted() -> void:
 	var nc := await _at_rest_nunchuk()
-	# Turned over: the stick end points at the floor.
-	nc.global_transform = Transform3D(Basis(Vector3.FORWARD, PI), Vector3.ZERO)
+	# Turned over from rest about its own spine: stick down, buttons up.
+	nc.global_transform = Transform3D(Basis(Vector3.BACK, PI) * _rest_basis(), Vector3.ZERO)
 	_settle(nc)
 	_vec_ok("upside down reads one g the other way",
 		nc.accel_in_nunchuk_frame(), Vector3(0, 0, -1))
 	nc.queue_free()
 
 
-func _test_top_forward_reads_back() -> void:
+func _test_nose_up_reads_forward() -> void:
 	var nc := await _at_rest_nunchuk()
-	# Tipped nose-down through a right angle about X, so the stick end now points
-	# where the buttons were facing. The sky is off the shell's rear face, so the
-	# device feels gravity on the axis Dolphin calls back.
-	nc.global_transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), Vector3.ZERO)
+	# Stood up from rest so the nose points at the ceiling. The sky is off the
+	# device's front, and Dolphin's +Y is BACK, so a nose-up device reads -1
+	# there. The remote must answer the same in the same attitude — see
+	# _test_both_devices_agree_in_one_attitude, which is the case that can
+	# actually catch a wrong frame.
+	nc.global_transform = Transform3D(Basis(Vector3.RIGHT, PI / 2.0) * _rest_basis(),
+		Vector3.ZERO)
 	_settle(nc)
-	_vec_ok("stick end forward reads one g on the back axis",
-		nc.accel_in_nunchuk_frame(), Vector3(0, 1, 0))
+	_vec_ok("nose up reads one g on the forward axis",
+		nc.accel_in_nunchuk_frame(), Vector3(0, -1, 0))
 	nc.queue_free()
 
 
 func _test_top_right_reads_left() -> void:
 	var nc := await _at_rest_nunchuk()
-	# Laid over to the right: the stick end points to world +X, so the sky is now
-	# off the shell's LEFT side, which is the axis Dolphin calls +X.
-	nc.global_transform = Transform3D(Basis(Vector3.BACK, -PI / 2.0), Vector3.ZERO)
+	# Rolled to the right from rest, so the sky is off the shell's LEFT flank,
+	# which is the axis Dolphin calls +X.
+	nc.global_transform = Transform3D(Basis(Vector3.BACK, -PI / 2.0) * _rest_basis(),
+		Vector3.ZERO)
 	_settle(nc)
-	_vec_ok("stick end to the right reads one g on the left axis",
+	_vec_ok("rolled right reads one g on the left axis",
 		nc.accel_in_nunchuk_frame(), Vector3(1, 0, 0))
+	nc.queue_free()
+
+
+## The case that can catch a wrong frame, which none of the ones above can.
+##
+## Every case above pins ONE device against poses reasoned about in that device's
+## own terms, and a mapping that is a whole quarter turn out is still perfectly
+## self-consistent under that: turn the shell, the reading turns with it, every
+## assertion agrees. The Nunchuk's mapping was wrong from the day it was written
+## and six cases here were written to match it.
+##
+## Two devices are what breaks the symmetry. A remote and a Nunchuk held in the
+## SAME physical attitude are feeling the same gravity, and they report on the
+## same axis names, so their answers must be equal — whatever those answers are.
+## No knowledge of either shell's authored orientation is needed to say so, which
+## is exactly why this case survives the mistake that produced the others.
+func _test_both_devices_agree_in_one_attitude() -> void:
+	var nc := await _at_rest_nunchuk()
+	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
+	wm.freeze = true
+	add_child(wm)
+	await get_tree().process_frame
+
+	# Each device's own rest, then the same rotation applied to both. The
+	# remote's rest IS its authored pose; the Nunchuk's is Rx(-90) off it.
+	for pose in [["at rest", Basis.IDENTITY],
+				 ["nose up", Basis(Vector3.RIGHT, PI / 2.0)],
+				 ["rolled right", Basis(Vector3.BACK, -PI / 2.0)],
+				 ["nose down", Basis(Vector3.RIGHT, -PI / 2.0)]]:
+		var turn: Basis = pose[1]
+		nc.global_transform = Transform3D(turn * _rest_basis(), Vector3.ZERO)
+		wm.global_transform = Transform3D(turn, Vector3.ZERO)
+		_settle(nc)
+		wm.set("_accel_smoothed", Vector3.UP * Nunchuk.G)
+		var n_vec := nc.accel_in_nunchuk_frame()
+		var w_vec: Vector3 = wm.accel_in_wiimote_frame()
+		_ok("%s: the remote and the Nunchuk report the same gravity" % pose[0],
+			n_vec.distance_to(w_vec) < EPS,
+			"nunchuk %v against remote %v" % [n_vec, w_vec])
+	wm.queue_free()
 	nc.queue_free()
 
 
@@ -173,7 +254,7 @@ func _test_always_one_g_at_rest() -> void:
 
 func _test_smoothing_settles_on_rest() -> void:
 	var nc := await _at_rest_nunchuk()
-	nc.global_transform = Transform3D.IDENTITY
+	nc.global_transform = Transform3D(_rest_basis(), Vector3.ZERO)
 	# Straight out of the scene, before anything has driven it. A smoothed value
 	# starting at zero would read as freefall for the first tenth of a second,
 	# which is a Nunchuk that has been dropped rather than one just picked up.
@@ -206,7 +287,13 @@ func _test_smoothing_settles_on_rest() -> void:
 func _carry(nc: Nunchuk, amp: float, hz: float, jitter := 0.0) -> Dictionary:
 	nc.freeze = true
 	nc.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-	nc.global_transform = Transform3D(Basis(), Vector3(0, 1.2, 0))
+	# Carried in its REST attitude, not at identity. The two lines below that
+	# subtract (0, 0, 1) are only arithmetic if gravity really does fall on the
+	# device's up axis, and at identity this shell is stood on its cable end. It
+	# used to be carried that way: `out` then had a whole spurious g folded into
+	# it, which the punch case survived only because its assertion is a lower
+	# bound, and `tilt` sat at a permanent 90 degrees.
+	nc.global_transform = Transform3D(_rest_basis(), Vector3(0, 1.2, 0))
 	var t := 0.0
 	var peak := 0.0
 	var out := 0.0
@@ -218,7 +305,12 @@ func _carry(nc: Nunchuk, amp: float, hz: float, jitter := 0.0) -> Dictionary:
 		var x := amp * sin(TAU * hz * t)
 		if jitter > 0.0:
 			x += randf_range(-jitter, jitter)
-		nc.global_position = Vector3(x, 1.2, 0)
+		# The whole transform, not just the origin. Writing .global_position on a
+		# frozen kinematic body round-trips through the physics server, which
+		# hands back the basis it has rather than the one just written — so the
+		# attitude set above is quietly replaced by identity on the first tick
+		# and the carry happens in the wrong pose.
+		nc.global_transform = Transform3D(_rest_basis(), Vector3(x, 1.2, 0))
 		await get_tree().physics_frame
 		if t < 0.5:
 			continue
