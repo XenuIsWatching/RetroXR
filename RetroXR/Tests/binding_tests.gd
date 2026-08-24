@@ -56,6 +56,7 @@ func _ready() -> void:
 	_test_overridden_systems()
 	_test_wii_layers_survive_a_save()
 	_test_console_pad_art()
+	_test_the_editor_writes_the_nunchuk_layer()
 	_test_pad_art_variants()
 	_test_wii_pad_art()
 	_test_desktop_layers()
@@ -379,6 +380,40 @@ func _test_overridden_systems() -> void:
 # load-bearing: a variant that answered has() would grow a tile in the platform
 # grid for a console nobody owns.
 # ---------------------------------------------------------------------------
+
+## The editor's own path to the store, which the writer case cannot reach.
+##
+## save_for_system carries a stored Nunchuk layer over only when the caller
+## offers nothing, so an editor that forgot to pass its working copy would look
+## exactly like one that worked: the old value stays, the new one is dropped, and
+## nothing anywhere errors.
+func _test_the_editor_writes_the_nunchuk_layer() -> void:
+	_clear()
+	var ed := ControlsBindingEditor.new()
+	add_child(ed)
+	ed._systemid = "wii"
+	ed._build_xr_controls(ed)
+
+	_eq("editor/starts from the stored map",
+		str(ed._edit_nunchuk_map.get("c")), "ax_button")
+
+	ed._edit_nunchuk_map["c"] = "grip"
+	ed._apply_xr_bindings()
+	_eq("editor/a change to C reaches the store",
+		str((ControllerBindings.get_for_system("wii")["nunchuk"] as Dictionary).get("c")),
+		"grip")
+	# And did not take the other key with it.
+	_eq("editor/while Z keeps its default",
+		str((ControllerBindings.get_for_system("wii")["nunchuk"] as Dictionary).get("z")),
+		"trigger")
+
+	# The rows exist and are the two that can be bound. The stick is not among
+	# them on purpose — it is whichever hand is holding the Nunchuk.
+	_ok("editor/there is a row for C", ed._controls_opts.has("nc:c"))
+	_ok("editor/and one for Z", ed._controls_opts.has("nc:z"))
+	_ok("editor/and none for the stick", not ed._controls_opts.has("nc:stick"))
+	ed.queue_free()
+
 
 func _test_pad_art_variants() -> void:
 	_ok("variant/sideways is not a platform",

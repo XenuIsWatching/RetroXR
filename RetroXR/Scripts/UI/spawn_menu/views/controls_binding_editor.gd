@@ -37,6 +37,10 @@ var _systemid: String = ""
 var _edit_button_map:   Dictionary = {}
 var _edit_stick_map:    Dictionary = {}
 var _edit_lightgun_map: Dictionary = {}
+## The Nunchuk's own two keys. A separate map because it is keyed the other way
+## round from the joypad one — control to source, not source to bit — and because
+## it is stored under its own layer, which the writer keeps for us.
+var _edit_nunchuk_map: Dictionary = {}
 
 # Desktop rebinding: which action is listening, and action_name -> its Button so
 # on_rebind_complete() can relabel it.
@@ -163,6 +167,16 @@ const _CONSOLE_DIAGRAM_H := 470.0
 ## pad's: the generic pad is roughly square and stacks eight rows a side.
 const _DESKTOP_DIAGRAM_H := 620.0
 
+## What can work the Nunchuk's C and Z: the same VR inputs the light gun offers,
+## because it is the same hand and the same controller. "None" is included so a
+## player can put a button beyond reach deliberately rather than only by accident.
+const _NUNCHUK_OPTIONS: Array = [
+	["None", "none"],
+	["Trigger", "trigger"], ["Grip", "grip"],
+	["A / X button", "ax_button"], ["B / Y button", "by_button"],
+	["Thumbstick click", "primary_click"],
+]
+
 ## Order in which lightgun sources appear in the Controls UI.
 const _LIGHTGUN_SOURCE_ORDER: Array = [
 	"trigger", "grip", "ax_button", "by_button", "primary_click",
@@ -193,6 +207,7 @@ func _build_xr_controls(vbox: VBoxContainer) -> void:
 	_edit_button_map  = current["buttons"].duplicate()
 	_edit_stick_map   = current["sticks"].duplicate()
 	_edit_lightgun_map = current["lightgun"].duplicate()
+	_edit_nunchuk_map = (current["nunchuk"] as Dictionary).duplicate()
 
 	# ── Joypad Buttons ────────────────────────────────────────────────────────
 	if ConsolePadArt.has(_systemid):
@@ -272,6 +287,46 @@ func _build_xr_controls(vbox: VBoxContainer) -> void:
 				_apply_xr_bindings(),
 			3
 		))
+
+	# ── The Nunchuk ───────────────────────────────────────────────────────────
+	# Only for the platform that has one. Rows and not a diagram: there are three
+	# controls, one of which cannot be bound at all, and a picture of a Nunchuk
+	# seen side-on shows two buttons edge-on — all the cost of art for less than a
+	# list gives.
+	if _systemid == "wii":
+		vbox.add_child(HSeparator.new())
+		vbox.add_child(MenuStyle.label("Nunchuk", 18, MenuStyle.COLOR_LICENSE))
+		vbox.add_child(_hint("The Nunchuk is held in your other hand, so its "
+			+ "buttons are bound on that hand's controller. Plugging one in also "
+			+ "moves the remote's own 1 and 2 onto the buttons + and - were on, "
+			+ "and puts C and Z where 1 and 2 were — the console does that, not "
+			+ "the room."))
+
+		for key: String in ["c", "z"]:
+			var captured_key := key
+			vbox.add_child(_make_vr_dropdown_row(
+				"nc:" + key, key.to_upper() + " Button", _NUNCHUK_OPTIONS,
+				str(_edit_nunchuk_map.get(key, "none")),
+				func(v: Variant) -> void:
+					_edit_nunchuk_map[captured_key] = str(v)
+					_apply_xr_bindings(),
+				3
+			))
+
+		# The stick is not a choice. It is whichever hand is holding the Nunchuk,
+		# read straight off that controller — see Nunchuk.get_state. Saying so is
+		# worth a row: left out, the section looks like it forgot the stick.
+		var stick_row := HBoxContainer.new()
+		stick_row.add_theme_constant_override("separation", 12)
+		var stick_name := Label.new()
+		stick_name.text = "Control Stick"
+		stick_name.custom_minimum_size = Vector2(220, 0)
+		stick_row.add_child(stick_name)
+		var stick_value := Label.new()
+		stick_value.text = "Thumbstick of the hand holding it"
+		stick_value.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
+		stick_row.add_child(stick_value)
+		vbox.add_child(stick_row)
 
 	# ── Light Gun Buttons ─────────────────────────────────────────────────────
 	vbox.add_child(HSeparator.new())
@@ -519,9 +574,13 @@ func _on_desktop_controls_reset() -> void:
 ## Write this scope's XR bindings and push them to everything holding a copy.
 ## Called from every dropdown, so a change is live the moment it is made — which
 ## is what a dropdown implies, and what the missing Save button used to gate.
+## The Nunchuk map rides along on every write, and must: save_for_system carries
+## a stored layer over only when the caller offers nothing, so passing it here is
+## what makes a change to C or Z actually land. Passing it on the OTHER writes
+## costs nothing and keeps one path.
 func _apply_xr_bindings() -> void:
 	ControllerBindings.save_for_system(_systemid,
-		_edit_button_map, _edit_stick_map, _edit_lightgun_map)
+		_edit_button_map, _edit_stick_map, _edit_lightgun_map, null, _edit_nunchuk_map)
 	controller_bindings_changed.emit()
 
 
@@ -530,7 +589,7 @@ func _apply_xr_bindings() -> void:
 func apply_all() -> void:
 	if MenuStyle.is_vr_mode():
 		ControllerBindings.save_for_system(_systemid,
-			_edit_button_map, _edit_stick_map, _edit_lightgun_map)
+			_edit_button_map, _edit_stick_map, _edit_lightgun_map, null, _edit_nunchuk_map)
 	GamepadBindings.save_for_system(_systemid, _edit_pad_button_map, _edit_pad_stick_map)
 	if not MenuStyle.is_vr_mode():
 		DesktopBindings.save_for_system(_systemid)
@@ -542,12 +601,14 @@ func _on_controls_reset() -> void:
 		_edit_button_map   = ControllerBindings.DEFAULT_BUTTON_MAP.duplicate()
 		_edit_stick_map    = ControllerBindings.DEFAULT_STICK_MAP.duplicate()
 		_edit_lightgun_map = ControllerBindings.DEFAULT_LIGHTGUN_MAP.duplicate()
+		_edit_nunchuk_map  = ControllerBindings.DEFAULT_NUNCHUK_MAP.duplicate()
 	else:
 		# The layer beneath a platform is the global map, not the shipped default.
 		var g := ControllerBindings.get_global()
 		_edit_button_map   = (g["buttons"] as Dictionary).duplicate()
 		_edit_stick_map    = (g["sticks"] as Dictionary).duplicate()
 		_edit_lightgun_map = (g["lightgun"] as Dictionary).duplicate()
+		_edit_nunchuk_map  = (g["nunchuk"] as Dictionary).duplicate()
 	for src: String in _BUTTON_SOURCE_ORDER:
 		_reset_vr_dropdown("btn:" + src, _edit_button_map.get(src, -1))
 	for stick: String in ["stick_left", "stick_right"]:
@@ -556,6 +617,8 @@ func _on_controls_reset() -> void:
 	for src: String in _LIGHTGUN_SOURCE_ORDER:
 		_reset_vr_dropdown("gun:" + src, _edit_lightgun_map.get(src, -1))
 	_reset_vr_dropdown("gun:stick", str(_edit_lightgun_map.get("stick", "dpad")))
+	for key: String in ["c", "z"]:
+		_reset_vr_dropdown("nc:" + key, str(_edit_nunchuk_map.get(key, "none")))
 	_refresh_console_xr_diagrams()
 	_apply_xr_bindings()
 

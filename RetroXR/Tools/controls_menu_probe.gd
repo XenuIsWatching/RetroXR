@@ -8,6 +8,7 @@ extends Node
 ##
 ##   --page=global   the page every machine falls back to
 ##   --page=<sysid>  that platform's override page (wii, nes, …)
+##   --xr            photograph the XR rows instead of the desktop key rows
 ##   --scroll=<px>   scroll down before the shot, for a page taller than the frame
 ##   --out=<name>    PNG stem; defaults to controls_<page>
 ##
@@ -32,6 +33,7 @@ const OUT_DIR := "res://probe_out"
 var _page := "global"
 var _scroll := 0
 var _out := ""
+var _xr := false
 
 
 func _ready() -> void:
@@ -42,6 +44,8 @@ func _ready() -> void:
 			_scroll = int(arg.split("=")[1])
 		elif arg.begins_with("--out="):
 			_out = arg.split("=")[1]
+		elif arg == "--xr":
+			_xr = true
 	if _out.is_empty():
 		_out = "controls_" + _page
 	get_tree().create_timer(120.0).timeout.connect(func() -> void:
@@ -95,6 +99,29 @@ func _run() -> void:
 	for i in 20:
 		await get_tree().process_frame
 
+	# The XR rows, which a desktop run never builds. MenuStyle.is_vr_mode() asks
+	# the live OpenXR interface, so it cannot be faked from here — but the editor
+	# will build its XR half on request, and dropping that into the page the menu
+	# already laid out gives it the real theme and the real width.
+	#
+	# It is an EXTRA copy of the section, not a replacement: the desktop rows stay
+	# above it. That is honest about what this is, and it means the shot cannot be
+	# mistaken for what a desktop player sees.
+	if _xr:
+		var body := _find_platform_body(view)
+		if body == null:
+			print("[controls] no page body to put the XR rows in")
+			get_tree().quit(1)
+			return
+		var ed := ControlsBindingEditor.new()
+		ed._systemid = _page
+		ed.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ed.add_theme_constant_override("separation", 14)
+		body.add_child(ed)
+		ed._build_xr_controls(ed)
+		for i in 20:
+			await get_tree().process_frame
+
 	if view is ScrollContainer:
 		var sc := view as ScrollContainer
 		var bar := sc.get_v_scroll_bar()
@@ -118,6 +145,12 @@ func _run() -> void:
 	print("[controls] page=%s scroll=%d viewport=%s -> %s"
 		% [_page, _scroll, str(sv.size), path])
 	get_tree().quit(0)
+
+
+## The container a platform page's rows are added to.
+func _find_platform_body(view: Node) -> VBoxContainer:
+	var body: Variant = view.get("_platform_body")
+	return body as VBoxContainer
 
 
 func _owning_viewport(n: Node) -> SubViewport:
