@@ -1769,6 +1769,9 @@ func _nearest_av_gap(machine: Node3D, x: float) -> float:
 # _watch decides is the `seat`/`live_seat` pair in each entry, and that is what
 # is varied here.
 
+const NO_SEAT_SENTINEL := -1
+
+
 class _FakeMachine extends Node:
 	var systemid := "game_boy_advance"
 	var rom_path := "/roms/game.gba"
@@ -1842,5 +1845,31 @@ func _test_restart_rule() -> void:
 	_ok("restart/the cartridge-holding host survives a client joining it",
 		fired.is_empty())
 
-	for n: Node in [host, host_lib, client, client_lib, snes, snes_lib, solo, solo_lib, cable]:
+	# A PULLED lead must not leave a seat behind.
+	#
+	# This is the case that actually power-cycled machines in a real session. Two
+	# pairs were playing, every lead came out, and all four went back in as one
+	# chain; the two that returned at player three and four were reset "so it can
+	# be player 3 rather than player 1", against a seat they had held before the
+	# cable was ever unplugged. There was no link in between for a renumber to
+	# happen across -- the link went down and came back, which is the first-sight
+	# case and needs no reset.
+	var pulled := _FakeMachine.new()
+	var pulled_lib := Libretro.new()
+	pulled_lib.set_meta("link_live_seat", 0)
+	var lead: LinkCable = load(CABLE_SCENE).instantiate()
+	add_child(lead)
+	lead._linked = [_end_for(pulled, pulled_lib, 0, 0)] as Array[Dictionary]
+	lead._disconnect()
+	_eq("restart/pulling the lead forgets the seat a machine was playing at",
+		int(pulled_lib.get_meta("link_live_seat", NO_SEAT_SENTINEL)), -1)
+	# ...so coming back somewhere else is a first sight, not a renumber.
+	fired = _restart_seen(cable, [_end_for(pulled, pulled_lib, 2,
+		int(pulled_lib.get_meta("link_live_seat", NO_SEAT_SENTINEL)))])
+	_ok("restart/so returning at a different seat is not a renumber",
+		fired.is_empty())
+	lead.queue_free()
+
+	for n: Node in [host, host_lib, client, client_lib, snes, snes_lib, solo, solo_lib,
+			pulled, pulled_lib, cable]:
 		n.free()

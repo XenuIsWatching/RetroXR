@@ -599,6 +599,13 @@ func _watch() -> void:
 			# A machine switched off starts its next session knowing nothing.
 			lib.set_meta(LIVE_SEAT, NO_SEAT)
 			continue
+		if lib.LinkPeerCount(end["port"]) < 2:
+			# Nor does a machine whose wire has gone quiet under it. The lead may
+			# still be in its socket while the bus it was on has fallen apart, and
+			# a seat remembered across that gap is the same stale answer
+			# _disconnect clears above -- it just arrives by a different route.
+			lib.set_meta(LIVE_SEAT, NO_SEAT)
+			continue
 		var seen := end.duplicate()
 		# The seat is this machine's position in the bus order, which is the
 		# player number the hardware gives it: index zero is player one.
@@ -699,6 +706,26 @@ func _disconnect() -> void:
 	_linked = []
 	for end: Dictionary in ends:
 		if is_instance_valid(end["libretro"]):
+			# Forget what this machine was PLAYING as. The link is going away
+			# entirely, and a machine's next appearance on a wire is a fresh one.
+			#
+			# Without this the seat outlives the cable, and the room then reads a
+			# reconnection as a renumber. That is what happened in a real session:
+			# two pairs, all four leads pulled, all four seated again as one chain,
+			# and the two machines that came back at player three and four were
+			# power-cycled "so it can be player 3 rather than player 1" -- for a
+			# seat they had held before the cable was ever unplugged. There was no
+			# link in between to renumber anything.
+			#
+			# What that actually is, is the first-sight case, and it needs no reset
+			# at all: an unplugged link is the disconnection a game already handles
+			# (0xFFFF and its own timeout), and a re-seated one is a machine
+			# meeting the cable again, which mGBA fcf53f2ba made work without being
+			# thrown back to its boot logo.
+			#
+			# Clearing this can only ever cause FEWER resets, never more, because
+			# NO_SEAT is the branch that returns early.
+			end["libretro"].set_meta(LIVE_SEAT, NO_SEAT)
 			end["libretro"].LinkDisconnect(end["port"])
 	# After the disconnects, so the count reported is the one that resulted.
 	_log_ends("parted", ends)
