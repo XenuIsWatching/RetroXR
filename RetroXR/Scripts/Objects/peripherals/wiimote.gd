@@ -322,10 +322,20 @@ func wants_ray_handoff() -> bool:
 func _ready() -> void:
 	super._ready()
 	press_to_hold = false
-	# A second hand on the remote is how a player asks for sideways, so the grab
-	# has to accept one rather than ignoring it. SECOND and not SWAP: SWAP would
-	# hand the whole remote to the new hand instead of letting both hold it.
-	second_hand_grab = SecondHandGrab.SECOND
+	# NOT SecondHandGrab.SECOND, and this is the reason rather than an oversight.
+	#
+	# Everything below assumes exactly ONE holder. _holding_ctrl is singular and
+	# is where every input this remote reads comes from; _saved_by is singular and
+	# is what the no-drop rehold re-grabs with; and _on_grabbed_signal overwrites
+	# both, unconditionally, for whichever hand grabbed last. Accepting a second
+	# grab therefore points the remote at a hand that may not be holding it, hides
+	# the wrong hand's model, and leaves the rehold re-grabbing with the wrong
+	# pickup -- which reads as a remote that falls out of both hands and a bare
+	# hand flickering where the object should be.
+	#
+	# Two-handed hold needs those three made plural first, and a second grab point
+	# at the other end of the shell for the pose to lay across. Until then the
+	# sideways device id has no trigger.
 	add_to_group("spawned")
 	add_to_group(ControllerBindings.CONSUMER_GROUP)
 	grabbed.connect(_on_grabbed_signal)
@@ -708,17 +718,6 @@ func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
 	_set_model_visible(ctrl, false)
 	_update_pointer_block(ctrl, true)
 	_update_locomotion_block()
-
-
-## Turning sideways back again, which has no signal of its own.
-##
-## xr-tools emits `grabbed` for a second hand but nothing for a second RELEASE:
-## let_go removes the grab and returns early while a primary is still holding, so
-## `dropped` fires only when the LAST hand lets go. Watching the signals alone
-## would turn the remote sideways and never turn it back.
-func let_go(by: Node3D, p_linear_velocity: Vector3, p_angular_velocity: Vector3) -> void:
-	super.let_go(by, p_linear_velocity, p_angular_velocity)
-	_refresh_device_type()
 
 
 func _on_dropped_signal(_pickable: Node3D) -> void:

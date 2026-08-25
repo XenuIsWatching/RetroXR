@@ -254,10 +254,10 @@ const _ROWS: Dictionary = {
 			"start": "wii_button_plus_outline",
 			"r3": "wii_button_home_outline",
 		},
-		"note": "Hold the remote in both hands, like a plain pad. Grab it with "
-			+ "your second hand and it turns sideways by itself; let go and it "
-			+ "turns back. The buttons keep whatever you bound above — the "
-			+ "console is the one relabelling them, not the room.",
+		"note": "Held in both hands, like a plain pad — this is what the console "
+			+ "calls the buttons then. The buttons keep whatever you bound "
+			+ "above; the console is the one relabelling them, not the room. "
+			+ "Turning the remote sideways in the room is not wired up yet.",
 	},
 }
 
