@@ -141,7 +141,7 @@ func _run() -> void:
 		print("[pak] power: clients 2..%d, then host 1" % (_clients.size() + 1))
 		for c: Libretro in _clients:
 			c.StartContent(root, CORE, "")
-			await _wait(30)
+			await _wait_set(30, [c])
 		_host.StartContent(root, CORE, rom)
 	else:
 		print("[pak] power: host 1, then clients 2..%d" % (_clients.size() + 1))
@@ -336,14 +336,18 @@ func _find_bytes(hay: PackedByteArray, needle: PackedByteArray, from: int) -> in
 
 
 func _wait(n: int) -> void:
+	await _wait_set(n, _all)
+
+
+func _wait_set(n: int, machines: Array) -> void:
 	var targets: Array[int] = []
-	for machine: Libretro in _all:
+	for machine: Libretro in machines:
 		targets.append(machine.GetFrameCount() + n)
 	var deadline: int = Time.get_ticks_msec() + 30000
 	while Time.get_ticks_msec() < deadline:
 		var done := true
-		for i in _all.size():
-			if _all[i].GetFrameCount() < targets[i]:
+		for i in machines.size():
+			if machines[i].GetFrameCount() < targets[i]:
 				done = false
 		if done:
 			return
