@@ -32,8 +32,9 @@ extends Node
 ## asynchronous.
 
 const NM_SCRIPT := preload("res://Scripts/Net/network_manager.gd")
-const GROUPS := ["cores", "identity", "roomcode", "wire", "owners", "assemble",
-	"start", "lockstep", "desync", "join", "transfer", "leave", "rollback", "link"]
+const GROUPS := ["cores", "identity", "roomcode", "punch", "wire", "owners",
+	"assemble", "start", "lockstep", "desync", "join", "transfer", "leave",
+	"rollback", "link"]
 const PORT := 42913
 
 ## What a real fceumm reports, near enough. The exact strings do not matter to
@@ -62,6 +63,8 @@ func _ready() -> void:
 		_test_identity()
 	if _want("roomcode"):
 		_test_room_code()
+	if _want("punch"):
+		_test_punch()
 	if _want("wire"):
 		await _test_wire()
 	if _want("owners"):
@@ -519,6 +522,88 @@ func _test_room_code() -> void:
 		"roomcode/a zero lease is not a lease")
 	_eq(RendezvousClient.parse_heartbeat(null), -1,
 		"roomcode/an empty heartbeat answer renews nothing")
+
+
+# ══ The punch ═════════════════════════════════════════════════════════════════
+# The noray protocol, ported rather than vendored (Scripts/Net/ATTRIBUTIONS.txt).
+# Only the parsing is here. Whether a punch actually opens a path cannot be
+# answered on one LAN by anything, so it is not pretended at: that answer comes
+# from two real networks, and the cases below only make sure that what noray
+# says is understood correctly when it does.
+func _test_punch() -> void:
+	var c := Punchthrough.parse_command("register-host")
+	_eq(c["command"], "register-host", "punch/a bare command parses")
+	_eq(c["data"], "", "punch/and carries no data")
+
+	c = Punchthrough.parse_command("set-oid abc123")
+	_eq(c["command"], "set-oid", "punch/a command with a parameter parses")
+	_eq(c["data"], "abc123", "punch/and keeps the parameter")
+
+	# Everything after the first space is the parameter. No command in this
+	# protocol takes two, and splitting on every space would silently truncate
+	# one that ever did.
+	c = Punchthrough.parse_command("cmd a b c")
+	_eq(c["data"], "a b c", "punch/a parameter containing spaces survives whole")
+	_eq(Punchthrough.parse_command("")["command"], "",
+		"punch/an empty line is not a command")
+
+	# TCP is a stream. A command split across two reads is ordinary, and the
+	# half-line has to wait rather than be parsed as a short command.
+	var got := Punchthrough.ingest("set-oid abc
+set-pid de")
+	var cmds: Array = got["commands"]
+	_eq(cmds.size(), 1, "punch/only the whole line is taken")
+	_eq(cmds[0]["command"], "set-oid", "punch/and it is the first one")
+	_eq(got["rest"], "set-pid de", "punch/the partial line is kept for later")
+
+	got = Punchthrough.ingest(got["rest"] + "f456
+")
+	cmds = got["commands"]
+	_eq(cmds.size(), 1, "punch/the rest completes on the next read")
+	_eq(cmds[0]["data"], "def456", "punch/rejoined across the split")
+	_eq(got["rest"], "", "punch/and nothing is left over")
+
+	got = Punchthrough.ingest("a
+
+b
+")
+	_eq((got["commands"] as Array).size(), 2, "punch/blank lines are not commands")
+
+	got = Punchthrough.ingest("no newline yet")
+	_eq((got["commands"] as Array).size(), 0, "punch/an unterminated line yields nothing")
+	_eq(got["rest"], "no newline yet", "punch/and is kept entire")
+
+	var addr := Punchthrough.parse_address("203.0.113.7:41234")
+	_eq(addr.get("address", ""), "203.0.113.7", "punch/a peer address parses")
+	_eq(addr.get("port", 0), 41234, "punch/with its port")
+
+	# An unusable address must not become port 0 on some default host: that
+	# would turn a protocol fault into a connection attempt against nothing.
+	_ok(Punchthrough.parse_address("203.0.113.7").is_empty(),
+		"punch/an address with no port is refused")
+	_ok(Punchthrough.parse_address(":41234").is_empty(),
+		"punch/a port with no address is refused")
+	_ok(Punchthrough.parse_address("203.0.113.7:0").is_empty(),
+		"punch/port zero is refused")
+	_ok(Punchthrough.parse_address("203.0.113.7:70000").is_empty(),
+		"punch/a port above the range is refused")
+	_ok(Punchthrough.parse_address("").is_empty(),
+		"punch/an empty address is refused")
+
+	_eq(Punchthrough.encode_status(false, false, false), "$---",
+		"punch/a fresh handshake has seen nothing")
+	_eq(Punchthrough.encode_status(true, true, true), "$rwx",
+		"punch/a finished one has seen everything")
+	_eq(Punchthrough.encode_status(false, true, false), "$-w-",
+		"punch/having sent is not having received")
+
+	for flags in [[false, false, false], [true, false, false],
+			[false, true, false], [false, false, true], [true, true, true]]:
+		var enc: String = Punchthrough.encode_status(flags[0], flags[1], flags[2])
+		var dec: Dictionary = Punchthrough.decode_status(enc)
+		_ok(dec["did_read"] == flags[0] and dec["did_write"] == flags[1]
+				and dec["did_handshake"] == flags[2],
+			"punch/%s round-trips" % enc)
 
 
 # ══ The wire format ═══════════════════════════════════════════════════════════

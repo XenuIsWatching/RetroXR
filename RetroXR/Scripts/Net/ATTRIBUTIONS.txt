@@ -1,0 +1,27 @@
+Networking code — attribution
+=============================
+
+punchthrough.gd
+---------------
+  Ported from the netfox.noray addon, which implements the client half of the
+  noray NAT punchthrough protocol.
+
+  Source   : https://github.com/foxssake/netfox (addons/netfox.noray)
+  Licence  : MIT
+  Server   : https://github.com/foxssake/noray
+
+  Ported rather than installed, for three reasons:
+
+    - The addon reaches netfox core for NetfoxLogger and for a block of
+      project settings. Taking it whole means taking the core addon, whose
+      NetworkTime and NetworkRollback autoloads overlap with what
+      netplay_session.gd already does.
+    - It ships as two autoloads, Noray and PacketHandshake. This project drives
+      the punch from NetworkManager at the moment a player asks for it, and a
+      process-wide singleton is the wrong lifetime for something that exists
+      only during a connection attempt.
+    - The protocol is small: newline-separated TCP commands, a UDP registration
+      and a status packet. Carrying a fork of an addon is more work than
+      carrying this.
+
+  MIT permits the reuse and does not affect the licence of this project.
