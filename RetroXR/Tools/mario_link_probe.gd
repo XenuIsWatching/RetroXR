@@ -181,9 +181,15 @@ func _run() -> void:
 	# with the lead already seated hides a whole class of fault, because then the
 	# count is settled before the guest ever looks at it.
 	var order := "cable-first"
+	var power_order := "forward"
+	var power_gap := 90
 	for arg in _args():
 		if arg.begins_with("--order="):
 			order = arg.substr(8)
+		if arg.begins_with("--power-order="):
+			power_order = arg.substr(14)
+		if arg.begins_with("--power-gap="):
+			power_gap = maxi(1, int(arg.substr(12)))
 	_renumber = order == "cable-first-renumber"
 	_regroup = order == "cable-first-regroup"
 	for arg in _args():
@@ -200,17 +206,13 @@ func _run() -> void:
 			# A saved room restores its leads before anything is powered up, then
 			# the player switches two handhelds on one after the other.
 			joined = _cable()
-			_m[0].StartContent(root, CORE, rom)
-			while _m[0].GetFrameCount() < 90:
-				await get_tree().process_frame
-			for k in range(1, _m.size()):
-				_m[k].StartContent(root, CORE, rom)
+			var started := await _start_in_order(root, rom, power_order, power_gap)
 			# The machines that booted before the last one arrived cached "nobody
 			# there". That membership change is what LinkCable restarts on, and
 			# LinkConnect is the raw call below the room, so the probe does it.
 			await _wait_frames(30)
-			for k in range(_m.size() - 1):
-				_m[k].RequestReset()
+			for machine: Libretro in started.slice(0, started.size() - 1):
+				machine.RequestReset()
 			await _wait_frames(30)
 		"cable-last":
 			# Both running, then the lead goes in. What a player does by hand.
@@ -218,8 +220,7 @@ func _run() -> void:
 			# Without the restart this order carries exactly zero transfers. A GBA
 			# reads whether anything is on the other end once, while it boots, and
 			# never asks again.
-			for machine: Libretro in _m:
-				machine.StartContent(root, CORE, rom)
+			await _start_in_order(root, rom, power_order, power_gap)
 			await _wait_frames(200)
 			joined = _cable()
 			for machine: Libretro in _m:
@@ -231,8 +232,7 @@ func _run() -> void:
 			# booted without, and this is the case that says whether it still has
 			# to: if a game can pick a link up mid-session, that restart is a run
 			# thrown away for nothing.
-			for machine: Libretro in _m:
-				machine.StartContent(root, CORE, rom)
+			await _start_in_order(root, rom, power_order, power_gap)
 			await _wait_frames(200)
 			joined = _cable()
 			await _wait_frames(30)
@@ -240,18 +240,13 @@ func _run() -> void:
 			# The lead in first and the machines switched on one at a time, which
 			# is what a restored room does, with no restart either.
 			joined = _cable()
-			_m[0].StartContent(root, CORE, rom)
-			while _m[0].GetFrameCount() < 90:
-				await get_tree().process_frame
-			for k in range(1, _m.size()):
-				_m[k].StartContent(root, CORE, rom)
+			await _start_in_order(root, rom, power_order, power_gap)
 			await _wait_frames(30)
 		"cable-last-reset":
 			# Both running, then the lead goes in, then both are reset. On real
 			# hardware you power-cycle a pair you cabled up after the fact, and
 			# this asks whether a reset is genuinely all it takes.
-			for machine: Libretro in _m:
-				machine.StartContent(root, CORE, rom)
+			await _start_in_order(root, rom, power_order, power_gap)
 			await _wait_frames(200)
 			joined = _cable()
 			await _wait_frames(30)
@@ -263,7 +258,7 @@ func _run() -> void:
 			for machine: Libretro in _m:
 				machine.StartContent(root, CORE, rom)
 			joined = _cable()
-	print("[mario] order=%s cabled=%s" % [order, str(joined)])
+	print("[mario] order=%s power=%s gap=%d cabled=%s" % [order, power_order, power_gap, str(joined)])
 	_wall_prev = Time.get_ticks_msec()
 
 	# Through the logo, then interrupt the attract demo.
@@ -321,6 +316,14 @@ func _run() -> void:
 		if quiet >= 3 and step >= 4:
 			break
 	_shot("e_lobby")
+	if "--lobby-only" in _args():
+		_report("lobby")
+		for machine: Libretro in _m:
+			machine.StopContent()
+		await _wait_process_frames(30)
+		_restore()
+		get_tree().quit(0)
+		return
 
 	# Both machines are paired and sitting on the lobby, which is the screen a game
 	# polls the cable from. Moving the seats HERE is the case the room actually
@@ -460,6 +463,32 @@ func _cable() -> bool:
 	return _m[0].LinkConnectGroup(others, ports)
 
 
+## Power the handhelds one at a time so attachment order is a controlled part
+## of the test instead of three racing emulation threads.
+func _start_in_order(root: String, rom: String, order: String, gap: int) -> Array[Libretro]:
+	var indices: Array[int] = []
+	match order:
+		"reverse":
+			for i in range(_m.size() - 1, -1, -1):
+				indices.append(i)
+		"outside-in":
+			for i in [0, _m.size() - 1, 1, _m.size() - 2]:
+				if i >= 0 and i < _m.size() and not indices.has(i):
+					indices.append(i)
+		_:
+			for i in _m.size():
+				indices.append(i)
+	var started: Array[Libretro] = []
+	for index in indices:
+		var machine: Libretro = _m[index]
+		machine.StartContent(root, CORE, rom)
+		started.append(machine)
+		var target := machine.GetFrameCount() + gap
+		while machine.GetFrameCount() < target:
+			await get_tree().process_frame
+	return started
+
+
 ## Every machine except the one that owns the clock.
 func _guests() -> Array:
 	return _m.slice(1)
@@ -526,6 +555,11 @@ func _wait_frames(n: int) -> void:
 				done = false
 		if done:
 			return
+		await get_tree().process_frame
+
+
+func _wait_process_frames(n: int) -> void:
+	for i in n:
 		await get_tree().process_frame
 
 
