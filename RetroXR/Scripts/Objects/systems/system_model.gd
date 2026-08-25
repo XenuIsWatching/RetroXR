@@ -680,6 +680,28 @@ const LED_DECAY := 2.0
 const LED_RANGE := 0.45
 const LED_STANDOFF := 0.006
 
+
+## Whether a lamp may hang a real light off its lens. Forward+ only.
+##
+## This light is a deliberately extreme thing: an energy of ~1e-5 sitting 3 to 6
+## mm off the surface, whose brightness comes out of the inverse square at that
+## range (peak * STANDOFF^2). Forward+ renders it as intended. The MOBILE backend
+## — Android, so the Quest — does not, and not subtly: at the shipped values with
+## specular 0 it paints everything the light reaches BLACK (the DualShock's lamp
+## became a black bar, the PlayStation's green lens grew a dark core); nudging
+## specular off zero clears the black but leaves a flat coloured disc that reads
+## as a sticker rather than a light; and steepening the falloff detonates
+## completely, the whole pad black with saturated patches. Three regimes, three
+## different wrong answers, so this is not a value that wants tuning.
+##
+## The lens's own emissive material is untouched by any of it and renders
+## identically on both backends. Mobile therefore keeps the glowing lens and
+## gives up the wash it throws on the shell around it — which is exactly what
+## these shells looked like before the lamps were added, and is a great deal
+## better than a black hole where the lamp should be.
+static func lamp_glow_supported() -> bool:
+	return RenderingServer.get_current_rendering_method() == "forward_plus"
+
 var _power_light_mesh: MeshInstance3D = null
 var _power_light_mats: Array[StandardMaterial3D] = []
 var _power_light_glow: OmniLight3D = null
@@ -715,6 +737,8 @@ func prep_power_light(emission: Color, glow: Color, glow_energy: float,
 
 func _build_power_glow(glow: Color, glow_energy: float) -> void:
 	if _power_light_glow != null or _power_light_mesh == null:
+		return
+	if not lamp_glow_supported():
 		return
 	_power_light_glow = OmniLight3D.new()
 	_power_light_glow.name = "PowerLightGlow"

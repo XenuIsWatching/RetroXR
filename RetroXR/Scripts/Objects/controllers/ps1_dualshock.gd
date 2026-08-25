@@ -174,6 +174,11 @@ func _build_analog_lamp() -> void:
 		m.emission_energy_multiplier = 0.0
 		_led_mesh.set_surface_override_material(i, m)
 		_led_mats.append(m)
+	# Forward+ only — see RetroSystemModel.lamp_glow_supported. On the mobile
+	# backend this light does not render as a light at all, and the lens above
+	# carries the lamp there on its own.
+	if not RetroSystemModel.lamp_glow_supported():
+		return
 	_led_glow = OmniLight3D.new()
 	_led_glow.name = "AnalogLampGlow"
 	_led_glow.add_to_group("no_shadow")
