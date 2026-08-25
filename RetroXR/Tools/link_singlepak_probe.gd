@@ -112,6 +112,7 @@ func _run() -> void:
 	var reversed := false
 	var swap := false
 	var swap_reset := false
+	var clients_first := false
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--reversed":
 			reversed = true
@@ -122,6 +123,8 @@ func _run() -> void:
 			reversed = true
 			swap = true
 			swap_reset = true
+		elif arg == "--clients-first":
+			clients_first = true
 	print("[pak] seating: %s" % ("cartridge-less machine first" if reversed
 		else "cartridge first"))
 
@@ -134,9 +137,17 @@ func _run() -> void:
 	# The client takes the null game info: no cartridge, so the BIOS is all it
 	# has, and the BIOS is what listens on the link port.
 	ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", true)
-	_host.StartContent(root, CORE, rom)
-	for c: Libretro in _clients:
-		c.StartContent(root, CORE, "")
+	if clients_first:
+		print("[pak] power: clients 2..%d, then host 1" % (_clients.size() + 1))
+		for c: Libretro in _clients:
+			c.StartContent(root, CORE, "")
+			await _wait(30)
+		_host.StartContent(root, CORE, rom)
+	else:
+		print("[pak] power: host 1, then clients 2..%d" % (_clients.size() + 1))
+		_host.StartContent(root, CORE, rom)
+		for c: Libretro in _clients:
+			c.StartContent(root, CORE, "")
 	await _wait(120)
 	var peers: PackedStringArray = []
 	for machine: Libretro in _all:
