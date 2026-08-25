@@ -60,6 +60,7 @@ func _ready() -> void:
 		await _test_bare_remote()
 		await _test_a_seated_nunchuk()
 		await _test_two_hands_turn_it_sideways()
+		await _test_a_real_release_turns_it_back()
 		await _test_a_nunchuk_beats_a_second_hand()
 		await _test_a_dongle_has_its_own_sideways_id()
 		await _test_a_nunchuk_behind_a_dongle()
@@ -498,14 +499,9 @@ func _test_a_seated_nunchuk() -> void:
 
 
 # ── Held in two hands ────────────────────────────────────────────────────────
-# The RULE for resolving a device id, which stands whether or not anything can
-# currently ask for it. Nothing can: accepting a second grab broke the remote's
-# single-holder assumptions, so second_hand_grab is back to IGNORE and these
-# cases drive _refresh_device_type directly.
-#
-# They are kept rather than deleted because the id resolution is the part that
-# was right, and whatever eventually triggers sideways will need exactly it —
-# including a seated Nunchuk outranking the gesture.
+# A second hand on the remote asks for sideways. These cases pin both halves:
+# the core-facing device id and the physical pose, including the D-pad end being
+# nearest the left hand no matter which hand picked the remote up first.
 
 
 ## Put the remote in one hand, two, or none.
@@ -541,21 +537,57 @@ func _test_two_hands_turn_it_sideways() -> void:
 	add_child(wm)
 	await get_tree().process_frame
 
+	_ok("the remote accepts a second hand",
+		wm.second_hand_grab == XRToolsPickable.SecondHandGrab.SECOND)
 	_hold(wm, 1)
 	_ok("one hand leaves the remote upright",
 		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
 	_hold(wm, 2)
 	_ok("a second hand turns it sideways",
 		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+	var left_grip := wm.grip_anchor(true)
+	var right_grip := wm.grip_anchor(false)
+	_ok("the D-pad end belongs to the left hand",
+		left_grip.origin.z < right_grip.origin.z)
+	_vec_ok("the sideways pose turns the D-pad end left",
+		left_grip.basis.inverse() * Vector3(0.0, 0.0, -1.0), Vector3.LEFT)
 	# The half with no signal behind it: xr-tools emits `grabbed` for a second
-	# hand and nothing at all for a second RELEASE, so a remote that only watched
-	# the signals would turn sideways and stay there.
+	# hand, while `released` is the event that has to restore the one-hand pose.
 	_hold(wm, 1)
 	_ok("letting the second hand go turns it back",
 		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_vec_ok("and restores the upright centre grip", wm.grip_anchor(true).origin,
+		Vector3(0.0, 0.0, 0.012))
 	_hold(wm, 0)
 	_ok("and putting it down leaves it upright",
 		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	wm.queue_free()
+
+
+## The wiring, as opposed to the rule above. Let a hand go through XR Tools'
+## real driver so the release signal has to switch the device and grip back.
+func _test_a_real_release_turns_it_back() -> void:
+	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
+	add_child(wm)
+	await get_tree().process_frame
+
+	var first := _hand()
+	var second := _hand()
+	var driver := XRToolsGrabDriver.new()
+	driver.target = wm
+	driver.primary = Grab.new(Grabber.new(first), wm, null, false)
+	driver.secondary = Grab.new(Grabber.new(second), wm, null, false)
+	wm._grab_driver = driver
+	wm._refresh_device_type()
+	wm._refresh_grip()
+	_ok("two real grabs read as sideways",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+
+	wm.let_go(second, Vector3.ZERO, Vector3.ZERO)
+	_ok("a real second-hand release turns it upright again",
+		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_vec_ok("the real release restores the centre grip",
+		wm.grip_anchor(true).origin, Vector3(0.0, 0.0, 0.012))
 	wm.queue_free()
 
 

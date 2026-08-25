@@ -127,6 +127,13 @@ const COVER_OPEN_DEG := 45.0
 const TRIGGER_PULL_DEG := -16.0
 const ANIM_WEIGHT := 0.4
 
+## Two-handed grip points, measured along the remote's long (+/-Z) axis. The
+## D-pad sits at -Z, so the left hand always takes the negative end and the
+## buttons stay by the right hand. Their basis turns the remote's +Z axis into
+## the hands' +X axis: seen by the player, the remote lies sideways like a pad.
+const SIDEWAYS_GRIP_OFFSET := 0.055
+const SIDEWAYS_GRIP_ROTATION := -PI * 0.5
+
 ## Player-LED colours. "Off" is the unlit lens, not black — an unlit LED still
 ## catches room light.
 const LED_OFF := Color(0.06, 0.07, 0.12)
@@ -198,6 +205,8 @@ var _allow_drop := false
 var _saved_by: Node3D = null
 var _holding_ctrl: XRController3D = null
 var _desktop_held: bool = false
+var _upright_left_grip := Transform3D.IDENTITY
+var _upright_right_grip := Transform3D.IDENTITY
 
 var _hint: HeldHint = null
 var _capture: ScrollLockCapture = null
@@ -322,24 +331,14 @@ func wants_ray_handoff() -> bool:
 func _ready() -> void:
 	super._ready()
 	press_to_hold = false
-	# NOT SecondHandGrab.SECOND, and this is the reason rather than an oversight.
-	#
-	# Everything below assumes exactly ONE holder. _holding_ctrl is singular and
-	# is where every input this remote reads comes from; _saved_by is singular and
-	# is what the no-drop rehold re-grabs with; and _on_grabbed_signal overwrites
-	# both, unconditionally, for whichever hand grabbed last. Accepting a second
-	# grab therefore points the remote at a hand that may not be holding it, hides
-	# the wrong hand's model, and leaves the rehold re-grabbing with the wrong
-	# pickup -- which reads as a remote that falls out of both hands and a bare
-	# hand flickering where the object should be.
-	#
-	# Two-handed hold needs those three made plural first, and a second grab point
-	# at the other end of the shell for the pose to lay across. Until then the
-	# sideways device id has no trigger.
+	second_hand_grab = SecondHandGrab.SECOND
+	_upright_left_grip = ($HandLeft as Node3D).transform
+	_upright_right_grip = ($HandRight as Node3D).transform
 	add_to_group("spawned")
 	add_to_group(ControllerBindings.CONSUMER_GROUP)
 	grabbed.connect(_on_grabbed_signal)
 	dropped.connect(_on_dropped_signal)
+	released.connect(_on_released_signal)
 	_hint = HeldHint.attach(self, true, HINT_HEIGHT)
 	_capture = ScrollLockCapture.attach(self, _can_capture,
 		ICON_CAPTURE, ICON_SIZE)
@@ -671,6 +670,48 @@ func _is_held_in_two_hands() -> bool:
 	return _grab_driver.secondary != null
 
 
+## Returns the XR controller carrying the secondary grab, if there is one.
+func _get_secondary_ctrl() -> XRController3D:
+	if _grab_driver and _grab_driver.secondary:
+		return _grab_driver.secondary.controller
+	return null
+
+
+## A plain grip press on a hand already holding the remote is not a drop. The
+## remote uses the same explicit drop combo as the other game controllers, which
+## also lets either hand leave a two-handed hold without a drop/re-grab flicker.
+func wants_grip_toggle_drop() -> bool:
+	return false
+
+
+## Re-anchor both live grabs and blend to the resulting one- or two-hand pose.
+func _refresh_grip() -> void:
+	_update_hand_pose_anchors()
+	GripAnchor.refresh(self, self)
+
+
+## Local-space grip for one hand. Upright uses the authored centre pose; with two
+## hands the remote spans them, D-pad end on the left, irrespective of which hand
+## picked it up first.
+func grip_anchor(is_left: bool) -> Transform3D:
+	if not _is_held_in_two_hands():
+		return _upright_left_grip if is_left else _upright_right_grip
+	return Transform3D(
+		Basis(Vector3.UP, SIDEWAYS_GRIP_ROTATION),
+		Vector3(0.0, 0.0, -SIDEWAYS_GRIP_OFFSET if is_left else SIDEWAYS_GRIP_OFFSET))
+
+
+## The drawn hands use these same nodes, so keep their meshes on the physical
+## grips as the remote changes pose.
+func _update_hand_pose_anchors() -> void:
+	var left := get_node_or_null(^"HandLeft") as Node3D
+	var right := get_node_or_null(^"HandRight") as Node3D
+	if left:
+		left.transform = grip_anchor(true)
+	if right:
+		right.transform = grip_anchor(false)
+
+
 ## Re-announce the slot when the extension changes. The core rebuilds the whole
 ## Wiimote mapping on this call — including which buttons mean what, which is why
 ## _pressed_now reads a different table per device type.
@@ -713,11 +754,54 @@ func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
 			if _capture:
 				_capture.refresh()
 		return
-	_saved_by = by
-	_holding_ctrl = ctrl
+	# The first grab remains the input-bearing primary. A second hand only adds
+	# its controls and its grip anchor; it must not steal the saved rehold target.
+	if not is_instance_valid(_holding_ctrl):
+		_saved_by = by
+		_holding_ctrl = ctrl
 	_set_model_visible(ctrl, false)
 	_update_pointer_block(ctrl, true)
 	_update_locomotion_block()
+	_refresh_grip()
+
+
+## Fires for each individual hand. XR Tools has already removed that grab (and
+## promoted the survivor when the primary left) before emitting this signal.
+func _on_released_signal(_pickable: Node3D, by: Node3D) -> void:
+	_refresh_device_type()
+	var pickup := by as XRToolsFunctionPickup
+	if not is_instance_valid(pickup):
+		_refresh_grip()
+		return
+	var ctrl: XRController3D = pickup.get_controller()
+	if ctrl == null:
+		_refresh_grip()
+		return
+
+	if _allow_drop:
+		_set_model_visible(ctrl, true)
+		_update_pointer_block(ctrl, false)
+		if ctrl == _holding_ctrl:
+			if _grab_driver and _grab_driver.primary:
+				_holding_ctrl = _grab_driver.primary.controller
+				_saved_by = _grab_driver.primary.by
+			else:
+				_holding_ctrl = null
+				_saved_by = null
+		_update_locomotion_block()
+		_refresh_grip()
+		return
+
+	# A non-drop release is the toggle-hold machinery trying to let go. Reattach
+	# that hand; if it was primary, XR Tools has already promoted the survivor.
+	if ctrl == _holding_ctrl:
+		if _grab_driver and _grab_driver.primary:
+			_holding_ctrl = _grab_driver.primary.controller
+			_saved_by = _grab_driver.primary.by
+			call_deferred("_rehold_hand", by)
+	else:
+		call_deferred("_rehold_hand", by)
+	_refresh_grip()
 
 
 func _on_dropped_signal(_pickable: Node3D) -> void:
@@ -755,6 +839,12 @@ func _rehold() -> void:
 	_saved_by.call("_pick_up_object", self)
 
 
+func _rehold_hand(by: Node3D) -> void:
+	if _allow_drop or not is_instance_valid(by):
+		return
+	by.call("_pick_up_object", self)
+
+
 func _set_model_visible(ctrl: XRController3D, shown: bool) -> void:
 	if is_instance_valid(ctrl) and ctrl.has_method("set_model_visible"):
 		ctrl.call("set_model_visible", shown)
@@ -771,6 +861,10 @@ func _is_combo_pressed(ctrl: XRController3D) -> bool:
 func _drop_all() -> void:
 	_set_model_visible(_holding_ctrl, true)
 	_update_pointer_block(_holding_ctrl, false)
+	var secondary_ctrl := _get_secondary_ctrl()
+	if is_instance_valid(secondary_ctrl):
+		_set_model_visible(secondary_ctrl, true)
+		_update_pointer_block(secondary_ctrl, false)
 	_allow_drop = true
 	_holding_ctrl = null
 	_laser_dot.visible = false
@@ -799,8 +893,11 @@ func _vr_block_owner() -> StringName:
 
 
 func _update_locomotion_block() -> void:
-	var left_held  := is_instance_valid(_holding_ctrl) and _holding_ctrl.tracker == &"left_hand"
-	var right_held := is_instance_valid(_holding_ctrl) and _holding_ctrl.tracker == &"right_hand"
+	var secondary_ctrl := _get_secondary_ctrl()
+	var left_held := (is_instance_valid(_holding_ctrl) and _holding_ctrl.tracker == &"left_hand") \
+		or (is_instance_valid(secondary_ctrl) and secondary_ctrl.tracker == &"left_hand")
+	var right_held := (is_instance_valid(_holding_ctrl) and _holding_ctrl.tracker == &"right_hand") \
+		or (is_instance_valid(secondary_ctrl) and secondary_ctrl.tracker == &"right_hand")
 	var desktop_claim := _desktop_held and _connected_system != null and _port_index >= 0
 	if _locomotion_manager != null:
 		_locomotion_manager.set_block(_vr_block_owner(), LocomotionManager.CHANNEL_LEFT,  left_held)
@@ -1122,6 +1219,12 @@ func _log_aim_points(points: Array[Vector3]) -> void:
 func _dpad_stick() -> Vector2:
 	if _wiimote_map.get("stick", "dpad") != "dpad" or not is_instance_valid(_holding_ctrl):
 		return Vector2.ZERO
+	var secondary_ctrl := _get_secondary_ctrl()
+	if is_instance_valid(secondary_ctrl):
+		if _holding_ctrl.tracker == &"left_hand":
+			return _holding_ctrl.get_vector2("primary")
+		if secondary_ctrl.tracker == &"left_hand":
+			return secondary_ctrl.get_vector2("primary")
 	return _holding_ctrl.get_vector2("primary")
 
 
@@ -1138,15 +1241,22 @@ func _pressed_now() -> Dictionary:
 	var out: Dictionary = {}
 	for key: String in FACE_BUTTONS:
 		out[key] = false
-	var vr := is_instance_valid(_holding_ctrl)
+	var controllers: Array[XRController3D] = []
+	if is_instance_valid(_holding_ctrl):
+		controllers.append(_holding_ctrl)
+	var secondary_ctrl := _get_secondary_ctrl()
+	if is_instance_valid(secondary_ctrl):
+		controllers.append(secondary_ctrl)
 	for source: String in _wiimote_map:
 		if source == "stick":
 			continue
 		var control := str(_wiimote_map[source])
 		if control.is_empty() or control == "none":
 			continue
-		out[control] = vr and _holding_ctrl.get_float(source) \
-			> float(INPUT_THRESHOLDS.get(source, 0.5))
+		for ctrl: XRController3D in controllers:
+			if ctrl.get_float(source) > float(INPUT_THRESHOLDS.get(source, 0.5)):
+				out[control] = true
+				break
 	# A poke is an OR, not an override: pressing 1 on the shell while the bound
 	# hand input is also down must not cancel it. The keyboard joins on the same
 	# terms, so a desktop player and a poking hand cannot cancel each other either.
@@ -1217,9 +1327,27 @@ func _process(delta: float) -> void:
 	_update_leds(delta)
 	_update_power_hold(delta)
 
-	if _is_combo_pressed(_holding_ctrl):
-		_drop_all()
-		return
+	var secondary_ctrl := _get_secondary_ctrl()
+	if _is_combo_pressed(secondary_ctrl):
+		_allow_drop = true
+		_set_model_visible(secondary_ctrl, true)
+		_update_pointer_block(secondary_ctrl, false)
+		if _grab_driver and _grab_driver.secondary:
+			_grab_driver.secondary.pickup.drop_object()
+		_allow_drop = false
+		_update_locomotion_block()
+	elif _is_combo_pressed(_holding_ctrl):
+		if is_instance_valid(secondary_ctrl):
+			_allow_drop = true
+			_set_model_visible(_holding_ctrl, true)
+			_update_pointer_block(_holding_ctrl, false)
+			if is_instance_valid(_saved_by):
+				_saved_by.call("drop_object")
+			_allow_drop = false
+			_update_locomotion_block()
+		else:
+			_drop_all()
+			return
 
 	# The shell moves whether or not it is paired — an unpaired remote still has
 	# buttons you can press.
