@@ -1,0 +1,44 @@
+# Nintendo - Game Boy / Color (Gambatte), retroXR build.
+#
+# Overrides the vendored libretro-core-info entry of the same name. It lives in
+# its own directory because res://libretro-core-info is vendored wholesale from
+# libretro's repository and is refreshed wholesale too — an edit there would be
+# lost the next time, silently.
+#
+# The binary this describes is built from XenuIsWatching/gambatte-libretro at
+# the tag retroxr-gambatte-libretro-v1 and published on that repository's
+# releases page, which is also where its source is: gambatte is GPLv2, so the
+# two travel together.
+
+# Software Information
+display_name = "Nintendo - Game Boy / Color (Gambatte, retroXR)"
+authors = "Sinamas"
+supported_extensions = "gb|gbc|dmg"
+corename = "Gambatte (retroXR)"
+license = "GPLv2"
+permissions = ""
+display_version = "retroXR build"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Nintendo"
+systemname = "Game Boy/Game Boy Color"
+systemid = "game_boy"
+
+# Libretro Features
+supports_no_game = "false"
+database = "Nintendo - Game Boy|Nintendo - Game Boy Color"
+savestate = "true"
+savestate_features = "deterministic"
+
+# BIOS / Firmware
+firmware_count = 2
+firmware0_desc = "gb_bios.bin (Game Boy BIOS)"
+firmware0_path = "gb_bios.bin"
+firmware0_opt = "true"
+firmware1_desc = "gbc_bios.bin (Game Boy Color BIOS)"
+firmware1_path = "gbc_bios.bin"
+firmware1_opt = "true"
+notes = "(!) gb_bios.bin (md5): 32fbbd84168d3482956eb3c5051637f5|(!) gbc_bios.bin (md5): dbfce9db9deaa2567f6a84fde55f9680|(!) Installs over the buildbot's Gambatte under the same name, so saves and core options carry across.|(!) Link Cable is the default Game Boy Link Mode — with nothing plugged in it behaves exactly like the stock build."
+
+description = "Gambatte for Game Boy and Game Boy Color, built from retroXR's fork. It is the stock libretro Gambatte plus the other end of every Game Boy cable in the room. The Game Boy's serial port is two wires and a clock, and libretro has never had anywhere to put the far end of them; this build speaks gb-sio-1 over a bus the frontend hosts, and gambatte_gb_link_mode gains a fourth value, Link Cable, which is the default. With no bus, or a bus with nothing cabled to it, the driver hands back the 0xFF of an open line — exactly what the port does on the stock build — so the default costs an uncabled player nothing. It is deliberately the same wire format mGBA's Game Boy driver uses, which is what lets a gambatte Game Boy and an mGBA one join the same cable. It also carries two accuracy fixes the cable work uncovered, neither of them about cables: the progressive serial shift took its bits off the top of the incoming byte rather than from where the transfer had reached, and a savestate was missing the blit event and blank-LCD flag, which slipped a frame on reload with the LCD off — that second one is what had kept gambatte out of rollback netplay. Everything else is upstream Gambatte. Source and binaries: github.com/XenuIsWatching/gambatte-libretro/releases/latest & the tag it points at."

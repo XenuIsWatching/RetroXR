@@ -1,0 +1,60 @@
+# Sony - PlayStation (PCSX-ReARMed), retroXR build.
+#
+# Overrides the vendored libretro-core-info entry of the same name. It lives in
+# its own directory because res://libretro-core-info is vendored wholesale from
+# libretro's repository and is refreshed wholesale too — an edit there would be
+# lost the next time, silently.
+#
+# The binary this describes is built from XenuIsWatching/pcsx_rearmed at the tag
+# retroxr-pcsx-rearmed-libretro-v1 and published on that repository's releases
+# page, which is also where its source is: pcsx_rearmed is GPLv2, so the two
+# travel together.
+
+# Software Information
+display_name = "Sony - PlayStation (PCSX ReARMed, retroXR)"
+authors = "PCSX Team|notaz|Exophase"
+supported_extensions = "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+corename = "PCSX-ReARMed (retroXR)"
+license = "GPLv2"
+permissions = "dynarec"
+display_version = "retroXR build"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Sony"
+systemname = "PlayStation"
+systemid = "playstation"
+
+# Libretro Features
+database = "Sony - PlayStation"
+supports_no_game = "false"
+savestate = "true"
+savestate_features = "deterministic"
+cheats = "true"
+input_descriptors = "true"
+memory_descriptors = "true"
+libretro_saves = "true"
+core_options = "true"
+load_subsystem = "false"
+hw_render = "false"
+needs_fullpath = "true"
+disk_control = "true"
+is_experimental = "false"
+
+# Firmware / BIOS
+firmware_count = 4
+firmware0_desc = "scph5500.bin (PS1 JP BIOS)"
+firmware0_path = "scph5500.bin"
+firmware0_opt = "true"
+firmware1_desc = "scph5501.bin (PS1 US BIOS)"
+firmware1_path = "scph5501.bin"
+firmware1_opt = "true"
+firmware2_desc = "scph5502.bin (PS1 EU BIOS)"
+firmware2_path = "scph5502.bin"
+firmware2_opt = "true"
+firmware3_desc = "psxonpsp660.bin (PSP PSX Emu BIOS)"
+firmware3_path = "psxonpsp660.bin"
+firmware3_opt = "true"
+notes = "(!) scph5500.bin (md5): 8dd7d5296a650fac7319bce665a6a53c|(!) scph5501.bin (md5): 490f666e1afb15b7362b406ed1cea246|(!) scph5502.bin (md5): 32736f17079d0b2b7024407c39bd3050|(!) psxonpsp660.bin (md5): c53ca5908936d412331790f4426c6c33|(!) Installs over the buildbot's PCSX-ReARMed under the same name, so memory cards, saves and core options carry across.|(!) Link Cable is on by default and is not restart-time; with nothing plugged in the port answers as it always did."
+
+description = "PCSX-ReARMed for the PlayStation, built from retroXR's fork. It is the stock libretro core plus the console's serial port. SIO1 — the port at 1F801050h that the official Link Cable plugs into — had never been emulated at all: sio1ReadStat16 returned a bare 0xa0 and there was nothing behind it. This build implements the port and speaks psx-sio-1 over the link bus the frontend hosts, so two PlayStations in one room can be cabled together. With no bus the port still answers 0xa0, which is what every existing session sees, and that matters more than it sounds: it is what stops Armored Core and Formula 1 misdetecting a cable that is not there. pcsx_rearmed_link_cable is on by default and is not restart-time. Everything else is upstream PCSX-ReARMed. Source and binaries: github.com/XenuIsWatching/pcsx_rearmed/releases/latest & the tag it points at."

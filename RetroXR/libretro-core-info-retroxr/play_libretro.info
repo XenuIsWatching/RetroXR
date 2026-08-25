@@ -1,0 +1,37 @@
+# Sony - PlayStation 2 (Play!), retroXR build.
+#
+# Overrides the vendored libretro-core-info entry of the same name. It lives in
+# its own directory because res://libretro-core-info is vendored wholesale from
+# libretro's repository and is refreshed wholesale too — an edit there would be
+# lost the next time, silently.
+#
+# The binary this describes is built from XenuIsWatching/Play- at the tag
+# retroxr-play-libretro-v1 and published on that repository's releases page,
+# which is also where its source is. Play! is BSD/MIT, so no source obligation
+# rides with the binary; the tag is beside it so anyone can tell what they are
+# running.
+
+# Software Information
+display_name = "Sony - PlayStation 2 (Play!, retroXR)"
+authors = "Jean-Philip Desjardins"
+supported_extensions = "chd|cso|cue|elf|iso|isz"
+corename = "Play! (retroXR)"
+license = "MIT"
+permissions = "dynarec"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Sony"
+systemname = "Sony PlayStation 2"
+systemid = "playstation2"
+
+# Libretro Features
+display_version = "retroXR build"
+supports_no_game = "false"
+database = "Sony - PlayStation 2"
+savestate = "true"
+savestate_features = "basic"
+is_experimental = "true"
+notes = "(!) Installs over the buildbot's Play! under the same name, so saves and core options carry across.|(!) The buildbot's Android build cannot start on a Quest at all — use this one there."
+
+description = "Play! for the PlayStation 2, built from retroXR's fork. It is the stock libretro Play! plus three fixes, two of which are the difference between a core that runs on a Quest and one that does not. The buildbot's Android build points its data directory at /sdcard, which scoped storage will not let it create, and the exception that follows escapes retro_init and aborts the whole frontend. Past that, every thread the core starts asked to attach to a JavaVM that a dlopen'd library never receives, and the assert guarding it is compiled out of a release build. The third fix is visible on both platforms: sprites are snapped to whole pixels, closing the column of black seams the GS's corner sampling leaves down an OpenGL-rendered frame. Everything else is upstream Play!, including its compatibility — this core still has significantly lower compatibility with the PS2 library than PCSX2, and substantial hardware requirements besides. Source and binaries: github.com/XenuIsWatching/Play-/releases/latest & the tag it points at."

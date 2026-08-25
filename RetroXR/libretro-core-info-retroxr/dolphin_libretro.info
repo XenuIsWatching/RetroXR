@@ -6,7 +6,7 @@
 # lost the next time, silently.
 #
 # The binary this describes is built from XenuIsWatching/dolphin at the tag
-# retroxr-dolphin-libretro-v3 and published on that repository's releases page,
+# retroxr-dolphin-libretro-v6 and published on that repository's releases page,
 # which is also where its source is: Dolphin is GPLv2+, so the two travel
 # together.
 
