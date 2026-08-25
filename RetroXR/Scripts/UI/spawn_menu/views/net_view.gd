@@ -1,5 +1,11 @@
-## SpawnMenuNetView — the menu's NET tab: host or join a LAN session, and see who
+## SpawnMenuNetView — the menu's NET tab: host or join a session, and see who
 ## is in it.
+##
+## Two ways in, and the difference is who can reach you. Hosting online claims a
+## room code from the rendezvous and punches a hole; hosting on LAN is what this
+## tab always did. The code path can fail in a way the LAN one cannot — some
+## networks simply cannot be punched — so the failure is spelled out rather
+## than left as a silence, and the LAN row never goes away.
 ##
 ## Talks only to NetworkManager, so like the graphics tab it reports nothing back
 ## to the menu and has no signals. The name and last-used IP persist to
@@ -25,8 +31,12 @@ var _name_edit:    LineEdit = null
 var _ip_edit:      LineEdit = null
 var _players_box:  VBoxContainer = null
 var _host_btn:     Button = null
+var _host_lan_btn: Button = null
 var _join_btn:     Button = null
+var _join_code_btn: Button = null
 var _leave_btn:    Button = null
+var _code_edit:    LineEdit = null
+var _code_lbl:     Label = null
 
 
 static func create() -> SpawnMenuNetView:
@@ -44,7 +54,7 @@ func _build() -> void:
 
 	var prefs := _load_prefs()
 
-	vbox.add_child(MenuStyle.header("MULTIPLAYER (LAN)"))
+	vbox.add_child(MenuStyle.header("MULTIPLAYER"))
 
 	_status_lbl = MenuStyle.label("Not connected", 18, MenuStyle.COLOR_LICENSE)
 	_status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -64,12 +74,59 @@ func _build() -> void:
 
 	# ── Host ──────────────────────────────────────────────────────────────────
 	vbox.add_child(HSeparator.new())
-	_host_btn = _wide_button("Host Game")
-	_host_btn.pressed.connect(_on_host)
+	_host_btn = _wide_button("Host Online")
+	_host_btn.pressed.connect(_on_host_online)
 	vbox.add_child(_host_btn)
+
+	# The code, once there is one. Large because it gets read out loud off the
+	# panel while the headset is on, which is the whole reason it is six
+	# characters of an alphabet with no I, L, O, U, 0 or 1 in it.
+	_code_lbl = MenuStyle.label("", 44, MenuStyle.COLOR_TITLE)
+	_code_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_code_lbl.visible = false
+	vbox.add_child(_code_lbl)
+
+	# Kept, not replaced. A pair that cannot be punched still has a LAN, and
+	# this is also the fallback when the rendezvous itself cannot be reached.
+	_host_lan_btn = _wide_button("Host on LAN")
+	_host_lan_btn.pressed.connect(_on_host)
+	vbox.add_child(_host_lan_btn)
 
 	# ── Join ──────────────────────────────────────────────────────────────────
 	vbox.add_child(HSeparator.new())
+	var code_row := MenuStyle.hbox(10)
+	code_row.custom_minimum_size = Vector2(0, 56)
+	vbox.add_child(code_row)
+	code_row.add_child(MenuStyle.label("Room code", 20, MenuStyle.COLOR_TITLE))
+	_code_edit = LineEdit.new()
+	_code_edit.text = str(prefs.get("code", ""))
+	_code_edit.placeholder_text = "K7MPQ4"
+	_code_edit.max_length = RoomCode.LENGTH
+	_code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_code_edit.add_theme_font_size_override("font_size", 20)
+	code_row.add_child(_code_edit)
+	_join_code_btn = Button.new()
+	_join_code_btn.text = "  Join  "
+	_join_code_btn.custom_minimum_size = Vector2(120, 52)
+	_join_code_btn.add_theme_font_size_override("font_size", 20)
+	_join_code_btn.focus_mode = Control.FOCUS_NONE
+	_join_code_btn.pressed.connect(_on_join_code)
+	var code_rub := Button.new()
+	code_rub.text = String.chr(MenuIcons.BACKSPACE)
+	code_rub.custom_minimum_size = Vector2(64, 52)
+	code_rub.add_theme_font_size_override("font_size", 22)
+	code_rub.add_theme_font_override("font", MenuIcons.symbols())
+	code_rub.focus_mode = Control.FOCUS_NONE
+	code_rub.pressed.connect(func() -> void:
+		_code_edit.text = _code_edit.text.left(_code_edit.text.length() - 1))
+	code_row.add_child(code_rub)
+	code_row.add_child(_join_code_btn)
+
+	# The alphabet, not a keyboard: six columns, five square rows, and only the
+	# characters a code can contain — which makes a mistyped O or 1 unreachable
+	# rather than merely rejected.
+	_keypad(vbox, 6, _alphabet_keys(), _code_edit)
+
 	var join_row := MenuStyle.hbox(10)
 	join_row.custom_minimum_size = Vector2(0, 56)
 	vbox.add_child(join_row)
@@ -88,29 +145,11 @@ func _build() -> void:
 	_join_btn.pressed.connect(_on_join)
 	join_row.add_child(_join_btn)
 
-	# On-menu keypad so the IP can be typed with the VR pointer.
-	var pad := GridContainer.new()
-	pad.columns = 6
-	pad.add_theme_constant_override("h_separation", 6)
-	pad.add_theme_constant_override("v_separation", 6)
-	vbox.add_child(pad)
-	var rub := String.chr(MenuIcons.BACKSPACE)
-	for key: String in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", rub]:
-		var kb := Button.new()
-		kb.text = key
-		kb.custom_minimum_size = Vector2(0, 52)
-		kb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		kb.add_theme_font_size_override("font_size", 22)
-		kb.add_theme_font_override("font", MenuIcons.symbols())
-		kb.focus_mode = Control.FOCUS_NONE
-		var captured := key
-		kb.pressed.connect(func() -> void:
-			if captured == rub:
-				_ip_edit.text = _ip_edit.text.left(_ip_edit.text.length() - 1)
-			else:
-				_ip_edit.text += captured
-		)
-		pad.add_child(kb)
+	# The IP pad, unchanged in shape. Both pads are built by the same helper so
+	# the fix for a Viewport2Din3D delivering two events per tap keeps covering
+	# both of them.
+	_keypad(vbox, 6, ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".",
+		String.chr(MenuIcons.BACKSPACE)], _ip_edit)
 
 	# ── Players ───────────────────────────────────────────────────────────────
 	vbox.add_child(HSeparator.new())
@@ -127,6 +166,12 @@ func _build() -> void:
 	NetworkManager.status_changed.connect(func(text: String) -> void:
 		if is_instance_valid(_status_lbl):
 			_status_lbl.text = text
+	)
+	NetworkManager.room_code_changed.connect(func(code: String) -> void:
+		if not is_instance_valid(_code_lbl):
+			return
+		_code_lbl.text = code
+		_code_lbl.visible = not code.is_empty()
 	)
 	NetworkManager.session_started.connect(func(_h: bool) -> void: refresh())
 	NetworkManager.session_ended.connect(func(_r: String) -> void: refresh())
@@ -153,6 +198,86 @@ func _wide_button(text: String) -> Button:
 	return b
 
 
+## Every key a code can contain. Built from RoomCode.ALPHABET so the pad cannot
+## drift from what the validator accepts: a key that types a character the gate
+## refuses is a trap with no way out on a panel that has no other keyboard.
+##
+## The rubout is deliberately not in here. Thirty keys make five rows of six;
+## a thirty-first left it orphaned on a row of its own, so it sits next to the
+## field it edits instead.
+func _alphabet_keys() -> Array:
+	var keys: Array = []
+	for c in RoomCode.ALPHABET:
+		keys.append(c)
+	return keys
+
+
+## One on-panel pad. Press mode, one event per tap.
+func _keypad(parent: Node, columns: int, keys: Array, target: LineEdit) -> void:
+	var pad := GridContainer.new()
+	pad.columns = columns
+	pad.add_theme_constant_override("h_separation", 6)
+	pad.add_theme_constant_override("v_separation", 6)
+	parent.add_child(pad)
+	var rub := String.chr(MenuIcons.BACKSPACE)
+	for key: String in keys:
+		var kb := Button.new()
+		kb.text = key
+		kb.custom_minimum_size = Vector2(0, 52)
+		kb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		kb.add_theme_font_size_override("font_size", 22)
+		kb.add_theme_font_override("font", MenuIcons.symbols())
+		kb.focus_mode = Control.FOCUS_NONE
+		var captured := key
+		kb.pressed.connect(func() -> void:
+			if not is_instance_valid(target):
+				return
+			if captured == rub:
+				target.text = target.text.left(target.text.length() - 1)
+			else:
+				target.text += captured
+		)
+		pad.add_child(kb)
+
+
+func _on_host_online() -> void:
+	NetworkManager.player_name = _name_edit.text.strip_edges()
+	_save_prefs()
+	_set_busy(true)
+	var err: Error = await NetworkManager.host_online(NetworkManager.player_name)
+	_set_busy(false)
+	# NetworkManager has already said what went wrong through status_changed,
+	# and it says it better than this view can: it knows whether the rendezvous
+	# was unreachable or the punch simply failed. Repeating it here would only
+	# overwrite the specific message with a vaguer one.
+	if err == OK:
+		refresh()
+
+
+func _on_join_code() -> void:
+	var code := RoomCode.normalize(_code_edit.text)
+	if not RoomCode.is_valid(code):
+		if is_instance_valid(_status_lbl):
+			_status_lbl.text = "A room code is %d characters, like K7MPQ4." % RoomCode.LENGTH
+		return
+	_code_edit.text = code
+	NetworkManager.player_name = _name_edit.text.strip_edges()
+	_save_prefs()
+	_set_busy(true)
+	var err: Error = await NetworkManager.join_by_code(code)
+	_set_busy(false)
+	if err == OK:
+		refresh()
+
+
+## A punch takes seconds, not frames. Without this the panel looks idle while it
+## works and the player presses the button again.
+func _set_busy(busy: bool) -> void:
+	for b: Button in [_host_btn, _host_lan_btn, _join_btn, _join_code_btn]:
+		if is_instance_valid(b):
+			b.disabled = busy
+
+
 func _on_host() -> void:
 	NetworkManager.player_name = _name_edit.text.strip_edges()
 	_save_prefs()
@@ -176,9 +301,16 @@ func refresh() -> void:
 		return
 	var active: bool = NetworkManager.is_active()
 	_host_btn.disabled = active
+	_host_lan_btn.disabled = active
 	_join_btn.disabled = active
+	_join_code_btn.disabled = active
 	_leave_btn.disabled = not active
 	_name_edit.editable = not active
+	# The code belongs to a live session. Leaving one has to take it off the
+	# panel, or the next player reads out a code that resolves to nothing.
+	var code: String = NetworkManager.room_code()
+	_code_lbl.text = code
+	_code_lbl.visible = not code.is_empty()
 
 	for child in _players_box.get_children():
 		child.queue_free()
@@ -219,4 +351,5 @@ func _save_prefs() -> void:
 		f.store_string(JSON.stringify({
 			"name": _name_edit.text.strip_edges(),
 			"ip": _ip_edit.text.strip_edges(),
+			"code": RoomCode.normalize(_code_edit.text),
 		}))
