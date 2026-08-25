@@ -568,6 +568,20 @@ const _GRAB_FLIP := PI
 ## so the shell can move without dragging the seat off the socket.
 const PORT_MOUTH_RISE := 0.0074
 
+## The DEPTH is the block's front FACE, not its centre either, and for the same
+## reason build_serial_port takes JackSerial's face: a plug's origin is its
+## mating face, so seating it on a centre buries it by half the block.
+##
+## It did. The block spans z 79.7..90.2 mm, so the centre put the plug's collar
+## 5.3 mm inside the shell and drove the 8.8 mm tongue 3.6 mm out through the
+## BACK of the cavity — a connector sunk into the console rather than plugged
+## into it. On the face the collar lands flush with the moulding and the tongue
+## stops 1.7 mm short of the cavity floor, which is a seated plug.
+##
+## No proud offset here, unlike SERIAL_PROUD on the back panel: that connector
+## stands off its socket, while a controller plug's collar butts against the
+## case.
+
 ## The zone is not the plug's pose. XRTools aligns a plug's SnapGrabPoint — which
 ## carries its own 180-degree flip about X (controller_cable.tscn) — to the zone,
 ## so the placed pose has to be composed with that flip. A front-facing socket
@@ -586,7 +600,7 @@ func configure_controller_ports(port_zones: Array) -> void:
 			continue
 		var block: AABB = _mesh_aabb_local(mesh_name)
 		zone.position = Vector3(block.get_center().x,
-			block.position.y + PORT_MOUTH_RISE, block.get_center().z)
+			block.position.y + PORT_MOUTH_RISE, block.position.z + block.size.z)
 		zone.rotation_degrees = Vector3(0.0, 0.0, 180.0)
 	hide_port_placeholders(port_zones)
 
