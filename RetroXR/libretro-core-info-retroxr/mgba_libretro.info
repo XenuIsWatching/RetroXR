@@ -6,7 +6,7 @@
 # lost the next time, silently.
 #
 # The binary this describes is built from XenuIsWatching/mgba at the tag
-# retroxr-mgba-libretro-v3 and published on that repository's releases page,
+# retroxr-mgba-libretro-v4 and published on that repository's releases page,
 # which is also where its source is. mGBA is MPL-2.0, so no source obligation
 # rides with the binary; the tag is beside it so anyone can tell what they are
 # running.

@@ -96,7 +96,7 @@ const SOURCES := {
 	# name here fails silently, as a core that simply never downloads.
 	"mgba": {
 		"repo":  "XenuIsWatching/mgba",
-		"known_tag": "retroxr-mgba-libretro-v3",
+		"known_tag": "retroxr-mgba-libretro-v4",
 		"label": "mGBA (retroXR build)",
 		"assets": {
 			"Windows": "mgba_libretro.dll.zip",
