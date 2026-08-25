@@ -251,10 +251,27 @@ func on_power_off() -> void:
 ## mirrored onto the lid's own rotation. Same idiom as the NES flap's FlapHinge
 ## frame, for the same reason: keep the widget's convention and the mesh's
 ## geometry from having to agree.
+##
+## The driver is not a bare frame at the model's origin, and both halves of its
+## placement are load-bearing — VRHinge._angle_at reads the hand's angle in the
+## TARGET's frame, about the TARGET's origin, so a driver that does not stand
+## where the lid's hinge stands and turn the way the lid turns maps the hand's
+## motion onto a different arc than the one the player can see:
+##   • ORIGIN — the lid's own origin IS the hinge line (rear edge, ~85 mm behind
+##     and 42 mm above the model origin). Measuring from the model origin instead
+##     put a hand at the lid's front edge in the wrong quadrant entirely, where
+##     pushing DOWN increased the angle. That is the reported bug: the lid would
+##     not shut when you brought your hand down with it, but did shut when the
+##     hand swung back over the console.
+##   • YAW — VRSpringLatchedHinge.mount's Basis(UP, PI), for the reason its own
+##     note gives. The lid opens on NEGATIVE local X, so without the half turn a
+##     driver aligned with the model tracks the hand backwards.
 func _setup_lid() -> void:
 	_lid_driver = Node3D.new()
 	_lid_driver.name = "LidDriver"
 	add_child(_lid_driver)
+	_lid_driver.transform = Transform3D(Basis(Vector3.UP, PI),
+		to_local(_lid.global_position))
 
 	var hinge := VRSpringLatchedHinge.new()
 	hinge.name = "LidHinge"
