@@ -194,6 +194,11 @@ func _try_fb() -> bool:
 func _on_fb_loaded() -> void:
 	if source == Source.NONE:
 		_adopt_fb()
+	else:
+		# The vendor node may replace its Skeleton3D when a controller wakes or
+		# changes profile. Re-walk the new model so ControllerModel drops the old
+		# bone indices and resolves the replacement rig.
+		_mark_dirty()
 
 
 func _adopt_fb() -> void:

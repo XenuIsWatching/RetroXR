@@ -301,6 +301,18 @@ func _check_rig(ctrl: XRController3D, art: ControllerArt) -> void:
 		_check(went.normalized().dot(push.normalized()) > 0.97,
 			"hand moved, pushed %s, tip still goes %s" % [push, went.normalized()])
 
+	# Runtime render-model nodes own their skeleton and can replace it between two
+	# controller input signals. The cached reference then remains non-null but is
+	# a previously freed instance — exactly the state that used to throw from
+	# _stick_frame(). Both stick and button paths must discard it quietly.
+	skel.free()
+	ctrl.call("_on_vec2_changed", "primary", Vector2(0.6, 0.4))
+	ctrl.call("_on_float_changed", "trigger", 1.0)
+	_check(ctrl.get("_skeleton") == null,
+		"a freed runtime skeleton is invalidated before the next input")
+	_check((ctrl.get("_stick") as Dictionary).is_empty(),
+		"and its stale stick geometry is discarded with it")
+
 
 ## Everything is measured from where the CLIP rests each bone, which is not where
 ## the skeleton's own rest puts it - a rig is free to disagree with itself, and

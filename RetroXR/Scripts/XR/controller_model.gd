@@ -93,9 +93,8 @@ var _stick := {}
 ## Re-read the rig whenever the art changes. A model can be replaced mid-session,
 ## and a stale bone index would drive a freed skeleton.
 func _resolve_rig() -> void:
+	_invalidate_rig()
 	_skeleton = _art.skeleton()
-	_driven.clear()
-	_stick.clear()
 	var anim := _art.animation_player()
 	if _skeleton == null or anim == null:
 		return
@@ -119,6 +118,24 @@ func _resolve_rig() -> void:
 		_read_extremes(clip, track, kind, d)
 		_driven[bone_name] = d
 	_read_stick(clip)
+
+
+## A runtime render model owns this skeleton and may replace it between input
+## events (most visibly when a sleeping second controller wakes for a two-hand
+## grab). A freed Object is not null in GDScript, so null checks alone leave a
+## short window where the old rig looks present but every method call on it
+## throws "previously freed instance".
+func _rig_is_valid() -> bool:
+	if is_instance_valid(_skeleton):
+		return true
+	_invalidate_rig()
+	return false
+
+
+func _invalidate_rig() -> void:
+	_skeleton = null
+	_driven.clear()
+	_stick.clear()
 
 
 ## The clip runs every input in turn across five seconds, and a button's stretch
@@ -158,7 +175,7 @@ func _deviation(rest: Variant, v: Variant) -> float:
 ## rig ever takes it.
 func _actuate(bone_name: String, amount: float) -> void:
 	var d: Variant = _driven.get(bone_name)
-	if d == null or _skeleton == null:
+	if d == null or not _rig_is_valid():
 		return
 	var t := clampf(amount, 0.0, 1.0)
 	if d.has("rot_rest"):
@@ -247,6 +264,8 @@ func _plane_normal(axes: Array[Vector3]) -> Vector3:
 ## the art still hangs off a grip anchor sitting at identity; a mapping baked
 ## then sends the stick anywhere but where it was pushed.
 func _stick_frame() -> Basis:
+	if not _rig_is_valid():
+		return Basis.IDENTITY
 	var bone: int = _stick["bone"]
 	var parent := _skeleton.get_bone_parent(bone)
 	var below := _skeleton.get_bone_global_pose(parent) if parent >= 0 else Transform3D.IDENTITY
@@ -263,6 +282,8 @@ func _stick_frame() -> Basis:
 ## down onto that face, and "right" is the face's own right, taken so it agrees
 ## with the hand's. Turning about `shaft x lean` then moves the tip along `lean`.
 func _actuate_stick(value: Vector2) -> void:
+	if not _rig_is_valid():
+		return
 	if _stick.is_empty():
 		_actuate(ACTION_BONES["primary"], minf(1.0, value.length()))
 		return
