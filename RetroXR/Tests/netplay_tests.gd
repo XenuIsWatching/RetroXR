@@ -32,8 +32,8 @@ extends Node
 ## asynchronous.
 
 const NM_SCRIPT := preload("res://Scripts/Net/network_manager.gd")
-const GROUPS := ["cores", "identity", "wire", "owners", "assemble", "start",
-	"lockstep", "desync", "join", "transfer", "leave", "rollback", "link"]
+const GROUPS := ["cores", "identity", "roomcode", "wire", "owners", "assemble",
+	"start", "lockstep", "desync", "join", "transfer", "leave", "rollback", "link"]
 const PORT := 42913
 
 ## What a real fceumm reports, near enough. The exact strings do not matter to
@@ -60,6 +60,8 @@ func _ready() -> void:
 		_test_cores()
 	if _want("identity"):
 		_test_identity()
+	if _want("roomcode"):
+		_test_room_code()
 	if _want("wire"):
 		await _test_wire()
 	if _want("owners"):
@@ -367,6 +369,72 @@ func _test_identity() -> void:
 	# same-arch — the safe way round for something with no evidence at all.
 	_ok(not NetplaySession.identity_mismatch(x64, arm, "nonesuch").is_empty(),
 		"identity/an unknown core is held to one architecture")
+
+
+# ══ Room codes ════════════════════════════════════════════════════════════════
+# The six characters a host reads out over voice chat. The alphabet is chosen so
+# that a code cannot contain a character someone will hear or read wrong, and
+# the two calls are ordered — normalize, then validate — so that what passed the
+# gate is exactly what gets sent to the registry.
+func _test_room_code() -> void:
+	_eq(RoomCode.ALPHABET.length(), 30, "roomcode/the alphabet is 30 symbols")
+	_eq(RoomCode.LENGTH, 6, "roomcode/a code is six characters")
+
+	# Both halves of every confusable pair are absent. Dropping only one would
+	# make the survivor a rewrite target and hide a typo as a wrong-code lookup.
+	for c in ["I", "L", "O", "U", "0", "1"]:
+		_ok(not RoomCode.ALPHABET.contains(c),
+			"roomcode/the alphabet excludes %s" % c)
+	var seen := {}
+	for c in RoomCode.ALPHABET:
+		seen[c] = true
+	_eq(seen.size(), RoomCode.ALPHABET.length(),
+		"roomcode/no symbol appears twice")
+
+	_eq(RoomCode.normalize("k7mpq4"), "K7MPQ4", "roomcode/input is upper-cased")
+	_eq(RoomCode.normalize("  K7MPQ4  "), "K7MPQ4",
+		"roomcode/surrounding space is dropped")
+	_eq(RoomCode.normalize("K7M PQ4"), "K7MPQ4",
+		"roomcode/space inside a code is dropped")
+	_eq(RoomCode.normalize("K7M-PQ4"), "K7MPQ4",
+		"roomcode/a hyphen someone added is dropped")
+	_eq(RoomCode.normalize("k7m_pq4"), "K7MPQ4",
+		"roomcode/an underscore is dropped too")
+	_eq(RoomCode.normalize(""), "", "roomcode/nothing normalizes to nothing")
+
+	# A character outside the alphabet must survive normalization. Rewriting it
+	# here would let an unmintable code reach the registry as a plausible one.
+	_eq(RoomCode.normalize("k7mpq0"), "K7MPQ0",
+		"roomcode/a confusable is kept for the validator to reject")
+
+	_ok(RoomCode.is_valid("K7MPQ4"), "roomcode/a well-formed code is valid")
+	_ok(RoomCode.is_valid("ZZZZZZ"), "roomcode/so is one letter repeated")
+	_ok(RoomCode.is_valid("234567"), "roomcode/so is an all-digit code")
+
+	_ok(not RoomCode.is_valid("K7MPQ"), "roomcode/five characters is not a code")
+	_ok(not RoomCode.is_valid("K7MPQ44"),
+		"roomcode/seven characters is not a code")
+	_ok(not RoomCode.is_valid(""), "roomcode/an empty field is not a code")
+	for c in ["I", "L", "O", "U", "0", "1"]:
+		_ok(not RoomCode.is_valid("K7MPQ" + c),
+			"roomcode/%s is refused inside a code" % c)
+	_ok(not RoomCode.is_valid("K7MPQ!"), "roomcode/punctuation is refused")
+
+	# is_valid judges the sent form, so lowercase fails rather than quietly
+	# passing — a caller that skipped normalize finds out here, not at the
+	# registry.
+	_ok(not RoomCode.is_valid("k7mpq4"),
+		"roomcode/an unnormalized code does not pass the gate")
+	_ok(not RoomCode.is_valid("K7M-PQ4"),
+		"roomcode/nor does one still carrying its hyphen")
+	_ok(RoomCode.is_valid(RoomCode.normalize("k7m-pq4")),
+		"roomcode/normalize then validate is the accepted order")
+
+	# Every symbol the server can mint has to survive its own round trip.
+	for c in RoomCode.ALPHABET:
+		var code: String = c.repeat(RoomCode.LENGTH)
+		_ok(RoomCode.is_valid(RoomCode.normalize(code.to_lower())),
+			"roomcode/%s round-trips" % c)
 
 
 # ══ The wire format ═══════════════════════════════════════════════════════════
