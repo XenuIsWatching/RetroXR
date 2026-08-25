@@ -152,6 +152,24 @@ const DEFAULT_WIIMOTE_MAP: Dictionary = {
     "stick":         "dpad",
 }
 
+## Two-hand Wii Remote map. Unlike the upright map, sources are hand-specific:
+## the remote is physically a small pad now, so the left hand owns B/A/- and the
+## D-pad while the right owns 1/2/+. Values are the PHYSICAL labels printed on
+## the shell; Wiimote translates them to Dolphin's sideways RetroPad bits.
+const DEFAULT_WIIMOTE_SIDEWAYS_MAP: Dictionary = {
+    "left_trigger":        "b",
+    "left_ax_button":      "a",
+    "left_by_button":      "none",
+    "left_grip":           "none",
+    "left_primary_click":  "minus",
+    "right_trigger":       "none",
+    "right_ax_button":     "two",
+    "right_by_button":     "one",
+    "right_grip":          "none",
+    "right_primary_click": "plus",
+    "stick":               "dpad",
+}
+
 ## Human-readable labels for each Wii Remote button source.
 const WIIMOTE_SOURCE_LABELS: Dictionary = {
     "trigger":       "Trigger",
@@ -181,6 +199,13 @@ const WIIMOTE_CONTROL_OF_TARGET: Dictionary = {
     "b": "b", "a": "a", "x": "one", "y": "two",
     "start": "plus", "select": "minus", "r3": "home", "r2": "shake",
     "up": "up", "down": "down", "left": "left", "right": "right",
+}
+
+## Sideways RetroPad target -> physical label on the rotated Wii Remote.
+const WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET: Dictionary = {
+    "b": "one", "a": "two", "x": "a", "y": "b",
+    "start": "plus", "select": "minus", "r3": "home", "r2": "shake",
+    "up": "right", "down": "left", "left": "up", "right": "down",
 }
 
 ## Default Nunchuk map, read by the OFF hand. Only C and Z are bindable; the
@@ -213,12 +238,11 @@ static func _save_file(data: Dictionary) -> void:
 
 ## Save global (fallback) bindings. Existing per-system profiles are preserved.
 ##
-## The wiimote and nunchuk layers are OPTIONAL, and null means "leave whatever is
-## stored alone" rather than "clear it". They are written from a different page
-## from the other three, so a caller that has no Nunchuk map to offer must not
-## take the stored one with it.
+## The upright Wiimote, sideways Wiimote and Nunchuk layers are OPTIONAL, and
+## null means "leave whatever is stored alone" rather than "clear it".
 static func save_global(button_map: Dictionary, stick_map: Dictionary, lightgun_map: Dictionary,
-        wiimote_map: Variant = null, nunchuk_map: Variant = null) -> void:
+        wiimote_map: Variant = null, nunchuk_map: Variant = null,
+        wiimote_sideways_map: Variant = null) -> void:
     var data := _load_file()
     if not data.has("global"):
         data["global"] = {}
@@ -229,24 +253,27 @@ static func save_global(button_map: Dictionary, stick_map: Dictionary, lightgun_
         data["global"]["wiimote"] = wiimote_map
     if nunchuk_map != null:
         data["global"]["nunchuk"] = nunchuk_map
+    if wiimote_sideways_map != null:
+        data["global"]["wiimote_sideways"] = wiimote_sideways_map
     _save_file(data)
 
 
 ## Save per-system bindings. Falls back to save_global if systemid is empty.
 ##
 ## A profile is written WHOLE — that is what makes it pin a platform against
-## later global edits — and the whole has five layers, not three. Replacing the
+## later global edits — and the whole has six layers, not three. Replacing the
 ## entry with only buttons/sticks/lightgun is what used to destroy a stored
 ## Nunchuk map every time any other binding on that platform was saved: binding
 ## one thing silently reset another page, on a store the player never sees.
 ##
-## So the two Wii layers are carried over from what is already there when the
+## So the three Wii layers are carried over from what is already there when the
 ## caller does not supply them. Everything else is still replaced outright.
 static func save_for_system(systemid: String, button_map: Dictionary, stick_map: Dictionary,
         lightgun_map: Dictionary, wiimote_map: Variant = null,
-        nunchuk_map: Variant = null) -> void:
+        nunchuk_map: Variant = null, wiimote_sideways_map: Variant = null) -> void:
     if systemid.is_empty():
-        save_global(button_map, stick_map, lightgun_map, wiimote_map, nunchuk_map)
+        save_global(button_map, stick_map, lightgun_map, wiimote_map, nunchuk_map,
+            wiimote_sideways_map)
         return
     var data := _load_file()
     if not data.has("per_system"):
@@ -259,10 +286,14 @@ static func save_for_system(systemid: String, button_map: Dictionary, stick_map:
     }
     var wiimote: Variant = wiimote_map if wiimote_map != null else previous.get("wiimote")
     var nunchuk: Variant = nunchuk_map if nunchuk_map != null else previous.get("nunchuk")
+    var sideways: Variant = wiimote_sideways_map if wiimote_sideways_map != null \
+        else previous.get("wiimote_sideways")
     if wiimote != null:
         entry["wiimote"] = wiimote
     if nunchuk != null:
         entry["nunchuk"] = nunchuk
+    if sideways != null:
+        entry["wiimote_sideways"] = sideways
     data["per_system"][systemid] = entry
     _save_file(data)
 
@@ -277,14 +308,14 @@ static func get_for_system(systemid: String) -> Dictionary:
         var per_sys: Dictionary = data.get("per_system", {}) as Dictionary
         sys_data = per_sys.get(systemid, {}) as Dictionary
 
-    # The wiimote/nunchuk layers read the same file but have no save_* writer of
-    # their own yet, so today they always resolve to the defaults. Merging them
-    # here regardless means adding a remap tab later touches only the writer.
+    # All hardware-specific layers use the same default → global → system merge.
     return {
         "buttons":  _merge(DEFAULT_BUTTON_MAP,   global_data.get("buttons",  {}), sys_data.get("buttons",  {})),
         "sticks":   _merge(DEFAULT_STICK_MAP,     global_data.get("sticks",   {}), sys_data.get("sticks",   {})),
         "lightgun": _merge(DEFAULT_LIGHTGUN_MAP,  global_data.get("lightgun", {}), sys_data.get("lightgun", {})),
         "wiimote":  _merge(DEFAULT_WIIMOTE_MAP,   global_data.get("wiimote",  {}), sys_data.get("wiimote",  {})),
+        "wiimote_sideways": _merge(DEFAULT_WIIMOTE_SIDEWAYS_MAP,
+            global_data.get("wiimote_sideways", {}), sys_data.get("wiimote_sideways", {})),
         "nunchuk":  _merge(DEFAULT_NUNCHUK_MAP,   global_data.get("nunchuk",  {}), sys_data.get("nunchuk",  {})),
     }
 

@@ -65,6 +65,8 @@ func _ready() -> void:
 		await _test_a_dongle_has_its_own_sideways_id()
 		await _test_a_nunchuk_behind_a_dongle()
 		await _test_pulling_the_extension()
+	if _wants("sideways"):
+		await _test_sideways_controls_follow_the_hands_and_shell()
 
 	print("[motion] ---- %d passed, %d failed ----" % [_pass, _fail])
 	get_tree().quit(1 if _fail > 0 else 0)
@@ -588,6 +590,96 @@ func _test_a_real_release_turns_it_back() -> void:
 		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
 	_vec_ok("the real release restores the centre grip",
 		wm.grip_anchor(true).origin, Vector3(0.0, 0.0, 0.012))
+	wm.queue_free()
+
+
+func _test_sideways_controls_follow_the_hands_and_shell() -> void:
+	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
+	add_child(wm)
+	await get_tree().process_frame
+
+	var origin := XROrigin3D.new()
+	add_child(origin)
+	var left := XRController3D.new()
+	left.tracker = &"left_hand"
+	left.pose = &"default"
+	origin.add_child(left)
+	var right := XRController3D.new()
+	right.tracker = &"right_hand"
+	right.pose = &"default"
+	origin.add_child(right)
+	var left_tracker := XRControllerTracker.new()
+	left_tracker.name = &"left_hand"
+	XRServer.add_tracker(left_tracker)
+	left_tracker.set_pose(&"default", Transform3D.IDENTITY, Vector3.ZERO, Vector3.ZERO,
+		XRPose.XR_TRACKING_CONFIDENCE_HIGH)
+	var right_tracker := XRControllerTracker.new()
+	right_tracker.name = &"right_hand"
+	XRServer.add_tracker(right_tracker)
+	right_tracker.set_pose(&"default", Transform3D.IDENTITY, Vector3.ZERO, Vector3.ZERO,
+		XRPose.XR_TRACKING_CONFIDENCE_HIGH)
+	await get_tree().process_frame
+
+	var driver := XRToolsGrabDriver.new()
+	driver.target = wm
+	driver.primary = Grab.new(Grabber.new(right), wm, null, false)
+	driver.primary.controller = right
+	driver.secondary = Grab.new(Grabber.new(left), wm, null, false)
+	driver.secondary.controller = left
+	wm._grab_driver = driver
+	wm._holding_ctrl = right
+	wm._wiimote_sideways_map = \
+		ControllerBindings.DEFAULT_WIIMOTE_SIDEWAYS_MAP.duplicate()
+	wm._refresh_device_type()
+
+	left_tracker.set_input(&"trigger", 1.0)
+	var pressed := wm._pressed_now()
+	_ok("sideways/left trigger presses physical B",
+		pressed.get("b", false) and not pressed.get("one", false))
+	var mask := wm._button_mask(pressed)
+	_ok("sideways/physical B reaches Dolphin's Y bit",
+		(mask & (1 << ControllerBindings.JOYPAD_Y)) != 0
+		and (mask & (1 << ControllerBindings.JOYPAD_B)) == 0)
+
+	left_tracker.set_input(&"trigger", 0.0)
+	right_tracker.set_input(&"trigger", 1.0)
+	pressed = wm._pressed_now()
+	_ok("sideways/right trigger is unassigned",
+		not pressed.get("b", false) and not pressed.get("one", false))
+	right_tracker.set_input(&"trigger", 0.0)
+	right_tracker.set_input(&"by_button", 1.0)
+	pressed = wm._pressed_now()
+	_ok("sideways/right B presses physical 1",
+		pressed.get("one", false) and not pressed.get("b", false))
+	mask = wm._button_mask(pressed)
+	_ok("sideways/physical 1 reaches Dolphin's B bit",
+		(mask & (1 << ControllerBindings.JOYPAD_B)) != 0
+		and (mask & (1 << ControllerBindings.JOYPAD_Y)) == 0)
+	wm._animate_controls(pressed)
+	_ok("sideways/physical 1 animation follows the right B button",
+		bool((wm._face_buttons["one"] as VRButton).get("_latched_pressed")))
+
+	right_tracker.set_input(&"by_button", 0.0)
+	right_tracker.set_input(&"ax_button", 1.0)
+	pressed = wm._pressed_now()
+	_ok("sideways/right A presses physical 2",
+		pressed.get("two", false) and not pressed.get("a", false))
+
+	right_tracker.set_input(&"ax_button", 0.0)
+	left_tracker.set_input(&"primary", Vector2.LEFT)
+	_vec_ok("sideways/stick left depresses the physical D-pad Up arm",
+		Vector3(wm._dpad_animation_stick().x, wm._dpad_animation_stick().y, 0.0),
+		Vector3.UP)
+	mask = wm._button_mask(wm._pressed_now())
+	_ok("sideways/stick left still sends logical Left to Dolphin",
+		(mask & (1 << ControllerBindings.JOYPAD_LEFT)) != 0
+		and (mask & (1 << ControllerBindings.JOYPAD_UP)) == 0)
+
+	wm._grab_driver = null
+	wm._holding_ctrl = null
+	XRServer.remove_tracker(left_tracker)
+	XRServer.remove_tracker(right_tracker)
+	origin.queue_free()
 	wm.queue_free()
 
 

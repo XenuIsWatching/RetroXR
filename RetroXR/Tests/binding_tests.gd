@@ -58,6 +58,7 @@ func _ready() -> void:
 	_test_console_pad_art()
 	_test_the_editor_writes_the_nunchuk_layer()
 	_test_the_wii_diagram_writes_the_wiimote_layer()
+	_test_the_sideways_diagram_has_its_own_layer()
 	_test_wii_target_table_matches_the_remote()
 	_test_pad_art_variants()
 	_test_wii_pad_art()
@@ -480,6 +481,45 @@ func _test_the_wii_diagram_writes_the_wiimote_layer() -> void:
 	ed.queue_free()
 
 
+func _test_the_sideways_diagram_has_its_own_layer() -> void:
+	_clear()
+	var ed := ControlsBindingEditor.new()
+	add_child(ed)
+	ed._systemid = "wii"
+	ed._build_xr_controls(ed)
+
+	_eq("wii-sideways/left trigger works physical B",
+		ed._wiimote_source_for("y", ConsolePadArt.WII_SIDEWAYS), "left_trigger")
+	_eq("wii-sideways/right B works physical 1",
+		ed._wiimote_source_for("b", ConsolePadArt.WII_SIDEWAYS), "right_by_button")
+	_eq("wii-sideways/right A works physical 2",
+		ed._wiimote_source_for("a", ConsolePadArt.WII_SIDEWAYS), "right_ax_button")
+	_eq("wii-sideways/left click works minus",
+		ed._wiimote_source_for("select", ConsolePadArt.WII_SIDEWAYS),
+		"left_primary_click")
+	_eq("wii-sideways/right click works plus",
+		ed._wiimote_source_for("start", ConsolePadArt.WII_SIDEWAYS),
+		"right_primary_click")
+	_eq("wii-sideways/logical Left is the physical Up arm",
+		str(ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET.get("left")), "up")
+	_eq("wii-sideways/logical Up is the physical Right arm",
+		str(ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET.get("up")), "right")
+
+	# Rebinding the sideways picture changes only its hand-specific layer.
+	ed._on_console_xr_changed("b", "right_trigger", ConsolePadArt.WII_SIDEWAYS)
+	var resolved := ControllerBindings.get_for_system("wii")
+	var sideways: Dictionary = resolved["wiimote_sideways"]
+	_eq("wii-sideways/a change lands in the sideways layer",
+		str(sideways.get("right_trigger")), "one")
+	_eq("wii-sideways/and frees the old source",
+		str(sideways.get("right_by_button")), "none")
+	_eq("wii-sideways/upright trigger remains B",
+		str((resolved["wiimote"] as Dictionary).get("trigger")), "b")
+	_eq("wii-sideways/the sideways picture agrees",
+		ed._wiimote_source_for("b", ConsolePadArt.WII_SIDEWAYS), "right_trigger")
+	ed.queue_free()
+
+
 ## The crossing table and the remote's own desktop map must agree, since they are
 ## two statements of the same fact in files that cannot import each other.
 func _test_wii_target_table_matches_the_remote() -> void:
@@ -726,8 +766,10 @@ func _test_wii_layers_survive_a_save() -> void:
 	# A per-platform Nunchuk map, written whole the way an override is.
 	var nunchuk := {"c": "grip", "z": "by_button"}
 	var wiimote := {"shake": "grip"}
+	var sideways := {"right_trigger": "one"}
 	var a := _xr_profile("right_grip", ControllerBindings.JOYPAD_R2)
-	ControllerBindings.save_for_system(SYS_A, a[0], a[1], a[2], wiimote, nunchuk)
+	ControllerBindings.save_for_system(SYS_A, a[0], a[1], a[2], wiimote, nunchuk,
+		sideways)
 
 	_eq("wii/the nunchuk layer round-trips",
 		str((ControllerBindings.get_for_system(SYS_A)["nunchuk"] as Dictionary).get("c")),
@@ -735,6 +777,9 @@ func _test_wii_layers_survive_a_save() -> void:
 	_eq("wii/and the wiimote layer with it",
 		str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
 		"grip")
+	_eq("wii/and the sideways layer with it",
+		str((ControllerBindings.get_for_system(SYS_A)["wiimote_sideways"] as Dictionary)
+			.get("right_trigger")), "one")
 
 	# THE GUARD. Saving any OTHER binding for the same platform used to replace
 	# the whole per-system entry with buttons/sticks/lightgun, taking these two
@@ -749,17 +794,23 @@ func _test_wii_layers_survive_a_save() -> void:
 	_eq("wii/and the wiimote layer standing",
 		str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
 		"grip")
+	_eq("wii/and the sideways layer standing",
+		str((ControllerBindings.get_for_system(SYS_A)["wiimote_sideways"] as Dictionary)
+			.get("right_trigger")), "one")
 	_eq("wii/while the new binding did take",
 		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("left_grip")),
 		ControllerBindings.JOYPAD_L2)
 
 	# The global layer has the same shape and the same hazard.
-	ControllerBindings.save_global(a[0], a[1], a[2], wiimote, nunchuk)
+	ControllerBindings.save_global(a[0], a[1], a[2], wiimote, nunchuk, sideways)
 	var g := _xr_profile("right_trigger", ControllerBindings.JOYPAD_A)
 	ControllerBindings.save_global(g[0], g[1], g[2])
 	_eq("wii/a global save leaves the global nunchuk layer standing",
 		str((ControllerBindings.get_global()["nunchuk"] as Dictionary).get("z")),
 		"by_button")
+	_eq("wii/and leaves the global sideways layer standing",
+		str((ControllerBindings.get_global()["wiimote_sideways"] as Dictionary)
+			.get("right_trigger")), "one")
 
 	# And a platform with no Nunchuk map of its own still reads the global one,
 	# which is what makes the layer worth storing per platform at all.

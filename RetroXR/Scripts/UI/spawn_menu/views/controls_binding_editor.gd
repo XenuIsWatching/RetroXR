@@ -44,6 +44,7 @@ var _edit_nunchuk_map: Dictionary = {}
 ## The Wii Remote's own map, source -> control name. The remote resolves THIS and
 ## never the joypad one, so on the Wii page the picture edits this instead.
 var _edit_wiimote_map: Dictionary = {}
+var _edit_wiimote_sideways_map: Dictionary = {}
 
 # Desktop rebinding: which action is listening, and action_name -> its Button so
 # on_rebind_complete() can relabel it.
@@ -212,6 +213,7 @@ func _build_xr_controls(vbox: VBoxContainer) -> void:
 	_edit_lightgun_map = current["lightgun"].duplicate()
 	_edit_nunchuk_map = (current["nunchuk"] as Dictionary).duplicate()
 	_edit_wiimote_map = (current["wiimote"] as Dictionary).duplicate()
+	_edit_wiimote_sideways_map = (current["wiimote_sideways"] as Dictionary).duplicate()
 
 	# ── Joypad Buttons ────────────────────────────────────────────────────────
 	if ConsolePadArt.has(_systemid):
@@ -230,9 +232,8 @@ func _build_xr_controls(vbox: VBoxContainer) -> void:
 		# and print different names on them, so one picture cannot be right for
 		# both. Every other console answers with a single key and is untouched.
 		#
-		# They share one binding map on purpose: the console does the relabelling,
-		# so a change made on either picture is the same change. The dropdowns are
-		# registered per variant and reset drives them all.
+		# Upright has one unprefixed holding-hand map; sideways has a separate map
+		# with left/right sources because both hands are active at once.
 		for art_key: String in ConsolePadArt.variants_for(_systemid):
 			var row := ConsolePadArt.row(art_key)
 			vbox.add_child(MenuStyle.label(String(row["label"]), 18, MenuStyle.COLOR_LICENSE))
@@ -241,9 +242,9 @@ func _build_xr_controls(vbox: VBoxContainer) -> void:
 			diagram.custom_minimum_size = Vector2(0, _CONSOLE_DIAGRAM_H)
 			diagram.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			vbox.add_child(diagram)
-			diagram.setup(art_key, _console_source_options(),
+			diagram.setup(art_key, _console_source_options(art_key),
 				_xr_current_by_control(art_key))
-			diagram.binding_changed.connect(_on_console_xr_changed)
+			diagram.binding_changed.connect(_on_console_xr_changed.bind(art_key))
 			_console_xr_diagrams.append(diagram)
 			# The first one is the platform's own, and is what the rest of this
 			# class means when it says "the" console diagram.
@@ -602,7 +603,7 @@ func _on_desktop_controls_reset() -> void:
 func _apply_xr_bindings() -> void:
 	ControllerBindings.save_for_system(_systemid,
 		_edit_button_map, _edit_stick_map, _edit_lightgun_map,
-		_edit_wiimote_map, _edit_nunchuk_map)
+		_edit_wiimote_map, _edit_nunchuk_map, _edit_wiimote_sideways_map)
 	controller_bindings_changed.emit()
 
 
@@ -612,7 +613,7 @@ func apply_all() -> void:
 	if MenuStyle.is_vr_mode():
 		ControllerBindings.save_for_system(_systemid,
 			_edit_button_map, _edit_stick_map, _edit_lightgun_map,
-			_edit_wiimote_map, _edit_nunchuk_map)
+			_edit_wiimote_map, _edit_nunchuk_map, _edit_wiimote_sideways_map)
 	GamepadBindings.save_for_system(_systemid, _edit_pad_button_map, _edit_pad_stick_map)
 	if not MenuStyle.is_vr_mode():
 		DesktopBindings.save_for_system(_systemid)
@@ -625,6 +626,9 @@ func _on_controls_reset() -> void:
 		_edit_stick_map    = ControllerBindings.DEFAULT_STICK_MAP.duplicate()
 		_edit_lightgun_map = ControllerBindings.DEFAULT_LIGHTGUN_MAP.duplicate()
 		_edit_nunchuk_map  = ControllerBindings.DEFAULT_NUNCHUK_MAP.duplicate()
+		_edit_wiimote_map = ControllerBindings.DEFAULT_WIIMOTE_MAP.duplicate()
+		_edit_wiimote_sideways_map = \
+			ControllerBindings.DEFAULT_WIIMOTE_SIDEWAYS_MAP.duplicate()
 	else:
 		# The layer beneath a platform is the global map, not the shipped default.
 		var g := ControllerBindings.get_global()
@@ -632,6 +636,8 @@ func _on_controls_reset() -> void:
 		_edit_stick_map    = (g["sticks"] as Dictionary).duplicate()
 		_edit_lightgun_map = (g["lightgun"] as Dictionary).duplicate()
 		_edit_nunchuk_map  = (g["nunchuk"] as Dictionary).duplicate()
+		_edit_wiimote_map = (g["wiimote"] as Dictionary).duplicate()
+		_edit_wiimote_sideways_map = (g["wiimote_sideways"] as Dictionary).duplicate()
 	for src: String in _BUTTON_SOURCE_ORDER:
 		_reset_vr_dropdown("btn:" + src, _edit_button_map.get(src, -1))
 	for stick: String in ["stick_left", "stick_right"]:
@@ -667,12 +673,13 @@ func _hint(text: String) -> Label:
 ## still appears rather than becoming a blank row.
 ## The inputs a console control can be driven by on this page.
 ##
-## A Wii Remote is held in ONE hand and bound through its own layer, so its
-## sources are that hand's five inputs -- unprefixed, the same namespace the
-## Nunchuk and light gun use. Every other console binds the generic joypad map,
-## whose sources are left- and right-hand specific.
-func _console_source_options() -> Array:
+## Upright Wii uses five unprefixed inputs from whichever hand holds it. Its
+## sideways variant uses both controllers, so it offers the ten hand-prefixed
+## sources used by an ordinary two-hand pad.
+func _console_source_options(art_key: String = "") -> Array:
 	if not _uses_wiimote_layer():
+		return _xr_source_options()
+	if art_key == ConsolePadArt.WII_SIDEWAYS:
 		return _xr_source_options()
 	# "" and not "none" for the empty choice, matching _xr_source_options. The
 	# diagram selects by matching the current value against an option id, and
@@ -725,12 +732,7 @@ func _xr_source_for_bit(bit: int) -> String:
 	return ""
 
 
-## Repaint every console diagram from the one shared binding map.
-##
-## All of them, not just the platform's own. The Wii's upright and sideways
-## pictures show the SAME bits under different names, so a change made on either
-## has to land on both — repainting only the first leaves the other showing what
-## the map used to say, which reads as a binding that did not take.
+## Repaint every console diagram from the map belonging to that variant.
 func _refresh_console_xr_diagrams() -> void:
 	for d: ConsolePadDiagram in _console_xr_diagrams:
 		if is_instance_valid(d):
@@ -748,12 +750,16 @@ func _uses_wiimote_layer() -> bool:
 
 
 ## Which VR input works a given Wii Remote control, "" for none.
-func _wiimote_source_for(control: String) -> String:
-	var wii := String(ControllerBindings.WIIMOTE_CONTROL_OF_TARGET.get(control, ""))
+func _wiimote_source_for(control: String, art_key: String = "") -> String:
+	var sideways := art_key == ConsolePadArt.WII_SIDEWAYS
+	var crossing := ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET \
+		if sideways else ControllerBindings.WIIMOTE_CONTROL_OF_TARGET
+	var wii := String(crossing.get(control, ""))
 	if wii.is_empty():
 		return ""
-	for src: String in _edit_wiimote_map:
-		if src != "stick" and String(_edit_wiimote_map[src]) == wii:
+	var binding_map := _edit_wiimote_sideways_map if sideways else _edit_wiimote_map
+	for src: String in binding_map:
+		if src != "stick" and String(binding_map[src]) == wii:
 			return src
 	return ""
 
@@ -769,7 +775,8 @@ func _xr_current_by_control(art_key: String = "") -> Dictionary:
 		art_key = _systemid
 	var out: Dictionary = {}
 	for control: String in ConsolePadArt.controls(art_key):
-		out[control] = _wiimote_source_for(control) if _uses_wiimote_layer() 			else _xr_source_for_bit(ConsolePadArt.bit_of(control))
+		out[control] = _wiimote_source_for(control, art_key) if _uses_wiimote_layer() \
+			else _xr_source_for_bit(ConsolePadArt.bit_of(control))
 	return out
 
 
@@ -783,9 +790,9 @@ func _pad_current_by_control() -> Dictionary:
 ## One source per control: free whatever drove this button, then assign. Taking a
 ## source off another button is correct — one finger cannot do two jobs — and the
 ## whole diagram is refreshed because the button it left now reads None.
-func _on_console_xr_changed(control: String, id: Variant) -> void:
+func _on_console_xr_changed(control: String, id: Variant, art_key: String = "") -> void:
 	if _uses_wiimote_layer():
-		_on_wiimote_control_changed(control, id)
+		_on_wiimote_control_changed(control, id, art_key)
 		return
 	var bit := ConsolePadArt.bit_of(control)
 	if bit < 0:
@@ -804,16 +811,20 @@ func _on_console_xr_changed(control: String, id: Variant) -> void:
 ## one control, so choosing a source for a control takes it off whatever it was
 ## on. Keyed the other way round from the joypad map -- source to control, not
 ## source to bit -- which is why it cannot share that code.
-func _on_wiimote_control_changed(control: String, id: Variant) -> void:
-	var wii := String(ControllerBindings.WIIMOTE_CONTROL_OF_TARGET.get(control, ""))
+func _on_wiimote_control_changed(control: String, id: Variant, art_key: String = "") -> void:
+	var sideways := art_key == ConsolePadArt.WII_SIDEWAYS
+	var crossing := ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET \
+		if sideways else ControllerBindings.WIIMOTE_CONTROL_OF_TARGET
+	var wii := String(crossing.get(control, ""))
 	if wii.is_empty():
 		return
-	for src: String in _edit_wiimote_map.keys():
-		if src != "stick" and String(_edit_wiimote_map[src]) == wii:
-			_edit_wiimote_map[src] = "none"
+	var binding_map := _edit_wiimote_sideways_map if sideways else _edit_wiimote_map
+	for src: String in binding_map.keys():
+		if src != "stick" and String(binding_map[src]) == wii:
+			binding_map[src] = "none"
 	var chosen := String(id)
 	if not chosen.is_empty() and chosen != "none":
-		_edit_wiimote_map[chosen] = wii
+		binding_map[chosen] = wii
 	_apply_xr_bindings()
 	_refresh_console_xr_diagrams()
 

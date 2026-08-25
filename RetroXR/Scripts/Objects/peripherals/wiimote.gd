@@ -183,6 +183,8 @@ var desktop_fps_snap: bool = true
 
 # Active bindings (loaded from ControllerBindings on pair)
 var _wiimote_map: Dictionary = ControllerBindings.DEFAULT_WIIMOTE_MAP.duplicate()
+var _wiimote_sideways_map: Dictionary = \
+	ControllerBindings.DEFAULT_WIIMOTE_SIDEWAYS_MAP.duplicate()
 
 # Pairing state
 var _connected_system: RetroSystem = null
@@ -547,7 +549,9 @@ func _load_bindings() -> void:
 	var systemid := ""
 	if is_instance_valid(_connected_system):
 		systemid = _connected_system.systemid
-	_wiimote_map = ControllerBindings.get_for_system(systemid)["wiimote"]
+	var bindings := ControllerBindings.get_for_system(systemid)
+	_wiimote_map = bindings["wiimote"]
+	_wiimote_sideways_map = bindings["wiimote_sideways"]
 
 
 ## Find the glass to aim at. Re-runnable, and re-run whenever it has nothing —
@@ -668,6 +672,11 @@ func _is_held_in_two_hands() -> bool:
 	if _grab_driver == null:
 		return false
 	return _grab_driver.secondary != null
+
+
+func _is_sideways() -> bool:
+	return device_type == RETRO_DEVICE_WIIMOTE_SW \
+		or device_type == RETRO_DEVICE_WIIMOTE_MP_SW
 
 
 ## Returns the XR controller carrying the secondary grab, if there is one.
@@ -1139,7 +1148,7 @@ func _animate_controls(pressed: Dictionary) -> void:
 	# than sinking. Driven off the raw stick rather than the thresholded d-pad
 	# bits, so it leans with the thumb instead of snapping between five poses.
 	if _dpad != null:
-		var s := _dpad_stick()
+		var s := _dpad_animation_stick()
 		# Both axes are NEGATED, and it is the same reason twice: a rocker dips on
 		# the side you press. UP is the arm toward the front of the remote (-Z), so
 		# pushing up has to carry -Z downward — a positive turn about +X lifts it
@@ -1217,7 +1226,8 @@ func _log_aim_points(points: Array[Vector3]) -> void:
 
 ## The holding hand's thumbstick, or zero when nothing is holding the remote.
 func _dpad_stick() -> Vector2:
-	if _wiimote_map.get("stick", "dpad") != "dpad" or not is_instance_valid(_holding_ctrl):
+	var active_map := _wiimote_sideways_map if _is_sideways() else _wiimote_map
+	if active_map.get("stick", "dpad") != "dpad" or not is_instance_valid(_holding_ctrl):
 		return Vector2.ZERO
 	var secondary_ctrl := _get_secondary_ctrl()
 	if is_instance_valid(secondary_ctrl):
@@ -1228,11 +1238,20 @@ func _dpad_stick() -> Vector2:
 	return _holding_ctrl.get_vector2("primary")
 
 
+## The core wants the player's logical direction and rotates it internally for
+## a sideways remote. The visible rocker wants the opposite view: which arm on
+## the rotated physical cross moved. With the D-pad end on the left, logical
+## LEFT is the arm labelled UP, then the other three follow around the cross.
+func _dpad_animation_stick() -> Vector2:
+	var logical := _dpad_stick()
+	return Vector2(logical.y, -logical.x) if _is_sideways() else logical
+
+
 # ── Input forwarding ──────────────────────────────────────────────────────────
 
-## Which named remote controls are down this frame, from BOTH routes: the hand
-## holding the remote, and a free hand poking the shell. One read, shared by the
-## core and the shell animation, so the two can never disagree.
+## Which PHYSICAL remote controls are down this frame, from the active upright
+## or sideways binding layer plus a hand poking the shell. One read is shared by
+## the core and animation, so the visible button and emulated button agree.
 ##
 ## Every face button appears in the result whether or not anything is mapped to
 ## it, so a control with no binding still reports false rather than nothing —
@@ -1241,20 +1260,31 @@ func _pressed_now() -> Dictionary:
 	var out: Dictionary = {}
 	for key: String in FACE_BUTTONS:
 		out[key] = false
+	var active_map := _wiimote_sideways_map if _is_sideways() else _wiimote_map
 	var controllers: Array[XRController3D] = []
 	if is_instance_valid(_holding_ctrl):
 		controllers.append(_holding_ctrl)
-	var secondary_ctrl := _get_secondary_ctrl()
-	if is_instance_valid(secondary_ctrl):
-		controllers.append(secondary_ctrl)
-	for source: String in _wiimote_map:
+	if _is_sideways():
+		var secondary_ctrl := _get_secondary_ctrl()
+		if is_instance_valid(secondary_ctrl):
+			controllers.append(secondary_ctrl)
+	for source: String in active_map:
 		if source == "stick":
 			continue
-		var control := str(_wiimote_map[source])
+		var control := str(active_map[source])
 		if control.is_empty() or control == "none":
 			continue
 		for ctrl: XRController3D in controllers:
-			if ctrl.get_float(source) > float(INPUT_THRESHOLDS.get(source, 0.5)):
+			var input := source
+			if source.begins_with("left_"):
+				if ctrl.tracker != &"left_hand":
+					continue
+				input = source.substr(5)
+			elif source.begins_with("right_"):
+				if ctrl.tracker != &"right_hand":
+					continue
+				input = source.substr(6)
+			if ctrl.get_float(input) > float(INPUT_THRESHOLDS.get(input, 0.5)):
 				out[control] = true
 				break
 	# A poke is an OR, not an override: pressing 1 on the shell while the bound
@@ -1270,9 +1300,9 @@ func _pressed_now() -> Dictionary:
 
 ## Pack the named controls into a libretro joypad mask.
 ##
-## The two tables are NOT one with extras: attaching a Nunchuk moves 1/2 off X/Y
-## onto START/SELECT and puts C/Z where they were, because that is how the core
-## lays out descWiimoteNunchuk. Reading the wrong one silently swaps four buttons.
+## These tables are deliberately separate. A Nunchuk moves 1/2 off X/Y onto
+## START/SELECT; sideways maps physical 1/2/A/B and the rotated cross onto the
+## bits in descWiimoteSideways. Reading the wrong one silently swaps controls.
 func _button_mask(pressed: Dictionary) -> int:
 	var nc := _has_nunchuk()
 	var bits: Dictionary = {
@@ -1298,6 +1328,23 @@ func _button_mask(pressed: Dictionary) -> int:
 		"left":  ControllerBindings.JOYPAD_LEFT,
 		"right": ControllerBindings.JOYPAD_RIGHT,
 	}
+	if _is_sideways():
+		# Values in the sideways binding layer are PHYSICAL shell labels. Dolphin's
+		# sideways device describes those labels on different RetroPad bits.
+		bits = {
+			"one":   ControllerBindings.JOYPAD_B,
+			"two":   ControllerBindings.JOYPAD_A,
+			"a":     ControllerBindings.JOYPAD_X,
+			"b":     ControllerBindings.JOYPAD_Y,
+			"minus": ControllerBindings.JOYPAD_SELECT,
+			"plus":  ControllerBindings.JOYPAD_START,
+			"home":  ControllerBindings.JOYPAD_R3,
+			"shake": ControllerBindings.JOYPAD_R2,
+			"up":    ControllerBindings.JOYPAD_LEFT,
+			"down":  ControllerBindings.JOYPAD_RIGHT,
+			"left":  ControllerBindings.JOYPAD_DOWN,
+			"right": ControllerBindings.JOYPAD_UP,
+		}
 	var mask := 0
 	for key: String in bits:
 		if pressed.get(key, false):

@@ -192,10 +192,9 @@ const _ROWS: Dictionary = {
 	},
 	# The same remote, turned on its side and held in two hands like an NES pad.
 	#
-	# The RetroPad bits do not move — Dolphin's descWiimoteSideways keeps every
-	# one of them and changes what it MEANS, doing the remap internally — so this
-	# is a picture and a set of labels, not a second binding map. Whatever a
-	# player binds above works here too.
+	# Dolphin's descWiimoteSideways keeps the RetroPad bits and changes what they
+	# mean. The room still needs a separate binding map here because two XR hands
+	# are active at once, unlike the upright remote's single holding hand.
 	#
 	# What DOES move is which physical button each bit points at, so the anchors
 	# are re-keyed rather than merely rotated:
@@ -254,10 +253,9 @@ const _ROWS: Dictionary = {
 			"start": "wii_button_plus_outline",
 			"r3": "wii_button_home_outline",
 		},
-		"note": "Held in both hands, like a plain pad — this is what the console "
-			+ "calls the buttons then. The buttons keep whatever you bound "
-			+ "above; the console is the one relabelling them, not the room. "
-			+ "Turning the remote sideways in the room is not wired up yet.",
+		"note": "Held in both hands, like a plain pad. These bindings are "
+			+ "independent from the upright remote: the left hand works B, A and −; "
+			+ "the right hand works 1, 2 and +.",
 	},
 }
 
