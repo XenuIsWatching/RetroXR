@@ -14,6 +14,7 @@ const UMD_DISC_SCENE        := preload("res://Scenes/Objects/media/umd_disc.tscn
 const BOOK_SCENE            := preload("res://Scenes/Objects/media/pdf_book.tscn")
 const POSTER_SCENE := preload("res://Scenes/Objects/media/poster.tscn")
 const TRASH_CAN_SCENE       := preload("res://Scenes/Objects/appliances/trash_can.tscn")
+const TABLE_SCENE           := preload("res://Scenes/Objects/furniture/table.tscn")
 const RETRO_CONTROLLER_SCENE := preload("res://Scenes/Objects/controllers/retro_controller.tscn")
 # Stand-in Virtual Boy pad: carries the console POWER switch, like the real one.
 const VB_CONTROLLER_SCENE   := preload("res://Scenes/Objects/controllers/vb/vb_controller.tscn")
@@ -1067,6 +1068,8 @@ func _on_spawn_requested(type: String) -> void:
 			obj = CART_SCENE.instantiate() as Node3D
 		"trash_can":
 			obj = TRASH_CAN_SCENE.instantiate() as Node3D
+		"table":
+			obj = TABLE_SCENE.instantiate() as Node3D
 		"vcr_player":
 			obj = VCR_SCENE.instantiate() as Node3D
 		"dvd_player":

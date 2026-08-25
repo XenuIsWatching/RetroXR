@@ -79,10 +79,13 @@ func _ready() -> void:
 
 func _test_slots() -> void:
 	# The authored rooms must never keep slots: a slot there restores a handful of
-	# spawned objects into a room that already has its own contents.
+	# spawned objects into a room that already has its own contents. The bedroom
+	# was one of them until it was emptied — it ships as bare walls and is now a
+	# room the player furnishes, so it keeps slots like the arcade does.
 	_ok(SceneManager.room_has_slots("arcade"), "slots/arcade has slots")
 	_ok(SceneManager.room_has_slots("passthrough"), "slots/passthrough has slots")
-	for room in ["den", "bedroom", "test"]:
+	_ok(SceneManager.room_has_slots("bedroom"), "slots/bedroom has slots")
+	for room in ["den", "test"]:
 		_ok(not SceneManager.room_has_slots(room), "slots/%s has none" % room)
 	_ok(not SceneManager.room_has_slots("nonesuch"), "slots/unknown room has none")
 

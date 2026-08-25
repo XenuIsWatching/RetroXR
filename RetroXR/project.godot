@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="RetroXR"
 config/version="0.4.0"
-run/main_scene="uid://bh8x3sbal8nds"
+run/main_scene="res://Scenes/BedroomScene.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://Textures/app_icon.png"
 run/main_scene.rendermodelprobe="res://Tools/quest_render_model_probe.tscn"

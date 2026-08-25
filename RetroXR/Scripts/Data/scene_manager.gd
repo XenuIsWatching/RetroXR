@@ -32,19 +32,24 @@ const SCENE_TITLES := {
 	"passthrough": "PASSTHROUGH",
 	"test":        "TEST HALLWAY",
 }
-## Rooms that keep save slots. The arcade and passthrough are the two you furnish:
-## everything in them arrived from the spawn menu, so a slot is the whole room.
-## The den, the bedroom and the test hallway are authored — their contents are in
-## the .tscn, and a slot of what was spawned on top would restore a handful of
-## objects into a room that already has its own.
-const SLOT_ROOMS := ["arcade", "passthrough"]
+## Rooms that keep save slots — the ones you furnish yourself, where everything
+## arrived from the spawn menu and a slot is therefore the whole room. The den and
+## the test hallway are authored: their contents are in the .tscn, and a slot of
+## what was spawned on top would restore a handful of objects into a room that
+## already has its own.
+##
+## The bedroom was in that second group until it was emptied. It ships as bare
+## walls now — window, blinds, door, light switch and the day/night lever, and
+## nothing standing on the floor — so it is the home room you furnish, and the
+## objection above no longer applies to it.
+const SLOT_ROOMS := ["arcade", "passthrough", "bedroom"]
 const PREFS_FILE := "user://scenes/prefs.json"
 const LOADING_RIG_SCENE := preload("res://Scenes/UI/loading_rig.tscn")
 ## Every room instances res://Scenes/player_rig.tscn under this name.
 const PLAYER_RIG_NAME := "PlayerRig"
 const ORIGIN_PATH := "Staging/XROrigin3D"
 
-var current_scene_id: String = "arcade"
+var current_scene_id: String = "bedroom"
 var auto_save_on_switch: bool = true
 
 ## room id -> the slot that room is currently standing on. Absent means "clean".

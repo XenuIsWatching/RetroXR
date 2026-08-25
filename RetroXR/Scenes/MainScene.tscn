@@ -5,6 +5,7 @@
 [ext_resource type="Shader" uid="uid://ctwkb7jcoma01" path="res://Shaders/arcade_carpet.gdshader" id="20_carpet"]
 [ext_resource type="Shader" uid="uid://ck7deycag7kku" path="res://Shaders/ceiling_tiles.gdshader" id="21_ceiltiles"]
 [ext_resource type="PackedScene" path="res://Scenes/player_rig.tscn" id="23_playerrig"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/furniture/table.tscn" id="24_table"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProcSkyMat"]
 sky_top_color = Color(0.18, 0.31, 0.55, 1)
@@ -122,30 +123,6 @@ size = Vector3(1.2, 2.2, 0.08)
 albedo_color = Color(0.22, 0.13, 0.07, 1)
 roughness = 0.7
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_table"]
-size = Vector3(2, 0.2, 0.8)
-
-[sub_resource type="BoxMesh" id="BoxMesh_table"]
-size = Vector3(2, 0.05, 0.8)
-
-[sub_resource type="StandardMaterial3D" id="Mat_table"]
-albedo_color = Color(0.18, 0.1, 0.06, 1)
-metallic = 0.05
-roughness = 0.55
-
-[sub_resource type="BoxMesh" id="BoxMesh_table_apron_long"]
-size = Vector3(2, 0.08, 0.03)
-
-[sub_resource type="StandardMaterial3D" id="Mat_table_apron"]
-albedo_color = Color(0.12, 0.07, 0.04, 1)
-roughness = 0.6
-
-[sub_resource type="BoxMesh" id="BoxMesh_table_apron_short"]
-size = Vector3(0.03, 0.08, 0.74)
-
-[sub_resource type="BoxMesh" id="BoxMesh_table_leg"]
-size = Vector3(0.05, 0.7, 0.05)
-
 [sub_resource type="BoxMesh" id="BoxMesh_fixture"]
 size = Vector3(1.2, 0.04, 0.3)
 
@@ -219,6 +196,7 @@ emission_energy_multiplier = 0.3
 
 [node name="Root" type="Node3D" unique_id=1033434416]
 script = ExtResource("3_xrinit")
+scene_id = "arcade"
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=2000000070]
 environment = SubResource("Env_main")
@@ -312,58 +290,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -4.96)
 mesh = SubResource("BoxMesh_door")
 surface_material_override/0 = SubResource("Mat_door")
 
-[node name="Table" type="StaticBody3D" parent="." unique_id=2000000040]
+; The table used to be inline scenery here: a StaticBody3D with one collision box
+; over the top slab and none on the legs. It is an ordinary spawnable object now,
+; so the arcade instances it in the "spawned" group like anything else the player
+; put down — which also means it is carried by a save slot and can be moved or
+; binned rather than being welded to the room.
+[node name="Table" parent="." unique_id=2000000040 groups=["spawned"] instance=ExtResource("24_table")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
-collision_mask = 0
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Table" unique_id=2000000041]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
-shape = SubResource("BoxShape3D_table")
-
-[node name="TableTop" type="MeshInstance3D" parent="Table" unique_id=2000000042]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.725, 0)
-mesh = SubResource("BoxMesh_table")
-surface_material_override/0 = SubResource("Mat_table")
-
-[node name="ApronFront" type="MeshInstance3D" parent="Table" unique_id=1538582152]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.66, 0.385)
-mesh = SubResource("BoxMesh_table_apron_long")
-surface_material_override/0 = SubResource("Mat_table_apron")
-
-[node name="ApronBack" type="MeshInstance3D" parent="Table" unique_id=538374127]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.66, -0.385)
-mesh = SubResource("BoxMesh_table_apron_long")
-surface_material_override/0 = SubResource("Mat_table_apron")
-
-[node name="ApronLeft" type="MeshInstance3D" parent="Table" unique_id=479813542]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.985, 0.66, 0)
-mesh = SubResource("BoxMesh_table_apron_short")
-surface_material_override/0 = SubResource("Mat_table_apron")
-
-[node name="ApronRight" type="MeshInstance3D" parent="Table" unique_id=1286397208]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.985, 0.66, 0)
-mesh = SubResource("BoxMesh_table_apron_short")
-surface_material_override/0 = SubResource("Mat_table_apron")
-
-[node name="LegFL" type="MeshInstance3D" parent="Table" unique_id=969174286]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.35, 0.35)
-mesh = SubResource("BoxMesh_table_leg")
-surface_material_override/0 = SubResource("Mat_table_apron")
-
-[node name="LegFR" type="MeshInstance3D" parent="Table" unique_id=1055080951]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0.35, 0.35)
-mesh = SubResource("BoxMesh_table_leg")
-surface_material_override/0 = SubResource("Mat_table_apron")
-
-[node name="LegBL" type="MeshInstance3D" parent="Table" unique_id=72202051]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.35, -0.35)
-mesh = SubResource("BoxMesh_table_leg")
-surface_material_override/0 = SubResource("Mat_table_apron")
-
-[node name="LegBR" type="MeshInstance3D" parent="Table" unique_id=1155107031]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0.35, -0.35)
-mesh = SubResource("BoxMesh_table_leg")
-surface_material_override/0 = SubResource("Mat_table_apron")
 
 [node name="TV" parent="." unique_id=-1294967286 groups=["fixture"] instance=ExtResource("13_tv")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.95, -0.5)

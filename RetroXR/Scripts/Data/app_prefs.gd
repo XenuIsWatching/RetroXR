@@ -80,9 +80,10 @@ var compact_tiles: bool = false
 ## The bedroom's time-of-day lever, 0 = morning .. 1 = night. 0.75 is the dusk the
 ## room was authored at, so an unset pref opens the room exactly as it always was.
 ##
-## Here rather than in a save slot because the bedroom has none: SLOT_ROOMS is
-## ["arcade", "passthrough"], and scene_persistence only tracks the "spawned" group,
-## which an authored wall fixture is not in.
+## Here rather than in a save slot even though the bedroom now keeps slots:
+## scene_persistence only tracks the "spawned" group, and the lever is an authored
+## wall fixture that is not in it. A slot carries what the player put in the room;
+## where they left the lever is a setting that outlives any one slot.
 var bedroom_time_of_day: float = 0.75
 ## What GET_PREFERRED_HW_RENDER advertises to a core with no opinion of its own,
 ## matching the default the extension itself carries. A constant rather than a

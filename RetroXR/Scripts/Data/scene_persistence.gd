@@ -84,6 +84,7 @@ const GC_GBA_CABLE_SCENE     := preload("res://Scenes/Objects/cables/gc_gba_cabl
 const PSX_LINK_CABLE_SCENE   := preload("res://Scenes/Objects/cables/psx_link_cable.tscn")
 const SPEAKER_PAIR_SCENE     := preload("res://Scenes/Objects/appliances/speaker_pair.tscn")
 const TRASH_CAN_SCENE        := preload("res://Scenes/Objects/appliances/trash_can.tscn")
+const TABLE_SCENE            := preload("res://Scenes/Objects/furniture/table.tscn")
 const RETRO_MOUSE_SCENE      := preload("res://Scenes/Objects/peripherals/retro_mouse.tscn")
 const SNES_MOUSE_SCENE       := preload("res://Scenes/Objects/peripherals/snes_mouse.tscn")
 const RETRO_KEYBOARD_SCENE   := preload("res://Scenes/Objects/peripherals/retro_keyboard.tscn")
@@ -102,6 +103,7 @@ const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse
 const PLAIN_SCENES := {
 	"tv_remote": TV_REMOTE_SCENE,
 	"trash_can": TRASH_CAN_SCENE,
+	"table": TABLE_SCENE,
 	"light_gun": LIGHT_GUN_SCENE,
 	# Slots written before the rename say "ray_gun".
 	"ray_gun": LIGHT_GUN_SCENE,
@@ -1311,6 +1313,11 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		return _base(id, "tv_remote", n3d)
 	elif node is TrashCan:
 		return _base(id, "trash_can", n3d)
+	elif node is Table:
+		# Pose only. Being in PLAIN_SCENES is not enough on its own — that map is
+		# read when LOADING, so without this branch a table is never written and
+		# there is nothing to load back.
+		return _base(id, "table", n3d)
 	elif node is RetroDisc:
 		# MUST precede the RetroCartridge branch — RetroDisc extends it.
 		return _base(id, "disc", n3d).merged(_media_fields(node as RetroCartridge))

@@ -1,4 +1,4 @@
-[gd_scene load_steps=129 format=3]
+[gd_scene load_steps=99 format=3]
 
 [ext_resource type="Script" uid="uid://btn0gji8qtw2l" path="res://Scripts/XR/xr_init.gd" id="1_xrinit"]
 [ext_resource type="PackedScene" path="res://Scenes/player_rig.tscn" id="2_playerrig"]
@@ -9,24 +9,14 @@
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/exterior/house_two_e.glb" id="8_house2e"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/exterior/trees.glb" id="9_trees"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/bedroom_exterior.gd" id="10_exterior"]
-[ext_resource type="Script" path="res://Scripts/Objects/room/mesh_filter.gd" id="11_meshfilter"]
-[ext_resource type="PackedScene" uid="uid://mft7vy78rjrv" path="res://Scenes/Objects/tv.tscn" id="30_tv"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Plaster001_1K-JPG_Color.jpg" id="20_wall_col"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Plaster001_1K-JPG_NormalGL.jpg" id="21_wall_nrm"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Plaster001_1K-JPG_Roughness.jpg" id="22_wall_rgh"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_Color.jpg" id="23_rug_col"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_NormalGL.jpg" id="24_rug_nrm"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_Roughness.jpg" id="25_rug_rgh"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/bed.glb" id="12_bed"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/bookcase_tall.glb" id="17_bctall"]
-
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/ceiling_fan.glb" id="14_fan"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/tv_stand_corner.glb" id="15_tvstand"]
-[ext_resource type="PackedScene" uid="uid://trashcan_001" path="res://Scenes/Objects/appliances/trash_can.tscn" id="16_trash"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/door.glb" id="19_door"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/chair.glb" id="20_chair"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/nightstand.glb" id="26_nightstand"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/table_lamp.glb" id="27_lamp"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/light_switch.glb" id="28_switch"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/light_switch.gd" id="29_switchscript"]
 [ext_resource type="Script" path="res://Scripts/Objects/highlights/glow_mesh.gd" id="35_glow"]
@@ -36,13 +26,7 @@
 [ext_resource type="Script" path="res://Scripts/Objects/room/time_of_day.gd" id="50_timeofday"]
 [ext_resource type="Script" path="res://Scripts/Objects/widgets/vr_lever.gd" id="51_vrlever"]
 [ext_resource type="FontFile" uid="uid://bv8kh41jwy8bc" path="res://fonts/SymbolsNerdFont-Regular.ttf" id="52_nerdfont"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/props/throw_pillows_01_1k.gltf" id="37_pillows"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/props/potted_plant_04_1k.gltf" id="38_plant"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/props/textures/throw_pillows_01_nor_gl_1k.jpg" id="42_cu_nrm"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/props/textures/throw_pillows_01_rough_1k.jpg" id="43_cu_rgh"]
 [ext_resource type="Script" uid="uid://d3iq3gmwxpvjl" path="res://Scripts/Objects/widgets/vr_button.gd" id="31_vrbutton"]
-[ext_resource type="PackedScene" path="res://Scenes/Objects/system.tscn" id="47_system"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/rug_persian.png" id="32_rug"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_memphis.png" id="33_poster_a"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_grid.png" id="34_poster_b"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_testcard.png" id="44_p_test"]
@@ -154,13 +138,13 @@ uv1_scale = Vector3(4, 4, 1)
 ;
 ; The normal map is the reason this beats a flat colour: shadows are OFF on Quest,
 ; so per-pixel normals are the only thing giving the walls form. It only shows
-; under directional light, which is what the bedside and desk lamps are for.
+; under directional light — the window sun, and the ceiling globe after dark.
 ; The tint is near-NEUTRAL on purpose. It used to be Color(0.78, 0.71, 0.58) —
 ; strongly warm — against a texture whose base is 0.745/0.747/0.734, i.e. grey.
 ; Plaster001's base is 0.843/0.828/0.815: brighter and slightly warm already, so
 ; the same tint compounded into orange and the walls read as adobe. The room's
-; ambient is Color(1, 0.84, 0.70) and both lamps are warm, so the warmth wants to
-; come from the light, not from the paint as well.
+; ambient is Color(1, 0.84, 0.70) and the ceiling globe is warm, so the warmth
+; wants to come from the light, not from the paint as well.
 [sub_resource type="StandardMaterial3D" id="Mat_wall"]
 albedo_color = Color(0.72, 0.7, 0.67, 1)
 albedo_texture = ExtResource("20_wall_col")
@@ -233,38 +217,9 @@ size = Vector3(5.2, 0.15, 4.4)
 [sub_resource type="BoxShape3D" id="Shape_ceiling"]
 size = Vector3(5.2, 0.15, 4.4)
 
-; Two-part baseboard profile. The cap is 4 mm prouder than the base, and that
-; overhang is the whole point: it throws its own shadow line under the bedside
-; lamp, which a single flat strip (the arcade's approach) cannot. Unit-length in
-; the run direction so each wall scales one mesh.
-[sub_resource type="BoxShape3D" id="Shape_chair"]
-size = Vector3(0.62, 0.83, 0.62)
-
 [sub_resource type="BoxShape3D" id="Shape_door"]
 size = Vector3(0.16, 2.07, 0.96)
 
-; The desk is three colliders, not one solid box. The box filled the knee hole,
-; which was harmless for the player (a full-height capsule can never go under a
-; desk anyway) but made the space unusable for a RIGID BODY — and the PC tower is
-; one. Top slab is 0.20 thick rather than the mesh's 0.04 so the monitor cannot
-; tunnel through it, while still leaving everything below 0.55 clear.
-[sub_resource type="BoxShape3D" id="Shape_desk_top"]
-size = Vector3(1.35, 0.2, 0.62)
-
-[sub_resource type="BoxShape3D" id="Shape_desk_side"]
-size = Vector3(0.04, 0.71, 0.56)
-
-[sub_resource type="BoxShape3D" id="Shape_tvstand"]
-size = Vector3(0.928, 0.8, 0.929)
-
-[sub_resource type="BoxShape3D" id="Shape_bed"]
-size = Vector3(1.5, 0.62, 1.94)
-
-[sub_resource type="BoxShape3D" id="Shape_nightstand"]
-size = Vector3(0.352, 0.62, 0.352)
-
-; The switch lever. The plate GLB's own lever is baked into the plate mesh and
-; cannot move, so this box lies over it and is the part that actually rocks.
 [sub_resource type="BoxMesh" id="Mesh_lever"]
 size = Vector3(0.016, 0.01, 0.04)
 
@@ -319,25 +274,6 @@ emission_energy_multiplier = 0.55
 [sub_resource type="SphereShape3D" id="Shape_tod_ball"]
 radius = 0.035
 
-; The plate is a shade darker than the light switch beside it. A cream plate is
-; right for a switch and wrong here: the day glyph is near-white, and on cream it
-; disappeared entirely.
-[sub_resource type="BoxShape3D" id="Shape_bookcase"]
-size = Vector3(0.36, 1.8, 0.95)
-
-[sub_resource type="StandardMaterial3D" id="Mat_desk"]
-albedo_color = Color(0.29, 0.18, 0.11, 1)
-roughness = 0.55
-
-[sub_resource type="BoxMesh" id="Mesh_desk_top"]
-size = Vector3(1.35, 0.04, 0.62)
-
-[sub_resource type="BoxMesh" id="Mesh_desk_side"]
-size = Vector3(0.04, 0.71, 0.56)
-
-[sub_resource type="BoxMesh" id="Mesh_desk_rail"]
-size = Vector3(1.27, 0.12, 0.03)
-
 [sub_resource type="BoxMesh" id="Mesh_base_ns"]
 size = Vector3(1, 0.11, 0.018)
 
@@ -349,19 +285,6 @@ size = Vector3(0.018, 0.11, 1)
 
 [sub_resource type="BoxMesh" id="Mesh_cap_ew"]
 size = Vector3(0.026, 0.022, 1)
-
-; --- Dressing: rug, posters, wardrobe ----------------------------------------
-; Artwork is generated by Tools/gen_bedroom_art.py rather than downloaded, so no
-; licence attaches to any of it. See that script.
-[sub_resource type="PlaneMesh" id="Mesh_rug"]
-size = Vector2(2.4, 1.7)
-
-; No albedo tint. The red rug needed 0.66 to stop it shouting; the taupe
-; colourway carries its own muted values, and tinting a muted texture again only
-; darkens it — the same double-application that turned the walls orange.
-[sub_resource type="StandardMaterial3D" id="Mat_rug"]
-albedo_texture = ExtResource("32_rug")
-roughness = 0.95
 
 [sub_resource type="BoxMesh" id="Mesh_poster_frame"]
 size = Vector3(0.66, 0.88, 0.03)
@@ -393,48 +316,6 @@ emission_enabled = true
 emission_energy_multiplier = 0.1
 emission_texture = ExtResource("34_poster_b")
 
-; Wardrobe, built from boxes in the room's own trim material. A painted wardrobe
-; is flat panels and square corners with nothing organic in it, so it is one of
-; the few pieces that loses nothing to primitives - the same reasoning as the
-; desk. It also avoids the 30.2k triangles of the downloadable louvred wardrobe,
-; whose slats would have made it the heaviest object in the room and would
-; shimmer at distance under VR's temporal sampling.
-[sub_resource type="BoxMesh" id="Mesh_wr_plinth"]
-size = Vector3(1.18, 0.07, 0.55)
-
-[sub_resource type="BoxMesh" id="Mesh_wr_carcass"]
-size = Vector3(1.2, 1.9, 0.58)
-
-[sub_resource type="BoxMesh" id="Mesh_wr_cornice"]
-size = Vector3(1.28, 0.07, 0.64)
-
-[sub_resource type="BoxMesh" id="Mesh_wr_door"]
-size = Vector3(0.57, 1.78, 0.02)
-
-[sub_resource type="BoxMesh" id="Mesh_wr_panel"]
-size = Vector3(0.45, 1.6, 0.03)
-
-[sub_resource type="CylinderMesh" id="Mesh_wr_handle"]
-top_radius = 0.012
-bottom_radius = 0.012
-height = 0.16
-
-; The panels need their own tint. A raised panel normally reads by its shadow
-; line, but this room is lit almost entirely by ambient plus one globe, so a
-; 10 mm step in the same colour showed nothing at all and both doors looked like
-; flat slabs. Eight percent darker reads as a panel under any lighting.
-[sub_resource type="StandardMaterial3D" id="Mat_wr_panel"]
-albedo_color = Color(0.79, 0.77, 0.72, 1)
-roughness = 0.55
-
-[sub_resource type="StandardMaterial3D" id="Mat_handle"]
-albedo_color = Color(0.75, 0.76, 0.78, 1)
-metallic = 0.9
-roughness = 0.35
-
-[sub_resource type="BoxShape3D" id="Shape_wardrobe"]
-size = Vector3(1.28, 2.04, 0.66)
-
 [sub_resource type="Animation" id="Anim_fan_spin"]
 resource_name = "spin"
 length = 2.0
@@ -457,42 +338,6 @@ _data = {
 &"spin": SubResource("Anim_fan_spin")
 }
 
-; Floor cushions. Poly Haven's throw_pillows_01 ships ONE colourway: a bold
-; red/black/yellow CHEVRON print at 0.772 mean saturation, busier and louder than
-; the red rug that had to go for dominating the room.
-;
-; The albedo texture is dropped entirely. Inspecting the three maps settled it —
-; the chevron exists only in the diffuse, while the normal map carries nothing but
-; folds and wrinkles and the roughness nothing but weave. So a flat albedo colour
-; plus the original normal and roughness gives plain cushions that still crease
-; and catch light like fabric. Recolouring the diffuse was tried first and failed
-; for the obvious reason in hindsight: preserving its luminance preserved the
-; print. A material tint cannot help either, since albedo_color multiplies —
-; orange times green is mud, not sage.
-[sub_resource type="StandardMaterial3D" id="Mat_cushion_cream"]
-albedo_color = Color(0.86, 0.82, 0.74, 1)
-roughness_texture = ExtResource("43_cu_rgh")
-normal_enabled = true
-normal_texture = ExtResource("42_cu_nrm")
-
-[sub_resource type="StandardMaterial3D" id="Mat_cushion_sage"]
-albedo_color = Color(0.61, 0.66, 0.56, 1)
-roughness_texture = ExtResource("43_cu_rgh")
-normal_enabled = true
-normal_texture = ExtResource("42_cu_nrm")
-
-[sub_resource type="StandardMaterial3D" id="Mat_cushion_tan"]
-albedo_color = Color(0.76, 0.66, 0.52, 1)
-roughness_texture = ExtResource("43_cu_rgh")
-normal_enabled = true
-normal_texture = ExtResource("42_cu_nrm")
-
-; --- TV-corner gallery -------------------------------------------------------
-; Three more frames bracketing the corner stand. Deliberately three DIFFERENT
-; designs and three different sizes — repeating one poster round a corner reads
-; as wallpaper, and a matched set reads as a shop display rather than a bedroom.
-; All run through print_look() like the other two, so they sit at the room's
-; contrast rather than four times it.
 [sub_resource type="BoxMesh" id="Mesh_frame_land"]
 size = Vector3(0.6, 0.46, 0.03)
 
@@ -791,127 +636,6 @@ omni_range = 14.0
 ; own origin — so none of these numbers are guessable by hand.
 [node name="Furniture" type="Node3D" parent="."]
 
-; Every piece below was split out and squared up in Blender
-; (Tools note: /tmp straighten pass, 2026-07-28). The downloads are staged
-; product shots — the bed, desk and chair were one inseparable mesh, and the two
-; bookcases sat at ~30 deg to each other — so nothing could be aligned to a wall
-; as shipped. Each is now its own GLB, axis-aligned, origin at base-centre, which
-; is why the transforms here are plain position + scale with no stray rotations.
-
-; Head to the north wall, east side. Model is 2.25 m across including the duvet
-; overhang; 0.667 brings that to a 1.5 m double.
-;
-; The bedding was green. This is ONE mesh with ONE surface and ONE 1024 atlas —
-; 54% brown wood frame, 17% green duvet, 25% desaturated sheets — so it cannot be
-; re-skinned with a flat colour without recolouring the frame too, and a material
-; tint cannot change a hue at all (albedo_color multiplies: green times cream is
-; muddy green). Tools/recolour_texture.py rewrites just the green hue band of
-; bed_Image_1.png in HSV, keeping V so every fold and shadow survives. The
-; untouched original is kept beside it as bed_Image_1_source.png, which is what
-; the tool reads, so the colour can be redone without re-downloading.
-[node name="Bed" parent="Furniture" instance=ExtResource("12_bed")]
-transform = Transform3D(0.667, 0, 0, 0, 0.667, 0, 0, 0, 0.667, 2.31, 0, -1.11)
-
-; Desk built from primitives rather than downloaded. The set's desk could not be
-; separated from its chair — every split left the two joined, so min-area
-; bounding-box straightening aligned to the pair's L-shape instead of the desk,
-; and it stayed ~20 deg off no matter what. Boxes are square by construction,
-; cost nothing, and follow test_scene_builder.gd's _build_table() idiom.
-[node name="Desk" type="Node3D" parent="Furniture"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0, -1.78)
-
-[node name="Top" type="MeshInstance3D" parent="Furniture/Desk"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.73, 0)
-mesh = SubResource("Mesh_desk_top")
-surface_material_override/0 = SubResource("Mat_desk")
-
-[node name="SideL" type="MeshInstance3D" parent="Furniture/Desk"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.655, 0.355, 0)
-mesh = SubResource("Mesh_desk_side")
-surface_material_override/0 = SubResource("Mat_desk")
-
-[node name="SideR" type="MeshInstance3D" parent="Furniture/Desk"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.655, 0.355, 0)
-mesh = SubResource("Mesh_desk_side")
-surface_material_override/0 = SubResource("Mat_desk")
-
-[node name="BackRail" type="MeshInstance3D" parent="Furniture/Desk"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.64, -0.29)
-mesh = SubResource("Mesh_desk_rail")
-surface_material_override/0 = SubResource("Mat_desk")
-
-; Dropped 0.12 on Y. The GLB is not zeroed to its base — its geometry starts at
-; y +0.12 in local space — so at y 0 both cases hovered 12 cm above the carpet
-; with daylight under the plinths. Their colliders were already floor-to-1.8 and
-; now agree with the meshes.
-;
-; Yaw 90, so the shelves face EAST into the room. The model's open face is +Z
-; and its solid back -Z (checked by rendering it from all four sides); the first
-; pass had them turned into the west wall showing their backs.
-; Swivel desk chair, its own front is +Z (checked by rendering the model from all
-; four sides before placing it). Scaled 1.25 — the download is only 0.66 m to the
-; top of the backrest.
-;
-; Pushed out to the desk's EAST end and angled, rather than squared up in the
-; middle. Centred it walled off the desk: the chair plus the player capsule's own
-; 0.2 m radius blocked x -1.45..-0.45 for a metre of depth, which is the entire
-; desk frontage, so the monitor could not be reached from the front at all. The
-; player body is a full-height capsule and can never pass under a desk, so there
-; is no arrangement where a chair squared up to a desk leaves it usable.
-[node name="Chair" parent="Furniture" instance=ExtResource("20_chair")]
-transform = Transform3D(-1.1746, 0, -0.4275, 0, 1.25, 0, 0.4275, 0, -1.1746, -0.3, 0, -1.2)
-
-; Two of the tall bookcase rather than the set's small one, which carries a
-; corner return that defeats the same straightening pass.
-[node name="BookcaseA" parent="Furniture" instance=ExtResource("17_bctall")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.345, -0.12, -1.55)
-
-[node name="BookcaseB" parent="Furniture" instance=ExtResource("17_bctall")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.345, -0.12, -0.55)
-
-; Yaw 225 deg, not 45: the model faces +Z, so 45 pointed the doors and the open
-; AV bay INTO the corner and presented its back to the room.
-[node name="TVStand" parent="Furniture" instance=ExtResource("15_tvstand")]
-; Scaled 0.77877, down from 0.94228. True vertex extents put it at
-; 1.12 x 0.97 x 1.12: the footprint is right for a corner unit but 0.97 m tall
-; is a sideboard, and a 14 in set on top looked lost. Uniform 0.826 brings it to
-; 0.93 x 0.80 x 0.93. Height is the only thing wrong, but the mouldings and the
-; arched door panels will not take a non-uniform squash, so the footprint comes
-; down with it.
-;
-; Position re-solved from TRUE VERTEX extents, not the AABB: at 45 deg the AABB
-; of a rotated AABB inflates by up to sqrt(2), which reads as a 0.55 m gap that
-; is not there. Back faces land exactly on x 2.525 and z 2.125.
-transform = Transform3D(-0.55068, 0, -0.55068, 0, 0.77877, 0, 0.55068, 0, -0.55068, 2.1248, 0.0324, 1.7441)
-
-; The functional TrashCan scene, not the bare model — it is an XRToolsPickable,
-; so it can be picked up and it deletes what you drop in it. y = 0.18 puts the
-; body origin (the can's centre) a half-height off the floor.
-[node name="TrashCan" parent="Furniture" instance=ExtResource("16_trash")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.24, 0.18, 0.45)
-
-; Bedside cabinet, back to the north wall in the gap between the bed's west edge
-; (x = 1.0) and the desk. Its drawer-and-door face is the model's +X, so the yaw
-; of -90 turns that to face south down the room; the door hangs ajar as shipped
-; and swings into free floor. Scale 0.0826 makes it 0.62 m tall on a 0.352 m
-; square plan — measured off the TOP SLAB, not the AABB, which the open door
-; stretches 0.16 m past the carcass in +X.
-[node name="Nightstand" parent="Furniture" instance=ExtResource("26_nightstand")]
-transform = Transform3D(0, 0, -0.0826, 0, 0.0826, 0, 0.0826, 0, 0, 0.755, 0.619, -1.948)
-
-; Both lamps are the same model. It arrives at real-world scale already and
-; centred on its own origin, so the only work is lifting it by half its height
-; onto whatever it stands on: the nightstand top at 0.62, the desk top at 0.75.
-[node name="BedsideLamp" parent="Furniture" instance=ExtResource("27_lamp")]
-transform = Transform3D(0.9, 0, 0, 0, 0.9, 0, 0, 0, 0.9, 0.754, 0.828, -1.925)
-
-[node name="DeskLamp" parent="Furniture" instance=ExtResource("27_lamp")]
-transform = Transform3D(0.9, 0, 0, 0, 0.9, 0, 0, 0, 0.9, -0.45, 0.958, -1.78)
-
-; Light switch, west wall, on the north side of the door opening (which spans
-; z 0.72 to 1.68) at the standard 1.2 m. The root is UNSCALED and yawed so its
-; local +Z is out of the wall — the plate GLB carries the 0.0345 scale on its own
-; child transform, which keeps the VRButton below in plain metres.
 [node name="LightSwitch" type="Node3D" parent="Furniture"]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.525, 1.2, 0.55)
 script = ExtResource("29_switchscript")
@@ -1077,38 +801,6 @@ shape = SubResource("Shape_tod_ball")
 
 [node name="HingeHint" type="Label3D" parent="Furniture/TimeLever/LeverPivot/Lever"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.055, 0, -0.03)
-
-; Fan blades spin about the hub; the glass shade must ride the STATIC mount or
-; the light swings round the room with them (the den learned this the hard way).
-; --- Lamp pull cords ---------------------------------------------------------
-; Ball-chain pulls on both lamps. The simulation is VerletRope's free-end case
-; (head pinned, end_node null); BeadPullCord threads beads along its curve with a
-; MultiMesh — one draw call, no per-frame mesh rebuild, which is cheaper than the
-; tube it replaces. That matters: GDScript verlet cables are what saturated the
-; main thread in the 20 fps Quest diagnosis, and this rope sleeps when it settles.
-;
-; The pull is proximity + TRIGGER (VRButton.require_trigger), the project's
-; interaction model for contextual actions. A touch button would toggle the lamp
-; every time a hand drifted past a cord hanging at desk height.
-[node name="BedsideLampCord" type="Node3D" parent="Furniture"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.832, 0.905, -1.925)
-script = ExtResource("48_pullcord")
-cord_length = 0.16
-light_path = NodePath("../../BedsideLampLight")
-
-[node name="DeskLampCord" type="Node3D" parent="Furniture"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.372, 1.035, -1.78)
-script = ExtResource("48_pullcord")
-cord_length = 0.16
-light_path = NodePath("../../DeskLampLight")
-
-; Vinyl mini blinds in the window opening (x -1.65..-0.15, y 0.85..2.05). 1.44
-; wide leaves 3 cm clearance each side; 1.18 drop covers the 1.2 m opening.
-; z -2.06 sits them inside the casing, which stands proud to -2.025.
-;
-; 48 slats in ONE MultiMesh. They STACK as they rise — the pitch between them
-; collapses rather than the assembly sliding — which is what a cord-and-ladder
-; blind actually does.
 [node name="Blinds" type="Node3D" parent="Furniture"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 2.05, -2.06)
 script = ExtResource("49_blinds")
@@ -1167,57 +859,14 @@ libraries = {
 }
 autoplay = "spin"
 
-; Baseboard. Runs are unit meshes scaled along the wall direction; the cap sits
-; 4 mm prouder than the base.
 ; --- Furniture colliders ------------------------------------------------------
-; RetroTV is a RigidBody3D, so anything it rests on needs a collider or it falls
-; straight through to the floor — which is exactly what happened to both displays
-; on the first pass. Same convention as the den: a StaticBody3D per piece with a
-; hand-fitted BoxShape3D, collision_mask = 0 so they collide-with nothing
-; themselves.
+; One box per piece of room-owned furniture, hand-fitted, collision_mask = 0 so
+; they collide with nothing themselves. Only the door is left: the bed, desk,
+; bookcases, TV stand, nightstand, chair and wardrobe this body used to mirror
+; were removed when the room was emptied, and a collider outliving its mesh is an
+; invisible wall. Anything the player puts here now brings its own collision.
 [node name="FurnitureCollision" type="StaticBody3D" parent="."]
 collision_mask = 0
-
-[node name="DeskTopCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.65, -1.78)
-shape = SubResource("Shape_desk_top")
-
-[node name="DeskSideLCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.605, 0.355, -1.78)
-shape = SubResource("Shape_desk_side")
-
-[node name="DeskSideRCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.295, 0.355, -1.78)
-shape = SubResource("Shape_desk_side")
-
-[node name="TVStandCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0612, 0.4, 1.6607)
-shape = SubResource("Shape_tvstand")
-
-[node name="BedCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.75, 0.31, -1.133)
-shape = SubResource("Shape_bed")
-
-[node name="BookcaseACol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.345, 0.9, -1.55)
-shape = SubResource("Shape_bookcase")
-
-[node name="BookcaseBCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.345, 0.9, -0.55)
-shape = SubResource("Shape_bookcase")
-
-[node name="NightstandCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.755, 0.31, -1.948)
-shape = SubResource("Shape_nightstand")
-
-[node name="ChairCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0.415, -1.2)
-shape = SubResource("Shape_chair")
-
-[node name="WardrobeCol" type="CollisionShape3D" parent="FurnitureCollision"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 1.02, 1.79)
-shape = SubResource("Shape_wardrobe")
-
 [node name="DoorCol" type="CollisionShape3D" parent="FurnitureCollision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 1.035, 1.2)
 shape = SubResource("Shape_door")
@@ -1227,28 +876,6 @@ shape = SubResource("Shape_door")
 ; collidered — the opening was a hole straight through to the sky before this.
 [node name="Door" parent="Furniture" instance=ExtResource("19_door")]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.6, -2.018, 0.89)
-
-; --- Displays -----------------------------------------------------------------
-; Both are RetroTV instances wearing a shell variant, so both carry a working
-; composite port, CRT/phosphor stages and the options panel. Consoles plug into
-; the television; the DOS/ScummVM box into the monitor.
-[node name="TV90s" parent="." instance=ExtResource("30_tv")]
-transform = Transform3D(-0.70711, 0, -0.70711, 0, 1, 0, 0.70711, 0, -0.70711, 2.0612, 1.007, 1.6607)
-tv_model = "crt_90s"
-
-[node name="Monitor" parent="." instance=ExtResource("30_tv")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.97, -1.85)
-tv_model = "crt_monitor"
-
-; Area rug over the wall-to-wall carpet, in the open middle of the room. Lifted
-; 6 mm so it does not z-fight the floor plane.
-[node name="Rug" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0.006, 0.05)
-mesh = SubResource("Mesh_rug")
-surface_material_override/0 = SubResource("Mat_rug")
-
-; Posters. QuadMesh faces +Z as authored, so each is yawed to face into the room:
-; 180 on the south wall, -90 on the east wall above the bed.
 [node name="PosterMemphis" type="Node3D" parent="."]
 
 [node name="Frame" type="MeshInstance3D" parent="PosterMemphis"]
@@ -1272,72 +899,6 @@ surface_material_override/0 = SubResource("Mat_poster_frame")
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.493, 1.6, -1.1)
 mesh = SubResource("Quad_poster")
 surface_material_override/0 = SubResource("Mat_poster_b")
-
-; Wardrobe, south wall. Back at z 2.10 against the baseboard, doors facing -Z
-; into the room. Sited east of the player spawn (-1.55, 1.05) rather than the
-; plan's x -1.6, which would have put it 0.2 m in front of the player's face on
-; arrival.
-[node name="Wardrobe" type="Node3D" parent="Furniture"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, 1.78)
-
-[node name="Plinth" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.035, 0)
-mesh = SubResource("Mesh_wr_plinth")
-surface_material_override/0 = SubResource("Mat_trim")
-
-[node name="Carcass" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.02, 0)
-mesh = SubResource("Mesh_wr_carcass")
-surface_material_override/0 = SubResource("Mat_trim")
-
-[node name="Cornice" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.005, 0)
-mesh = SubResource("Mesh_wr_cornice")
-surface_material_override/0 = SubResource("Mat_trim")
-
-[node name="DoorL" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 1.02, -0.3)
-mesh = SubResource("Mesh_wr_door")
-surface_material_override/0 = SubResource("Mat_trim")
-
-[node name="DoorR" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3, 1.02, -0.3)
-mesh = SubResource("Mesh_wr_door")
-surface_material_override/0 = SubResource("Mat_trim")
-
-; Raised panels, set 2 mm prouder than the door face so each throws its own
-; shadow line - the baseboard cap trick.
-[node name="PanelL" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 1.02, -0.3055)
-mesh = SubResource("Mesh_wr_panel")
-surface_material_override/0 = SubResource("Mat_wr_panel")
-
-[node name="PanelR" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3, 1.02, -0.3055)
-mesh = SubResource("Mesh_wr_panel")
-surface_material_override/0 = SubResource("Mat_wr_panel")
-
-[node name="HandleL" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.045, 1.05, -0.325)
-mesh = SubResource("Mesh_wr_handle")
-surface_material_override/0 = SubResource("Mat_handle")
-
-[node name="HandleR" type="MeshInstance3D" parent="Furniture/Wardrobe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.045, 1.05, -0.325)
-mesh = SubResource("Mesh_wr_handle")
-surface_material_override/0 = SubResource("Mat_handle")
-
-; String lights, per the reference: run round the window casing and bordered along
-; the poster rather than hung as swags. Generated by StringLights from a polyline,
-; because the one usable CC0/CC-BY strand on Sketchfab is modelled dead straight
-; and cannot be run round a frame.
-;
-; Bulbs are emissive, not lights — the Environment's glow makes them bloom, and
-; ~87 OmniLights would be unthinkable on the mobile backend. Each strand carries
-; one dim unshadowed Omni for the wall wash instead. Two draw calls per strand.
-;
-; The window frame's bottom run sits at y 0.80, just above the sill and the desk
-; top at 0.75: at the casing's own 0.78 the bulbs would have grown out of the desk.
 [node name="WindowLights" type="Node3D" parent="."]
 script = ExtResource("36_strlights")
 path = PackedVector3Array(-1.79, 2.16, -2.1, -0.01, 2.16, -2.1, -0.01, 0.8, -2.1, -1.79, 0.8, -2.1)
@@ -1363,97 +924,6 @@ bulb_color = Color(1, 0.8, 0.5, 1)
 emission_energy = 1.7
 wash_energy = 0.26
 wash_range = 1.8
-
-; --- Soft props -------------------------------------------------------------
-; Five floor cushions RINGING the rug (x -1.4..1.0, z -0.8..0.9), each overlapping
-; its edge and yawed off-axis so they read as floor seating around it. The first
-; pass put them at arbitrary spots unrelated to the rug and it read as litter.
-; Scaled 0.85 across and SQUASHED to 0.45 on Y. Rendering the asset alone on a
-; floor plane showed what it really is: a pair of sofa throw pillows modelled
-; plump and propped upright against each other. There is no rotation that lays one
-; flat — sweeping rotX only ever made the bounding box TALLER, because they are
-; already resting as low as they get. At full height they read as pointed
-; teardrops standing on the carpet. A non-uniform squash is the fix, and a soft
-; object takes it where the wardrobe's mouldings never could: no straight lines to
-; distort, and a compressed crease is what a floor cushion under weight looks
-; like anyway. Each instance
-; hides one of the GLB's two pillows and re-skins the other, so one 6.4k-tri
-; download gives a varied scatter — the pattern mesh_filter.gd exists for.
-;
-; NO COLLIDERS, deliberately. XRToolsPlayerBody is a full-height capsule, so a
-; 0.45 m cushion would block it outright and these sit in the open floor where
-; the player walks. Walking through a cushion is the lesser wrong, and nothing
-; rests on them, which is what the FurnitureCollision colliders are actually for.
-[node name="SoftProps" type="Node3D" parent="."]
-[node name="CushionA" type="Node3D" parent="SoftProps"]
-transform = Transform3D(0.821015, 0, 0.21998, 0, 0.45, 0, -0.21998, 0, 0.821015, -1.45, 0, -0.15)
-script = ExtResource("11_meshfilter")
-hide_meshes = PackedStringArray("throw_pillows_01_pillow01")
-skin = SubResource("Mat_cushion_cream")
-
-[node name="Pillows" parent="SoftProps/CushionA" instance=ExtResource("37_pillows")]
-
-[node name="CushionB" type="Node3D" parent="SoftProps"]
-transform = Transform3D(0.425, 0, -0.7361, 0, 0.45, 0, 0.7361, 0, 0.425, -1.1, 0, -0.95)
-script = ExtResource("11_meshfilter")
-hide_meshes = PackedStringArray("throw_pillows_01_pillow02")
-skin = SubResource("Mat_cushion_sage")
-
-[node name="Pillows" parent="SoftProps/CushionB" instance=ExtResource("37_pillows")]
-
-[node name="CushionC" type="Node3D" parent="SoftProps"]
-transform = Transform3D(0.6511, 0, 0.54638, 0, 0.45, 0, -0.54638, 0, 0.6511, -1.05, 0, 1.05)
-script = ExtResource("11_meshfilter")
-hide_meshes = PackedStringArray("throw_pillows_01_pillow01")
-skin = SubResource("Mat_cushion_tan")
-
-[node name="Pillows" parent="SoftProps/CushionC" instance=ExtResource("37_pillows")]
-
-[node name="CushionD" type="Node3D" parent="SoftProps"]
-transform = Transform3D(0.770355, 0, -0.35921, 0, 0.45, 0, 0.35921, 0, 0.770355, 0.05, 0, 1.1)
-script = ExtResource("11_meshfilter")
-hide_meshes = PackedStringArray("throw_pillows_01_pillow02")
-skin = SubResource("Mat_cushion_cream")
-
-[node name="Pillows" parent="SoftProps/CushionD" instance=ExtResource("37_pillows")]
-
-[node name="CushionE" type="Node3D" parent="SoftProps"]
-transform = Transform3D(0.21998, 0, 0.821015, 0, 0.45, 0, -0.821015, 0, 0.21998, 1.15, 0, 0.45)
-script = ExtResource("11_meshfilter")
-hide_meshes = PackedStringArray("throw_pillows_01_pillow01")
-skin = SubResource("Mat_cushion_sage")
-
-[node name="Pillows" parent="SoftProps/CushionE" instance=ExtResource("37_pillows")]
-
-; Throw pillows on the bed, in front of the ones the model already carries at the
-; head, so the bedding reads layered the way the reference does. Scaled down —
-; the source pillows are 0.65 m floor cushions, too big to pass as bed pillows at
-; full size. Mattress top is y 0.62, which is where their bases sit.
-[node name="BedPillowA" type="Node3D" parent="SoftProps"]
-transform = Transform3D(0.7922, 0, 0.1114, 0, 0.8, 0, -0.1114, 0, 0.7922, 1.36, 0.62, -1.7)
-script = ExtResource("11_meshfilter")
-hide_meshes = PackedStringArray("throw_pillows_01_pillow01")
-skin = SubResource("Mat_cushion_cream")
-
-[node name="Pillows" parent="SoftProps/BedPillowA" instance=ExtResource("37_pillows")]
-
-[node name="BedPillowB" type="Node3D" parent="SoftProps"]
-transform = Transform3D(0.7336, 0, -0.1559, 0, 0.75, 0, 0.1559, 0, 0.7336, 2.0, 0.62, -1.76)
-script = ExtResource("11_meshfilter")
-hide_meshes = PackedStringArray("throw_pillows_01_pillow02")
-skin = SubResource("Mat_cushion_sage")
-
-[node name="Pillows" parent="SoftProps/BedPillowB" instance=ExtResource("37_pillows")]
-
-; Potted succulent on the desk's free west end. potted_plant_04 at 8.9k tris
-; against 70k and 96k for Poly Haven's other two potted plants, which are floor
-; plants — either would have cost more than every other object in the room put
-; together. At 0.27 m tall this is the windowsill-sized one the reference shows.
-[node name="DeskPlant" parent="SoftProps" instance=ExtResource("38_plant")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.45, 0.75, -1.78)
-
-; Test card directly above the set, at the TV's own z. The stand tops out at 0.80
-; and the television at 1.21, so a frame centred on 1.60 clears both.
 [node name="PosterTestcard" type="Node3D" parent="."]
 
 [node name="Frame" type="MeshInstance3D" parent="PosterTestcard"]
@@ -1494,20 +964,8 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.88, 1.68, 2.093)
 mesh = SubResource("Quad_sq")
 surface_material_override/0 = SubResource("Mat_poster_half")
 
-; --- PC tower ----------------------------------------------------------------
-; A RetroSystem running ScummVM, standing in the desk's knee hole. systemid
-; "scummvm" is registered in MediaDimensions as a 12 cm disc system, so the spawn
-; menu hands out a disc for it and RetroSystem takes the tray path; pc_tower.tscn
-; then SLIDES that tray rather than hinging a lid, which is what a PC CD-ROM does.
-;
-; Sited so the bay clears the desk. The tower front is at z -1.58 and the desk
-; front at -1.47, so the 0.135 m tray travel brings the tray 0.025 m past the desk
-; edge — it emerges into the room instead of grinding into the underside.
-[node name="PCTower" parent="." instance=ExtResource("47_system")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.35, 0, -1.8)
-systemid = "scummvm"
-core_name = "scummvm"
-
+; Baseboard. Runs are unit meshes scaled along the wall direction; the cap sits
+; 4 mm prouder than the base.
 [node name="Baseboard" type="Node3D" parent="."]
 
 [node name="NorthBase" type="MeshInstance3D" parent="Baseboard"]
@@ -1584,10 +1042,6 @@ light_energy = 1.2
 light_cull_mask = 1
 omni_range = 7.0
 
-; Bedside and desk lamps stay OUT of the ceiling_light group so they keep the
-; energy authored here — they are the two lights that actually rake the walls and
-; make the orange-peel normal map read. Each sits inside its lamp's shade: the
-; lamp is 0.415 m tall from whatever it stands on, and the shade is its top third.
 ; Golden-hour sun through the window. See the note in this file's history: this is
 ; a SpotLight3D rather than a DirectionalLight because shadows are OFF on Quest,
 ; so a directional sun lights the room through its walls. The cone does the
@@ -1604,29 +1058,6 @@ light_cull_mask = 1
 spot_range = 12.0
 spot_angle = 11.0
 spot_angle_attenuation = 0.55
-
-[node name="BedsideLampLight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.754, 0.95, -1.925)
-light_color = Color(1, 0.78, 0.5, 1)
-light_energy = 1.0
-omni_range = 3.0
-
-[node name="DeskLampLight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 1.08, -1.78)
-light_color = Color(1, 0.82, 0.58, 1)
-light_energy = 1.0
-omni_range = 3.0
-
-
-; --- Time of day --------------------------------------------------------------
-; LAST child of Root on purpose. _ready() runs depth-first in tree order, and
-; Furniture/Blinds REPLACES the WorldEnvironment's environment with a duplicate of
-; its own during its _ready(); anything that resolved the environment earlier would
-; be holding the copy that gets discarded. TimeOfDay also defers its first apply,
-; so this ordering is belt and braces rather than the only thing holding it up.
-;
-; It drives the daylight and the street, never the room's own lamps: the wall
-; switch, the two pull cords and the string lights keep those.
 [node name="TimeOfDay" type="Node3D" parent="."]
 script = ExtResource("50_timeofday")
 world_env_path = NodePath("../WorldEnvironment")

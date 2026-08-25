@@ -1,10 +1,10 @@
-## SpawnMenuSceneView — the menu's SCENE tab: pick a room, or manage the arcade's
+## SpawnMenuSceneView — the menu's SCENE tab: pick a room, or manage a room's
 ## save slots.
 ##
 ## Two panels stacked in one Control, one visible at a time: the room picker, and
-## the slot grid you reach through the Arcade Room card. Everything it wants done
-## it asks for by signal — SpawnMenu2D relays these to its own, so the controller
-## on the far side is unchanged.
+## the slot grid you reach through the card of any room in SceneManager.SLOT_ROOMS.
+## Everything it wants done it asks for by signal — SpawnMenu2D relays these to
+## its own, so the controller on the far side is unchanged.
 class_name SpawnMenuSceneView
 extends Control
 
@@ -20,6 +20,18 @@ signal slot_rename_requested(slot_id: String, new_name: String, room_id: String)
 ## owns _active_scroll, and this view switches panels on its own.
 signal scroll_changed(scroll: ScrollContainer)
 
+## Room id -> the name shown on its card and over its slot grid. One table for
+## both, so a card and the header you reach through it cannot drift apart.
+## SceneManager.SCENE_TITLES is the loading screen's copy and is upper-case; these
+## are the menu's own casing.
+const ROOM_TITLES := {
+	"bedroom":     "90s Bedroom",
+	"arcade":      "Arcade Room",
+	"den":         "Cozy Den",
+	"test":        "Test Hallway",
+	"passthrough": "Passthrough AR",
+}
+
 var _rooms_panel:   Control         = null
 var _states_panel:  Control         = null
 var _rooms_grid:    GridContainer   = null
@@ -33,7 +45,7 @@ var _hover_pending: Dictionary      = {}
 var _rename_slot_id: String         = ""
 var _rename_edit:   LineEdit        = null
 ## Which room's slots the states panel is showing.
-var _slot_room:     String          = "arcade"
+var _slot_room:     String          = "bedroom"
 var _states_title:  Label           = null
 ## The bottom "+ Save New" bar. Hidden for a room the player is not standing in:
 ## saving writes the CURRENT scene's contents, which are not that room's.
@@ -78,17 +90,18 @@ func _build() -> void:
 	rooms_vbox.add_child(grid)
 	_rooms_grid = grid
 
+	# 90s Bedroom card → navigates to its state grid. Leads the grid: it is the
+	# room the player boots into and the one they furnish.
+	grid.add_child(_make_room_card(ROOM_TITLES["bedroom"], Color(0.30, 0.16, 0.36),
+		show_states.bind("bedroom")))
+
 	# Arcade Room card → navigates to its state grid
-	grid.add_child(_make_room_card("Arcade Room", Color(0.15, 0.13, 0.35),
+	grid.add_child(_make_room_card(ROOM_TITLES["arcade"], Color(0.15, 0.13, 0.35),
 		show_states.bind("arcade")))
 
 	# Cozy Den card → direct scene switch
-	grid.add_child(_make_room_card("Cozy Den", Color(0.4, 0.25, 0.12),
+	grid.add_child(_make_room_card(ROOM_TITLES["den"], Color(0.4, 0.25, 0.12),
 		func(): scene_change_requested.emit("den")))
-
-	# 90s Bedroom card → direct scene switch
-	grid.add_child(_make_room_card("90s Bedroom", Color(0.30, 0.16, 0.36),
-		func(): scene_change_requested.emit("bedroom")))
 
 	# Test Hallway card → direct scene switch
 	grid.add_child(_make_room_card("Test Hallway", Color(0.12, 0.32, 0.30),
@@ -119,7 +132,7 @@ func _build() -> void:
 	back_btn.pressed.connect(show_rooms)
 	back_row.add_child(back_btn)
 
-	var title_lbl := MenuStyle.header("Arcade Room")
+	var title_lbl := MenuStyle.header(ROOM_TITLES["bedroom"])
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	back_row.add_child(title_lbl)
@@ -189,7 +202,7 @@ func _sync_passthrough_card() -> void:
 ## Open the slot grid for one room. Bound into that room's card, so which grid
 ## this is stays with the card rather than being inferred from where the player
 ## happens to be standing.
-func show_states(room_id: String = "arcade") -> void:
+func show_states(room_id: String = "bedroom") -> void:
 	_slot_room = room_id
 	if _states_title != null:
 		_states_title.text = _room_title(room_id)
@@ -202,7 +215,7 @@ func show_states(room_id: String = "arcade") -> void:
 
 
 func _room_title(room_id: String) -> String:
-	return "Passthrough AR" if room_id == "passthrough" else "Arcade Room"
+	return ROOM_TITLES.get(room_id, room_id)
 
 
 ## True while the player is standing in the room whose grid is open — the only

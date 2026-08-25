@@ -1,0 +1,131 @@
+[gd_scene load_steps=12 format=3 uid="uid://table_001"]
+
+[ext_resource type="Script" path="res://Scripts/Objects/room/table.gd" id="1_tablescript"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_table"]
+size = Vector3(2, 0.2, 0.8)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_table_leg"]
+size = Vector3(0.05, 0.7, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_table"]
+size = Vector3(2, 0.05, 0.8)
+
+[sub_resource type="StandardMaterial3D" id="Mat_table"]
+albedo_color = Color(0.18, 0.1, 0.06, 1)
+metallic = 0.05
+roughness = 0.55
+
+[sub_resource type="BoxMesh" id="BoxMesh_table_apron_long"]
+size = Vector3(2, 0.08, 0.03)
+
+[sub_resource type="StandardMaterial3D" id="Mat_table_apron"]
+albedo_color = Color(0.12, 0.07, 0.04, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_table_apron_short"]
+size = Vector3(0.03, 0.08, 0.74)
+
+[sub_resource type="BoxMesh" id="BoxMesh_table_leg"]
+size = Vector3(0.05, 0.7, 0.05)
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_table"]
+bounce = 0.0
+friction = 0.9
+
+; Origin sits on the floor: the legs run y 0 -> 0.7 and the top face lands at
+; 0.75, so the table stands on whatever surface it is released against instead
+; of sinking half-way into it.
+[node name="Table" type="RigidBody3D" groups=["spawned"]]
+mass = 15.0
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_table")
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("1_tablescript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+shape = SubResource("BoxShape3D_table")
+
+; The four legs each carry their own shape. As inline arcade scenery the table
+; had the top slab above and nothing else, so the space between the legs was
+; open in every direction — you could walk through them, and anything set down
+; beside the table slid under it. These are what make it solid to the floor.
+[node name="LegColFL" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.35, 0.35)
+shape = SubResource("BoxShape3D_table_leg")
+
+[node name="LegColFR" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0.35, 0.35)
+shape = SubResource("BoxShape3D_table_leg")
+
+[node name="LegColBL" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.35, -0.35)
+shape = SubResource("BoxShape3D_table_leg")
+
+[node name="LegColBR" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0.35, -0.35)
+shape = SubResource("BoxShape3D_table_leg")
+
+[node name="TableTop" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.725, 0)
+mesh = SubResource("BoxMesh_table")
+surface_material_override/0 = SubResource("Mat_table")
+
+[node name="ApronFront" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.66, 0.385)
+mesh = SubResource("BoxMesh_table_apron_long")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="ApronBack" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.66, -0.385)
+mesh = SubResource("BoxMesh_table_apron_long")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="ApronLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.985, 0.66, 0)
+mesh = SubResource("BoxMesh_table_apron_short")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="ApronRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.985, 0.66, 0)
+mesh = SubResource("BoxMesh_table_apron_short")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="LegFL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.35, 0.35)
+mesh = SubResource("BoxMesh_table_leg")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="LegFR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0.35, 0.35)
+mesh = SubResource("BoxMesh_table_leg")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="LegBL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.35, -0.35)
+mesh = SubResource("BoxMesh_table_leg")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="LegBR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0.35, -0.35)
+mesh = SubResource("BoxMesh_table_leg")
+surface_material_override/0 = SubResource("Mat_table_apron")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+; Ray targeting covers the top slab only. A box over the whole footprint would
+; put a pointer target across the empty space between the legs, so aiming at the
+; floor under the table would grab the table.
+[node name="PointerArea" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+shape = SubResource("BoxShape3D_table")
