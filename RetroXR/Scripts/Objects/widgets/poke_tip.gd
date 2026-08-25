@@ -10,8 +10,10 @@
 ## never need to care.
 ##
 ## CONTACT SNAPPING. A widget under the tip may CLAIM it for the frame
-## (set_contact / claim_box_face); the only visible feedback is a small disc on
-## the touched surface. The old controller-tip cone is deliberately gone.
+## (set_contact / claim_box_face). Two things show it: a small disc on the
+## touched surface, always, and — in Controllers mode only — a cone nib on the
+## front of the controller that bends onto the same point. The Capsense modes
+## draw a real fingertip there instead, so the nib would sit inside the hand.
 class_name PokeTip
 extends Node3D
 
@@ -44,9 +46,20 @@ const FACE_INSET := 0.0015
 ## a fingertip's footprint, not a second object.
 const DISC_RADIUS := 0.005
 
+## The Controllers-mode nib. Its APEX sits exactly on this node's origin, so what
+## you see is the point every widget tests against, and its base runs back toward
+## the controller body.
+const CONE_HEIGHT := 0.022
+const CONE_RADIUS := 0.007
+## Longest the nib may stretch onto a claimed surface. Past this it reads as
+## snapped off the hand rather than reaching; larger than any engage radius.
+const CONTACT_MAX_REACH := 0.045
+
 var _pickup: Node = null   # sibling XRToolsFunctionPickup (hide contact while holding)
 var _disc: MeshInstance3D = null
 var _disc_mat: StandardMaterial3D = null
+var _cone: MeshInstance3D = null
+var _cone_local := Vector3.ZERO    # resolved apex, in THIS node's frame
 
 # Winning claim for the current frame, plus the smoothed state it drives.
 var _claim_point := Vector3.ZERO
@@ -156,6 +169,25 @@ func _ready() -> void:
 	# one-frame tolerance in _process covers any ordering this misses.
 	process_priority = 100
 
+	# Visible cone: apex exactly at this node's origin, base back toward the
+	# controller body — reads as a stylus nib. Shown only in Controllers mode;
+	# _process owns that, so it starts hidden and never flashes on first frame.
+	_cone = MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = CONE_RADIUS
+	cone.height = CONE_HEIGHT
+	_cone.mesh = cone
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.75, 0.8, 0.9)
+	mat.emission_enabled = true
+	mat.emission = Color(0.25, 0.3, 0.4)
+	mat.emission_energy_multiplier = 0.4
+	_cone.set_surface_override_material(0, mat)
+	_cone.visible = false
+	add_child(_cone)
+	_apply_cone()   # with no claim this IS the rest pose; see _apply_cone
+
 	# Contact shadow. This sits at the smoothed, reported point — what you see is
 	# what the core is told. top_level so it stays flat on the surface rather than
 	# inheriting the hand's roll.
@@ -212,6 +244,7 @@ func _process(delta: float) -> void:
 		_claim_smooth = Vector3.ZERO
 		_blend = 0.0
 		_disc.visible = false
+		_cone.visible = false
 		return
 
 	var live: bool = _claim_priority >= 0 and _claim_frame >= Engine.get_process_frames() - 1
@@ -230,6 +263,14 @@ func _process(delta: float) -> void:
 	_blend = lerpf(_blend, 1.0 if on else 0.0, k)
 	var apex: Vector3 = tip_of(get_parent()).lerp(_claim_smooth, _blend)
 	_apply_disc(apex)
+
+	# The nib is the Controllers-mode stand-in for a fingertip. In the Capsense
+	# modes a real finger is drawn at this point, so showing both would put the
+	# cone inside the hand.
+	_cone.visible = AppPrefs.xr_display_mode == AppPrefs.XRDisplayMode.CONTROLLERS
+	if _cone.visible:
+		_cone_local = to_local(apex)
+		_apply_cone()
 
 
 ## Smoothed surface point for visual fingertip IK. This is deliberately NOT the
@@ -252,6 +293,33 @@ func visual_contact() -> Dictionary:
 		"point": _claim_smooth - _claim_normal * CONTACT_LIFT,
 		"normal": _claim_normal,
 	}
+
+
+## Stretch the cone from its fixed base to the smoothed apex, so the nib bends
+## onto the claimed surface instead of floating at whatever depth the hand is.
+## Only the length axis scales — the nib keeps its radius — and the base stays
+## put, so the cone always reads as attached to the controller.
+##
+## This moves the CONE only. It must never move this node: tip_of() IS this
+## node's origin and every widget projects against it, so moving it would make a
+## widget project onto a face, the tip follow, the widget re-project, and the
+## geometry chase itself.
+func _apply_cone() -> void:
+	if _cone == null:
+		return
+	var base := Vector3(0.0, 0.0, CONE_HEIGHT)
+	var d: Vector3 = _cone_local - base
+	var dist: float = d.length()
+	if dist < 1e-6:
+		d = Vector3(0.0, 0.0, -CONE_HEIGHT)
+		dist = CONE_HEIGHT
+	var reach: float = clampf(dist, CONE_HEIGHT * 0.4, CONTACT_MAX_REACH)
+	var dir: Vector3 = d / dist
+	var ref: Vector3 = Vector3.RIGHT if absf(dir.x) < 0.9 else Vector3.FORWARD
+	var bx: Vector3 = ref.cross(dir).normalized()
+	var bz: Vector3 = bx.cross(dir)
+	_cone.transform = Transform3D(Basis(bx, dir * (reach / CONE_HEIGHT), bz),
+		base + dir * (reach * 0.5))
 
 
 func _apply_disc(apex: Vector3) -> void:
