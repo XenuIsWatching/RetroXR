@@ -12,11 +12,19 @@ control can be pulled out and animated.
 
 Two things worth knowing:
 
-  * The wordmarks are ALBEDO ONLY. The normal map is flat across the whole
-    "SONY" / "PlayStation" region — only the button recesses are embossed — so
-    erasing the base colour leaves no relief ghost behind. That was worth
-    checking: a co-located embossed copy is exactly what made the Atari's logo
-    removal leave a visible mark.
+  * The FRONT wordmarks are albedo only. The normal map is flat across the whole
+    "SONY" / "PlayStation" region on the face — only the button recesses are
+    embossed — so erasing the base colour leaves no relief ghost behind. That was
+    worth checking: a co-located embossed copy is exactly what made the Atari's
+    logo removal leave a visible mark.
+
+    The BACK is the other way round, and this file used to claim the whole sheet
+    was flat and stop there. The compliance plate under the pad — "SONY",
+    "CONTROLLER" and its fine print — is embossed in the NORMAL map and carries
+    no albedo at all, so the base-colour scrub could never have touched it and
+    the wordmark shipped, white on white, legible whenever the pad was picked up
+    and turned over. Checking one region and generalising to the sheet is the
+    whole mistake; scrub_normal_label handles that plate.
 
   * The functional legends and the trademarks separate cleanly in X. START and
     SELECT end at texture x=230; "PlayStation", the PS logo and "SONY" all start
@@ -36,6 +44,23 @@ PAD_GREY = (165, 159, 160)
 ## x0, y0, x1, y1 in the 4096 base-colour sheet. Covers "PlayStation", the PS
 ## logo glyph and "SONY"; START/SELECT sit left of x=230 and are untouched.
 SCRUB_RECT = (330, 490, 640, 990)
+
+## The compliance plate on the pad's UNDERSIDE, in the DOWNSCALED 1024 normal
+## map's pixels — x0, y0, x1, y1, top-left origin.
+##
+## Measured at 1024 and scrubbed after downscale_textures, unlike SCRUB_RECT
+## above, which is measured in the source's 4096 sheet. Deliberate: these are the
+## coordinates that were actually verified, against the shipped asset, by column
+## and row profile. The plate's border is at columns 260-261 / 327-328 and rows
+## 134-135 / 231-232 and is LEFT STANDING — the recess is real moulding, and a
+## blank plate is what a de-branded pad has. Only the lettering inside goes.
+##
+## The screw boss at x 335-340 is outside this rect and must stay outside it.
+NORMAL_LABEL_RECT = (262, 136, 327, 231)
+
+## A flat tangent-space normal, sampled off this sheet rather than assumed: it is
+## (128, 127, 255) here, not the (128, 128, 255) you would write down.
+FLAT_NORMAL = (128, 127, 255)
 
 TARGET_WIDTH = 0.1449          # a real SCPH-1080 is ~145 mm across
 
@@ -92,6 +117,31 @@ def downscale_textures():
         img.scale(max(1, int(w * s)), max(1, int(h * s)))
         img.pack()
         print("[tex] %s %dx%d -> %dx%d" % (img.name, w, h, img.size[0], img.size[1]))
+
+
+## Flatten the underside's embossed label plate. Runs AFTER downscale_textures,
+## because NORMAL_LABEL_RECT is measured in the 1024 sheet — see the constant.
+def scrub_normal_label():
+    import numpy as np
+    done = 0
+    for img in bpy.data.images:
+        if not img.pixels or _is_base_colour(img):
+            continue
+        w, h = img.size
+        if (w, h) != (1024, 1024):
+            print("[warn] normal sheet is %dx%d, not 1024 — rect not applied" % (w, h))
+            continue
+        px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+        x0, y0, x1, y1 = NORMAL_LABEL_RECT
+        fy0, fy1 = h - y1, h - y0          # Blender's buffer is bottom-up
+        for c in range(3):
+            px[fy0:fy1, x0:x1, c] = FLAT_NORMAL[c] / 255.0
+        img.pixels = px.ravel().tolist()
+        img.pack()
+        print("[scrub] %s label plate %s <- flat" % (img.name, NORMAL_LABEL_RECT))
+        done += 1
+    if done == 0:
+        print("[warn] no normal sheet scrubbed — the underside wordmark may survive")
 
 
 def _is_base_colour(img):
@@ -322,6 +372,7 @@ def main():
 
     scrub_base_colour()
     downscale_textures()
+    scrub_normal_label()
 
     meshes = [o for o in bpy.data.objects if o.type == 'MESH']
     root = meshes[0]

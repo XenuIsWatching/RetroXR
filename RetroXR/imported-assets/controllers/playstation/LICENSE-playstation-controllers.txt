@@ -26,9 +26,15 @@ Adapted by Tools/glb/prepare_ps1_pad.py:
   * Cleared the "SONY" and "PlayStation" wordmarks and the PS logo glyph from
     the base-colour sheet, filling with the pad's own sampled plastic grey.
     SELECT, START and the four face-button symbols are untouched — they are the
-    only labelling the controls have. The normal map was left alone: it is flat
-    across the whole wordmark region (only the button recesses are embossed), so
-    no relief ghost remains.
+    only labelling the controls have. The normal map is flat across that FRONT
+    region (only the button recesses are embossed), so no relief ghost remains
+    there.
+
+  * Blanked the compliance plate on the UNDERSIDE — "SONY", "CONTROLLER" and its
+    fine print — which is embossed in the NORMAL map and carries no base colour,
+    so the scrub above never touched it and the wordmark shipped, white on white,
+    visible whenever the pad was turned over. The plate's moulded border and the
+    screw bosses are left standing; only the lettering inside is flattened.
   * Rescaled to real-world size (145 mm across, a real SCPH-1080), re-origined
     centred on its own footprint and resting on y = 0.
   * Split the single mesh into its 105 disconnected islands and regrouped them
