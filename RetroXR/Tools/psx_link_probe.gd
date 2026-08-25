@@ -92,9 +92,10 @@ func _press(lib: Node, mask: int, frames := 40) -> void:
 ## device to pace against and two PlayStations share one machine here, so wall
 ## clock and emulated time drift apart by a factor that moves between runs.
 func _wait(n: int) -> void:
-	var target: int = int(_a.GetFrameCount()) + n
-	var guard := n * 60
-	while int(_a.GetFrameCount()) < target and guard > 0:
+	var target_a: int = int(_a.GetFrameCount()) + n
+	var target_b: int = int(_b.GetFrameCount()) + n
+	var guard := n * 120
+	while (int(_a.GetFrameCount()) < target_a or int(_b.GetFrameCount()) < target_b) and guard > 0:
 		guard -= 1
 		await get_tree().process_frame
 
@@ -174,6 +175,22 @@ func _enter_menu(lib: Node) -> void:
 		lib.SetJoypadState(0, B_START, 0, 0, 0, 0)
 		await _wait(6)
 		lib.SetJoypadState(0, 0, 0, 0, 0, 0)
+		await _wait(24)
+
+
+func _enter_menus(libs: Array) -> void:
+	for lib: Node in libs:
+		lib.SetJoypadState(0, B_START, 0, 0, 0, 0)
+	await _wait(240)
+	for lib: Node in libs:
+		lib.SetJoypadState(0, 0, 0, 0, 0, 0)
+	await _wait(180)
+	for i in range(8):
+		for lib: Node in libs:
+			lib.SetJoypadState(0, B_START, 0, 0, 0, 0)
+		await _wait(6)
+		for lib: Node in libs:
+			lib.SetJoypadState(0, 0, 0, 0, 0, 0)
 		await _wait(24)
 
 
@@ -261,14 +278,15 @@ func _run() -> void:
 	var before := [_traffic(_a), _traffic(_b)]
 	print("[psx-link] traffic at title: A=%s B=%s" % [before[0], before[1]])
 
-	# Into the menu, one machine at a time, with a hold long enough that the
-	# title screen actually takes it.
-	print("[psx-link] machine A into the menu")
-	await _enter_menu(_a)
-	await _shot("a_entered")
-	print("[psx-link] machine B into the menu")
-	await _enter_menu(_b)
-	await _wait(240)
+	# Keep both machines on the same title/attract phase. Advancing one through
+	# the menu while the other watches its demo made the later DOWN press select
+	# TWO PLAYER on only one console, so the old probe tested a linked console
+	# against a peer that was still on a loading screen.
+	print("[psx-link] both machines into the menu")
+	await _enter_menus([_a, _b])
+	# The attract-to-menu loading screen outlasts the input sequence. Do not
+	# send DOWN while either machine can still interpret it as demo input.
+	await _wait(600)
 	await _shot("after_start")
 
 	# SELECT NUMBER OF PLAYERS: ONE PLAYER / TWO PLAYER / OPTIONS, confirmed
@@ -326,6 +344,6 @@ func _run() -> void:
 
 	_a.StopContent()
 	_b.StopContent()
-	await _wait(120)
+	await get_tree().create_timer(2.0).timeout
 	print("[psx-link] ---- %d passed, %d failed ----" % [_pass, _fail])
 	get_tree().quit(1 if _fail > 0 else 0)
