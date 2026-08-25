@@ -437,6 +437,90 @@ func _test_room_code() -> void:
 			"roomcode/%s round-trips" % c)
 
 
+	# ── The registry, mocked. No server: the response shapes are pure static
+	# functions precisely so a suite can hold them to their contract.
+	var made := RendezvousClient.parse_created({
+		"code": "K7MPQ4", "secret": "s3cr3t", "ttl": 90,
+		"punch_host": "punch.retroxr.app", "punch_port": 8890,
+	})
+	_eq(made.get("code", ""), "K7MPQ4", "roomcode/a created room carries its code")
+	_eq(made.get("secret", ""), "s3cr3t", "roomcode/and the secret that owns it")
+	_eq(made.get("punch_port", 0), 8890, "roomcode/and where to punch")
+
+	# The punch endpoint arrives in the response so it can move without a client
+	# update. A record that omits it is unusable, not a default.
+	_ok(RendezvousClient.parse_created({
+			"code": "K7MPQ4", "secret": "s", "ttl": 90,
+		}).is_empty(),
+		"roomcode/a room with no punch endpoint is refused")
+	_ok(RendezvousClient.parse_created({
+			"code": "K7MPQ4", "secret": "s", "punch_host": "h", "punch_port": 0,
+		}).is_empty(),
+		"roomcode/port 0 is not a punch endpoint")
+	_ok(RendezvousClient.parse_created({
+			"code": "K7MPQ4", "secret": "s", "punch_host": "h",
+			"punch_port": 70000,
+		}).is_empty(),
+		"roomcode/nor is a port above the range")
+	_ok(RendezvousClient.parse_created({
+			"code": "K7MPQ4", "punch_host": "h", "punch_port": 8890,
+		}).is_empty(),
+		"roomcode/a room with no secret is refused")
+
+	# A code the client would reject from a player it must reject from the
+	# server too, rather than hand someone an unreadable string to dictate.
+	_ok(RendezvousClient.parse_created({
+			"code": "K7MPQ0", "secret": "s", "punch_host": "h",
+			"punch_port": 8890,
+		}).is_empty(),
+		"roomcode/a minted code containing a confusable is refused")
+	_ok(RendezvousClient.parse_created({
+			"code": "K7MPQ44", "secret": "s", "punch_host": "h",
+			"punch_port": 8890,
+		}).is_empty(),
+		"roomcode/so is one of the wrong length")
+	_ok(RendezvousClient.parse_created("not a dictionary at all").is_empty(),
+		"roomcode/a non-dictionary body is refused")
+	_ok(RendezvousClient.parse_created(null).is_empty(),
+		"roomcode/so is nothing at all")
+
+	var found := RendezvousClient.parse_room({
+		"oid": "abc123", "name": "Ryan", "protocol_version": 7,
+		"punch_host": "punch.retroxr.app", "punch_port": 8890,
+	})
+	_eq(found.get("oid", ""), "abc123", "roomcode/a looked-up room carries the host oid")
+	_eq(found.get("protocol_version", -1), 7,
+		"roomcode/and the protocol version to check before connecting")
+
+	# Without a version there is nothing to compare, and an unverifiable peer is
+	# refused here rather than found out as a desync later.
+	_ok(RendezvousClient.parse_room({
+			"oid": "abc123", "punch_host": "h", "punch_port": 8890,
+		}).is_empty(),
+		"roomcode/a room with no protocol version is refused")
+	_ok(RendezvousClient.parse_room({
+			"protocol_version": 7, "punch_host": "h", "punch_port": 8890,
+		}).is_empty(),
+		"roomcode/a room with no host oid is refused")
+	# Version 0 is a real version, not a missing one.
+	_ok(not RendezvousClient.parse_room({
+			"oid": "abc", "protocol_version": 0, "punch_host": "h",
+			"punch_port": 8890,
+		}).is_empty(),
+		"roomcode/protocol version zero is still a version")
+
+	_eq(RendezvousClient.parse_heartbeat({"ok": true, "ttl": 90}), 90,
+		"roomcode/a heartbeat renews the lease")
+	_eq(RendezvousClient.parse_heartbeat({"ok": false, "ttl": 90}), -1,
+		"roomcode/a refused heartbeat renews nothing")
+	_eq(RendezvousClient.parse_heartbeat({"ok": true}), -1,
+		"roomcode/nor does one that does not say how long")
+	_eq(RendezvousClient.parse_heartbeat({"ok": true, "ttl": 0}), -1,
+		"roomcode/a zero lease is not a lease")
+	_eq(RendezvousClient.parse_heartbeat(null), -1,
+		"roomcode/an empty heartbeat answer renews nothing")
+
+
 # ══ The wire format ═══════════════════════════════════════════════════════════
 # Everything crossing the wire is integers, which is what makes cross-platform
 # play possible at all — but each field is packed to a fixed width, and a value
