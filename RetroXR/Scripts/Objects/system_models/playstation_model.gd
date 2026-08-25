@@ -545,6 +545,29 @@ const _GRAB_FLIP := PI
 ## assumption: the 2600's two ports sit 30 mm apart in magnitude and mirroring one
 ## onto the other was wrong there.
 ##
+## The height is NOT the Port mesh's centre, and that is the whole point of this
+## constant. "Port1" is the entire moulded block, and the MEMORY CARD slot is
+## inside it: the block spans y 9.3..35.5 mm and MemCard1 sits at 26.8..33.9,
+## two openings in one mesh. Its AABB centre is therefore 22.4 mm — on the
+## DIVIDER between them — and every controller plug seated about 3 mm high,
+## which is what it looked like: a plug hovering over the top edge of its socket.
+##
+## Measured by raycast into the front face, because an AABB cannot see a recess.
+## Rays two tenths of a millimetre apart, read as a DEPTH PROFILE rather than
+## against one threshold -- that distinction cost a round trip here, because the
+## mouth is not empty. Going up the socket: the block's face stands at 90.2 mm,
+## bevels in to 88.5 by y 13.0, drops to the cavity floor at 79.7 from y 13.2,
+## and then reads 88.4 from 14.0 to 19.4 -- which is NOT the shell, it is the
+## front of the three PIN HOUSINGS standing inside the socket. Floor again at
+## 19.6..20.2, bevel from 20.4. So the mouth spans y 13.1..20.3, about 7.2 mm
+## tall, centre 16.7 -- and a threshold that called anything behind the face
+## "mouth" swallowed the bevel above it and put the centre 2.8 mm too high, on
+## the pin housings' top edge.
+##
+## Held as a RISE off the block's lower edge (9.3 mm) rather than an absolute y,
+## so the shell can move without dragging the seat off the socket.
+const PORT_MOUTH_RISE := 0.0074
+
 ## The zone is not the plug's pose. XRTools aligns a plug's SnapGrabPoint — which
 ## carries its own 180-degree flip about X (controller_cable.tscn) — to the zone,
 ## so the placed pose has to be composed with that flip. A front-facing socket
@@ -561,7 +584,9 @@ func configure_controller_ports(port_zones: Array) -> void:
 		var mesh_name := "Port%d" % (i + 1)
 		if _shell_mesh(mesh_name) == null:
 			continue
-		zone.position = _mesh_center_local(mesh_name)
+		var block: AABB = _mesh_aabb_local(mesh_name)
+		zone.position = Vector3(block.get_center().x,
+			block.position.y + PORT_MOUTH_RISE, block.get_center().z)
 		zone.rotation_degrees = Vector3(0.0, 0.0, 180.0)
 	hide_port_placeholders(port_zones)
 
