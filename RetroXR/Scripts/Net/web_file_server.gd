@@ -701,7 +701,7 @@ f.addEventListener('submit',function(e){
   fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({pin:pin.value})}).then(function(r){
     if(r.ok){location.reload();}
-    else{er.textContent='Incorrect PIN.';pin.value='';pin.focus();}
+	else{er.textContent='Incorrect PIN.';pin.value='';pin.focus();}
   }).catch(function(){er.textContent='Connection error.';});
 });
 </script></body></html>"""
@@ -774,11 +774,11 @@ function draw(d){
   var h='';
   if(cur){h+='<tr><td class="ic">📁</td><td class="nm dn" data-nav="'+esc(parent_of(cur))+'">..</td><td class="sz"></td><td class="ac"></td></tr>';}
   (d.dirs||[]).forEach(function(n){
-    var cp=cur?cur+'/'+n:n;
+	var cp=cur?cur+'/'+n:n;
 	h+='<tr><td class="ic">📁</td><td class="nm dn" data-nav="'+esc(cp)+'">'+esc(n)+'</td><td class="sz">—</td><td class="ac"></td></tr>';
   });
   (d.files||[]).forEach(function(f){
-    var fp=cur?cur+'/'+f.name:f.name;
+	var fp=cur?cur+'/'+f.name:f.name;
 	h+='<tr><td class="ic">📄</td><td class="nm">'+esc(f.name)+'</td><td class="sz">'+fmt(f.size)+'</td><td class="ac"><button class="dl" data-dl="'+esc(fp)+'">↓</button> <button class="rm" data-del="'+esc(fp)+'">✕</button></td></tr>';
   });
   if(!h)h='<tr><td colspan="4" style="color:#333;padding:20px;text-align:center">Empty</td></tr>';
@@ -787,12 +787,12 @@ function draw(d){
 document.addEventListener('click',function(e){
   if(e.target.hasAttribute('data-nav'))go(e.target.getAttribute('data-nav'));
   if(e.target.hasAttribute('data-dl')){
-    window.location='/api/download?path='+encodeURIComponent(e.target.getAttribute('data-dl'));
+	window.location='/api/download?path='+encodeURIComponent(e.target.getAttribute('data-dl'));
   }
   if(e.target.hasAttribute('data-del')){
-    var p=e.target.getAttribute('data-del');
-    if(confirm('Delete '+p.split('/').pop()+'?'))
-      fetch('/api/delete?path='+encodeURIComponent(p),{method:'DELETE'}).then(function(){go(cur);});
+	var p=e.target.getAttribute('data-del');
+	if(confirm('Delete '+p.split('/').pop()+'?'))
+	  fetch('/api/delete?path='+encodeURIComponent(p),{method:'DELETE'}).then(function(){go(cur);});
   }
 });
 var dz=document.getElementById('dz');
@@ -804,27 +804,27 @@ var pf=document.getElementById('pf');
 function uploadItems(items){
   var i=0;
   function next(){
-    if(i>=items.length){
-      st.textContent='Done \u2014 uploaded '+items.length+' file(s).';
-      pb.style.display='none';pf.style.width='0%';go(cur);return;
-    }
-    var it=items[i],nm=it.path||it.file.name;
-    st.textContent='Uploading '+(i+1)+' of '+items.length+': '+nm;
-    pb.style.display='block';pf.style.width='0%';
-    var fd=new FormData();
-    fd.append('file',it.file,it.path||it.file.name);
-    var xhr=new XMLHttpRequest();
-    xhr.upload.onprogress=function(ev){
-      if(ev.lengthComputable){
-        var pct=Math.round(ev.loaded/ev.total*100);
-        pf.style.width=pct+'%';
-        st.textContent='Uploading '+(i+1)+' of '+items.length+': '+nm+' ('+pct+'%)';
-      }
-    };
-    xhr.onload=function(){pf.style.width='100%';i++;next();};
-    xhr.onerror=function(){st.textContent='Error uploading '+nm;i++;next();};
-    xhr.open('POST','/api/upload?path='+encodeURIComponent(cur));
-    xhr.send(fd);
+	if(i>=items.length){
+	  st.textContent='Done \u2014 uploaded '+items.length+' file(s).';
+	  pb.style.display='none';pf.style.width='0%';go(cur);return;
+	}
+	var it=items[i],nm=it.path||it.file.name;
+	st.textContent='Uploading '+(i+1)+' of '+items.length+': '+nm;
+	pb.style.display='block';pf.style.width='0%';
+	var fd=new FormData();
+	fd.append('file',it.file,it.path||it.file.name);
+	var xhr=new XMLHttpRequest();
+	xhr.upload.onprogress=function(ev){
+	  if(ev.lengthComputable){
+		var pct=Math.round(ev.loaded/ev.total*100);
+		pf.style.width=pct+'%';
+		st.textContent='Uploading '+(i+1)+' of '+items.length+': '+nm+' ('+pct+'%)';
+	  }
+	};
+	xhr.onload=function(){pf.style.width='100%';i++;next();};
+	xhr.onerror=function(){st.textContent='Error uploading '+nm;i++;next();};
+	xhr.open('POST','/api/upload?path='+encodeURIComponent(cur));
+	xhr.send(fd);
   }
   if(items.length)next();else st.textContent='Nothing to upload.';
 }
@@ -840,21 +840,21 @@ document.getElementById('pf_dir').addEventListener('change',function(e){uploadIt
 // Recursively walk a dropped FileSystemEntry, collecting {file,path} into out.
 function walkEntry(entry,prefix,out){
   return new Promise(function(resolve){
-    if(entry.isFile){
-      entry.file(function(f){out.push({file:f,path:prefix+entry.name});resolve();},function(){resolve();});
-    }else if(entry.isDirectory){
-      var reader=entry.createReader(),kids=[];
-      (function read(){
-        reader.readEntries(function(ents){
-          if(!ents.length){
-            Promise.all(kids.map(function(c){return walkEntry(c,prefix+entry.name+'/',out);})).then(resolve);
-            return;
-          }
-          kids=kids.concat(Array.prototype.slice.call(ents));
-          read();
-        },function(){resolve();});
-      })();
-    }else{resolve();}
+	if(entry.isFile){
+	  entry.file(function(f){out.push({file:f,path:prefix+entry.name});resolve();},function(){resolve();});
+	}else if(entry.isDirectory){
+	  var reader=entry.createReader(),kids=[];
+	  (function read(){
+		reader.readEntries(function(ents){
+		  if(!ents.length){
+			Promise.all(kids.map(function(c){return walkEntry(c,prefix+entry.name+'/',out);})).then(resolve);
+			return;
+		  }
+		  kids=kids.concat(Array.prototype.slice.call(ents));
+		  read();
+		},function(){resolve();});
+	  })();
+	}else{resolve();}
   });
 }
 dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('over');});
@@ -865,14 +865,14 @@ dz.addEventListener('drop',function(e){
   // Prefer the entry API so a dropped folder keeps its structure. getAsEntry must
   // be called synchronously here \u2014 the item list is invalidated after this handler.
   if(its&&its.length&&its[0].webkitGetAsEntry){
-    var entries=[];
-    for(var k=0;k<its.length;k++){var en=its[k].webkitGetAsEntry();if(en)entries.push(en);}
-    if(entries.length){
-      var out=[];
-      st.textContent='Reading folder\u2026';
-      Promise.all(entries.map(function(en){return walkEntry(en,'',out);})).then(function(){uploadItems(out);});
-      return;
-    }
+	var entries=[];
+	for(var k=0;k<its.length;k++){var en=its[k].webkitGetAsEntry();if(en)entries.push(en);}
+	if(entries.length){
+	  var out=[];
+	  st.textContent='Reading folder\u2026';
+	  Promise.all(entries.map(function(en){return walkEntry(en,'',out);})).then(function(){uploadItems(out);});
+	  return;
+	}
   }
   // Fallback: flat file list (older browsers / plain file drops).
   var files=dt.files,out=[];
