@@ -62,7 +62,7 @@ func _ready() -> void:
 	if _want("identity"):
 		_test_identity()
 	if _want("roomcode"):
-		_test_room_code()
+		await _test_room_code()
 	if _want("punch"):
 		_test_punch()
 	if _want("wire"):
@@ -523,6 +523,41 @@ func _test_room_code() -> void:
 	_eq(RendezvousClient.parse_heartbeat(null), -1,
 		"roomcode/an empty heartbeat answer renews nothing")
 
+
+	# ── The decisions host_online and join_by_code make before any packet
+	# leaves. Everything past this point needs a registry and two real
+	# networks, and is deliberately not faked here.
+	var nm := _branch("RC%d" % _ran)
+
+	# A malformed code is answered locally. Spending a round trip to be told
+	# what this call already knows would also make a typo and an expired room
+	# arrive as the same message.
+	# A lambda captures by value, so the message has to land somewhere mutable.
+	var said := [""]
+	nm.status_changed.connect(func(t: String) -> void: said[0] = t)
+	_eq(await nm.join_by_code("not-a-code"), ERR_INVALID_PARAMETER,
+		"roomcode/a malformed code is refused without asking anyone")
+	_ok(not nm.is_active(), "roomcode/and starts no session")
+	_ok(str(said[0]).contains("not a room code"), "roomcode/and says so plainly")
+
+	_eq(nm.room_code(), "", "roomcode/nothing is hosting a code yet")
+
+	# The failure copy is the whole point of typing the failures. A player who
+	# cannot be punched to must be told what to try, because roughly one
+	# attempt in five lands here and a blank message just gets retried.
+	var unpunchable: String = nm._punch_failure(Punchthrough.Result.UNPUNCHABLE)
+	_ok(unpunchable.contains("hotspot"),
+		"roomcode/an unpunchable pair is told the likely cause")
+	_ok(unpunchable.contains("LAN") or unpunchable.contains("Wi-Fi"),
+		"roomcode/and what to try instead")
+	_ok(nm._punch_failure(Punchthrough.Result.NO_SUCH_HOST).contains("no longer"),
+		"roomcode/a room that stopped says so, not that the network failed")
+	_ok(nm._punch_failure(Punchthrough.Result.UNREACHABLE).contains("LAN"),
+		"roomcode/a dead registry points at LAN hosting")
+	_ok(unpunchable != nm._punch_failure(Punchthrough.Result.UNREACHABLE),
+		"roomcode/the two failures do not read the same")
+
+	nm.get_parent().queue_free()
 
 # ══ The punch ═════════════════════════════════════════════════════════════════
 # The noray protocol, ported rather than vendored (Scripts/Net/ATTRIBUTIONS.txt).

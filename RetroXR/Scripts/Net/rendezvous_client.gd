@@ -74,6 +74,33 @@ func create_room(oid: String, room_name: String, protocol_version: int,
 	)
 
 
+## Where to punch, asked before there is a room to create.
+##
+## This call exists because the two halves would otherwise deadlock: a room is
+## created with an OID, an OID only exists after punching, and where to punch is
+## something only the registry knows. Asking first is what keeps the punch
+## endpoint out of the client, which is the point - it can move, or be replaced,
+## without anybody shipping a build.
+##
+## callback(result: Result, endpoint: Dictionary) - on OK, punch_host/punch_port.
+func punch_endpoint(callback: Callable) -> void:
+	_request("/punch", HTTPClient.METHOD_GET, "", "",
+		func(res: int, data: Variant) -> void:
+			if res != Result.OK:
+				callback.call(res, {})
+				return
+			var ep := parse_punch_endpoint(data)
+			callback.call(Result.OK if not ep.is_empty() else Result.BAD_RESPONSE, ep)
+	)
+
+
+## Returns {} for anything that is not a usable endpoint.
+static func parse_punch_endpoint(data: Variant) -> Dictionary:
+	if not data is Dictionary:
+		return {}
+	return _parse_punch(data)
+
+
 ## Tell the registry the room is still live. callback(result: Result, ttl: int).
 func heartbeat(code: String, secret: String, callback: Callable) -> void:
 	_request("/rooms/%s/heartbeat" % code, HTTPClient.METHOD_POST, "", secret,

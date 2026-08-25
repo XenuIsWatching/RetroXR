@@ -58,6 +58,8 @@ signal session_ended(reason: String)
 signal peer_registered(id: int, info: Dictionary)
 signal peer_left(id: int)
 signal status_changed(text: String)
+## The room code a joiner has to be told, or empty when not hosting online.
+signal room_code_changed(code: String)
 
 ## Peer roster: peer_id -> {name: String, is_vr: bool, color_idx: int}
 var peers: Dictionary = {}
@@ -79,6 +81,11 @@ var _signals_wired := false
 var _object_sync: NetObjectSync = null
 var _netplay: NetplaySession = null
 var _file_transfer: NetFileTransfer = null
+var _rendezvous: RendezvousClient = null
+var _punch: Punchthrough = null
+var _room_code := ""
+var _room_secret := ""
+var _heartbeat: Timer = null
 var _pose_accum := 0.0
 var _latest_poses: Dictionary = {}     # peer_id -> PackedFloat32Array(21)
 var _avatars_container: Node3D = null
@@ -175,15 +182,28 @@ func _parse_cmdline() -> void:
 		return
 	var args := OS.get_cmdline_user_args()
 	var do_host := false
+	var do_host_online := false
 	var join_ip := ""
+	var join_code := ""
 	for arg: String in args:
 		if arg == "--net-host":
 			do_host = true
+		elif arg == "--net-host-online":
+			do_host_online = true
 		elif arg.begins_with("--net-join="):
 			join_ip = arg.trim_prefix("--net-join=")
+		elif arg.begins_with("--net-code="):
+			join_code = arg.trim_prefix("--net-code=")
 		elif arg.begins_with("--net-name="):
 			player_name = arg.trim_prefix("--net-name=")
-	if do_host:
+	# The online pair are awaited rather than called: they take as long as a
+	# registry round trip and a punch, which is not something to do inside the
+	# first frame of a scene.
+	if do_host_online:
+		host_online.call_deferred()
+	elif not join_code.is_empty():
+		join_by_code.call_deferred(join_code)
+	elif do_host:
 		host_game()
 	elif not join_ip.is_empty():
 		join_game(join_ip)
@@ -232,11 +252,15 @@ func host_game(port := DEFAULT_PORT) -> Error:
 	return OK
 
 
-func join_game(ip: String, port := DEFAULT_PORT) -> Error:
+## local_port is the punched socket when joining by code. It has to be the port
+## the handshake went out of, because that is the one the far NAT has a mapping
+## for; anything else arrives at a closed door. Zero lets ENet pick, which is
+## right for LAN and wrong for a punch.
+func join_game(ip: String, port := DEFAULT_PORT, local_port := 0) -> Error:
 	if _active:
 		return ERR_ALREADY_IN_USE
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_client(ip, port)
+	var err := peer.create_client(ip, port, 0, 0, 0, local_port)
 	if err != OK:
 		status_changed.emit("Failed to connect: %s" % error_string(err))
 		return err
@@ -249,6 +273,217 @@ func join_game(ip: String, port := DEFAULT_PORT) -> Error:
 		ip, port, PROTOCOL_VERSION])
 	status_changed.emit("Connecting to %s…" % ip)
 	return OK
+
+
+# ── Playing online, by room code ──────────────────────────────────────────────
+# Everything here ends in host_game/join_game above. The ENet handshake, the
+# roster and the version check are untouched: this only arranges for the two
+# peers to be able to see each other first.
+
+
+## Host where anyone can reach us. Returns OK once the room code exists and the
+## ENet server is listening on the punched port; read the code from
+## room_code_changed or room_code().
+##
+## Every failure leaves nothing running, so the caller can fall back to LAN
+## hosting without cleaning up after this.
+func host_online(room_name := "") -> Error:
+	if _active:
+		return ERR_ALREADY_IN_USE
+
+	var rv := _make_rendezvous()
+	status_changed.emit("Finding a way through…")
+
+	var ep: Dictionary = await _call_registry(rv.punch_endpoint)
+	if ep.is_empty():
+		_teardown_online()
+		status_changed.emit("Could not reach the RetroXR server. Try hosting on LAN.")
+		return ERR_CANT_CONNECT
+
+	var punched: Dictionary = await _make_punch().host(
+		ep["punch_host"], ep["punch_port"])
+	if punched["result"] != Punchthrough.Result.OK:
+		_teardown_online()
+		status_changed.emit(_punch_failure(punched["result"]))
+		return ERR_CANT_CONNECT
+
+	var room: Dictionary = await _call_registry(func(cb: Callable) -> void:
+		rv.create_room(punched["oid"],
+			room_name if not room_name.is_empty() else player_name,
+			PROTOCOL_VERSION, cb))
+	if room.is_empty():
+		_teardown_online()
+		status_changed.emit("Could not reach the RetroXR server. Try hosting on LAN.")
+		return ERR_CANT_CONNECT
+
+	# Only now is the port real. Hosting first would mean holding a socket open
+	# that nobody could be told about.
+	var err := host_game(punched["local_port"])
+	if err != OK:
+		rv.close_room(room["code"], room["secret"])
+		_teardown_online()
+		return err
+
+	_room_code = room["code"]
+	_room_secret = room["secret"]
+	_start_heartbeat(int(room.get("ttl", 90)))
+	room_code_changed.emit(_room_code)
+	status_changed.emit("Hosting online — room code %s" % _room_code)
+	return OK
+
+
+## Join whoever is holding this code.
+func join_by_code(raw_code: String) -> Error:
+	if _active:
+		return ERR_ALREADY_IN_USE
+
+	var code := RoomCode.normalize(raw_code)
+	if not RoomCode.is_valid(code):
+		status_changed.emit("That is not a room code.")
+		return ERR_INVALID_PARAMETER
+
+	var rv := _make_rendezvous()
+	status_changed.emit("Looking up %s…" % code)
+
+	var room: Dictionary = await _call_registry(func(cb: Callable) -> void:
+		rv.lookup(code, cb))
+	if room.is_empty():
+		_teardown_online()
+		status_changed.emit("No game with code %s. Check it and try again." % code)
+		return ERR_DOES_NOT_EXIST
+
+	# Before ENet, not after. The registry record carries the version precisely
+	# so a mismatch can be named here; left to the handshake it arrives as a
+	# refusal from a peer the player never sees.
+	var theirs := int(room.get("protocol_version", -1))
+	if theirs != PROTOCOL_VERSION:
+		_teardown_online()
+		status_changed.emit(
+			"That game is running a different version of RetroXR (theirs %d, yours %d)."
+			% [theirs, PROTOCOL_VERSION])
+		return ERR_INVALID_DATA
+
+	status_changed.emit("Connecting to %s…" % code)
+	var punched: Dictionary = await _make_punch().join(
+		room["punch_host"], room["oid"], room["punch_port"])
+	if punched["result"] != Punchthrough.Result.OK:
+		_teardown_online()
+		status_changed.emit(_punch_failure(punched["result"]))
+		return ERR_CANT_CONNECT
+
+	var err := join_game(punched["host_addr"], punched["host_port"],
+		punched["local_port"])
+	if err != OK:
+		_teardown_online()
+	return err
+
+
+## The room code currently being hosted, or empty.
+func room_code() -> String:
+	return _room_code
+
+
+# ── Online plumbing ───────────────────────────────────────────────────────────
+
+## Turns one of the callback-style registry calls into something awaitable.
+## Returns {} for every failure: the caller decides what to say, because the
+## same empty answer means different things to a host and to a joiner.
+func _call_registry(call: Callable) -> Dictionary:
+	var done := [false, {}]
+	call.call(func(res: int, data: Variant) -> void:
+		done[0] = true
+		if res == RendezvousClient.Result.OK and data is Dictionary:
+			done[1] = data
+	)
+	while not done[0]:
+		await get_tree().process_frame
+	return done[1]
+
+
+func _make_rendezvous() -> RendezvousClient:
+	if _rendezvous == null:
+		_rendezvous = RendezvousClient.new()
+		_rendezvous.name = "Rendezvous"
+		add_child(_rendezvous)
+	return _rendezvous
+
+
+func _make_punch() -> Punchthrough:
+	if _punch == null:
+		_punch = Punchthrough.new()
+		_punch.name = "Punchthrough"
+		add_child(_punch)
+		_punch.peer_punched.connect(_on_peer_punched)
+	return _punch
+
+
+## A joiner has punched its way to us. Nothing to connect - the ENet server is
+## already listening - but the far NAT only holds its mapping while traffic
+## keeps arriving, so we answer for as long as the handshake lasts.
+func _on_peer_punched(address: String, port: int) -> void:
+	var peer := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if peer == null or _punch == null:
+		return
+	_punch.blast_over_enet(peer, address, port)
+
+
+## Keep the room alive. A missed beat is not fatal to the session, only to new
+## players finding it, so this warns rather than tearing anything down: a
+## registry that dies mid-game must not end the game.
+func _start_heartbeat(ttl: int) -> void:
+	_stop_heartbeat()
+	_heartbeat = Timer.new()
+	_heartbeat.wait_time = maxf(5.0, float(ttl) / 3.0)
+	_heartbeat.timeout.connect(_beat)
+	add_child(_heartbeat)
+	_heartbeat.start()
+
+
+func _beat() -> void:
+	if _rendezvous == null or _room_code.is_empty():
+		return
+	_rendezvous.heartbeat(_room_code, _room_secret,
+		func(res: int, _ttl: int) -> void:
+			if res != RendezvousClient.Result.OK:
+				push_warning("[NetworkManager] room %s missed a heartbeat" % _room_code)
+	)
+
+
+func _stop_heartbeat() -> void:
+	if _heartbeat != null:
+		_heartbeat.stop()
+		_heartbeat.queue_free()
+		_heartbeat = null
+
+
+## Drop the room and everything holding it open. Safe to call when none of it
+## was ever created.
+func _teardown_online() -> void:
+	_stop_heartbeat()
+	if _rendezvous != null and not _room_code.is_empty():
+		_rendezvous.close_room(_room_code, _room_secret)
+	if not _room_code.is_empty():
+		_room_code = ""
+		_room_secret = ""
+		room_code_changed.emit("")
+	if _punch != null:
+		_punch.queue_free()
+		_punch = null
+
+
+## What to say when a punch fails. Naming the likely cause matters more here
+## than anywhere else in this file: roughly one attempt in five cannot be
+## punched at all, and a player given a blank failure will simply retry it.
+func _punch_failure(result: int) -> String:
+	match result:
+		Punchthrough.Result.NO_SUCH_HOST:
+			return "That game is no longer running."
+		Punchthrough.Result.UNREACHABLE, Punchthrough.Result.PROTOCOL_ERROR:
+			return "Could not reach the RetroXR server. Try hosting on LAN."
+		_:
+			return ("Could not reach the other player directly. This usually means "
+				+ "one of you is on a mobile hotspot or a restricted network. "
+				+ "Try a different Wi-Fi, or use LAN mode.")
 
 
 func leave_session(reason := "left session") -> void:
@@ -265,6 +500,7 @@ func leave_session(reason := "left session") -> void:
 		multiplayer.multiplayer_peer = null
 	peers.clear()
 	_latest_poses.clear()
+	_teardown_online()
 	_teardown_world()
 	status_changed.emit("Not connected")
 	session_ended.emit(reason)
