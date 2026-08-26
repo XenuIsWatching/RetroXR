@@ -2965,8 +2965,24 @@ func _removable_media_options(core: String) -> Dictionary:
 func _all_forced_options(core: String) -> Dictionary:
 	var out: Dictionary = _model.get_forced_core_options() if _model != null else {}
 	out.merge(_removable_media_options(core), true)
+	out.merge(_disk_drive_options(core), true)
 	out.merge(_bios_pinned_options(core), true)
 	return out
+
+
+## The 64DD is a drive bolted under an N64, and parallel_n64 models it behind an
+## option: with parallel-n64-64dd-hardware disabled there is no drive and a disk
+## has nothing to load into. So this machine pins it on, the way the Virtual Boy
+## pins its stereo split -- it is what makes the hardware that hardware, not a
+## preference.
+##
+## Keyed on the systemid as well as the core, and deliberately not added to
+## CoreOptionsStore.HARDWARE_PINNED: that table is per key, and the same core
+## runs the plain nintendo_64, where the drive really is the player's choice.
+func _disk_drive_options(core: String) -> Dictionary:
+	if systemid != "nintendo_64dd" or core != "parallel_n64":
+		return {}
+	return {"parallel-n64-64dd-hardware": "enabled"}
 
 
 ## The measured options that make this machine show its own boot screen, unless
