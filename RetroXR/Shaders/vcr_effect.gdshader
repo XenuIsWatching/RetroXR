@@ -4,10 +4,10 @@
 // chromatic aberration, scanlines, tape grain, a scrolling tracking band,
 // horizontal wobble, color washout and a vignette.
 //
-// render_mode unshaded so the picture reads as a self-lit screen regardless of
-// room lighting (matches how the plain StandardMaterial3D path used emission).
+// The picture is emitted from behind the shared lit glass surface, so room light
+// can catch the faceplate without tinting or dimming the tape image itself.
 shader_type spatial;
-render_mode unshaded, cull_disabled, shadows_disabled, fog_disabled;
+render_mode cull_disabled, shadows_disabled, fog_disabled;
 
 #include "res://Shaders/crt_filter.gdshaderinc"
 
@@ -140,5 +140,12 @@ void fragment() {
 		ALPHA = crt_border(crt_uv);
 	}
 
-	ALBEDO = clamp(col, 0.0, 1.0);
+	vec3 picture = clamp(col, 0.0, 1.0);
+	ALBEDO = vec3(0.006, 0.008, 0.012) * crt_glass_reflection;
+	EMISSION = picture + crt_glass_sheen(picture, crt_uv, NORMAL, VIEW);
+	METALLIC = 0.0;
+	SPECULAR = 0.5 * crt_glass_reflection;
+	ROUGHNESS = crt_glass_roughness;
+	CLEARCOAT = crt_glass_reflection;
+	CLEARCOAT_ROUGHNESS = crt_glass_roughness;
 }

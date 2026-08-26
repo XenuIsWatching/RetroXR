@@ -82,6 +82,15 @@ uniform float crt_vignette : hint_range(0.0, 1.0) = 0.18;
 // 1.0, so neither costs any light and there is nothing to compensate for.
 uniform float crt_brightness : hint_range(0.5, 2.0) = 1.0;
 
+// ── Faceplate glass ─────────────────────────────────────────────────────
+// The picture is emitted from behind a dark dielectric surface rather than
+// written straight into unshaded ALBEDO. The renderer supplies the real light /
+// reflection-probe response; the very broad analytic sheen below is a cheap,
+// stereo-safe fallback for the mobile renderer and rooms without a useful probe.
+uniform float crt_glass_reflection : hint_range(0.0, 1.0) = 0.35;
+uniform float crt_glass_roughness : hint_range(0.02, 0.6) = 0.12;
+const vec3 CRT_GLASS_TINT = vec3(0.42, 0.56, 0.72);
+
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -91,6 +100,36 @@ float crt_hash(vec2 p) {
 	vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
 	q += dot(q, q.yzx + 33.33);
 	return fract((q.x + q.y) * q.z);
+}
+
+float crt_luminance(vec3 col) {
+	return dot(col, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// A restrained front-surface glint. It is deliberately broad and keyed to tube
+// UV, so it cannot alias or disagree between the two eyes. Fresnel supplies the
+// view-dependent part; real environment/specular response is configured by each
+// calling shader through ALBEDO / SPECULAR / ROUGHNESS.
+vec3 crt_glass_sheen(vec3 picture, vec2 uv, vec3 normal, vec3 view) {
+	if (crt_glass_reflection <= 0.0) {
+		return vec3(0.0);
+	}
+	float ndv = clamp(abs(dot(normalize(normal), normalize(view))), 0.0, 1.0);
+	float fresnel = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
+
+	// A soft, slightly diagonal room-light streak. This is not meant to depict a
+	// particular window; it merely keeps a dark tube from reading as matte paint
+	// when reflection probes are unavailable or reduced on mobile.
+	vec2 p = uv - vec2(0.5);
+	float band = abs(p.x + p.y * 0.58 - 0.16);
+	float broad_highlight = 1.0 - smoothstep(0.10, 0.36, band);
+	broad_highlight *= 1.0 - smoothstep(0.08, 0.62, uv.y);
+
+	// Bright phosphors overpower reflections; black glass carries them clearly.
+	float darkness = 1.0 - smoothstep(0.03, 0.75, crt_luminance(picture));
+	float strength = (0.12 * fresnel + 0.075 * broad_highlight)
+		* mix(0.28, 1.0, darkness) * crt_glass_reflection;
+	return CRT_GLASS_TINT * strength;
 }
 
 // How much of a cosine harmonic survives being sampled at a footprint of `f`

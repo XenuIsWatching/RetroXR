@@ -816,6 +816,8 @@ func _d_off() -> void:
 	await _wait(6)
 	_check(_shown(tv) != src.texture, "a set that is off shows nothing")
 	_check_eq(_glass(tv), tv._dark_material, "it wears its own dark glass")
+	_check(_glass(tv) is ShaderMaterial, "the dark glass keeps the reflective shader")
+	_check_eq(_shown(tv), tv._dark_texture, "the phosphors behind it are black")
 
 
 func _d_empty() -> void:
@@ -950,6 +952,8 @@ func _d_stage() -> void:
 		_check_eq(mat.get_shader_parameter("source_rect"), Vector4(0.0, 0.5, 1.0, 0.5),
 			"and the source's own uniforms")
 		_check_eq(mat.get_shader_parameter("source_tex"), src.texture, "fed with its picture")
+		_check_eq(mat.get_shader_parameter("crt_glass_reflection"), 0.35,
+			"and the shared glass tuning reaches a source-owned display stage")
 
 
 func _d_stage_per_tv() -> void:

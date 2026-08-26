@@ -170,6 +170,8 @@ var _crt_params := {
 	"crt_wiggle": 0.0,
 	"crt_vignette": 0.18,
 	"crt_brightness": 1.0,
+	"crt_glass_reflection": 0.35,
+	"crt_glass_roughness": 0.12,
 }
 
 # Phosphor persistence ping-pong (Shaders/phosphor_decay.gdshader). A viewport
@@ -197,10 +199,11 @@ var _crt_derived_key: String = ""
 # scale_factor rather than being a fixed number of triads per UV.
 var _screen_size_m := Vector2(0.35, 0.25)
 
-# TV-owned screen states: blue "no signal" (ON with no live input) and the
-# original dark bezel material (OFF).
+# TV-owned screen states: blue "no signal" (ON with no live input) and black
+# phosphors behind reflective glass (OFF).
 var _blue_texture: Texture2D = null
-var _dark_material: Material = null
+var _dark_texture: Texture2D = null
+var _dark_material: ShaderMaterial = null
 
 # CRT power-on animation (thin horizontal line expanding to full height).
 var _poweron_tween: Tween = null
@@ -341,10 +344,10 @@ func _ready() -> void:
 	_resize.apply()
 	_float_lock = FloatLock.attach(self, ignore_gravity)
 
-	# The tscn's dark bezel material is the OFF look; blue is the ON-with-no-
-	# signal look. Blue carries a tiny texture so the CRT watcher can wrap it
-	# (curvature/scanlines apply to the blue screen too) and ambilight samples it.
-	_dark_material = _screen_mesh.get_surface_override_material(0)
+	# Blue is the ON-with-no-signal look. The authored dark material only covers
+	# the instant before the first process tick; OFF gets its own black texture in
+	# the same glass shader as every live source, so reflections do not disappear
+	# when the phosphors go dark.
 	if _screen_mesh.mesh != null:
 		var aabb := _screen_mesh.mesh.get_aabb()
 		# get_aabb() is the MESH's own extent and ignores the node scale, which a
@@ -369,6 +372,14 @@ func _ready() -> void:
 	var blue_img := Image.create(2, 2, false, Image.FORMAT_RGB8)
 	blue_img.fill(BLUE_SCREEN_COLOR)
 	_blue_texture = ImageTexture.create_from_image(blue_img)
+	var dark_img := Image.create(2, 2, false, Image.FORMAT_RGB8)
+	dark_img.fill(Color.BLACK)
+	_dark_texture = ImageTexture.create_from_image(dark_img)
+	_dark_material = ShaderMaterial.new()
+	_dark_material.shader = CRT_SHADER
+	_dark_material.set_shader_parameter("source_tex", _dark_texture)
+	_dark_material.set_shader_parameter("crt_enabled", crt_enabled)
+	_apply_crt_params(_dark_material)
 
 
 ## Wear a cabinet variant. Strict no-op when tv_model is empty — that is the
@@ -759,8 +770,8 @@ func _screen_light_rect(mat: Material) -> Rect2:
 # ── Screen source (blue / dark states) ─────────────────────────────────────────
 
 ## Own the "no signal" presentation like a retro TV: ON with no live input →
-## blue screen; OFF → the original dark bezel material. Live sources (the C++
-## video handler, the VCR) install their own materials over ours and this
+## blue screen; OFF → black phosphors behind the same reflective glass. Live
+## sources (the C++ video handler, the VCR) install their own materials over ours and this
 ## backs off automatically; when they blank/restore a textureless material we
 ## take over again next frame.
 func _update_screen_source() -> void:
@@ -1111,6 +1122,31 @@ func _apply_crt_params(mat: ShaderMaterial) -> void:
 	_apply_derived_crt_params(mat)
 
 
+func _is_tv_display_shader(shader: Shader) -> bool:
+	return shader == CRT_SHADER or shader == VCR_SHADER or shader == WINDOW_SHADER \
+		or shader == STATIC_SHADER
+
+
+## Every cached or currently installed material that can carry the shared tube
+## stage. Keeping this list in one place means a glass control changed while the
+## set is off still reaches VHS/static/stereo when that source comes back.
+func _known_display_materials() -> Array[ShaderMaterial]:
+	var result: Array[ShaderMaterial] = []
+	var candidates: Array[Variant] = [
+		_crt_material, _stereo_material, _dark_material, _rf_static_material,
+	]
+	for candidate: Variant in _stage_materials.values():
+		candidates.append(candidate)
+	if _screen_mesh != null:
+		candidates.append(_screen_mesh.get_surface_override_material(0))
+	for candidate: Variant in candidates:
+		if candidate is ShaderMaterial:
+			var mat := candidate as ShaderMaterial
+			if mat.shader != null and _is_tv_display_shader(mat.shader) and not result.has(mat):
+				result.append(mat)
+	return result
+
+
 ## The two uniforms that aren't slider values. Both describe the tube and the
 ## signal on it rather than a preference, so they're derived rather than authored
 ## — and both have to be right for the mask and raster to stay glued to the glass
@@ -1146,11 +1182,9 @@ func _apply_derived_crt_params(mat: ShaderMaterial) -> void:
 ## The installed material carrying the CRT display stage, if any.
 func _active_crt_material() -> ShaderMaterial:
 	var override := _screen_mesh.get_surface_override_material(0)
-	if override == _crt_material or override == _stereo_material:
-		return override as ShaderMaterial
 	if override is ShaderMaterial:
 		var sh := (override as ShaderMaterial).shader
-		if sh == VCR_SHADER or sh == WINDOW_SHADER:
+		if sh != null and _is_tv_display_shader(sh):
 			return override as ShaderMaterial
 	return null
 
@@ -1180,13 +1214,8 @@ func set_crt_param(pname: String, value: Variant) -> void:
 	if not _crt_params.has(pname):
 		return
 	_crt_params[pname] = value
-	if _crt_material != null:
-		_crt_material.set_shader_parameter(pname, value)
-	var override := _screen_mesh.get_surface_override_material(0)
-	if override is ShaderMaterial:
-		var sh := (override as ShaderMaterial).shader
-		if sh == VCR_SHADER or sh == WINDOW_SHADER:
-			(override as ShaderMaterial).set_shader_parameter(pname, value)
+	for mat: ShaderMaterial in _known_display_materials():
+		mat.set_shader_parameter(pname, value)
 	# crt_mask_pitch_mm isn't a uniform — it feeds the derived triad count.
 	_crt_derived_key = ""
 
@@ -1213,10 +1242,7 @@ func set_crt_params(values: Dictionary) -> void:
 	# in place and get pushed when the filter first wraps a source.
 	if _screen_mesh == null:
 		return
-	if _crt_material != null:
-		_apply_crt_params(_crt_material)
-	var mat := _active_crt_material()
-	if mat != null:
+	for mat: ShaderMaterial in _known_display_materials():
 		_apply_crt_params(mat)
 
 
@@ -1469,6 +1495,10 @@ func release_screen(who: Object) -> void:
 ## police itself, and so every write still passes through one place.
 func _paint(mat: Material) -> void:
 	_screen_owner = self
+	if mat is ShaderMaterial:
+		var shader_mat := mat as ShaderMaterial
+		if shader_mat.shader != null and _is_tv_display_shader(shader_mat.shader):
+			_apply_crt_params(shader_mat)
 	_screen_mesh.set_surface_override_material(0, mat)
 
 

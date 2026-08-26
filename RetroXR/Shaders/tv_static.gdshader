@@ -9,7 +9,7 @@
 // contract. Runs through the same crt_apply_full stage, so static curves,
 // scanlines and blooms like a real picture.
 shader_type spatial;
-render_mode unshaded, cull_disabled, shadows_disabled, fog_disabled;
+render_mode cull_disabled, shadows_disabled, fog_disabled;
 
 #include "res://Shaders/crt_filter.gdshaderinc"
 
@@ -71,7 +71,14 @@ void fragment() {
 	if (crt_enabled) {
 		col = crt_apply_full(col, vec3(0.0), wuv);
 	}
-	ALBEDO = clamp(col, 0.0, 1.0);
+	vec3 picture = clamp(col, 0.0, 1.0);
+	ALBEDO = vec3(0.006, 0.008, 0.012) * crt_glass_reflection;
+	EMISSION = picture + crt_glass_sheen(picture, wuv, NORMAL, VIEW);
+	METALLIC = 0.0;
+	SPECULAR = 0.5 * crt_glass_reflection;
+	ROUGHNESS = crt_glass_roughness;
+	CLEARCOAT = crt_glass_reflection;
+	CLEARCOAT_ROUGHNESS = crt_glass_roughness;
 	// ALPHA is written unconditionally: with the filter off the border term is a
 	// flat 1.0, and writing it either way keeps this a transparency-enabled
 	// material rather than flipping the pipeline when the toggle moves.

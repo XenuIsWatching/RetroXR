@@ -348,6 +348,8 @@ func _build_crt_tab(tabs: TabContainer) -> void:
 		["crt_wiggle",            "Wiggle",           0.0, 0.2,  0.02, "%.2f"],
 		["crt_vignette",          "Vignette",         0.0, 1.0,  0.05, "%.2f"],
 		["crt_brightness",        "Brightness",       0.5, 2.0,  0.05, "%.2f"],
+		["crt_glass_reflection",  "Glass reflection",  0.0, 1.0,  0.05, "%.2f"],
+		["crt_glass_roughness",   "Glass roughness",   0.02, 0.6, 0.02, "%.2f"],
 	]
 	for s: Array in specs:
 		_add_crt_slider(rows, s[0], s[1], s[2], s[3], s[4], s[5])
