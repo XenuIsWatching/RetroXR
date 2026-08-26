@@ -47,6 +47,7 @@ extends SceneTree
 const OUT_120 := "res://Scenes/Objects/media/disc_120mm.res"
 const OUT_80 := "res://Scenes/Objects/media/disc_80mm.res"
 const OUT_64 := "res://Scenes/Objects/media/disc_64mm.res"
+const OUT_LP := "res://Scenes/Objects/media/record_lp.res"
 
 ## 15 mm centre hole, 1.2 mm thick — identical on a CD, a DVD and a mini-DVD.
 const R_HOLE := 0.0075
@@ -65,6 +66,22 @@ const RING_IN := 0.0160
 const RING_OUT := 0.0210
 const RING_RAMP := 0.0005
 const RING_H := 0.00008
+
+## A 12" LP. 302 mm across (the nominal "12 inch" is the trim size, not the disc),
+## a 7.24 mm spindle hole, 1.9 mm thick — none of which is a CD figure. The label
+## is the standard 4 inch, and the lead-out groove ends about 60 mm out from the
+## spindle on a full side.
+const LP_R_OUT := 0.1510
+const LP_R_HOLE := 0.00362
+const LP_HALF_T := 0.00095
+const LP_R_LABEL := 0.0508
+const LP_R_LEAD_OUT := 0.1455
+## The two lands a stacked record rests on — the label area and the outer lip —
+## which is why the grooves between them never touch anything. 0.15 mm proud, so
+## like the CD's stacking ring it is a highlight line rather than geometry.
+const LP_LAND := 0.00015
+const LP_LAND_RAMP := 0.0016
+const LP_LIP := 0.0035
 
 const FACE_LABEL := 1.0
 const FACE_DATA := 0.0
@@ -86,7 +103,76 @@ func _init() -> void:
 	# optical-disc figure rather than a measured UMD one — plausible against
 	# photographs, but not verified.
 	_bake(OUT_64, 0.032, SEGMENTS)
+	_bake_lp(OUT_LP, SEGMENTS)
 	quit()
+
+
+## A 12" LP, for the record player. Deliberately a SEPARATE bake rather than a
+## parameterised _bake: a record shares the lathe and the face-class convention
+## with an optical disc and nothing else. Every dimension differs (302 mm across a
+## 7.24 mm spindle hole at 1.9 mm thick, against 120 mm across 15 mm at 1.2), it
+## has no stacking ring, and it carries a paper label on BOTH sides where a CD has
+## a printed face and a data face. Keeping _bake untouched also means the three
+## optical discs cannot be perturbed by a change made for this one.
+##
+## The profile adds a raised outer lip and a raised label land — the two places a
+## stacked record actually touches, and the reason the grooves never do.
+func _bake_lp(path: String, segs: int) -> void:
+	var r_out := LP_R_OUT
+	var prof := PackedVector2Array([
+		Vector2(LP_R_HOLE, LP_HALF_T - CHAMFER),                 # 0
+		Vector2(LP_R_HOLE + CHAMFER, LP_HALF_T),                 # 1
+		Vector2(LP_R_LABEL, LP_HALF_T),                          # 2  label land
+		Vector2(LP_R_LABEL + LP_LAND_RAMP, LP_HALF_T - LP_LAND), # 3  down to grooves
+		Vector2(LP_R_LEAD_OUT, LP_HALF_T - LP_LAND),             # 4  grooved area
+		Vector2(r_out - LP_LIP, LP_HALF_T),                      # 5  up to the lip
+		Vector2(r_out - CHAMFER, LP_HALF_T),                     # 6  lip land
+		Vector2(r_out, LP_HALF_T - CHAMFER),                     # 7  rim chamfer
+		Vector2(r_out, -LP_HALF_T + CHAMFER),                    # 8  rim
+		Vector2(r_out - CHAMFER, -LP_HALF_T),                    # 9  rim chamfer
+		Vector2(r_out - LP_LIP, -LP_HALF_T),                     # 10 lip land
+		Vector2(LP_R_LEAD_OUT, -LP_HALF_T + LP_LAND),            # 11 grooved area
+		Vector2(LP_R_LABEL + LP_LAND_RAMP, -LP_HALF_T + LP_LAND),# 12
+		Vector2(LP_R_LABEL, -LP_HALF_T),                         # 13 label land
+		Vector2(LP_R_HOLE + CHAMFER, -LP_HALF_T),                # 14
+		Vector2(LP_R_HOLE, -LP_HALF_T + CHAMFER),                # 15 bore chamfer
+		Vector2(LP_R_HOLE, LP_HALF_T - CHAMFER),                 # 16 == 0, closes
+	])
+	var faces := PackedFloat32Array([
+		FACE_EDGE,    # 0-1   bore chamfer, side A
+		FACE_LABEL,   # 1-2   label, side A
+		FACE_EDGE,    # 2-3   land ramp down to the grooves
+		FACE_DATA,    # 3-4   grooves, side A
+		FACE_EDGE,    # 4-5   ramp up to the outer lip
+		FACE_DATA,    # 5-6   lip land (ungrooved, but reads as record surface)
+		FACE_EDGE,    # 6-7   rim chamfer
+		FACE_EDGE,    # 7-8   rim
+		FACE_EDGE,    # 8-9   rim chamfer
+		FACE_DATA,    # 9-10  lip land, side B
+		FACE_EDGE,    # 10-11 ramp down
+		FACE_DATA,    # 11-12 grooves, side B
+		FACE_EDGE,    # 12-13 land ramp
+		FACE_LABEL,   # 13-14 label, side B
+		FACE_EDGE,    # 14-15 bore chamfer, side B
+		FACE_EDGE,    # 15-16 bore wall
+	])
+
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_lathe(st, prof, faces, r_out, segs)
+	st.index()
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
+
+	var err := ResourceSaver.save(mesh, path)
+	var ab: AABB = mesh.get_aabb()
+	var arrays := mesh.surface_get_arrays(0)
+	var verts: int = arrays[Mesh.ARRAY_VERTEX].size()
+	var tris: int = arrays[Mesh.ARRAY_INDEX].size() / 3
+	print("[gen] %s err=%d  %.1f x %.1f x %.1f mm  hole %.1f mm  segs %d  tris %d  verts %d" % [
+		path, err, ab.size.x * 1000.0, ab.size.y * 1000.0, ab.size.z * 1000.0,
+		LP_R_HOLE * 2000.0, segs, tris, verts])
 
 
 func _bake(path: String, r_out: float, segs: int) -> void:

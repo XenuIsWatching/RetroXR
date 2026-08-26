@@ -43,7 +43,7 @@ const _REFERENCE_FIELDS := [
 const _SPECIALIZED_TYPES := [
 	"system", "tv", "cartridge", "disc", "memory_card", "book",
 	"retro_controller", "retro_mouse", "snes_mouse", "vcr_tape", "dvd_disc",
-	"composite_cable", "audio_disc", "audio_cassette",
+	"composite_cable", "audio_disc", "audio_cassette", "vinyl_record",
 	"pad_receiver", "keyboard_receiver", "mouse_receiver", "poster",
 ]
 
@@ -73,6 +73,8 @@ const CD_PLAYER_SCENE        := preload("res://Scenes/Objects/appliances/cd_play
 const CASSETTE_PLAYER_SCENE  := preload("res://Scenes/Objects/appliances/cassette_player.tscn")
 const AUDIO_DISC_SCENE       := preload("res://Scenes/Objects/media/audio_disc.tscn")
 const AUDIO_CASSETTE_SCENE   := preload("res://Scenes/Objects/media/audio_cassette.tscn")
+const RECORD_PLAYER_SCENE    := preload("res://Scenes/Objects/appliances/record_player.tscn")
+const VINYL_RECORD_SCENE     := preload("res://Scenes/Objects/media/vinyl_record.tscn")
 const TV_REMOTE_SCENE        := preload("res://Scenes/Objects/appliances/tv_remote.tscn")
 const COMPOSITE_CABLE_SCENE  := preload("res://Scenes/Objects/cables/composite_cable.tscn")
 const MONO_CABLE_SCENE       := preload("res://Scenes/Objects/cables/mono_composite_cable.tscn")
@@ -112,6 +114,7 @@ const PLAIN_SCENES := {
 	"vcr_player": VCR_SCENE,
 	"dvd_player": DVD_SCENE,
 	"cd_player": CD_PLAYER_SCENE,
+	"record_player": RECORD_PLAYER_SCENE,
 	"cassette_player": CASSETTE_PLAYER_SCENE,
 	# Both Wii objects instantiate from here; the remote's pairing and its seated
 	# Nunchuk are applied afterwards by the peripheral arm of _apply_references,
@@ -1037,7 +1040,7 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 			(obj as DVDPlayer).restore_disc(disc)
 	elif obj is RetroAudioPlayer:
 		var media := _resolve_ref(root, spawned, d.get("media"))
-		if media is AudioDisc or media is AudioCassette:
+		if media is AudioDisc or media is AudioCassette or media is VinylRecord:
 			(obj as RetroAudioPlayer).restore_media(media as Node3D)
 	elif obj is SpeakerPair:
 		var pair := obj as SpeakerPair
@@ -1378,7 +1381,12 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		})
 	elif node is RetroAudioPlayer:
 		var ap := node as RetroAudioPlayer
-		return _base(id, "cd_player" if node is CDPlayer else "cassette_player", n3d).merged({
+		# The deck answers for its own type. This used to be
+		# `"cd_player" if node is CDPlayer else "cassette_player"`, whose else-arm
+		# silently saved any third deck as a cassette — a turntable came back a tape
+		# machine. A virtual makes a deck that forgets to override a missing string
+		# rather than another deck's.
+		return _base(id, ap.deck_save_type(), n3d).merged({
 			"media": _ref(node_to_id, ap.get_snapped_media()),
 		})
 	elif node is AudioDisc:
@@ -1392,6 +1400,12 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		return _base(id, "audio_cassette", n3d).merged({
 			"album_path": acass.album_path,
 			"album_label": acass.album_label,
+		})
+	elif node is VinylRecord:
+		var lp := node as VinylRecord
+		return _base(id, "vinyl_record", n3d).merged({
+			"album_path": lp.album_path,
+			"album_label": lp.album_label,
 		})
 	elif node is RetroController or node is LightGun or node is RetroMouse \
 			or node is RetroKeyboard or node is Wiimote:
@@ -1701,6 +1715,11 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				acass.album_path = data.get("album_path", "")
 				acass.album_label = data.get("album_label", "")
 				obj = acass
+			"vinyl_record":
+				var lp := VINYL_RECORD_SCENE.instantiate() as VinylRecord
+				lp.album_path = data.get("album_path", "")
+				lp.album_label = data.get("album_label", "")
+				obj = lp
 			_:
 				push_warning("ScenePersistence: unknown object type '%s'" % obj_type)
 				return null

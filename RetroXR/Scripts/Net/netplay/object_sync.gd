@@ -60,7 +60,7 @@ enum {
 	EV_DVD_CMD,          # {dvd, cmd}    client intent -> host transport/menu
 	EV_AUDIO_INSERT,     # {player, media}   CD / cassette media inserted
 	EV_AUDIO_REMOVE,     # {player}
-	EV_AUDIO_CMD,        # {player, cmd}     client intent -> host transport
+	EV_AUDIO_CMD,        # {player, cmd, index?}  client intent -> host transport
 	EV_TV_STEREO,        # {tv, mode}    stereo presentation (0 stereo / 1 left / 2 right)
 	EV_SYS_VIDEO_OUT,    # {sys, on}     video-out cables shown/hidden
 	EV_SYS_GRAVITY,      # {sys, on}     ignore-gravity (float where dropped)
@@ -1139,8 +1139,12 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 			if _valid(a, ["player", "media"]):
 				a["player"].restore_media(a["media"])
 		EV_AUDIO_REMOVE:
+			# Through the deck's own loader, not the snap zone. A seated item is
+			# NOT held by the zone — MediaSlot/MediaTray both drop it and reparent
+			# it as they take ownership — so the old get_node("MediaSlot").
+			# drop_object() here unseated nothing at all on a tray deck.
 			if _valid(a, ["player"]):
-				a["player"].get_node("MediaSlot").drop_object()
+				a["player"].remove_media()
 		EV_AUDIO_CMD:
 			# Audio transport is host-authoritative: the host executes and its
 			# state broadcast (send_audio_state) drives every peer's local
@@ -1157,6 +1161,11 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 					"rew": ap.remote_rewind()
 					"next": ap.remote_next()
 					"prev": ap.remote_prev()
+					# The needle landing on a band. Carries its index the way
+					# EV_TV_CHANNEL and EV_DISK_OP carry theirs. There is
+					# deliberately no `_:` arm on this match, so a host that
+					# predates this command no-ops rather than misfiring.
+					"track": ap.remote_goto_track(int(a.get("index", -1)))
 	_applying = false
 
 
@@ -1333,7 +1342,7 @@ func _file_desc(node: Node) -> Dictionary:
 		# single-file images (.iso/.img) carry a hash at all — a VIDEO_TS folder
 		# has no single md5, so it neither transfers nor resolves on a peer.
 		return {"kind": "dvd", "prop": "dvd_path"}
-	if node is AudioDisc or node is AudioCassette:
+	if node is AudioDisc or node is AudioCassette or node is VinylRecord:
 		# Music albums are folders (no single hash) + potentially copyrighted —
 		# verify-BY-NAME, never transferred. Each peer plays its own album of the
 		# same name; a peer without it simply won't hear playback.

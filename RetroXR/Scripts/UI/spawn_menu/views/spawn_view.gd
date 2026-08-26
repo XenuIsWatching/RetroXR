@@ -24,6 +24,7 @@ signal spawn_video_requested(video_path: String)
 signal spawn_dvd_requested(dvd_path: String)
 signal spawn_cd_requested(album_path: String)
 signal spawn_cassette_requested(album_path: String)
+signal spawn_record_requested(album_path: String)
 signal default_core_changed(systemid: String, core_name: String)
 ## Which scroll the thumbstick should drive — the sub-tabs each own one, and the
 ## two grid browsers own one per page.
@@ -135,6 +136,7 @@ var _videos_vbox: VBoxContainer = null
 var _dvds_vbox: VBoxContainer = null
 var _cds_vbox: VBoxContainer = null
 var _tapes_vbox: VBoxContainer = null
+var _records_vbox: VBoxContainer = null
 var _posters_vbox: VBoxContainer = null
 
 # ── Scraper / detail panels ───────────────────────────────────────────────────
@@ -396,6 +398,19 @@ func _build() -> void:
 	tapes_scroll.add_child(_tapes_vbox)
 	_populate_tapes_tab()
 
+	# Records tab — the same music library again, each row spawning a VinylRecord
+	# for the turntable.
+	var records_scroll := ScrollContainer.new()
+	records_scroll.name = "Records"
+	tabs.add_child(records_scroll)
+	_spawn_tab_scrolls.append(records_scroll)
+	MenuStyle.fat_vscroll_bar(records_scroll)
+	_records_vbox = VBoxContainer.new()
+	_records_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_records_vbox.add_theme_constant_override("separation", 10)
+	records_scroll.add_child(_records_vbox)
+	_populate_records_tab()
+
 	# Posters tab — lists images from the posters root directory
 	var posters_scroll := ScrollContainer.new()
 	posters_scroll.name = "Posters"
@@ -415,6 +430,7 @@ func _build() -> void:
 		["DVD Player",      "dvd_player"],
 		["CD Player",       "cd_player"],
 		["Cassette Player", "cassette_player"],
+		["Record Player",   "record_player"],
 		["TV Remote",       "tv_remote"],
 		["Composite Cable", "composite_cable"],
 		["Mono Composite Cable", "mono_composite_cable"],
@@ -456,6 +472,7 @@ func _build() -> void:
 			"DVDs": _populate_dvds_tab()
 			"CDs": _populate_cds_tab()
 			"Tapes": _populate_tapes_tab()
+			"Records": _populate_records_tab()
 			"Posters": _populate_posters_tab()
 		_update_spawn_active_scroll(idx)
 	)
@@ -1518,8 +1535,12 @@ func _populate_tapes_tab() -> void:
 	_populate_music_vbox(_tapes_vbox, "🎵", spawn_cassette_requested)
 
 
-## Shared list builder for the CDs / Tapes tabs — both list the same music
-## albums, differing only in the icon and which spawn signal a row fires.
+func _populate_records_tab() -> void:
+	_populate_music_vbox(_records_vbox, "🎶", spawn_record_requested)
+
+
+## Shared list builder for the CDs / Tapes / Records tabs — all three list the same
+## music albums, differing only in the icon and which spawn signal a row fires.
 func _populate_music_vbox(vbox: VBoxContainer, icon: String, sig: Signal) -> void:
 	if not vbox:
 		return

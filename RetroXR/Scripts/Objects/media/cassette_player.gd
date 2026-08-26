@@ -47,3 +47,13 @@ func _setup_loader() -> void:
 func restore_media(media: Node3D) -> void:
 	if _slot:
 		_slot.restore(media)
+
+
+## Ejecting IS how a tape leaves a front loader — it rides back out of the slot.
+func remove_media() -> void:
+	if _slot:
+		_slot.eject()
+
+
+func deck_save_type() -> String:
+	return "cassette_player"

@@ -608,6 +608,10 @@ func _cell_enabled(id: String) -> bool:
 	if _target is RetroAudioPlayer:
 		if id == "prev" or id == "next":
 			return (_target as RetroAudioPlayer).has_track_skip()
+		# A turntable has no scan: you move the needle instead. Greyed for the
+		# same reason prev/next are greyed on a cassette — the deck cannot do it.
+		if id == "rew" or id == "ff":
+			return (_target as RetroAudioPlayer).has_scan()
 		return true
 	if _target is RetroTV:
 		# The channel keys are the one TV cell that can be dead: the set may be on

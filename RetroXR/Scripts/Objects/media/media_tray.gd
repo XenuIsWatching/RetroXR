@@ -164,6 +164,15 @@ func restore(media: Node3D) -> void:
 	_accept(media)
 
 
+## Unseat with no hand involved — a net event, or a scripted eject. The mirror of
+## restore(), and the reason it exists: a seated disc is NOT held by the snap zone
+## (accept dropped it and reparented the disc to this tray's own holder), so a
+## caller reaching for the zone's drop_object() unseats nothing at all.
+func release() -> void:
+	if _media != null:
+		_on_media_taken(_media)
+
+
 func _accept(media: Node3D) -> void:
 	if not is_instance_valid(media) or _media != null:
 		return

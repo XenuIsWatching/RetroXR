@@ -217,6 +217,13 @@ class MockEventObject extends Node3D:
 		restored["card_slot"] = slot
 	func restore_disc(obj: Node) -> void: restored["disc"] = obj
 	func restore_media(obj: Node) -> void: restored["media"] = obj
+	## An audio deck unseats through its own loader now, rather than the event
+	## reaching into get_node("MediaSlot").drop_object(). That reach only ever
+	## worked for a SLOT deck: a tray deck's media is not held by the snap zone at
+	## all, so the old call unseated nothing. A front loader ejects, which is what
+	## this models.
+	func remove_media() -> void:
+		(get_node("MediaSlot") as MockSlot).drop_object()
 	func restore_cable_connection(tv: Node, channel := -1, input := -1) -> void:
 		cable_calls.append([tv, channel, input])
 	func release_input(input: int) -> void: cable_calls.append(["release", input])

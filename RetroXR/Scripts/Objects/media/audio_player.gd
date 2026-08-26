@@ -54,8 +54,8 @@ var _snapped_media: Node3D = null
 @onready var _play_button: VRButton = $PlayButton
 @onready var _pause_button: VRButton = $PauseButton
 @onready var _stop_button: VRButton = $StopButton
-@onready var _rewind_button: VRButton = $RewindButton
-@onready var _ff_button: VRButton = $FastForwardButton
+@onready var _rewind_button: VRButton = get_node_or_null("RewindButton")
+@onready var _ff_button: VRButton = get_node_or_null("FastForwardButton")
 @onready var _prev_button: VRButton = get_node_or_null("PrevButton")
 @onready var _next_button: VRButton = get_node_or_null("NextButton")
 
@@ -72,13 +72,17 @@ func _ready() -> void:
 	_play_button.button_pressed.connect(_on_play_pressed)
 	_pause_button.button_pressed.connect(_on_pause_pressed)
 	_stop_button.button_pressed.connect(_on_stop_pressed)
-	_rewind_button.button_pressed.connect(_on_rewind_pressed)
-	_ff_button.button_pressed.connect(_on_ff_pressed)
 	_play_button.set_color(Color(0.0, 0.9, 0.0))     # green
 	_pause_button.set_color(Color(0.9, 0.8, 0.0))     # amber
 	_stop_button.set_color(Color(0.9, 0.1, 0.1))      # red
-	_rewind_button.set_color(Color(0.1, 0.4, 0.9))    # blue
-	_ff_button.set_color(Color(0.1, 0.4, 0.9))        # blue
+	# Scan is optional hardware: a turntable has no FF/REW at all — you move the
+	# needle instead. Same shape as prev/next below.
+	if _rewind_button:
+		_rewind_button.button_pressed.connect(_on_rewind_pressed)
+		_rewind_button.set_color(Color(0.1, 0.4, 0.9))    # blue
+	if _ff_button:
+		_ff_button.button_pressed.connect(_on_ff_pressed)
+		_ff_button.set_color(Color(0.1, 0.4, 0.9))        # blue
 	if _prev_button:
 		_prev_button.button_pressed.connect(_on_prev_pressed)
 		_prev_button.set_color(Color(0.5, 0.5, 0.55))
@@ -100,6 +104,14 @@ func _ready() -> void:
 ## the TV remote to pick its row set and by the net layer to gate skip commands.
 func has_track_skip() -> bool:
 	return _prev_button != null
+
+
+## Whether this deck can scan (FF/REW). A tape and a CD can; a turntable cannot —
+## there is no such control on one, you move the needle. Read by the TV remote to
+## grey those two cells, and enforced in the handlers so a remote or a stale peer's
+## command cannot scan a deck that has no scan.
+func has_scan() -> bool:
+	return _ff_button != null
 
 
 ## True while playback is paused (used by the TV remote's play/pause cell).
@@ -249,6 +261,22 @@ func restore_media(_media: Node3D) -> void:
 	pass
 
 
+## Unseat whatever is loaded, through this deck's own loader. The net layer used to
+## do this by reaching for get_node("MediaSlot").drop_object(), which is a no-op for
+## any TRAY deck: MediaTray.accept already dropped the zone and reparented the media
+## to its own holder, so the zone holds nothing to drop. Each deck answers for
+## itself instead.
+func remove_media() -> void:
+	pass
+
+
+## The type string this deck saves under. A virtual rather than a chain of `is`
+## tests at the call site, so a new deck that forgets to override is a missing
+## method rather than something silently serialised as another deck.
+func deck_save_type() -> String:
+	return ""
+
+
 # --- Transport (front-panel buttons + remote entry points) ---
 
 func remote_play() -> void: _on_play_pressed()
@@ -258,6 +286,14 @@ func remote_ff() -> void: _on_ff_pressed()
 func remote_rewind() -> void: _on_rewind_pressed()
 func remote_next() -> void: _on_next_pressed()
 func remote_prev() -> void: _on_prev_pressed()
+
+
+## Play a specific track. The public entry point for the net layer, which must not
+## reach into the private _goto_track (that one does no command forwarding, and is
+## also the tail of _on_next_pressed). A caller that could be a client forwards the
+## intent itself before calling this.
+func remote_goto_track(idx: int) -> void:
+	_goto_track(idx)
 
 
 func _on_play_pressed() -> void:
@@ -295,6 +331,8 @@ func _on_stop_pressed() -> void:
 
 
 func _on_rewind_pressed() -> void:
+	if not has_scan():
+		return
 	if _net_forward_cmd("rew"):
 		return
 	if not is_playing:
@@ -306,6 +344,8 @@ func _on_rewind_pressed() -> void:
 
 
 func _on_ff_pressed() -> void:
+	if not has_scan():
+		return
 	if _net_forward_cmd("ff"):
 		return
 	if not is_playing:

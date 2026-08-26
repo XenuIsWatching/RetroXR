@@ -28,6 +28,8 @@ signal spawn_dvd_requested(dvd_path: String)
 signal spawn_cd_requested(album_path: String)
 ## Emitted when the user clicks an album (🎵) in the Tapes tab.
 signal spawn_cassette_requested(album_path: String)
+## Emitted when the user clicks an album in the Records tab.
+signal spawn_record_requested(album_path: String)
 ## Emitted when the user changes the turn style. value is "SNAP" or "SMOOTH".
 signal turn_style_changed(value: String)
 ## Emitted when the user clicks a room card that maps directly to a scene (e.g. passthrough).
@@ -404,6 +406,7 @@ func _build_ui() -> void:
 			[_spawn_view.spawn_dvd_requested, spawn_dvd_requested],
 			[_spawn_view.spawn_cd_requested, spawn_cd_requested],
 			[_spawn_view.spawn_cassette_requested, spawn_cassette_requested],
+			[_spawn_view.spawn_record_requested, spawn_record_requested],
 			[_spawn_view.spawn_poster_requested, spawn_poster_requested]]:
 		var out: Signal = relay[1]
 		(relay[0] as Signal).connect(func(v: Variant) -> void: out.emit(v))

@@ -63,6 +63,17 @@ func restore_media(media: Node3D) -> void:
 		_tray.restore(media)
 
 
+## Lift the lid and take the disc out — a top loader has no eject that hands it back.
+func remove_media() -> void:
+	if _tray:
+		_tray.set_open(true)
+		_tray.release()
+
+
+func deck_save_type() -> String:
+	return "cd_player"
+
+
 func _process(delta: float) -> void:
 	super._process(delta)
 	_update_disc_spin(delta)

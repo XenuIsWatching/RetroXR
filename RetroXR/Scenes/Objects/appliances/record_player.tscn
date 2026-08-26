@@ -1,0 +1,315 @@
+[gd_scene load_steps=26 format=3 uid="uid://recordplayer_0001"]
+
+[ext_resource type="Script" path="res://Scripts/Objects/media/record_player.gd" id="1_rpscript"]
+[ext_resource type="PackedScene" uid="uid://ce7vysyvondf8" path="res://addons/godot-xr-tools/objects/snap_zone.tscn" id="2_snapzone"]
+[ext_resource type="Script" uid="uid://d3iq3gmwxpvjl" path="res://Scripts/Objects/widgets/vr_button.gd" id="3_vrbtn"]
+[ext_resource type="Script" uid="uid://dgp6irihw103g" path="res://Scripts/Objects/highlights/snap_highlight.gd" id="4_snaphis"]
+[ext_resource type="Script" uid="uid://myg1jnlsxhnm" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="5_pickhigh"]
+[ext_resource type="Script" path="res://Scripts/Objects/widgets/vr_lever.gd" id="6_vrlever"]
+[ext_resource type="Script" path="res://Scripts/Objects/widgets/vr_slider.gd" id="7_vrslider"]
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_rp"]
+friction = 0.8
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(0.46, 0.06, 0.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.46, 0.06, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="Mat_body"]
+albedo_color = Color(0.16, 0.12, 0.09, 1)
+roughness = 0.65
+
+[sub_resource type="CylinderMesh" id="Cyl_platter"]
+top_radius = 0.152
+bottom_radius = 0.152
+height = 0.016
+
+[sub_resource type="StandardMaterial3D" id="Mat_platter"]
+albedo_color = Color(0.22, 0.22, 0.24, 1)
+metallic = 0.7
+roughness = 0.35
+
+[sub_resource type="CylinderMesh" id="Cyl_spindle"]
+top_radius = 0.0034
+bottom_radius = 0.0034
+height = 0.022
+
+[sub_resource type="StandardMaterial3D" id="Mat_spindle"]
+albedo_color = Color(0.75, 0.76, 0.78, 1)
+metallic = 0.85
+roughness = 0.2
+
+[sub_resource type="CylinderMesh" id="Cyl_record_ghost"]
+top_radius = 0.151
+bottom_radius = 0.151
+height = 0.0019
+
+[sub_resource type="StandardMaterial3D" id="Mat_record_ghost"]
+transparency = 1
+albedo_color = Color(0.2, 0.5, 1, 0.4)
+emission_enabled = true
+emission = Color(0, 0.15, 0.5, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_btn"]
+size = Vector3(0.03, 0.02, 0.03)
+
+[sub_resource type="BoxMesh" id="BoxMesh_btn"]
+size = Vector3(0.03, 0.02, 0.03)
+
+[sub_resource type="StandardMaterial3D" id="Mat_btn"]
+albedo_color = Color(0.5, 0.5, 0.55, 1)
+
+[sub_resource type="CylinderMesh" id="Cyl_armbase"]
+top_radius = 0.017
+bottom_radius = 0.022
+height = 0.048
+
+[sub_resource type="BoxMesh" id="Box_armtube"]
+size = Vector3(0.008, 0.008, 0.26)
+
+[sub_resource type="BoxMesh" id="Box_headshell"]
+size = Vector3(0.016, 0.014, 0.03)
+
+[sub_resource type="BoxMesh" id="Box_headdrop"]
+size = Vector3(0.009, 0.03, 0.009)
+
+[sub_resource type="StandardMaterial3D" id="Mat_arm"]
+albedo_color = Color(0.78, 0.79, 0.82, 1)
+metallic = 0.8
+roughness = 0.25
+
+[sub_resource type="CylinderMesh" id="Cyl_armrest"]
+top_radius = 0.007
+bottom_radius = 0.009
+height = 0.03
+
+[sub_resource type="BoxMesh" id="Box_knob"]
+size = Vector3(0.016, 0.012, 0.022)
+
+[node name="RecordPlayer" type="RigidBody3D" groups=["record_player"]]
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_rp")
+freeze_mode = 1
+linear_damp = 5.0
+angular_damp = 8.0
+script = ExtResource("1_rpscript")
+player_label = "TURNTABLE"
+arm_park = 0.35
+arm_lead_in = 0.557
+arm_lead_out = 1.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_body")
+
+[node name="Plinth" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("Mat_body")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("5_pickhigh")
+
+; The platter TURNS. The seated record is turned alongside it from the same angular
+; velocity rather than being parented to it — see MediaSlot below for why.
+[node name="Platter" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055, 0.038, 0)
+
+[node name="PlatterMesh" type="MeshInstance3D" parent="Platter"]
+mesh = SubResource("Cyl_platter")
+surface_material_override/0 = SubResource("Mat_platter")
+
+[node name="Spindle" type="MeshInstance3D" parent="Platter"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.014, 0)
+mesh = SubResource("Cyl_spindle")
+surface_material_override/0 = SubResource("Mat_spindle")
+
+; A DIRECT child of the deck, named exactly this: RetroAudioPlayer resolves it as
+; $MediaSlot. It deliberately does NOT ride the platter — a seated record is spun
+; by the deck instead, the way the CD player spins a disc, so that this node stays
+; where the base and the net layer expect to find it.
+[node name="MediaSlot" parent="." instance=ExtResource("2_snapzone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055, 0.047, 0)
+grab_distance = 0.12
+snap_require = "vinyl_record"
+
+[node name="SnapHighlight" type="Node3D" parent="MediaSlot"]
+script = ExtResource("4_snaphis")
+
+[node name="HighlightMesh" type="MeshInstance3D" parent="MediaSlot/SnapHighlight"]
+mesh = SubResource("Cyl_record_ghost")
+surface_material_override/0 = SubResource("Mat_record_ghost")
+
+; Where a fingertip is tested against the record. Does NOT ride the platter — it is
+; the fixed frame the hand's angle is measured in, and spinning it would cancel out
+; exactly the rotation being measured.
+[node name="PlatterPoke" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055, 0.048, 0)
+collision_layer = 0
+collision_mask = 0
+
+; ARM MOUNT. Its basis is the whole trick: VRHinge writes target.rotation.x and
+; measures the hand in the pivot's own rest frame, so a tonearm — which swings about
+; VERTICAL — needs a frame whose local X points along the deck's up axis. That is
+; R_z(+90): local X -> +Y. Listed by ROWS here, as .tscn always does.
+; The pivot below stays IDENTITY; the basis lives here, on the mount above it.
+;
+; The pivot sits 297 mm from the spindle with a 260 mm arm, and those two numbers
+; are not free. The stylus traces a circle of radius L about the pivot, so what the
+; pair decides is the band of the record it can reach: here 141 mm from the spindle
+; at 25.6 deg down to 54 mm at 45.9 deg, i.e. the outer groove to just outside the
+; label. An arm as long as the pivot distance sweeps THROUGH the spindle and lands
+; on the far side of the record instead, which is what the first cut of this did.
+[node name="ArmMount" type="Node3D" parent="."]
+transform = Transform3D(0, 1, 0, 1, 0, 0, 0, 0, -1, 0.185, 0.078, -0.175)
+
+; The post, from the plinth top up to the arm. Its own basis undoes the mount's so
+; the cylinder stands upright; -0.024 on mount-local X is 24 mm DOWN, that axis
+; being the deck's up.
+[node name="ArmBase" type="MeshInstance3D" parent="ArmMount"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, -0.024, 0, 0)
+mesh = SubResource("Cyl_armbase")
+surface_material_override/0 = SubResource("Mat_arm")
+
+[node name="ArmPivot" type="Node3D" parent="ArmMount"]
+
+; The arm runs out along the pivot's local -Z, which is the deg = 0 direction.
+[node name="ArmTube" type="MeshInstance3D" parent="ArmMount/ArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.13)
+mesh = SubResource("Box_armtube")
+surface_material_override/0 = SubResource("Mat_arm")
+
+; The headshell hangs below the tube, down to just clear of the record. That drop is
+; on the pivot's local X — the axis the arm turns ABOUT — so it is a constant height
+; at every swing angle. On local Y it would move the headshell SIDEWAYS instead, and
+; leave the stylus buried under the record, which is what it did at first.
+; The bend from the tube down to the headshell. Without it the headshell reads as a
+; box floating beside the arm rather than hanging off the end of it.
+[node name="HeadDrop" type="MeshInstance3D" parent="ArmMount/ArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.013, 0, -0.254)
+mesh = SubResource("Box_headdrop")
+surface_material_override/0 = SubResource("Mat_arm")
+
+[node name="Headshell" type="MeshInstance3D" parent="ArmMount/ArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.026, 0, -0.253)
+mesh = SubResource("Box_headshell")
+surface_material_override/0 = SubResource("Mat_arm")
+
+; The lever sits ON the headshell, not at the pivot: VRHinge measures tip proximity
+; from its own origin, so one parked at the hub would arm when a hand came near the
+; base instead of near the end you actually take hold of. Child of the pivot, so it
+; rides the arm round.
+;
+; deg 0 is the rest, clear of the record; -46 is the run-out groove. The throw is
+; negative because the mount is composed with a half turn to put the arm's deg-0
+; direction at the FRONT of the deck, which flips the sweep's sign — so value_at_min
+; 1 / value_at_max 0 is what keeps value 0 = parked.
+[node name="TonearmLever" type="Area3D" parent="ArmMount/ArmPivot" node_paths=PackedStringArray("target")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.016, 0, -0.245)
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("6_vrlever")
+target = NodePath("..")
+min_deg = -46.0
+max_deg = 0.0
+engage_radius = 0.05
+value_at_min = 1.0
+value_at_max = 0.0
+
+; Where the arm sits at deg 0. A rest under the parked stylus, so "parked" reads as
+; a place the arm belongs rather than as the arm stopping in mid-air.
+[node name="ArmRest" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.185, 0.038, 0.085)
+mesh = SubResource("Cyl_armrest")
+surface_material_override/0 = SubResource("Mat_arm")
+
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09, 0.072, -0.205)
+pixel_size = 0.0008
+text = "TURNTABLE"
+font_size = 24
+outline_size = 6
+
+; The transport runs along the FRONT edge (+Z, as on the CD player), clear of the
+; arc the arm sweeps: the parked stylus lands at x 0.185, z 0.085.
+[node name="PlayButton" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.03, 0.165)
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_vrbtn")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlayButton"]
+shape = SubResource("BoxShape3D_btn")
+
+[node name="ButtonMesh" type="MeshInstance3D" parent="PlayButton"]
+mesh = SubResource("BoxMesh_btn")
+surface_material_override/0 = SubResource("Mat_btn")
+
+[node name="ButtonLabel" type="Label3D" parent="PlayButton"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.012, 0)
+pixel_size = 0.001
+text = "START"
+font_size = 8
+
+[node name="PauseButton" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09, 0.03, 0.165)
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_vrbtn")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PauseButton"]
+shape = SubResource("BoxShape3D_btn")
+
+[node name="ButtonMesh" type="MeshInstance3D" parent="PauseButton"]
+mesh = SubResource("BoxMesh_btn")
+surface_material_override/0 = SubResource("Mat_btn")
+
+[node name="ButtonLabel" type="Label3D" parent="PauseButton"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.012, 0)
+pixel_size = 0.001
+text = "||"
+font_size = 8
+
+[node name="StopButton" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.04, 0.03, 0.165)
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_vrbtn")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StopButton"]
+shape = SubResource("BoxShape3D_btn")
+
+[node name="ButtonMesh" type="MeshInstance3D" parent="StopButton"]
+mesh = SubResource("BoxMesh_btn")
+surface_material_override/0 = SubResource("Mat_btn")
+
+[node name="ButtonLabel" type="Label3D" parent="StopButton"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.012, 0)
+pixel_size = 0.001
+text = "STOP"
+font_size = 8
+
+; 33/45. steps = 2 makes it a detented slide switch rather than a continuous slider.
+; It sets the platter's speed and nothing else: playing a record at the wrong speed
+; would need a playback-rate API, and vlc-godot exposes none.
+[node name="SpeedSwitch" type="Area3D" parent="." node_paths=PackedStringArray("target")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.045, 0.03, 0.165)
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("7_vrslider")
+target = NodePath(".")
+axis_local = Vector3(1, 0, 0)
+travel = 0.03
+steps = 2
+engage_radius = 0.03
+
+[node name="KnobMesh" type="MeshInstance3D" parent="SpeedSwitch"]
+mesh = SubResource("Box_knob")
+surface_material_override/0 = SubResource("Mat_arm")
+
+[node name="SpeedLabel" type="Label3D" parent="SpeedSwitch"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.012, 0.028)
+pixel_size = 0.001
+text = "33 / 45"
+font_size = 8

@@ -60,6 +60,8 @@ const CD_PLAYER_SCENE       := preload("res://Scenes/Objects/appliances/cd_playe
 const CASSETTE_PLAYER_SCENE := preload("res://Scenes/Objects/appliances/cassette_player.tscn")
 const AUDIO_DISC_SCENE      := preload("res://Scenes/Objects/media/audio_disc.tscn")
 const AUDIO_CASSETTE_SCENE  := preload("res://Scenes/Objects/media/audio_cassette.tscn")
+const RECORD_PLAYER_SCENE   := preload("res://Scenes/Objects/appliances/record_player.tscn")
+const VINYL_RECORD_SCENE    := preload("res://Scenes/Objects/media/vinyl_record.tscn")
 
 @onready var _viewport_node: XRToolsViewport2DIn3D = $SpawnMenuViewport
 
@@ -225,6 +227,7 @@ func _connect_menu_signals() -> void:
 	menu.spawn_dvd_requested.connect(_on_spawn_dvd_requested)
 	menu.spawn_cd_requested.connect(_on_spawn_cd_requested)
 	menu.spawn_cassette_requested.connect(_on_spawn_cassette_requested)
+	menu.spawn_record_requested.connect(_on_spawn_record_requested)
 	menu.turn_style_changed.connect(_on_turn_style_changed)
 	menu.scene_change_requested.connect(_on_scene_change_requested)
 	menu.scene_slot_load_requested.connect(_on_slot_load)
@@ -1106,6 +1109,8 @@ func _on_spawn_requested(type: String) -> void:
 			obj = CD_PLAYER_SCENE.instantiate() as Node3D
 		"cassette_player":
 			obj = CASSETTE_PLAYER_SCENE.instantiate() as Node3D
+		"record_player":
+			obj = RECORD_PLAYER_SCENE.instantiate() as Node3D
 		"composite_cable":
 			obj = COMPOSITE_CABLE_SCENE.instantiate() as Node3D
 		"mono_composite_cable":
@@ -1235,6 +1240,13 @@ func _on_spawn_cassette_requested(album_path: String) -> void:
 	tape.album_path = album_path
 	tape.album_label = album_path.get_file().get_basename()
 	_place_spawned(tape, "audio_cassette")
+
+
+func _on_spawn_record_requested(album_path: String) -> void:
+	var lp := VINYL_RECORD_SCENE.instantiate() as VinylRecord
+	lp.album_path = album_path
+	lp.album_label = album_path.get_file().get_basename()
+	_place_spawned(lp, "vinyl_record")
 
 
 func _on_turn_style_changed(value: String) -> void:
