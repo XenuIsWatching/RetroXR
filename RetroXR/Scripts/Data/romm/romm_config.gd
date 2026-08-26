@@ -44,10 +44,42 @@ var sync_state: Dictionary = {}
 ## call is needed at all.
 var last_stats: Dictionary = {}
 
+## Scopes the server last said these credentials carry, as RomM scope strings.
+## Empty means UNKNOWN — either nothing has been asked yet, or the server
+## declined the question (a token without `me.read`). It never means "none":
+## treating an unanswered question as a refusal would stop uploads working for
+## people they work for today. See RommClient.fetch_scopes.
+var scopes: PackedStringArray = PackedStringArray()
+## When the scopes above were read back, "" if never.
+var scopes_checked_at: String = ""
+
 ## Last mapped platform list, so a restart shows RomM content immediately
 ## instead of waiting on /api/platforms — 131 KB and ~4 s on a busy server.
 ## systemid -> platform dict (as returned by RommPlatforms.partition).
 var cached_platforms: Dictionary = {}
+
+
+## Record what the server just said. Clearing is meaningful: it puts us back to
+## unknown, which is what a changed token or a refused question should leave.
+func set_scopes(list: PackedStringArray) -> void:
+	scopes = list
+	scopes_checked_at = Time.get_datetime_string_from_system(true) if not list.is_empty() else ""
+
+
+## False while the scope set is unknown.
+func knows_scopes() -> bool:
+	return not scopes.is_empty()
+
+
+func has_scope(scope: String) -> bool:
+	return scopes.has(scope)
+
+
+## Whether saves and states may be uploaded. Unknown counts as yes — the server
+## is the one that enforces this, and guessing "no" would silently stop backing
+## up progress for anyone whose token cannot answer the scope question.
+func can_upload() -> bool:
+	return not knows_scopes() or has_scope("assets.write")
 
 
 ## True when there is enough configured to attempt a request.
@@ -160,6 +192,9 @@ func load_config() -> void:
 		last_stats = data["last_stats"]
 	if data.get("cached_platforms") is Dictionary:
 		cached_platforms = data["cached_platforms"]
+	if data.get("scopes") is Array:
+		scopes = PackedStringArray(data["scopes"])
+	scopes_checked_at = str(data.get("scopes_checked_at", ""))
 
 	print("[RommConfig] Loaded config (server=%s enabled=%s)" % [base_url, enabled])
 
@@ -186,6 +221,8 @@ func save_config() -> void:
 		"sync_state": sync_state,
 		"last_stats": last_stats,
 		"cached_platforms": cached_platforms,
+		"scopes": scopes,
+		"scopes_checked_at": scopes_checked_at,
 	}
 	file.store_string(JSON.stringify(data, "\t"))
 

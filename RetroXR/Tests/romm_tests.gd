@@ -53,6 +53,7 @@ func _ready() -> void:
 	_test_collapse_by_systemid()
 	_test_firmware_index()
 	_test_stats_unchanged()
+	_test_scopes()
 	_test_verify_transfer()
 	_test_error_vocabulary()
 	_test_cache_paths()
@@ -327,6 +328,55 @@ func _test_stats_unchanged() -> void:
 		var moved := stats.duplicate()
 		moved[key] = int(moved[key]) + 1
 		_ok("stats/%s move is seen" % key, not cfg.stats_unchanged(moved))
+
+
+# ---------------------------------------------------------------------------
+# Scopes — what the server says these credentials may do.
+#
+# The shipped bug: scopes were never read back at all, and a token RetroXR
+# minted itself asked for three read scopes, so save/state upload could not
+# work however the server was configured. Reported as being stuck unable to
+# upload saves after widening the scopes server-side.
+#
+# The asymmetry below is the whole design: UNKNOWN must permit, because a token
+# without me.read cannot answer the question and uploads fine today.
+# ---------------------------------------------------------------------------
+
+func _test_scopes() -> void:
+	var cfg := RommConfig.new()
+
+	_ok("scopes/unknown at rest", not cfg.knows_scopes())
+	_ok("scopes/unknown may upload", cfg.can_upload())
+
+	cfg.set_scopes(PackedStringArray(["roms.read", "platforms.read"]))
+	_ok("scopes/known once answered", cfg.knows_scopes())
+	_ok("scopes/read-only cannot upload", not cfg.can_upload())
+	_ok("scopes/has_scope reads the list", cfg.has_scope("roms.read") and not cfg.has_scope("assets.write"))
+	_ok("scopes/answer is stamped", not cfg.scopes_checked_at.is_empty())
+
+	cfg.set_scopes(PackedStringArray(["roms.read", "assets.write"]))
+	_ok("scopes/write grant permits upload", cfg.can_upload())
+
+	# Clearing goes back to unknown, not to "denied" — this is what a changed
+	# token leaves behind, and it must not stop a working device uploading.
+	cfg.set_scopes(PackedStringArray())
+	_ok("scopes/cleared is unknown", not cfg.knows_scopes() and cfg.can_upload())
+	_ok("scopes/cleared drops the stamp", cfg.scopes_checked_at.is_empty())
+
+	# The mint list must actually cover what the app does, or the token it
+	# creates repeats the shipped bug.
+	_ok("scopes/mint asks for upload", RommClient.WANTED_SCOPES.has(RommClient.SCOPE_UPLOAD))
+	_ok("scopes/mint asks for me.read", RommClient.WANTED_SCOPES.has("me.read"))
+
+	# Round trip through the file, since this is persisted state now.
+	var cfg2 := RommConfig.new()
+	cfg2.set_scopes(PackedStringArray(["assets.write", "me.read"]))
+	var json: Dictionary = JSON.parse_string(JSON.stringify({
+		"scopes": cfg2.scopes, "scopes_checked_at": cfg2.scopes_checked_at,
+	}))
+	var cfg3 := RommConfig.new()
+	cfg3.set_scopes(PackedStringArray(json["scopes"]))
+	_ok("scopes/survive a JSON round trip", cfg3.can_upload() and cfg3.knows_scopes())
 
 
 # ---------------------------------------------------------------------------

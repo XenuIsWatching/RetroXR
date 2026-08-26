@@ -1388,18 +1388,23 @@ func _build_romm_options(vbox: VBoxContainer) -> void:
 	_romm_token_edit = _add_options_text_field(vbox, "API token", romm_config.token,
 		func(text: String) -> void:
 			romm_config.token = text.strip_edges()
+			# A different credential carries a different grant, so what the server
+			# said about the old one is now worth nothing.
+			romm_config.set_scopes(PackedStringArray())
 			_save_romm_config()
 	, true)
 
 	var user_edit := _add_options_text_field(vbox, "Username", romm_config.username,
 		func(text: String) -> void:
 			romm_config.username = text.strip_edges()
+			romm_config.set_scopes(PackedStringArray())
 			_save_romm_config()
 	)
 
 	var pass_edit := _add_options_text_field(vbox, "Password", romm_config.password,
 		func(text: String) -> void:
 			romm_config.password = text
+			romm_config.set_scopes(PackedStringArray())
 			_save_romm_config()
 	, true)
 
@@ -1456,10 +1461,21 @@ func _build_romm_options(vbox: VBoxContainer) -> void:
 	sync_btn.custom_minimum_size = Vector2(0, 56)
 	sync_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sync_btn.add_theme_font_size_override("font_size", 18)
-	sync_btn.pressed.connect(_on_romm_sync_all_pressed)
+	sync_btn.pressed.connect(func() -> void:
+		# Scopes are editable on the server with nothing to tell this device, so
+		# both deliberate "talk to RomM" buttons re-read them. Fire and forget:
+		# the sync must not wait on it, and the status label repaints when the
+		# answer lands.
+		if romm_client != null:
+			romm_client.fetch_scopes()
+		_on_romm_sync_all_pressed()
+	)
 	actions.add_child(sync_btn)
 	_romm_sync_btn = sync_btn
 	_update_romm_sync_btn()
+
+	if not romm_client.scopes_refreshed.is_connected(_on_romm_scopes_refreshed):
+		romm_client.scopes_refreshed.connect(_on_romm_scopes_refreshed)
 
 	_romm_status_label = Label.new()
 	_romm_status_label.add_theme_font_size_override("font_size", 16)
@@ -1469,6 +1485,10 @@ func _build_romm_options(vbox: VBoxContainer) -> void:
 	update_romm_status_label()
 
 	vbox.add_child(HSeparator.new())
+
+
+func _on_romm_scopes_refreshed(_scopes: PackedStringArray) -> void:
+	update_romm_status_label()
 
 
 ## Show only the rows the selected sign-in method uses.
@@ -1493,7 +1513,9 @@ func _apply_pair_code(code: String) -> void:
 		romm_config.auth_mode = RommConfig.AUTH_TOKEN
 		romm_config.token = token
 		romm_config.enabled = true
+		romm_config.set_scopes(PackedStringArray())
 		romm_config.save_config()
+		romm_client.fetch_scopes()
 		if _romm_token_edit != null:
 			_romm_token_edit.text = token
 		# Pairing switches the method, so the dropdown and rows follow it.
@@ -1705,6 +1727,12 @@ func update_romm_status_label() -> void:
 		text += "\n%d unmapped: " % _unmapped().size() + ", ".join(PackedStringArray(names))
 		if sorted_un.size() > 6:
 			text += " and %d more" % (sorted_un.size() - 6)
+
+	# Only when the server actually answered. Saying nothing is right while the
+	# scope set is unknown: an absent line reads as "fine", which matches the
+	# permissive default in RommConfig.can_upload.
+	if romm_config.knows_scopes() and not romm_config.can_upload():
+		text += "\nSaves and states cannot be uploaded: this sign-in has no %s permission. Grant it on the server, then press Test connection." % RommClient.SCOPE_UPLOAD
 
 	_romm_status_label.text = text
 

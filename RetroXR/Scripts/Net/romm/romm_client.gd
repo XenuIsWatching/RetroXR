@@ -22,6 +22,25 @@ signal reachability_changed(reachable: bool)
 
 const REQUEST_TIMEOUT := 20.0
 
+## Everything RetroXR asks the server to do, as RomM scope strings. A token we
+## mint ourselves requests exactly this; a token minted elsewhere (pairing, the
+## RomM UI, the DB) carries whatever it was given, which is why scopes have to
+## be read back rather than assumed.
+const WANTED_SCOPES := [
+	"me.read",
+	"roms.read", "roms.user.read", "roms.user.write",
+	"platforms.read", "collections.read",
+	"firmware.read",
+	"assets.read", "assets.write",
+]
+
+## The one scope that decides whether saves and states can go up at all.
+const SCOPE_UPLOAD := "assets.write"
+
+## Emitted whenever the server's answer for the current credentials is read
+## back. `scopes` is empty when the server would not say (see fetch_scopes).
+signal scopes_refreshed(scopes: PackedStringArray)
+
 var config: RommConfig = null
 
 ## null = unknown (nothing attempted yet).
@@ -161,7 +180,7 @@ func mint_token_from_basic(callback: Callable) -> void:
 		return
 	var body := JSON.stringify({
 		"name": "RetroXR (%s)" % OS.get_name(),
-		"scopes": ["roms.read", "platforms.read", "collections.read"],
+		"scopes": WANTED_SCOPES,
 	})
 	var header := "Authorization: Basic " + Marshalls.utf8_to_base64(config.username + ":" + config.password)
 	_request_json("/api/client-tokens", HTTPClient.METHOD_POST, body,
@@ -173,6 +192,47 @@ func mint_token_from_basic(callback: Callable) -> void:
 				return
 			callback.call(true, str(dict.get("raw_token", "")), "")
 	)
+
+
+## GET /api/users/me — read the scopes the server currently grants these
+## credentials, and cache them on the config.
+##
+## Scopes are editable server-side (today only in RomM's DB), so a token that
+## could not upload yesterday may be able to today with no change on this
+## device. Nothing here can be inferred from the token itself; the server is the
+## only authority, and this is the call that asks it.
+##
+## A 403 here is NOT a bad token — it is a token without `me.read`, which is a
+## perfectly good read-only token. So this call is deliberately quiet: it does
+## not emit auth_failed, and it reports scopes as UNKNOWN (empty) rather than as
+## "no permissions", because refusing to upload on the strength of a question
+## the server declined to answer would break users who work fine today.
+## callback(ok: bool, scopes: PackedStringArray)
+func fetch_scopes(callback: Callable = Callable()) -> void:
+	var headers := config.auth_headers() if config != null else PackedStringArray()
+	if headers.is_empty():
+		_store_scopes(PackedStringArray())
+		if callback.is_valid():
+			callback.call(false, PackedStringArray())
+		return
+	_request_json("/api/users/me", HTTPClient.METHOD_GET, "", headers,
+		func(ok: bool, data: Variant, _code: int) -> void:
+			var dict: Dictionary = data if data is Dictionary else {}
+			var found := PackedStringArray()
+			if ok and dict.get("oauth_scopes") is Array:
+				for sc: Variant in dict["oauth_scopes"]:
+					found.append(str(sc))
+			_store_scopes(found)
+			if callback.is_valid():
+				callback.call(ok, found)
+	, true)
+
+
+func _store_scopes(scopes: PackedStringArray) -> void:
+	if config != null:
+		config.set_scopes(scopes)
+		config.save_config()
+	scopes_refreshed.emit(scopes)
 
 
 ## Heartbeat + one authenticated call, so the user learns in one tap whether the
@@ -200,8 +260,16 @@ func test_connection(callback: Callable) -> void:
 			var total := 0
 			for p: Dictionary in plats:
 				total += int(p.get("rom_count", 0))
-			callback.call(true, "RomM %s · %s games across %d platform%s"
-				% [version, _thousands(total), plats.size(), "" if plats.size() == 1 else "s"])
+			var summary := "RomM %s · %s games across %d platform%s" % [
+				version, _thousands(total), plats.size(),
+				"" if plats.size() == 1 else "s"]
+			# Scopes last, so a server that will not answer /api/users/me still
+			# gets the full connection result rather than a failed test.
+			fetch_scopes(func(_sc_ok: bool, _scopes: PackedStringArray) -> void:
+				if config != null and config.knows_scopes() and not config.can_upload():
+					summary += " · uploads not permitted by this token"
+				callback.call(true, summary)
+			)
 		)
 	)
 
@@ -235,9 +303,13 @@ func _post_json(path: String, authed: bool, body: String, callback: Callable) ->
 	_request_json(path, HTTPClient.METHOD_POST, body, headers, callback)
 
 
+## `quiet_auth` suppresses the auth_failed emit on 401/403. Only for calls where
+## a refusal is an expected answer about PERMISSIONS rather than evidence of a
+## bad credential — fetch_scopes is the whole reason it exists.
 ## callback(ok: bool, parsed: Variant, response_code: int)
 func _request_json(path: String, method: int, body: String,
-				   headers: PackedStringArray, callback: Callable) -> void:
+				   headers: PackedStringArray, callback: Callable,
+				   quiet_auth: bool = false) -> void:
 	if config == null or config.base_url.is_empty():
 		callback.call(false, null, 0)
 		return
@@ -262,7 +334,8 @@ func _request_json(path: String, method: int, body: String,
 			# 401/403 are terminal — a revoked token looks identical to a network
 			# error at the transport layer and completely different to the user.
 			if response_code == 401 or response_code == 403:
-				auth_failed.emit("HTTP %d on %s" % [response_code, path])
+				if not quiet_auth:
+					auth_failed.emit("HTTP %d on %s" % [response_code, path])
 				callback.call(false, null, response_code)
 				return
 
