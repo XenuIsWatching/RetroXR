@@ -89,6 +89,11 @@ uniform float crt_brightness : hint_range(0.5, 2.0) = 1.0;
 // stereo-safe fallback for the mobile renderer and rooms without a useful probe.
 uniform float crt_glass_reflection : hint_range(0.0, 1.0) = 0.35;
 uniform float crt_glass_roughness : hint_range(0.02, 0.6) = 0.12;
+uniform float crt_glass_wear : hint_range(0.0, 1.0) = 0.35;
+uniform sampler2D crt_glass_wear_tex : hint_default_black, filter_linear_mipmap, repeat_disable;
+// One of four mirrored orientations, assigned per set so a row of televisions
+// does not advertise that it shares one fingerprint mask.
+uniform vec2 crt_glass_wear_flip = vec2(0.0);
 const vec3 CRT_GLASS_TINT = vec3(0.42, 0.56, 0.72);
 
 
@@ -106,11 +111,38 @@ float crt_luminance(vec3 col) {
 	return dot(col, vec3(0.2126, 0.7152, 0.0722));
 }
 
+float crt_glass_wear_mask(vec2 uv) {
+	if (crt_glass_wear <= 0.0) {
+		return 0.0;
+	}
+	vec2 wear_uv = mix(uv, vec2(1.0) - uv, crt_glass_wear_flip);
+	// Lift faint cleaning streaks without turning the mask's clean black areas
+	// into a veil. Mip filtering keeps fingerprint ridges stable in both XR eyes.
+	float mask = texture(crt_glass_wear_tex, wear_uv).r;
+	return smoothstep(0.018, 0.72, mask) * crt_glass_wear;
+}
+
+float crt_glass_roughness_value(float wear) {
+	return mix(crt_glass_roughness, max(crt_glass_roughness, 0.46), wear);
+}
+
+float crt_glass_specular_value(float wear) {
+	return clamp(0.5 * crt_glass_reflection * mix(1.0, 1.42, wear), 0.0, 1.0);
+}
+
+float crt_glass_clearcoat_value(float wear) {
+	return crt_glass_reflection * mix(1.0, 0.58, wear);
+}
+
+float crt_glass_clearcoat_roughness_value(float wear) {
+	return mix(crt_glass_roughness, max(crt_glass_roughness, 0.38), wear);
+}
+
 // A restrained front-surface glint. It is deliberately broad and keyed to tube
 // UV, so it cannot alias or disagree between the two eyes. Fresnel supplies the
 // view-dependent part; real environment/specular response is configured by each
 // calling shader through ALBEDO / SPECULAR / ROUGHNESS.
-vec3 crt_glass_sheen(vec3 picture, vec2 uv, vec3 normal, vec3 view) {
+vec3 crt_glass_sheen(vec3 picture, vec2 uv, vec3 normal, vec3 view, float wear) {
 	if (crt_glass_reflection <= 0.0) {
 		return vec3(0.0);
 	}
@@ -129,7 +161,12 @@ vec3 crt_glass_sheen(vec3 picture, vec2 uv, vec3 normal, vec3 view) {
 	float darkness = 1.0 - smoothstep(0.03, 0.75, crt_luminance(picture));
 	float strength = (0.12 * fresnel + 0.075 * broad_highlight)
 		* mix(0.28, 1.0, darkness) * crt_glass_reflection;
-	return CRT_GLASS_TINT * strength;
+	// Wear is revealed only where the faceplate is already reflective. Dark
+	// phosphors and grazing angles expose it; a bright picture overwhelms it.
+	float reflection = max(fresnel, broad_highlight);
+	float artifact = wear * (0.025 + 0.20 * reflection)
+		* mix(0.20, 1.0, darkness) * crt_glass_reflection;
+	return CRT_GLASS_TINT * (strength + artifact);
 }
 
 // How much of a cosine harmonic survives being sampled at a footprint of `f`

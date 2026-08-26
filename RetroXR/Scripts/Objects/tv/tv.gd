@@ -13,6 +13,7 @@ const WINDOW_SHADER := preload("res://Shaders/screen_window.gdshader")
 # Analog snow, shown by the built-in tuner for every failure. Named here too
 # because _route_osd and _update_crt both have to recognise it on the screen.
 const STATIC_SHADER := preload("res://Shaders/tv_static.gdshader")
+const GLASS_WEAR_TEXTURE := preload("res://Textures/TV/crt_glass_wear.png")
 
 ## Which input the set is showing. COMPOSITE_1..4 are the physical sockets on the
 ## back — a console, VCR or DVD deck on a composite lead — TV is the built-in tuner
@@ -172,6 +173,7 @@ var _crt_params := {
 	"crt_brightness": 1.0,
 	"crt_glass_reflection": 0.35,
 	"crt_glass_roughness": 0.12,
+	"crt_glass_wear": 0.35,
 }
 
 # Phosphor persistence ping-pong (Shaders/phosphor_decay.gdshader). A viewport
@@ -1119,6 +1121,7 @@ func _update_stereo_button() -> void:
 func _apply_crt_params(mat: ShaderMaterial) -> void:
 	for key: String in _crt_params:
 		mat.set_shader_parameter(key, _crt_params[key])
+	mat.set_shader_parameter("crt_glass_wear_tex", GLASS_WEAR_TEXTURE)
 	_apply_derived_crt_params(mat)
 
 
@@ -1147,11 +1150,13 @@ func _known_display_materials() -> Array[ShaderMaterial]:
 	return result
 
 
-## The two uniforms that aren't slider values. Both describe the tube and the
-## signal on it rather than a preference, so they're derived rather than authored
-## — and both have to be right for the mask and raster to stay glued to the glass
-## as you move, which is the whole point of the rewritten filter.
+## Uniforms derived from the set and its current signal rather than authored by a
+## slider. They keep the mask/raster fixed to the glass and vary the shared wear
+## map between otherwise identical televisions.
 func _apply_derived_crt_params(mat: ShaderMaterial) -> void:
+	var wear_variant := int(get_instance_id() % 4)
+	mat.set_shader_parameter("crt_glass_wear_flip", Vector2(
+		float(wear_variant & 1), float((wear_variant >> 1) & 1)))
 	# Phosphor pitch is a property of the glass, so the triad count follows the
 	# screen's WORLD width: scaling the TV up adds triads instead of stretching
 	# them, exactly as a physically bigger tube would.

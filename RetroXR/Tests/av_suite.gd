@@ -21,6 +21,7 @@ const TRS_CABLE := preload("res://Scenes/Objects/cables/trs_cable.tscn")
 const SPEAKERS := preload("res://Scenes/Objects/appliances/speaker_pair.tscn")
 const RF_SWITCH := preload("res://Scenes/Objects/appliances/rf_switch.tscn")
 const WINDOW_SHADER := preload("res://Shaders/screen_window.gdshader")
+const TV_OPTIONS_UI := preload("res://Scenes/UI/tv_options_2d.tscn")
 
 ## A machine or deck reduced to the contract a television actually reads.
 ## Real hardware is used wherever routing is the thing under test; this stands in
@@ -129,6 +130,7 @@ func _run() -> void:
 		["display/the aerial input on the right channel shows the machine", _d_rf_tuned],
 		["display/the afterglow does not carry over from the last machine", _d_no_ghost],
 		["display/a source's own stage shader is used", _d_stage],
+		["display/glass wear follows its slider, source and save", _d_glass_wear],
 		["display/two sets get their own window of one picture", _d_stage_per_tv],
 		["display/the picture shape follows the button on the TV input", _d_tv_aspect],
 		["guard/a host that is not shown is refused", _g_refused],
@@ -954,6 +956,74 @@ func _d_stage() -> void:
 		_check_eq(mat.get_shader_parameter("source_tex"), src.texture, "fed with its picture")
 		_check_eq(mat.get_shader_parameter("crt_glass_reflection"), 0.35,
 			"and the shared glass tuning reaches a source-owned display stage")
+
+
+func _d_glass_wear() -> void:
+	var tv := _tv()
+	await _wait(30)
+	_check_eq(tv.get_crt_params().get("crt_glass_wear"), 0.35,
+		"new sets start with subtle wear")
+
+	# Exercise the actual UI signal, not merely the television setter.
+	var ui := TV_OPTIONS_UI.instantiate() as TVOptions2D
+	add_child(ui)
+	_spawned.append(ui)
+	await _wait(2)
+	ui.populate_crt(tv.get_crt_params())
+	ui.crt_param_changed.connect(tv.set_crt_param)
+	var wear_slider := ui._crt_sliders["crt_glass_wear"]["slider"] as HSlider
+	wear_slider.value = 0.8
+	_check_eq(tv.get_crt_params().get("crt_glass_wear"), 0.8,
+		"the Glass wear slider reaches the television")
+
+	# A source-owned stage replaces the ordinary gameplay material. The set must
+	# seed the replacement with the same wear texture, value and per-set flip.
+	var src := StubSource.new()
+	src.texture = _a_texture()
+	src.stage = {"shader": WINDOW_SHADER,
+		"params": {"source_rect": Vector4(0.0, 0.0, 1.0, 1.0), "eye_shift": 0.0}}
+	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
+	await _wait(4)
+	var active := _glass(tv) as ShaderMaterial
+	_check(active != null, "the source switch leaves a display material")
+	if active != null:
+		_check_eq(active.get_shader_parameter("crt_glass_wear"), 0.8,
+			"wear survives a source-stage switch")
+		_check_eq(active.get_shader_parameter("crt_glass_wear_tex"), RetroTV.GLASS_WEAR_TEXTURE,
+			"the mipmapped mask reaches the source stage")
+		_check(active.get_shader_parameter("crt_glass_wear_flip") is Vector2,
+			"the source stage receives this set's mirrored orientation")
+		var picture_before: Variant = active.get_shader_parameter("source_tex")
+		tv.set_crt_param("crt_glass_wear", 1.0)
+		_check_eq(active.get_shader_parameter("source_tex"), picture_before,
+			"wear changes glass response without replacing the game image")
+		tv.set_crt_param("crt_glass_wear", 0.8)
+
+	# Power-off swaps in a separate dark material, where wear should be easiest to
+	# see. It carries the same setting rather than resetting to the shader default.
+	tv.remote_power_toggle()
+	await _wait(6)
+	var dark := _glass(tv) as ShaderMaterial
+	_check_eq(dark, tv._dark_material, "power-off uses the dark glass")
+	if dark != null:
+		_check_eq(dark.get_shader_parameter("crt_glass_wear"), 0.8,
+			"powered-off glass keeps the chosen wear")
+
+	# ScenePersistence already stores the complete CRT dictionary. Assert the new
+	# key is in that real record and can seed a television before it enters a tree.
+	var persistence := ScenePersistence.new()
+	var record: Dictionary = persistence._serialize_node(tv, 1, {})
+	_check_eq((record.get("crt_params", {}) as Dictionary).get("crt_glass_wear"), 0.8,
+		"the scene record persists Glass wear")
+	var restored := TV_SCENE.instantiate() as RetroTV
+	restored.set_crt_params(record.get("crt_params", {}))
+	restored.freeze = true
+	restored.position = Vector3(_spawned.size() * 3.0, 1, 0)
+	add_child(restored)
+	_spawned.append(restored)
+	await _wait(4)
+	_check_eq(restored.get_crt_params().get("crt_glass_wear"), 0.8,
+		"a restored television keeps Glass wear")
 
 
 func _d_stage_per_tv() -> void:

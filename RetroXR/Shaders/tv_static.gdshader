@@ -72,13 +72,14 @@ void fragment() {
 		col = crt_apply_full(col, vec3(0.0), wuv);
 	}
 	vec3 picture = clamp(col, 0.0, 1.0);
+	float glass_wear = crt_glass_wear_mask(wuv);
 	ALBEDO = vec3(0.006, 0.008, 0.012) * crt_glass_reflection;
-	EMISSION = picture + crt_glass_sheen(picture, wuv, NORMAL, VIEW);
+	EMISSION = picture + crt_glass_sheen(picture, wuv, NORMAL, VIEW, glass_wear);
 	METALLIC = 0.0;
-	SPECULAR = 0.5 * crt_glass_reflection;
-	ROUGHNESS = crt_glass_roughness;
-	CLEARCOAT = crt_glass_reflection;
-	CLEARCOAT_ROUGHNESS = crt_glass_roughness;
+	SPECULAR = crt_glass_specular_value(glass_wear);
+	ROUGHNESS = crt_glass_roughness_value(glass_wear);
+	CLEARCOAT = crt_glass_clearcoat_value(glass_wear);
+	CLEARCOAT_ROUGHNESS = crt_glass_clearcoat_roughness_value(glass_wear);
 	// ALPHA is written unconditionally: with the filter off the border term is a
 	// flat 1.0, and writing it either way keeps this a transparency-enabled
 	// material rather than flipping the pipeline when the toggle moves.
