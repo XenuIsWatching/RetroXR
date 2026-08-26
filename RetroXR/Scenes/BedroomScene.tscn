@@ -17,7 +17,8 @@
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_Roughness.jpg" id="25_rug_rgh"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/ceiling_fan.glb" id="14_fan"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/door.glb" id="19_door"]
-[ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/light_switch.glb" id="28_switch"]
+[ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/switch_plate_2gang.res" id="28_plate"]
+[ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/switch_toggle.res" id="28_toggle"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/light_switch.gd" id="29_switchscript"]
 [ext_resource type="Script" path="res://Scripts/Objects/highlights/glow_mesh.gd" id="35_glow"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/string_lights.gd" id="36_strlights"]
@@ -220,15 +221,11 @@ size = Vector3(5.2, 0.15, 4.4)
 [sub_resource type="BoxShape3D" id="Shape_door"]
 size = Vector3(0.16, 2.07, 0.96)
 
-[sub_resource type="BoxMesh" id="Mesh_lever"]
-size = Vector3(0.016, 0.01, 0.04)
-
-[sub_resource type="BoxShape3D" id="Shape_lever"]
-size = Vector3(0.02, 0.014, 0.044)
-
-[sub_resource type="StandardMaterial3D" id="Mat_lever"]
-albedo_color = Color(0.93, 0.9, 0.83, 1)
-roughness = 0.5
+; Grab volume round one toggle bat. The bat is 9.2 x 6.8 mm in section and runs 20 mm
+; out of the wall, so this is that plus a few millimetres of slack, and it is deep
+; enough in Y to cover the tip at either end of the throw.
+[sub_resource type="BoxShape3D" id="Shape_bat"]
+size = Vector3(0.014, 0.020, 0.024)
 
 ; --- Time-of-day lever -------------------------------------------------------
 ; Plate lies flat on the west wall: thin in the mount's local X (the wall normal),
@@ -636,30 +633,70 @@ omni_range = 14.0
 ; own origin — so none of these numbers are guessable by hand.
 [node name="Furniture" type="Node3D" parent="."]
 
-[node name="LightSwitch" type="Node3D" parent="Furniture"]
+; Two-gang toggle plate, west wall, 1.2 m up. The plate and the bats are baked by
+; Tools/gen_light_switch.gd; nothing here is downloaded.
+;
+; The node's basis puts local +Z out of the wall and local +Y up, which is the frame
+; both meshes are authored in — so the plate mounts with its back face ON the wall at
+; x = -2.525 and needs no fitted offset, and each Button is an identity basis with a
+; position. (Basis rows here are the .tscn's row-major listing: columns are
+; x = (0,0,-1), y = (0,1,0), z = (1,0,0).)
+;
+; Gangs sit on the real 47.6 mm pitch, +/- 23.85 mm along local X. The plate is 116 mm
+; wide, so its edges reach z = 0.492 .. 0.608 in the room: clear of the TimeLever
+; (0.30 m north, z 0.25) and of the door opening (z 0.70 .. 1.70).
+[node name="SwitchPlate" type="Node3D" parent="Furniture"]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.525, 1.2, 0.55)
+
+[node name="Plate" type="MeshInstance3D" parent="Furniture/SwitchPlate"]
+mesh = ExtResource("28_plate")
+
+; Left gang: the ceiling fan globe.
+[node name="Ceiling" type="Node3D" parent="Furniture/SwitchPlate"]
 script = ExtResource("29_switchscript")
-hide_meshes = PackedStringArray("Object_3")
+target = 0
 
-; Object_3 is the second plate variant sitting alongside; only Object_5 is kept.
-[node name="Plate" parent="Furniture/LightSwitch" instance=ExtResource("28_switch")]
-transform = Transform3D(0.03453, 0, 0, 0, 0.03453, 0, 0, 0, 0.03453, 0.00466, 0.0278, 0.0014)
-
-[node name="Button" type="Area3D" parent="Furniture/LightSwitch"]
-transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.018)
+; The bat's pivot sits ON the aperture floor (z = THICK - WELL = 5.5 mm) and 4 mm of
+; bat is authored behind it, so the heel stays under the floor through the whole
+; throw and no gap opens at the root at full tilt.
+[node name="Button" type="Area3D" parent="Furniture/SwitchPlate/Ceiling"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.02385, 0, 0.0095)
 collision_layer = 0
 collision_mask = 0
 script = ExtResource("31_vrbutton")
 require_trigger = true
 interact_margin = 0.03
 depress_depth = 0.006
+depress_axis = Vector3(0, 0, -1)
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Furniture/LightSwitch/Button"]
-shape = SubResource("Shape_lever")
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Furniture/SwitchPlate/Ceiling/Button"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.008)
+shape = SubResource("Shape_bat")
 
-[node name="ButtonMesh" type="MeshInstance3D" parent="Furniture/LightSwitch/Button"]
-mesh = SubResource("Mesh_lever")
-surface_material_override/0 = SubResource("Mat_lever")
+[node name="ButtonMesh" type="MeshInstance3D" parent="Furniture/SwitchPlate/Ceiling/Button"]
+mesh = ExtResource("28_toggle")
+
+; Right gang: both string-light strands, via the "string_light" group.
+[node name="Strings" type="Node3D" parent="Furniture/SwitchPlate"]
+script = ExtResource("29_switchscript")
+target = 1
+
+[node name="Button" type="Area3D" parent="Furniture/SwitchPlate/Strings"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02385, 0, 0.0095)
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("31_vrbutton")
+require_trigger = true
+interact_margin = 0.03
+depress_depth = 0.006
+depress_axis = Vector3(0, 0, -1)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Furniture/SwitchPlate/Strings/Button"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.008)
+shape = SubResource("Shape_bat")
+
+[node name="ButtonMesh" type="MeshInstance3D" parent="Furniture/SwitchPlate/Strings/Button"]
+mesh = ExtResource("28_toggle")
 
 
 ; --- Time-of-day lever -------------------------------------------------------
@@ -899,7 +936,7 @@ surface_material_override/0 = SubResource("Mat_poster_frame")
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.493, 1.6, -1.1)
 mesh = SubResource("Quad_poster")
 surface_material_override/0 = SubResource("Mat_poster_b")
-[node name="WindowLights" type="Node3D" parent="."]
+[node name="WindowLights" type="Node3D" parent="." groups=["string_light"]]
 script = ExtResource("36_strlights")
 path = PackedVector3Array(-1.79, 2.16, -2.1, -0.01, 2.16, -2.1, -0.01, 0.8, -2.1, -1.79, 0.8, -2.1)
 closed = true
@@ -912,7 +949,7 @@ emission_energy = 1.7
 wash_energy = 0.34
 wash_range = 2.6
 
-[node name="PosterLights" type="Node3D" parent="."]
+[node name="PosterLights" type="Node3D" parent="." groups=["string_light"]]
 script = ExtResource("36_strlights")
 path = PackedVector3Array(2.505, 2.09, -1.48, 2.505, 2.09, -0.72, 2.505, 1.11, -0.72, 2.505, 1.11, -1.48)
 closed = true

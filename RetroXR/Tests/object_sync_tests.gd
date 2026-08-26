@@ -445,6 +445,15 @@ func _add_fixed_room_controls(root: Node, lights: bool, lamp: bool,
 	light.name = "RoomLight"
 	light.lights_on = lights
 	root.add_child(light)
+	# A second gang of the SAME class, deliberately holding the opposite state: the
+	# bedroom's plate has one, and the capture keys its records by node path rather
+	# than by class. A capture that keyed by class would pass every other case here
+	# and quietly give a late joiner one switch's state for both.
+	var strand := MockRoomLight.new()
+	strand.name = "StringLight"
+	strand.target = LightSwitch.Target.STRING
+	strand.lights_on = not lights
+	root.add_child(strand)
 	var pull := MockPullLight.new()
 	pull.name = "PullLight"
 	pull.lit = lamp
@@ -488,6 +497,9 @@ func _test_snapshot(p: Pair) -> void:
 		and int(tv_state["rf_channel"]) == 4 and int(tv_state["audio_mode"]) == 2
 		and client_tv.stereo_mode == 1,
 		"snapshot/a TV's power, volume, mute, ratio, source, channel and modes survive")
+	_ok((p.client_root.get_node("StringLight") as MockRoomLight).lights_on
+		and not (p.client_root.get_node("RoomLight") as MockRoomLight).lights_on,
+		"snapshot/two switch gangs of one class arrive with their own states")
 	_ok(not (p.client_root.get_node("RoomLight") as MockRoomLight).lights_on
 		and not (p.client_root.get_node("PullLight") as MockPullLight).lit
 		and is_equal_approx((p.client_root.get_node("Blinds") as MockBlinds).drop, 0.25)

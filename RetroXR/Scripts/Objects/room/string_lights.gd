@@ -65,12 +65,40 @@ extends Node3D
 @export var wash_range: float = 2.4:
 	set(v): wash_range = v; _rebuild()
 
+## Strand on/off. A plain assignment rather than a rebuild: the strand is two
+## MultiMeshes and an Omni, and turning it off changes exactly two numbers on them.
+## The wall switch drives this every press, so a rebuild here would free and
+## re-create both MultiMeshes on a hand movement.
 @export var lit: bool = true:
-	set(v): lit = v; _rebuild()
+	set(v): lit = v; _apply_lit()
 
 
 func _ready() -> void:
 	_rebuild()
+
+
+## The switch's entry point, and the one object_sync/_apply_lit round trip. Named to
+## match GlowMesh.set_lit(), which the same switch calls on the ceiling fixture.
+func set_lit(on: bool) -> void:
+	lit = on
+
+
+## Push `lit` onto the already-built children. A no-op before the first _rebuild()
+## — this is a @tool script and a setter can fire before the children exist.
+##
+## Writing light_energy is safe HERE and would not be on the ceiling fixture:
+## QualityManager._adjust_lights() owns the energy of everything in the
+## "ceiling_light" group and rewrites it per quality tier, and the wash Omni is
+## deliberately not in that group.
+func _apply_lit() -> void:
+	var bulbs := get_node_or_null("Bulbs") as MultiMeshInstance3D
+	if bulbs != null:
+		var mat := bulbs.material_override as StandardMaterial3D
+		if mat != null:
+			mat.emission_energy_multiplier = emission_energy if lit else 0.0
+	var wash := get_node_or_null("Wash") as OmniLight3D
+	if wash != null:
+		wash.light_energy = wash_energy if lit else 0.0
 
 
 ## Set the strand to trace a rectangle in a plane, which is how both of this
