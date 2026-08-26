@@ -108,7 +108,7 @@ func _on_peer_left(peer_id: int) -> void:
 func _on_serve_started(peer_id: int, md5: String, _kind: String, size: int) -> void:
 	if not _speaking():
 		return
-	_stack.notify(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.BUSY),
+	_stack.notify(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.UPLOAD),
 		"Sending %s to %s" % [_what(md5), _who(peer_id)], 0.0, 0.0)
 	if size <= 0:
 		_stack.finish(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.CHECK),
@@ -118,7 +118,7 @@ func _on_serve_started(peer_id: int, md5: String, _kind: String, size: int) -> v
 func _on_serve_progress(peer_id: int, md5: String, sent: int, total: int) -> void:
 	if not _speaking() or total <= 0:
 		return
-	_stack.notify(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.BUSY),
+	_stack.notify(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.UPLOAD),
 		"Sending %s to %s  %s / %s" % [_what(md5), _who(peer_id),
 			MenuStyle.human_bytes(sent), MenuStyle.human_bytes(total)],
 		float(sent) / float(total), 0.0)
@@ -149,11 +149,13 @@ func _on_join_progress(peer_id: int, phase: String, received: int, total: int) -
 	var who := _who(peer_id)
 	match phase:
 		"capturing":
-			_stack.notify(key, String.chr(MenuIcons.BUSY),
+			# A stall, not a transfer -- every player in the room is frozen at
+			# this moment, which a download arrow would misdescribe.
+			_stack.notify(key, String.chr(MenuIcons.PAUSED),
 				"Pausing the game so %s can join" % who, -1.0, 0.0)
 		"transferring":
 			var frac := float(received) / float(total) if total > 0 else -1.0
-			_stack.notify(key, String.chr(MenuIcons.BUSY),
+			_stack.notify(key, String.chr(MenuIcons.UPLOAD),
 				"Sending the game to %s" % who, frac, 0.0)
 		"done":
 			_stack.finish(key, String.chr(MenuIcons.CHECK),

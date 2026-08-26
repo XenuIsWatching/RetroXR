@@ -17,7 +17,9 @@ const ROMM_MARK_PATH := "res://Textures/RomM/romm_logo.svg"
 # file can be got back. (At row size the two trash cans look near-identical, so
 # the confirm text carries the real distinction — the glyph is a support cue.)
 const DOWNLOAD  := 0xF0ED    # fa-cloud_download  — on the server, not here
-const BUSY      := 0xF019    # fa-download        — transferring now
+const BUSY      := 0xF019    # fa-download        — coming down to us now
+const UPLOAD    := 0xF093    # fa-upload          — going out from us now
+const PAUSED    := 0xF04C    # fa-pause           — stalled, waiting on someone
 const DELETE    := 0xF01B4   # md-delete          — reversible (still on server)
 const DELETE_FOREVER := 0xF05E8  # md-delete_forever — local only, gone for good
 const RETRY     := 0xF021    # fa-refresh
