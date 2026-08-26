@@ -136,7 +136,7 @@ func _parse_cmdline() -> void:
 	if FileAccess.file_exists("user://spike.cfg") \
 			and ResourceLoader.exists("res://Tools/netplay_spike.tscn"):
 		print("[NetworkManager] spike.cfg found — launching netplay spike")
-		get_tree().change_scene_to_file("res://Tools/netplay_spike.tscn")
+		_swap_in_probe("res://Tools/netplay_spike.tscn")
 		return
 	# Same hook for the hardware-render video probe (GLES2/GLES3 black-screen
 	# hunt). The probe deletes the cfg itself, like the spike.
