@@ -279,13 +279,13 @@ size = Vector3(5.2, 2.6, 0.15)
 ; stretch of this wall was the only clear one: the two posters sit at x 0.95 and
 ; 1.88, and the west corner is at -2.525.
 [sub_resource type="BoxMesh" id="Mesh_wall_s_w"]
-size = Vector3(0.6, 2.6, 0.15)
+size = Vector3(0.622, 2.6, 0.15)
 
 [sub_resource type="BoxMesh" id="Mesh_wall_s_e"]
-size = Vector3(3.6, 2.6, 0.15)
+size = Vector3(3.622, 2.6, 0.15)
 
 [sub_resource type="BoxMesh" id="Mesh_wall_s_head"]
-size = Vector3(1, 0.5, 0.15)
+size = Vector3(0.956, 0.505, 0.15)
 
 ; --- Closet shell -------------------------------------------------------------
 ; Sits BEHIND the south wall, so it is never in shot with the door shut. Built
@@ -341,13 +341,13 @@ size = Vector3(1.7, 0.045, 0.1)
 
 ; West wall is split around the door opening: 1.0 wide x 2.1 high, centred z = 1.2.
 [sub_resource type="BoxMesh" id="Mesh_wall_w_n"]
-size = Vector3(0.15, 2.6, 2.9)
+size = Vector3(0.15, 2.6, 2.917)
 
 [sub_resource type="BoxMesh" id="Mesh_wall_w_s"]
-size = Vector3(0.15, 2.6, 0.5)
+size = Vector3(0.15, 2.6, 0.527)
 
 [sub_resource type="BoxMesh" id="Mesh_wall_w_head"]
-size = Vector3(0.15, 0.5, 1)
+size = Vector3(0.15, 0.505, 0.956)
 
 [sub_resource type="BoxMesh" id="Mesh_ceiling"]
 size = Vector3(5.2, 0.15, 4.4)
@@ -650,17 +650,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, -2.2)
 shape = SubResource("Shape_wall_ns")
 
 [node name="SouthWallW" type="MeshInstance3D" parent="Room"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 1.3, 2.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.289, 1.3, 2.2)
 mesh = SubResource("Mesh_wall_s_w")
 surface_material_override/0 = SubResource("Mat_wall")
 
 [node name="SouthWallE" type="MeshInstance3D" parent="Room"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 1.3, 2.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.789, 1.3, 2.2)
 mesh = SubResource("Mesh_wall_s_e")
 surface_material_override/0 = SubResource("Mat_wall")
 
 [node name="SouthWallHead" type="MeshInstance3D" parent="Room"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.35, 2.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.3475, 2.2)
 mesh = SubResource("Mesh_wall_s_head")
 surface_material_override/0 = SubResource("Mat_wall")
 
@@ -678,17 +678,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 1.3, 0)
 shape = SubResource("Shape_wall_e")
 
 [node name="WestWallN" type="MeshInstance3D" parent="Room"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 1.3, -0.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 1.3, -0.7415)
 mesh = SubResource("Mesh_wall_w_n")
 surface_material_override/0 = SubResource("Mat_wall")
 
 [node name="WestWallS" type="MeshInstance3D" parent="Room"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 1.3, 1.95)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 1.3, 1.9365)
 mesh = SubResource("Mesh_wall_w_s")
 surface_material_override/0 = SubResource("Mat_wall")
 
 [node name="WestWallHead" type="MeshInstance3D" parent="Room"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 2.35, 1.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 2.3475, 1.195)
 mesh = SubResource("Mesh_wall_w_head")
 surface_material_override/0 = SubResource("Mat_wall")
 
@@ -1238,22 +1238,22 @@ mesh = SubResource("Mesh_cap_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="SouthBaseW" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(0.6, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 0.055, 2.116)
+transform = Transform3D(0.622, 0, 0, 0, 1, 0, 0, 0, 1, -2.289, 0.055, 2.116)
 mesh = SubResource("Mesh_base_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="SouthCapW" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(0.6, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 0.121, 2.112)
+transform = Transform3D(0.622, 0, 0, 0, 1, 0, 0, 0, 1, -2.289, 0.121, 2.112)
 mesh = SubResource("Mesh_cap_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="SouthBaseE" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(3.6, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0.055, 2.116)
+transform = Transform3D(3.622, 0, 0, 0, 1, 0, 0, 0, 1, 0.789, 0.055, 2.116)
 mesh = SubResource("Mesh_base_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="SouthCapE" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(3.6, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0.121, 2.112)
+transform = Transform3D(3.622, 0, 0, 0, 1, 0, 0, 0, 1, 0.789, 0.121, 2.112)
 mesh = SubResource("Mesh_cap_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
@@ -1268,22 +1268,22 @@ mesh = SubResource("Mesh_cap_ew")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="WestNBase" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 2.9, -2.516, 0.055, -0.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 2.917, -2.516, 0.055, -0.7415)
 mesh = SubResource("Mesh_base_ew")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="WestNCap" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 2.9, -2.512, 0.121, -0.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 2.917, -2.512, 0.121, -0.7415)
 mesh = SubResource("Mesh_cap_ew")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="WestSBase" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, -2.516, 0.055, 1.95)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.527, -2.516, 0.055, 1.9365)
 mesh = SubResource("Mesh_base_ew")
 surface_material_override/0 = SubResource("Mat_trim")
 
 [node name="WestSCap" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, -2.512, 0.121, 1.95)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.527, -2.512, 0.121, 1.9365)
 mesh = SubResource("Mesh_cap_ew")
 surface_material_override/0 = SubResource("Mat_trim")
 
