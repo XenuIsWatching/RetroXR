@@ -1001,9 +1001,11 @@ func _d_glass_wear() -> void:
 	ui.populate_crt(tv.get_crt_params())
 	ui.crt_param_changed.connect(tv.set_crt_param)
 	var wear_slider := ui._crt_sliders["crt_glass_wear"]["slider"] as HSlider
-	wear_slider.value = 0.8
-	_check_eq(tv.get_crt_params().get("crt_glass_wear"), 0.8,
-		"the Glass wear slider reaches the television")
+	_check_eq(wear_slider.max_value, 3.0,
+		"the Glass wear slider offers a 3x overdrive range")
+	wear_slider.value = 2.5
+	_check_eq(tv.get_crt_params().get("crt_glass_wear"), 2.5,
+		"Glass wear overdrive reaches the television")
 	var character_slider := ui._crt_sliders["crt_character"]["slider"] as HSlider
 	character_slider.value = 0.75
 	_check_eq(tv.get_crt_params().get("crt_character"), 0.75,
@@ -1020,7 +1022,7 @@ func _d_glass_wear() -> void:
 	var active := _glass(tv) as ShaderMaterial
 	_check(active != null, "the source switch leaves a display material")
 	if active != null:
-		_check_eq(active.get_shader_parameter("crt_glass_wear"), 0.8,
+		_check_eq(active.get_shader_parameter("crt_glass_wear"), 2.5,
 			"wear survives a source-stage switch")
 		_check_eq(active.get_shader_parameter("crt_character"), 0.75,
 			"CRT character survives a source-stage switch")
@@ -1029,10 +1031,10 @@ func _d_glass_wear() -> void:
 		_check(active.get_shader_parameter("crt_glass_wear_flip") is Vector2,
 			"the source stage receives this set's mirrored orientation")
 		var picture_before: Variant = active.get_shader_parameter("source_tex")
-		tv.set_crt_param("crt_glass_wear", 1.0)
+		tv.set_crt_param("crt_glass_wear", 3.0)
 		_check_eq(active.get_shader_parameter("source_tex"), picture_before,
-			"wear changes glass response without replacing the game image")
-		tv.set_crt_param("crt_glass_wear", 0.8)
+			"wear overdrive changes glass response without replacing the game image")
+		tv.set_crt_param("crt_glass_wear", 2.5)
 
 	# Power-off swaps in a separate dark material, where wear should be easiest to
 	# see. It carries the same setting rather than resetting to the shader default.
@@ -1041,7 +1043,7 @@ func _d_glass_wear() -> void:
 	var dark := _glass(tv) as ShaderMaterial
 	_check_eq(dark, tv._dark_material, "power-off uses the dark glass")
 	if dark != null:
-		_check_eq(dark.get_shader_parameter("crt_glass_wear"), 0.8,
+		_check_eq(dark.get_shader_parameter("crt_glass_wear"), 2.5,
 			"powered-off glass keeps the chosen wear")
 		_check_eq(dark.get_shader_parameter("crt_powered"), false,
 			"powered-off glass receives explicit unlit state")
@@ -1050,7 +1052,7 @@ func _d_glass_wear() -> void:
 	# key is in that real record and can seed a television before it enters a tree.
 	var persistence := ScenePersistence.new()
 	var record: Dictionary = persistence._serialize_node(tv, 1, {})
-	_check_eq((record.get("crt_params", {}) as Dictionary).get("crt_glass_wear"), 0.8,
+	_check_eq((record.get("crt_params", {}) as Dictionary).get("crt_glass_wear"), 2.5,
 		"the scene record persists Glass wear")
 	_check_eq((record.get("crt_params", {}) as Dictionary).get("crt_character"), 0.75,
 		"the scene record persists CRT character")
@@ -1061,8 +1063,8 @@ func _d_glass_wear() -> void:
 	add_child(restored)
 	_spawned.append(restored)
 	await _wait(4)
-	_check_eq(restored.get_crt_params().get("crt_glass_wear"), 0.8,
-		"a restored television keeps Glass wear")
+	_check_eq(restored.get_crt_params().get("crt_glass_wear"), 2.5,
+		"a restored television keeps Glass wear overdrive")
 	_check_eq(restored.get_crt_params().get("crt_character"), 0.75,
 		"a restored television keeps CRT character")
 

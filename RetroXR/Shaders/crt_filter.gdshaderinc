@@ -89,7 +89,10 @@ uniform float crt_brightness : hint_range(0.5, 2.0) = 1.0;
 // fallback for the mobile renderer and rooms without a useful probe.
 uniform float crt_glass_reflection : hint_range(0.0, 1.0) = 0.35;
 uniform float crt_glass_roughness : hint_range(0.02, 0.6) = 0.12;
-uniform float crt_glass_wear : hint_range(0.0, 1.0) = 0.35;
+// 0..1 retains the original clean-to-strong range. 1..3 is deliberate
+// overdrive for players who want fingerprints and scratches to read clearly
+// even away from the ideal dark, grazing-angle reveal.
+uniform float crt_glass_wear : hint_range(0.0, 3.0) = 0.35;
 uniform float crt_character : hint_range(0.0, 1.0) = 0.35;
 uniform bool crt_powered = true;
 uniform vec2 crt_source_texel_size = vec2(0.0015625, 0.0020833333);
@@ -122,7 +125,9 @@ float crt_glass_wear_mask(vec2 uv) {
 	// Lift faint cleaning streaks without turning the mask's clean black areas
 	// into a veil. Mip filtering keeps fingerprint ridges stable in both XR eyes.
 	float mask = texture(crt_glass_wear_tex, wear_uv).r;
-	return smoothstep(0.018, 0.72, mask) * crt_glass_wear;
+	// Above 1x, progressively recruit the mask's faint streaks and dust instead
+	// of extrapolating material roughness beyond its physical 0..1 range.
+	return min(smoothstep(0.018, 0.72, mask) * crt_glass_wear, 1.0);
 }
 
 float crt_glass_roughness_value(float wear) {
@@ -184,7 +189,11 @@ vec3 crt_glass_sheen(vec3 picture, vec3 normal, vec3 view, float wear, mat4 inv_
 	// Wear is revealed only where the faceplate is already reflective. Dark
 	// phosphors and grazing angles expose it; a bright picture overwhelms it.
 	float reflection = max(fresnel, environment);
-	float artifact = wear * (0.025 + 0.20 * reflection)
+	// Past 1x, add up to another 2x reflection reveal. Together with the wider
+	// mask response above this makes 3x emphatic, while every value through 1x
+	// renders exactly as before.
+	float wear_overdrive = 1.0 + 0.5 * max(crt_glass_wear - 1.0, 0.0);
+	float artifact = wear * wear_overdrive * (0.025 + 0.20 * reflection)
 		* mix(0.20, 1.0, darkness) * crt_glass_reflection;
 	return CRT_GLASS_TINT * (strength + artifact);
 }

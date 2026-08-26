@@ -11,7 +11,8 @@
 extends Node3D
 
 const TV_SCENE := preload("res://Scenes/Objects/tv.tscn")
-const LEVELS := [0.0, 0.35, 1.0]
+const WEAR_LEVELS := [0.0, 0.35, 1.0, 3.0]
+const CHARACTER_LEVELS := [0.0, 0.35, 1.0]
 const ROTATION_ANGLES := [-30.0, -15.0, 0.0, 15.0, 30.0]
 const OUTPUT_DIR := "res://../build_out/tv_probe"
 
@@ -104,7 +105,7 @@ func _run() -> void:
 	await _wait(12)
 
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUTPUT_DIR))
-	for level: float in LEVELS:
+	for level: float in WEAR_LEVELS:
 		_tv.set_crt_param("crt_glass_wear", level)
 		await _wait(8)
 		await _capture("active", level)
@@ -121,7 +122,7 @@ func _run() -> void:
 	await _capture_character_matrix("stock")
 	await _replace_tv_with_plain_monitor()
 	await _capture_character_matrix("plain")
-	print("[glass-wear] captured 6 wear, 5 rotation and 12 character images")
+	print("[glass-wear] captured 8 wear, 5 rotation and 12 character images")
 	get_tree().quit(0)
 
 
@@ -154,7 +155,7 @@ func _capture(state: String, level: float) -> void:
 ## With the camera and room lights fixed, turn the powered-off set itself. The
 ## fingerprints must stay on the glass while the sheen that reveals them travels.
 func _capture_rotation_sweep() -> void:
-	_tv.set_crt_param("crt_glass_wear", 1.0)
+	_tv.set_crt_param("crt_glass_wear", 3.0)
 	_tv.remote_power_toggle()
 	await _wait(8)
 	_tv.hide_osd()
@@ -174,7 +175,7 @@ func _capture_rotation_sweep() -> void:
 
 func _capture_character_matrix(model: String) -> void:
 	_tv.set_crt_param("crt_glass_wear", 0.35)
-	for level: float in LEVELS:
+	for level: float in CHARACTER_LEVELS:
 		_tv.set_crt_param("crt_character", level)
 		await _wait(8)
 		await _capture_character(model, "active", level)

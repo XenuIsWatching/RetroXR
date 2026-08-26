@@ -350,7 +350,7 @@ func _build_crt_tab(tabs: TabContainer) -> void:
 		["crt_brightness",        "Brightness",       0.5, 2.0,  0.05, "%.2f"],
 		["crt_glass_reflection",  "Glass reflection",  0.0, 1.0,  0.05, "%.2f"],
 		["crt_glass_roughness",   "Glass roughness",   0.02, 0.6, 0.02, "%.2f"],
-		["crt_glass_wear",        "Glass wear",        0.0, 1.0,  0.05, "%.2f"],
+		["crt_glass_wear",        "Glass wear",        0.0, 3.0,  0.05, "%.2f×"],
 		["crt_character",         "CRT character",     0.0, 1.0,  0.05, "%.2f"],
 	]
 	for s: Array in specs:
