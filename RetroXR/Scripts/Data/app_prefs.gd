@@ -36,6 +36,12 @@ enum XRDisplayMode {
 var xr_display_mode: XRDisplayMode = XRDisplayMode.BOTH
 var controller_hands: bool = false
 var system_filter:    bool = true
+## Whether the player may move the core options that make a machine show its own
+## boot screen. Off means BiosBoot's measured values are pinned every launch and
+## shown locked; on hands them back, seeded once so a machine still boots right
+## until the player changes one. A missing key reads as off, so an existing
+## install gets the pinned behaviour.
+var bios_boot_override: bool = false
 ## Whether the spawn menu wraps onto a cylinder. Unlike the rest, this one is not
 ## an OPTIONS switch — it is the toggle on the menu's own lower-right corner.
 var menu_curved:      bool = true
@@ -219,6 +225,7 @@ func _load_prefs() -> void:
 	xr_display_mode = _prefs_xr_display_mode(data, "xr_display_mode", xr_display_mode)
 	controller_hands = _prefs_bool(data, "controller_hands", controller_hands)
 	system_filter    = _prefs_bool(data, "system_filter",    system_filter)
+	bios_boot_override = _prefs_bool(data, "bios_boot_override", bios_boot_override)
 	menu_curved      = _prefs_bool(data, "menu_curved",      menu_curved)
 	show_hints       = _prefs_bool(data, "show_hints",       show_hints)
 	hint_uses        = _prefs_dict(data, "hint_uses",        hint_uses)
@@ -246,6 +253,7 @@ func save_prefs() -> void:
 		"xr_display_mode":  xr_display_mode,
 		"controller_hands": controller_hands,
 		"system_filter":    system_filter,
+		"bios_boot_override": bios_boot_override,
 		"menu_curved":      menu_curved,
 		"show_hints":       show_hints,
 		"hint_uses":        hint_uses,

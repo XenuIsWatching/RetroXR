@@ -34,8 +34,14 @@
 ##     mednafen_saturn, mednafen_pce and neocd all refuse a zero-byte file, so
 ##     Dreamcast, Saturn, PC Engine CD and Neo Geo CD have no `empty_media`.
 ##   * mgba, flycast, mednafen_pce and pcsx_rearmed already ship with their
-##     boot-ROM options set the way this feature wants them, so they carry no
-##     `splash` at all. A row that seeds a core's own default is noise.
+##     boot-ROM options set the way this feature wants them. mgba's and
+##     pcsx_rearmed's measured keys carry a `splash` anyway: these values are
+##     PINNED every launch rather than seeded once, and a pin's job is to beat a
+##     saved value, which a shipped default cannot do -- a run that left
+##     mgba_skip_bios "ON" behind is the case, and the survey itself produced
+##     one. flycast and mednafen_pce have no `splash` because the survey never
+##     recorded their key names, and a key a core does not declare is rejected
+##     rather than applied.
 ##   * The N64 has no BIOS. Both N64 cores' only firmware entry is the 64DD IPL,
 ##     and the N64's own boot animation lives in each cartridge's IPL3. The real
 ##     machine here is nintendo_64dd, which does boot to the 64DD menu.
@@ -60,13 +66,12 @@ const _ROWS := {
 	# receives a program in single-cartridge play: the BIOS draws its screen and
 	# then listens on the link port, which is the whole of how both work.
 	#
-	# No `splash`: mgba already ships mgba_use_bios "ON" and mgba_skip_bios "OFF".
 	"mgba/game_boy_advance": {
 		"boot_rom": ["gba_bios.bin"],
 		"empty_media": "",
 		"no_content": true,
 		"empty_options": {"mgba_use_bios": "ON", "mgba_skip_bios": "OFF"},
-		"splash": {},
+		"splash": {"mgba_use_bios": "ON", "mgba_skip_bios": "OFF"},
 		"why": "Boots its own BIOS with no cartridge, and then listens on the link port",
 	},
 	# ── Sony ─────────────────────────────────────────────────────────────────
@@ -74,14 +79,13 @@ const _ROWS := {
 	# .cue gives the real "Please insert PlayStation CD-ROM" screen, from which
 	# the CD player and memory card manager are reachable. Its four BIOSes are
 	# regional and any one will do.
-	# No `splash`: pcsx_rearmed_show_bios_bootlogo already ships "enabled" and
-	# pcsx_rearmed_bios already ships "auto", which uses the real BIOS.
 	"pcsx_rearmed/playstation": {
 		"boot_rom": ["scph5501.bin", "scph5500.bin", "scph5502.bin", "psxonpsp660.bin"],
 		"empty_media": "cue",
 		"empty_options": {"pcsx_rearmed_show_bios_bootlogo": "enabled",
 			"pcsx_rearmed_bios": "auto"},
-		"splash": {},
+		"splash": {"pcsx_rearmed_show_bios_bootlogo": "enabled",
+			"pcsx_rearmed_bios": "auto"},
 		"why": "An empty disc gives the PS1 BIOS; measured, and the only machine where this works",
 	},
 	# Two PS2 cores, and they do NOT share the option key -- pcee2 says
@@ -237,6 +241,40 @@ static func splash_options(core_name: String, systemid: String) -> Dictionary:
 	if not boot_rom_present(core_name, systemid):
 		return {}
 	return splash.duplicate()
+
+
+## The options this machine's run pins, for the slot it is actually starting
+## with. An empty slot and a loaded game reach the BIOS by different keys, so the
+## caller says which boot it is rather than this guessing from the table.
+##
+## Both halves stay separately callable: net_boot_spec composes a launch
+## description rather than a set of pins, and picks its own half.
+static func pinned_options(core_name: String, systemid: String, empty_boot: bool) -> Dictionary:
+	if empty_boot:
+		return empty_boot_options(core_name, systemid)
+	return splash_options(core_name, systemid)
+
+
+## Every key any row for this core pins, as a set. For the core manager, which
+## edits a core's options with no machine in front of it and so has no systemid
+## to ask with -- a key one of this core's machines pins is shown locked for all
+## of them, which is the safe way round: the alternative offers an edit that the
+## next power-on silently reverts.
+##
+## Keys only. A value here would be a value for the wrong machine, since one core
+## serves several and genesis_plus_gx's five rows share a key.
+static func pinned_keys_for_core(core_name: String) -> Dictionary:
+	var out: Dictionary = {}
+	if core_name.is_empty():
+		return out
+	for row_key: String in _ROWS:
+		if row_key.get_slice("/", 0) != core_name:
+			continue
+		var row: Dictionary = _ROWS[row_key]
+		for group: String in ["splash", "empty_options"]:
+			for key: Variant in (row.get(group, {}) as Dictionary):
+				out[str(key)] = true
+	return out
 
 
 ## Files this core cannot run at all without, and has not got.

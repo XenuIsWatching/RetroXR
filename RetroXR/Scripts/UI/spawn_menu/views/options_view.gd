@@ -1180,6 +1180,36 @@ func _build_system_filter_options(vbox: VBoxContainer) -> void:
 		system_filter_changed.emit()
 	))
 
+	_build_bios_boot_override(vbox)
+
+
+## The switch that hands the BIOS-boot core options back to the player.
+##
+## Nothing to emit: the pins are re-read when a machine powers on and when an
+## options list is populated, so an open panel does not need telling.
+func _build_bios_boot_override(vbox: VBoxContainer) -> void:
+	vbox.add_child(MenuStyle.spacer(10))
+
+	var bb_row := HBoxContainer.new()
+	bb_row.add_theme_constant_override("separation", 10)
+	bb_row.custom_minimum_size = Vector2(0, 68)
+	vbox.add_child(bb_row)
+
+	var bb_col := VBoxContainer.new()
+	bb_col.add_theme_constant_override("separation", 0)
+	bb_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bb_row.add_child(bb_col)
+
+	bb_col.add_child(MenuStyle.label("Override BIOS Boot Options", 22, MenuStyle.COLOR_TITLE))
+	bb_col.add_child(MenuStyle.label(
+		"Let the core options that play a machine's boot screen be changed",
+		16, MenuStyle.COLOR_LICENSE))
+
+	bb_row.add_child(VRToggle.create(AppPrefs.bios_boot_override, func(on: bool) -> void:
+		AppPrefs.bios_boot_override = on
+		AppPrefs.save_prefs()
+	))
+
 
 ## Android / Quest only — the tab is not built on desktop at all.
 func _build_file_server_options(vbox: VBoxContainer) -> void:

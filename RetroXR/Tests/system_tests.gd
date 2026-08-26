@@ -115,6 +115,8 @@ func _ready() -> void:
 	_test_memcard_presence()
 	_test_bios_seed()
 	_test_bios_boot_table()
+	_test_bios_pinned_options()
+	_test_bios_pins_reach_the_opt_file()
 	_test_power_on_verdict()
 	_test_state_paths()
 	_test_state_thumbnail()
@@ -1140,6 +1142,111 @@ func _test_bios_boot_table() -> void:
 		BiosBoot.missing_required("selftest_core").is_empty())
 	# The pair is required: a core alone names no machine.
 	_ok("table/no systemid is not a match", BiosBoot.entry("pcsx_rearmed", "").is_empty())
+
+
+# ---------------------------------------------------------------------------
+# The BIOS options are PINNED, and the switch that hands them back.
+#
+# Two halves of one row and they are reached differently: a loaded game plays
+# its boot ROM through `splash`, an empty slot reaches the BIOS through
+# `empty_options`, and which one applies is read from what is in the slot.
+# ---------------------------------------------------------------------------
+
+func _test_bios_pinned_options() -> void:
+	# The empty-slot half. This is the case that used to reach netplay and
+	# nothing else: net_boot_spec read it, the local power-on path never did, so
+	# a saved mgba_skip_bios = ON skipped the BIOS with nothing to put it back.
+	_eq("pin/an empty slot pins the boot ROM on",
+		BiosBoot.pinned_options("mgba", "game_boy_advance", true).get("mgba_skip_bios", ""),
+		"OFF")
+	_eq("pin/and the BIOS itself in use",
+		BiosBoot.pinned_options("mgba", "game_boy_advance", true).get("mgba_use_bios", ""),
+		"ON")
+
+	# The loaded-game half is gated on the boot ROM being installed, so on a box
+	# with none it is empty — pinning a core to run a file that is not there
+	# turns a machine that played games into a black screen.
+	_ok("pin/an unknown pair pins nothing either way",
+		BiosBoot.pinned_options("selftest_core", "nes", true).is_empty()
+			and BiosBoot.pinned_options("selftest_core", "nes", false).is_empty())
+
+	# Keys only, and both halves of every row for the core: the core manager
+	# edits a core with no machine in front of it and has no systemid to ask
+	# with.
+	var mgba_keys := BiosBoot.pinned_keys_for_core("mgba")
+	_ok("pin/a core's key set covers its empty-slot half",
+		mgba_keys.has("mgba_skip_bios") and mgba_keys.has("mgba_use_bios"))
+	_ok("pin/one core's five Sega machines fold into one key",
+		BiosBoot.pinned_keys_for_core("genesis_plus_gx").has("genesis_plus_gx_bios"))
+	_ok("pin/a core with no row pins no keys",
+		BiosBoot.pinned_keys_for_core("selftest_core").is_empty())
+	_ok("pin/and no core names none", BiosBoot.pinned_keys_for_core("").is_empty())
+	# A key from ANOTHER core's row must not leak in — pcee2 and pcsx2 spell the
+	# same switch differently, and one table read by core alone would offer each
+	# the other's no-op.
+	_ok("pin/nor another core's spelling of the same switch",
+		not BiosBoot.pinned_keys_for_core("pcsx2").has("pcsx2_fast_boot"))
+
+
+## The system half, with a real firmware presence behind it.
+##
+## pcsx2 is the machine this can be run for: its boot ROM requirement is a
+## DIRECTORY with no md5 (`pcsx2/bios`), so the test can create one and get a
+## genuine PRESENT — every other row wants a dump whose hash cannot be faked,
+## and without a present boot ROM every assertion below is a green that could
+## not have gone red.
+##
+## It writes the player's real system dir, so it creates the directory only if
+## it was not already there and removes exactly what it made.
+func _test_bios_pins_reach_the_opt_file() -> void:
+	var core := "pcsx2"
+	var systemid := "playstation2"
+	var key := "pcsx2_fastboot"
+	var dest := FirmwareRequirements.destination(core, "pcsx2/bios")
+	var made_dir := not DirAccess.dir_exists_absolute(dest)
+	if made_dir and DirAccess.make_dir_recursive_absolute(dest) != OK:
+		_ok("pin/could create a boot ROM directory to test against", false)
+		return
+	FirmwareState.shared().invalidate(core, "pcsx2/bios")
+
+	var was_override: bool = AppPrefs.bios_boot_override
+	var root := "user://__biospin_selftest"
+	var sys := _system(systemid)
+	sys.rom_path = "/roms/ps2/game.iso"
+
+	_ok("pin/the boot ROM reads as present",
+		BiosBoot.boot_rom_present(core, systemid))
+
+	AppPrefs.bios_boot_override = false
+	_eq("pin/a loaded game pins its boot animation on",
+		sys._all_forced_options(core).get(key, ""), "disabled")
+
+	# The pin has to beat what is already saved. A core serialises its whole
+	# option set on shutdown, so "already in the file" is the normal case and a
+	# write-once default would never fix a machine that had skipped its BIOS.
+	CoreOptionsStore.save_values(root, core, {key: "enabled"})
+	sys._apply_forced_core_options(root, core)
+	_eq("pin/and overwrites a saved value that skipped it",
+		CoreOptionsStore.load_values(root, core).get(key, ""), "disabled")
+
+	AppPrefs.bios_boot_override = true
+	_ok("pin/the override hands the key back",
+		not sys._all_forced_options(core).has(key))
+	CoreOptionsStore.save_values(root, core, {key: "enabled"})
+	sys._apply_forced_core_options(root, core)
+	_eq("pin/and the player's value then survives a launch",
+		CoreOptionsStore.load_values(root, core).get(key, ""), "enabled")
+
+	AppPrefs.bios_boot_override = was_override
+	sys.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(
+		CoreOptionsStore.opt_path(root, core)))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(CoreOptionsStore.opt_dir(root)))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(root))
+	if made_dir:
+		DirAccess.remove_absolute(dest)
+		FirmwareState.shared().invalidate(core, "pcsx2/bios")
+	_ok("pin/cleaned up", made_dir == (not DirAccess.dir_exists_absolute(dest)))
 
 
 func _test_power_on_verdict() -> void:

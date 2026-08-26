@@ -519,7 +519,14 @@ func _add_core_option_row(root: String, core_name: String, _systemid: String, ke
 	var desc: String = defn.GetDescription()
 	if desc.is_empty():
 		desc = key
-	var pinned: bool = CoreOptionsStore.HARDWARE_PINNED.has(key)
+	# Two reasons a key can be locked here, and they say different things to the
+	# player: the hardware one cannot be unlocked at all, the BIOS one is a switch
+	# in OPTIONS > Systems. HARDWARE_PINNED deliberately does not carry the BIOS
+	# keys — it also drives reset_to_defaults, which must keep restoring them.
+	var hardware_pinned: bool = CoreOptionsStore.HARDWARE_PINNED.has(key)
+	var bios_pinned: bool = not AppPrefs.bios_boot_override \
+		and BiosBoot.pinned_keys_for_core(core_name).has(key)
+	var pinned: bool = hardware_pinned or bios_pinned
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -537,7 +544,7 @@ func _add_core_option_row(root: String, core_name: String, _systemid: String, ke
 	# that needs to stand out, and a single Label can only carry one colour.
 	if pinned:
 		var note := Label.new()
-		note.text = "(fixed by the hardware)"
+		note.text = "(fixed by the hardware)" if hardware_pinned else "(fixed for BIOS boot)"
 		note.add_theme_font_size_override("font_size", 15)
 		note.add_theme_color_override("font_color", MenuIcons.TINT_WARN)
 		note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

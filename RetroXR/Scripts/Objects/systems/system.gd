@@ -2143,10 +2143,17 @@ func power_on() -> void:
 	if not _resolve_content(resolved_core):
 		return
 
-	# Before the forced options, which win: these are defaults the player may
-	# turn back off, and a pin is something they may not.
-	CoreOptionsStore.seed_values(resolved_dir, resolved_core,
-		BiosBoot.splash_options(resolved_core, systemid))
+	# With the override on the BIOS options are the player's, so they are written
+	# once as a default and then left alone -- a machine still boots to its BIOS
+	# the first time, and a change made afterwards stands. With it off they are
+	# pinned instead, by _apply_forced_core_options below, which rewrites them
+	# every launch. Never both: seed_values records the key as seeded for ever,
+	# and doing that behind a pin would silently disarm the override.
+	if AppPrefs.bios_boot_override:
+		var empty_slot := rom_path.is_empty() \
+			and BiosBoot.can_boot_empty(resolved_core, systemid)
+		CoreOptionsStore.seed_values(resolved_dir, resolved_core,
+			BiosBoot.pinned_options(resolved_core, systemid, empty_slot))
 	_apply_forced_core_options(resolved_dir, resolved_core)
 	AppPrefs.apply_hw_render_for(resolved_core)
 	_libretro.SetSramPath(_sram_path_for_run(resolved_core))
@@ -2852,17 +2859,39 @@ func _removable_media_options(core: String) -> Dictionary:
 func _all_forced_options(core: String) -> Dictionary:
 	var out: Dictionary = _model.get_forced_core_options() if _model != null else {}
 	out.merge(_removable_media_options(core), true)
+	out.merge(_bios_pinned_options(core), true)
 	return out
 
 
-## Merge the model's REQUIRED core options into <dir>/core_options/<core>.opt
-## before StartContent — the C++ OptionsHandler reads that file when the core
-## boots. (SetCoreOption needs a running core, so pre-start forcing goes
-## through the file; user-set values for other keys are preserved.)
+## The measured options that make this machine show its own boot screen, unless
+## the player has taken them back in OPTIONS > Systems.
+##
+## Which half of the row applies is decided from what is in the slot, not from
+## the table: an empty slot reaches the BIOS by different keys from a loaded
+## game, and reading it from rom_path means the options panel shows the pin that
+## matches what the machine would actually start with right now.
+##
+## Pinned rather than seeded because a pin is the only kind of write that beats a
+## saved value. A core serialises its whole option set on shutdown, so one run
+## that left mgba_skip_bios "ON" behind would otherwise skip the BIOS for ever.
+func _bios_pinned_options(core: String) -> Dictionary:
+	if AppPrefs.bios_boot_override:
+		return {}
+	var empty := rom_path.is_empty() and BiosBoot.can_boot_empty(core, systemid)
+	return BiosBoot.pinned_options(core, systemid, empty)
+
+
+## Merge every REQUIRED core option into <dir>/core_options/<core>.opt before
+## StartContent — the C++ OptionsHandler reads that file when the core boots.
+## (SetCoreOption needs a running core, so pre-start forcing goes through the
+## file; user-set values for other keys are preserved.)
+##
+## Not gated on there being a shell model: the BIOS-boot pins come from the core
+## and the systemid, and a machine with no model still boots one.
 func _apply_forced_core_options(dir: String, core: String) -> void:
-	if _model == null:
-		return
 	var forced := _all_forced_options(core)
+	if forced.is_empty():
+		return
 	# Through the store, which owns this file: set_core_option already writes it
 	# that way, and two writers with their own idea of the format is how the same
 	# file came out in a different order depending on which one touched it last.
