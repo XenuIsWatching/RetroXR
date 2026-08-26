@@ -324,7 +324,10 @@ func clear_scene(root: Node) -> void:
 			if plug and plug.has_method("drop"):
 				plug.call("drop")
 
-	# Main pass: power off and free everything.
+	# Main pass: power off and free everything. Instantly: a room teardown is not
+	# a player deleting one object, and a shrink here would leave this room's
+	# nodes alive while the next room loads over them.
+	Vanish.instant = true
 	for node: Node in spawned:
 		# Power off systems so the emulation thread shuts down cleanly.
 		#
@@ -343,6 +346,7 @@ func clear_scene(root: Node) -> void:
 			node.call("drop_and_free")
 		else:
 			node.queue_free()
+	Vanish.instant = false
 
 
 # ── Private helpers ────────────────────────────────────────────────────────────

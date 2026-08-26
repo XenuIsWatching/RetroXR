@@ -460,6 +460,9 @@ func _clear_world(root: Node) -> void:
 			var plug := node.get_node_or_null(plug_name)
 			if plug and plug.has_method("drop"):
 				plug.call("drop")
+	# Instant, not shrunk: this is a world teardown, not a player deleting one
+	# object. See Vanish.instant.
+	Vanish.instant = true
 	for node: Node in mine:
 		if node is RetroSystem and (node as RetroSystem).is_powered_on:
 			(node as RetroSystem).toggle_power()
@@ -467,6 +470,7 @@ func _clear_world(root: Node) -> void:
 			node.call("drop_and_free")
 		else:
 			node.queue_free()
+	Vanish.instant = false
 
 
 # ── Spawn / despawn ───────────────────────────────────────────────────────────

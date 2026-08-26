@@ -26,6 +26,13 @@ const DURATION := 0.3
 ## rather than a second tween fighting the first.
 const META := "vanishing"
 
+## Set while a whole room is being torn down. Bulk teardown reaches the same
+## drop_and_free() every deleted object does, and there an animation would leave
+## the outgoing room's nodes alive for a third of a second, racing the incoming
+## room's — so while this is up, free_node() frees on the spot. Always restore it
+## in the same function that raised it.
+static var instant := false
+
 
 ## True once free_node() has taken this object. Callers that walk a set of
 ## objects can use it to skip one that is already going.
@@ -41,7 +48,7 @@ static func free_node(node: Node, duration: float = DURATION) -> void:
 	if node.has_meta(META):
 		return
 	var spatial := node as Node3D
-	if spatial == null:
+	if spatial == null or instant:
 		node.queue_free()
 		return
 	spatial.set_meta(META, true)
@@ -55,7 +62,7 @@ static func free_node(node: Node, duration: float = DURATION) -> void:
 	# object out from under us anyway.
 	var tween := spatial.create_tween()
 	tween.tween_property(spatial, "scale", Vector3.ONE * 0.001, duration) \
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	tween.finished.connect(func() -> void:
 		if is_instance_valid(spatial):
 			spatial.queue_free())

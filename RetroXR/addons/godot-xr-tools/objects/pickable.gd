@@ -256,9 +256,15 @@ func drop():
 	_grab_driver.primary.by.drop_object()
 
 
+## RetroXR: shrink away instead of blinking out. EVERY pickable inherits this,
+## so it is the one place that catches the ordinary case — a cartridge, a
+## console, a book. The project's own overrides (composite_cable, rf_switch_body,
+## input_receiver, speaker_pair) do their teardown and then call Vanish
+## themselves; a lead deliberately still goes at once, because a VerletRope is a
+## particle sim rather than a mesh and scaling it does not read as shrinking.
 func drop_and_free():
 	drop()
-	queue_free()
+	Vanish.free_node(self)
 
 
 # Called when this object is picked up

@@ -797,8 +797,11 @@ func _test_controller_end_to_end(p: Pair) -> void:
 		return p.host_os.node_for_id(pad_id) == null \
 			and p.client_os.node_for_id(pad_id) == null, 600),
 		"controllers/despawning the pad removes both controller replicas")
-	await _frames(2)
-	_ok(not is_instance_valid(host_cable) and not is_instance_valid(client_cable),
+	# Polled, not a fixed wait: a deleted object shrinks away before it is freed
+	# (Vanish), so the cables outlive the registry entry by the length of that
+	# animation. What matters is that they go, not that they go this frame.
+	_ok(await _until(func() -> bool:
+		return not is_instance_valid(host_cable) and not is_instance_valid(client_cable), 600),
 		"controllers/despawning a pad also removes both captive cables")
 
 	hand.queue_free()
