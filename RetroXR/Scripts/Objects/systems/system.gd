@@ -2623,7 +2623,8 @@ func net_prepare_boot(spec: Dictionary) -> bool:
 	match str(spec.get("mode", "rom")):
 		"rom":
 			_net_no_content_override = false
-			return net_resolve_rom(str(spec.get("rom_md5", "")))
+			return net_resolve_rom(str(spec.get("rom_md5", "")),
+				int(spec.get("rom_size", 0)))
 		"no_content":
 			if not BiosBoot.can_boot_empty(core, systemid) \
 					or not BiosBoot.boots_with_no_content(core, systemid):
@@ -2647,7 +2648,7 @@ func net_prepare_boot(spec: Dictionary) -> bool:
 ## host's ROM. Checks the current rom_path first, then searches the local rom
 ## library by hash. ROMs are VERIFY-ONLY — never transferred (copyright; see
 ## file_transfer.gd). Returns false when no matching copy exists locally.
-func net_resolve_rom(md5: String) -> bool:
+func net_resolve_rom(md5: String, size := 0) -> bool:
 	if md5.is_empty():
 		return false
 	# Refresh from the seated cartridge — object_sync may have remapped it.
@@ -2658,8 +2659,14 @@ func net_resolve_rom(md5: String) -> bool:
 	if not rom_path.is_empty() and FileAccess.file_exists(rom_path) \
 			and NetFileTransfer.hash_of(rom_path) == md5:
 		return true
-	var found := NetFileTransfer.resolve_by_md5(md5, "rom", 0, rom_path,
-		[RomLibrary.default_roms_root()])
+	# Search THIS system's folder, not the whole library, and only files of the
+	# right length. resolve_by_md5 hashes every candidate it cannot rule out, so
+	# an unbounded search means reading every ROM the player owns to find one --
+	# minutes of disk on a large library, at the moment someone pressed Join.
+	# systemid narrows it to one console, `size` to the handful that could match.
+	var dirs: Array = [RomLibrary.rom_dir_for_system(systemid)] if not systemid.is_empty() \
+		else [RomLibrary.default_roms_root()]
+	var found := NetFileTransfer.resolve_by_md5(md5, "rom", size, rom_path, dirs)
 	if found.is_empty():
 		net_boot_failure = "you do not have the game this machine is running"
 		push_warning("[RetroSystem] netplay: no local ROM matches md5 %s… — not transferable" % md5.left(8))

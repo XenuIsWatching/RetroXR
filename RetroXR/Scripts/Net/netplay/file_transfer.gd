@@ -61,6 +61,13 @@ static var _hash_cache: Dictionary = {}
 static var _hash_cache_loaded := false
 static var _hash_mutex := Mutex.new()   # hash_of runs on worker threads too
 
+## While true, a new entry marks the cache dirty instead of rewriting the whole
+## JSON file. Every hash_of() otherwise saves the entire dictionary, which is
+## fine for the one-at-a-time calls it was written for and quadratic for a warm
+## sweep over a library. Only warm_cache() sets it, and it always clears it.
+static var _hash_defer_save := false
+static var _hash_dirty := false
+
 
 ## MD5 of a file, via the persistent cache. "" if unreadable. First hash of a
 ## big file blocks (disk-bound); every later call is a dictionary hit.
@@ -73,7 +80,7 @@ static func hash_of(path: String) -> String:
 	var mtime := FileAccess.get_modified_time(path)
 	var entry: Dictionary = _hash_cache.get(path, {})
 	_hash_mutex.unlock()
-	if not entry.is_empty() and int(entry.get("mtime", -1)) == mtime:
+	if _entry_is_current(entry, path, mtime):
 		return str(entry.get("md5", ""))
 	var sums := RomHasher.compute_checksums(path)
 	if sums.is_empty():
@@ -101,7 +108,7 @@ static func checksums_of(path: String) -> Dictionary:
 	var mtime := FileAccess.get_modified_time(path)
 	var entry: Dictionary = _hash_cache.get(path, {})
 	_hash_mutex.unlock()
-	if not entry.is_empty() and int(entry.get("mtime", -1)) == mtime \
+	if _entry_is_current(entry, path, mtime) \
 			and not str(entry.get("sha1", "")).is_empty():
 		return {"md5": str(entry["md5"]), "sha1": str(entry["sha1"]),
 			"size": int(entry.get("size", 0))}
@@ -126,9 +133,29 @@ static func cached_hash_of(path: String) -> String:
 	_load_hash_cache()
 	var entry: Dictionary = _hash_cache.get(path, {})
 	_hash_mutex.unlock()
-	if not entry.is_empty() and int(entry.get("mtime", -1)) == FileAccess.get_modified_time(path):
+	if _entry_is_current(entry, path, FileAccess.get_modified_time(path)):
 		return str(entry.get("md5", ""))
 	return ""
+
+
+## Is this cache entry still describing the file on disk?
+##
+## The size half was documented from the start ("mtime+size keyed") and never
+## actually compared, which left a real hole: filesystem mtime has one-second
+## granularity, so a file rewritten inside the same second kept its old hash for
+## ever. Everything downstream trusts that hash to mean "these exact bytes" --
+## resolve_by_md5 hands back the path, netplay boots it, and every peer is
+## supposed to be running an identical image. A stale entry there is not a slow
+## lookup, it is the wrong file.
+##
+## An entry written before size was recorded has no "size" key and is treated as
+## current on mtime alone, so an existing cache is not thrown away wholesale.
+static func _entry_is_current(entry: Dictionary, path: String, mtime: int) -> bool:
+	if entry.is_empty() or int(entry.get("mtime", -1)) != mtime:
+		return false
+	if not entry.has("size"):
+		return true
+	return int(entry["size"]) == size_of(path)
 
 
 static func size_of(path: String) -> int:
@@ -147,11 +174,90 @@ static func _load_hash_cache() -> void:
 			_hash_cache = parsed
 
 
+## Call with the mutex held, like every other writer here.
 static func _save_hash_cache() -> void:
+	if _hash_defer_save:
+		_hash_dirty = true
+		return
+	_write_hash_cache()
+
+
+static func _write_hash_cache() -> void:
 	DirAccess.make_dir_recursive_absolute("user://net_cache")
 	var f := FileAccess.open(HASH_CACHE_PATH, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(_hash_cache))
+
+
+## Hash a library ahead of time so resolving BY hash does not have to.
+##
+## resolve_by_md5 is a reverse lookup -- given a hash, find the file -- so on a
+## cold cache it hashes candidate after candidate until one matches. That work
+## lands at the worst possible moment: a player pressing Join, waiting on a
+## progress-less pause while their ROM folder is read end to end.
+##
+## Warming it moves the same disk reads to an idle moment and leaves the lookup
+## a dictionary hit. It is NOT required for correctness -- resolve_by_md5 still
+## hashes on demand for anything the sweep has not reached -- so it can be
+## cancelled, interrupted or never run at all.
+##
+## Runs on WorkerThreadPool, the same pool object_sync already hashes on.
+## `budget` bounds a first run over a large library; the rest is picked up by
+## later sweeps or on demand.
+static func warm_cache(dirs: Array, extensions: Array = [], budget := 400) -> int:
+	var pending: Array[String] = []
+	for dir: Variant in dirs:
+		_collect_unhashed(str(dir), extensions, 3, pending, budget)
+		if pending.size() >= budget:
+			break
+	if pending.is_empty():
+		return 0
+	_hash_mutex.lock()
+	_hash_defer_save = true
+	_hash_mutex.unlock()
+	# Sequential on purpose. The work is disk-bound, so hashing eight files at
+	# once mostly makes the drive seek; and this runs inside a worker task
+	# already, where nesting a group task would be the pool waiting on itself.
+	for path: String in pending:
+		hash_of(path)
+	_hash_mutex.lock()
+	_hash_defer_save = false
+	if _hash_dirty:
+		_hash_dirty = false
+		_write_hash_cache()
+	_hash_mutex.unlock()
+	return pending.size()
+
+
+## Warm the cache without blocking the caller. Fire-and-forget: nothing waits on
+## the task, because nothing needs to -- an unfinished sweep only means the next
+## lookup does its own hashing, which is what it did before this existed.
+static func warm_cache_async(dirs: Array, extensions: Array = [], budget := 400) -> void:
+	WorkerThreadPool.add_task(
+		func() -> void: warm_cache(dirs, extensions, budget), false,
+		"netplay hash warm-up")
+
+
+## Files under `dir` with no current cache entry. Uses cached_hash_of, which
+## never hashes, so building the work list costs no reads of its own.
+static func _collect_unhashed(dir: String, extensions: Array, depth: int,
+		out: Array[String], budget: int) -> void:
+	if depth < 0 or out.size() >= budget or not DirAccess.dir_exists_absolute(dir):
+		return
+	for fname: String in DirAccess.get_files_at(dir):
+		if out.size() >= budget:
+			return
+		if not extensions.is_empty() \
+				and not extensions.has(fname.get_extension().to_lower()):
+			continue
+		var path := dir.path_join(fname)
+		if cached_hash_of(path).is_empty():
+			out.append(path)
+	for sub: String in DirAccess.get_directories_at(dir):
+		# Skip the index/metadata folders the library keeps beside its ROMs.
+		if sub.begins_with("."):
+			continue
+		_collect_unhashed(dir.path_join(sub), extensions, depth - 1, out, budget)
 
 
 ## Find a local file matching `md5`. Checks `hint_path` first, then the net

@@ -32,7 +32,7 @@ extends Node
 ## asynchronous.
 
 const NM_SCRIPT := preload("res://Scripts/Net/network_manager.gd")
-const GROUPS := ["cores", "substitute", "manifest", "readiness", "identity", "roomcode",
+const GROUPS := ["cores", "substitute", "manifest", "hashcache", "progress", "readiness", "identity", "roomcode",
 	"punch", "wire", "owners", "assemble", "start", "lockstep", "desync", "join",
 	"transfer", "leave", "rollback", "link"]
 const PORT := 42913
@@ -63,6 +63,10 @@ func _ready() -> void:
 		_test_substitute()
 	if _want("manifest"):
 		_test_manifest()
+	if _want("progress"):
+		await _test_progress()
+	if _want("hashcache"):
+		_test_hashcache()
 	if _want("readiness"):
 		_test_readiness()
 	if _want("badge"):
@@ -895,6 +899,21 @@ func _test_wire() -> void:
 
 func _test_owners() -> void:
 	var np := _stub_session()           # this peer is 1
+
+	# Decoding a global port for the players list. A port is
+	# machine * PORTS_PER_MACHINE + port, which is what lets a cabled pair's two
+	# machines share one numbering; showing "Port 1" for both would be a lie.
+	var nm := _branch("OWN")
+	var per: int = NetplayWire.PORTS_PER_MACHINE
+	_eq(nm.netplay_machine_of(0), 0, "owners/port 0 is the first machine")
+	_eq(nm.netplay_port_of(0), 0, "owners/and its first pad")
+	_eq(nm.netplay_machine_of(per), 1, "owners/the next block is the second machine")
+	_eq(nm.netplay_port_of(per), 0, "owners/whose first pad starts over")
+	_eq(nm.netplay_machine_of(per + 3), 1, "owners/a later pad on that machine")
+	_eq(nm.netplay_port_of(per + 3), 3, "owners/keeps its own index")
+	# No session means no owners, rather than a stale map from the last game.
+	_ok(nm.netplay_owners().is_empty(), "owners/no session reports no owners")
+	nm.queue_free()
 
 	np._set_owners({0: 1, 2: 7})
 	_eq(Array(np._all_ports), [0, 2], "owners/participating ports are sorted")
@@ -2756,6 +2775,158 @@ func _test_manifest() -> void:
 	_ok(str(sums.get("md5", "")) == NetFileTransfer.hash_of(real),
 		"manifest/and the md5 agrees with the cached hash")
 	DirAccess.remove_absolute(real)
+
+
+# ══ Late-join progress ════════════════════════════════════════════════════════
+# The stream tracked every byte and reported none of them, so a joiner watched a
+# still menu for up to JOIN_TIMEOUT_MS. These drive a real two-peer late join
+# and assert the phases actually arrive, in order, ending complete.
+
+func _test_progress() -> void:
+	var w := await _pair()
+	w.host_np._pending_local_route[0] = [0x01, 0, 0, 0, 0]
+	w.client_np._pending_local_route[1] = [0x02, 0, 0, 0, 0]
+	w.host_nm.netplay_start_host(w.host_sys, "fceumm", "MD5", {0: 1, 1: w.client_id}, 3, 0)
+	_ok(await _until(func() -> bool: return w.host_np.is_running()),
+		"progress/a game is running to join")
+	await _await_frames(60)
+	w.host_sys.lib.save_size = NetplaySession.STATE_CHUNK_SIZE * 3 + 77
+
+	# Record on the host, which sees capture and the whole send.
+	var host_phases: Array[String] = []
+	var host_last := {"received": -1, "total": 0}
+	var monotonic := true
+	w.host_np.join_state_progress.connect(
+		func(_peer: int, phase: String, received: int, total: int) -> void:
+			if host_phases.is_empty() or host_phases[-1] != phase:
+				host_phases.append(phase)
+			if phase == "transferring":
+				if received < int(host_last["received"]):
+					monotonic = false
+				host_last["received"] = received
+				host_last["total"] = total)
+
+	var third := _branch("P")
+	var jsys := MockSys.new()
+	jsys.name = "Sys"
+	third.add_child(jsys)
+	third._netplay.system_override = jsys
+	var jnp: NetplaySession = third._netplay
+
+	var join_phases: Array[String] = []
+	jnp.join_state_progress.connect(
+		func(_peer: int, phase: String, _received: int, _total: int) -> void:
+			if join_phases.is_empty() or join_phases[-1] != phase:
+				join_phases.append(phase))
+
+	third.join_game("::1", PORT)
+	_ok(await _until(func() -> bool: return jnp.is_running(), 900),
+		"progress/the newcomer is running the game")
+
+	_ok(host_phases.has("capturing"),
+		"progress/the host reports the snapshot pause it used to sit through silently")
+	_ok(host_phases.has("transferring"), "progress/and the send")
+	_eq(host_phases[0], "capturing", "progress/capture comes first")
+	_ok(monotonic, "progress/a transfer never goes backwards")
+	_ok(int(host_last["total"]) > 0, "progress/the total is a real byte count")
+	_eq(int(host_last["received"]), int(host_last["total"]),
+		"progress/and the send ends complete")
+
+	_ok(join_phases.has("transferring"), "progress/the joiner sees bytes arriving")
+	_ok(join_phases.has("verifying"),
+		"progress/and the hash check, which is otherwise a silent pause")
+	_ok(join_phases.has("loading"),
+		"progress/and the core taking the state, the other silent one")
+	# Order matters: verifying cannot be reported before the bytes are in.
+	_ok(join_phases.find("transferring") < join_phases.find("verifying"),
+		"progress/bytes before the check")
+	_ok(join_phases.find("verifying") < join_phases.find("loading"),
+		"progress/the check before the load")
+
+	w.host_nm.netplay_stop("done")
+	await _await_frames(10)
+	third.get_parent().queue_free()
+	_free(w)
+	await _await_frames(5)
+
+
+# ══ The hash cache and its warm-up ════════════════════════════════════════════
+# resolve_by_md5 is a REVERSE lookup, so on a cold cache it hashes candidates
+# until one matches -- at the moment a player presses Join. These cases pin that
+# a warm cache answers without reading, that a cold one still answers, and that
+# a changed file is never answered from a stale entry.
+
+func _test_hashcache() -> void:
+	var dir := "user://__np_warm"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var root := ProjectSettings.globalize_path(dir)
+	var paths: Array[String] = []
+	for i in range(4):
+		var p := root.path_join("rom%d.bin" % i)
+		var f := FileAccess.open(p, FileAccess.WRITE)
+		f.store_string("warm cache case %d" % i)
+		f.close()
+		paths.append(p)
+
+	# Cold: nothing is known without reading.
+	for p: String in paths:
+		_ok(NetFileTransfer.cached_hash_of(p).is_empty(),
+			"hashcache/%s starts uncached" % p.get_file())
+
+	var done := NetFileTransfer.warm_cache([root], [], 100)
+	_ok(done == 4, "hashcache/the warm-up hashed every file it found")
+
+	# Warm: the never-blocking accessor now answers, which is the whole point.
+	var warm_ok := true
+	for p: String in paths:
+		if NetFileTransfer.cached_hash_of(p).is_empty():
+			warm_ok = false
+	_ok(warm_ok, "hashcache/every file answers without hashing afterwards")
+	_ok(NetFileTransfer.warm_cache([root], [], 100) == 0,
+		"hashcache/a second sweep finds nothing left to do")
+
+	# The reverse lookup finds it, which is what all of this is for.
+	var want := NetFileTransfer.hash_of(paths[2])
+	var found := NetFileTransfer.resolve_by_md5(want, "rom",
+		NetFileTransfer.size_of(paths[2]), "", [root])
+	_ok(found == paths[2], "hashcache/resolve_by_md5 finds the warmed file")
+
+	# A rewritten file must not be answered from its old entry.
+	var f2 := FileAccess.open(paths[2], FileAccess.WRITE)
+	f2.store_string("changed on disk")
+	f2.close()
+	_ok(NetFileTransfer.hash_of(paths[2]) != want,
+		"hashcache/an mtime change invalidates the entry")
+
+	# The extension filter is what keeps a warm sweep off the videos.
+	_ok(NetFileTransfer.warm_cache([root], ["nes"], 100) == 0,
+		"hashcache/an extension filter excludes non-matching files")
+
+	# The size prefilter is what stops a lookup reading the whole library: a
+	# candidate of the wrong length must never be hashed at all. Proved by
+	# leaving a decoy that would match if size were ignored.
+	var decoy_dir := root.path_join("other")
+	DirAccess.make_dir_recursive_absolute(decoy_dir)
+	var decoy := decoy_dir.path_join("decoy.bin")
+	var df := FileAccess.open(decoy, FileAccess.WRITE)
+	df.store_string("a considerably longer decoy payload than the others")
+	df.close()
+	var target := paths[0]
+	var target_md5 := NetFileTransfer.hash_of(target)
+	var target_size := NetFileTransfer.size_of(target)
+	_ok(NetFileTransfer.size_of(decoy) != target_size,
+		"hashcache/the decoy is a different length")
+	_eq(NetFileTransfer.resolve_by_md5(target_md5, "rom", target_size, "", [root]),
+		target, "hashcache/a sized lookup still finds the real file")
+	# A hash nothing matches must come back empty rather than wandering.
+	_eq(NetFileTransfer.resolve_by_md5("0" .repeat(32), "rom", target_size, "", [root]),
+		"", "hashcache/an unmatched hash resolves to nothing")
+	DirAccess.remove_absolute(decoy)
+	DirAccess.remove_absolute(decoy_dir)
+
+	for p: String in paths:
+		DirAccess.remove_absolute(p)
+	DirAccess.remove_absolute(root)
 
 
 # ══ Readiness verdicts ════════════════════════════════════════════════════════

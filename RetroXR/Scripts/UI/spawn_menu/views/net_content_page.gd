@@ -152,7 +152,8 @@ func _make_row(row: Dictionary) -> Control:
 	bar.visible = str(row.get("state", "")) == NetplayContent.STATE_FETCHING
 	box.add_child(bar)
 
-	_widgets[key] = {"row": box, "status": status, "bar": bar}
+	_widgets[key] = {"row": box, "status": status, "bar": bar,
+		"label": str(row.get("label", ""))}
 	return box
 
 
@@ -225,18 +226,37 @@ func _on_item_changed(key: String, state: String, received: int, total: int) -> 
 	var status: Label = w["status"]
 	if not is_instance_valid(bar) or not is_instance_valid(status):
 		return
+	var label := str(w.get("label", key))
 	if state == NetplayContent.STATE_FETCHING:
 		bar.visible = true
 		bar.value = 100.0 * float(received) / maxf(1.0, float(total))
 		status.text = "%s / %s" % [MenuStyle.human_bytes(received),
 			MenuStyle.human_bytes(total)]
 		status.add_theme_color_override("font_color", MenuStyle.COLOR_NETPLAY)
+		# Also as a toast, so a transfer the player started stays visible when
+		# they leave this tab -- MenuToasts sits above the views for exactly this.
+		_toast(key, String.chr(MenuIcons.BUSY), label,
+			float(received) / maxf(1.0, float(total)))
 	else:
 		bar.visible = false
 		status.text = state
 		if state == NetplayContent.STATE_HAVE:
 			status.add_theme_color_override("font_color", COLOR_OK)
+			_toast_finish(key, String.chr(MenuIcons.CHECK), "%s ready" % label)
 			_maybe_finished()
+		elif state == NetplayContent.STATE_MISSING:
+			_toast_finish(key, String.chr(MenuIcons.ERROR), "%s unavailable" % label)
+
+
+func _toast(key: String, icon: String, msg: String, progress: float) -> void:
+	if _menu != null and _menu.has_method("notify"):
+		_menu.call("notify", "netcontent:%s" % key, icon, msg, progress, 0.0)
+
+
+func _toast_finish(key: String, icon: String, msg: String) -> void:
+	if _menu != null and _menu.has_method("notify"):
+		_menu.call("notify", "netcontent:%s" % key, icon, msg, -1.0,
+			MenuToasts.DWELL_OK)
 
 
 ## The four phases of a late join, named. "capturing" and "loading" carry no

@@ -56,6 +56,30 @@ func setup(nm: Node, client: RommClient, downloader: RommDownloader,
 	if _nm != null and _nm.has_signal("netplay_state_progress"):
 		_nm.netplay_state_progress.connect(_on_state_progress)
 
+## Pre-hash only the folders this session could possibly need.
+##
+## NOT the whole library, deliberately. A ROM library is tens of gigabytes and a
+## blanket sweep would read all of it to answer a question about one game --
+## expensive anywhere, punishing on a headset. The session names the systems in
+## play, so the sweep is scoped to those consoles' folders; everything else is
+## never touched, and anything the sweep misses is still hashed on demand by
+## resolve_by_md5 exactly as before.
+##
+## Mostly belt-and-braces now that lookups are narrowed by systemid AND exact
+## size: it earns its keep when an older host sends no rom_size, which puts the
+## size prefilter out of action.
+func warm_for_session() -> void:
+	var dirs: Array = []
+	for row: Dictionary in _machine_rows():
+		var sid := str(row.get("systemid", ""))
+		if sid.is_empty():
+			continue
+		var dir := RomLibrary.rom_dir_for_system(sid)
+		if not dirs.has(dir):
+			dirs.append(dir)
+	if not dirs.is_empty():
+		NetFileTransfer.warm_cache_async(dirs)
+
 
 static func key_for(content_class: String, md5: String) -> String:
 	return "%s:%s" % [content_class, md5]
@@ -82,6 +106,7 @@ func rebuild() -> void:
 		_rows[key_for(str(row["class"]), str(row["md5"]))] = row
 	for row: Dictionary in _machine_rows():
 		_rows[key_for(str(row["class"]), str(row["md5"]))] = row
+	warm_for_session()
 	manifest_changed.emit()
 
 
@@ -225,15 +250,20 @@ func _machine_rows() -> Array[Dictionary]:
 			"label": str(spec.get("rom_label", "")),
 			"systemid": str(spec.get("systemid", "")),
 			"transferable": false,
-			"state": _rom_state(md5),
+			"state": _rom_state(md5, int(spec.get("rom_size", 0)),
+				str(spec.get("systemid", ""))),
 			"blocking": true,
 		})
 	return out
 
 
-func _rom_state(md5: String) -> String:
-	var found := NetFileTransfer.resolve_by_md5(md5, "rom", 0, "",
-		[RomLibrary.default_roms_root()])
+## `size` matters more than it looks: resolve_by_md5 only applies its
+## same-size prefilter when it is non-zero, so passing 0 makes it hash every
+## file in the ROM tree instead of the handful that could possibly match.
+func _rom_state(md5: String, size := 0, systemid := "") -> String:
+	var dirs: Array = [RomLibrary.rom_dir_for_system(systemid)] if not systemid.is_empty() \
+		else [RomLibrary.default_roms_root()]
+	var found := NetFileTransfer.resolve_by_md5(md5, "rom", size, "", dirs)
 	if not found.is_empty():
 		# Found locally rather than downloaded, which is the other way a ROM
 		# turns up unscraped: it was on the shelf all along and nobody opened it.
