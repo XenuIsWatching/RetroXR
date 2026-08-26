@@ -607,6 +607,17 @@ func _test_room_code() -> void:
 		"roomcode/a room that stopped says so, not that the network failed")
 	_ok(nm._punch_failure(Punchthrough.Result.UNREACHABLE).contains("LAN"),
 		"roomcode/a dead registry points at LAN hosting")
+
+	# A punch server that answers the socket and then ignores the conversation
+	# is not the same fault as one that cannot be reached, and saying so cost a
+	# real debugging session once. These must not drift back together.
+	var protocol_msg: String = nm._punch_failure(Punchthrough.Result.PROTOCOL_ERROR)
+	_ok(protocol_msg.contains("punch"),
+		"roomcode/a silent punch server names the punch server")
+	_ok(protocol_msg != nm._punch_failure(Punchthrough.Result.UNREACHABLE),
+		"roomcode/and does not read as an unreachable registry")
+	_ok(protocol_msg.contains("LAN"),
+		"roomcode/while still pointing at the way out")
 	_ok(unpunchable != nm._punch_failure(Punchthrough.Result.UNREACHABLE),
 		"roomcode/the two failures do not read the same")
 

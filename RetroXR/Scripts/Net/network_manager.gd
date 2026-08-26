@@ -478,8 +478,16 @@ func _punch_failure(result: int) -> String:
 	match result:
 		Punchthrough.Result.NO_SUCH_HOST:
 			return "That game is no longer running."
-		Punchthrough.Result.UNREACHABLE, Punchthrough.Result.PROTOCOL_ERROR:
+		Punchthrough.Result.UNREACHABLE:
 			return "Could not reach the RetroXR server. Try hosting on LAN."
+		Punchthrough.Result.PROTOCOL_ERROR:
+			# Split from UNREACHABLE deliberately. The two are one keystroke
+			# apart in the code and a world apart when something is wrong: this
+			# one means the punch server answered the socket and then ignored
+			# the conversation, which happened on 2026-08-25 and sent the person
+			# debugging it into the registry, the one part that was healthy.
+			return ("The RetroXR punch server is not responding. Hosting on LAN "
+				+ "still works.")
 		_:
 			return ("Could not reach the other player directly. This usually means "
 				+ "one of you is on a mobile hotspot or a restricted network. "
