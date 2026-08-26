@@ -31,7 +31,8 @@ const _STRING_FIELDS := [
 ]
 const _NUMBER_FIELDS := [
 	"lid_angle", "scale_factor", "stereo_mode", "size_scale", "page_state",
-	"page_leaf", "sensitivity", "device_type", "port_index", "volume", "cords",
+	"page_leaf", "sensitivity", "stick_distance", "device_type", "port_index",
+	"volume", "cords",
 	"pad_ordinal", "fit_mode", "roll",
 ]
 const _BOOL_FIELDS := ["video_out", "ignore_gravity", "crt_enabled", "half_pages", "stuck",
@@ -255,6 +256,7 @@ func load_slot_async(root: Node, slot_id: String) -> bool:
 	# arranged around, and a lead restored into a television still standing in its
 	# authored place would be laid out to the wrong end of the room.
 	_restore_fixtures(root, _read_fixtures(path))
+	_restore_switches(root, _read_switches(path))
 	var spawned: Dictionary = await instantiate_objects_async(root, objects)
 	print("[ScenePersistence] loaded %d objects from '%s'" % [spawned.size(), path])
 	return true
@@ -432,6 +434,9 @@ func _snapshot(root: Node) -> Dictionary:
 	# the same bytes it always did.
 	if not fixtures.is_empty():
 		out["fixtures"] = fixtures
+	var switches := _collect_switches(root)
+	if not switches.is_empty():
+		out["switches"] = switches
 	return out
 
 
@@ -501,6 +506,37 @@ func _restore_fixtures(root: Node, fixtures: Variant) -> void:
 			(n3d as RetroTV).set_source(int(source))
 
 
+## The room's wall switches, keyed by node path the same way object_sync keys them
+## for a late joiner. A switch is not a fixture: it never moves, and what has to
+## survive a save is which way its bat is thrown and whether the lights it drives
+## are on. Omitted for a room with no switches, so those slots write the bytes
+## they always did.
+func _collect_switches(root: Node) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for node: Node in root.find_children("*", "LightSwitch", true, false):
+		out.append({
+			"path": str(root.get_path_to(node)),
+			"on": bool((node as LightSwitch).lights_on),
+		})
+	return out
+
+
+## Absent from every slot written before switches were recorded, in which case the
+## room keeps the lit state its .tscn authored.
+func _restore_switches(root: Node, switches: Variant) -> void:
+	if not switches is Array:
+		return
+	for entry: Variant in switches as Array:
+		if not entry is Dictionary:
+			continue
+		var d := entry as Dictionary
+		var sw := root.get_node_or_null(NodePath(str(d.get("path", "")))) as LightSwitch
+		if sw == null:
+			# A room whose switch plate was renamed or removed since the save.
+			continue
+		sw.set_lights_on(bool(d.get("on", true)))
+
+
 func _encode(snapshot: Dictionary) -> String:
 	return JSON.stringify(snapshot, "\t")
 
@@ -525,6 +561,19 @@ func _read_fixtures(path: String) -> Variant:
 	if not parsed is Dictionary:
 		return []
 	return (parsed as Dictionary).get("fixtures", [])
+
+
+## The switch entries of a slot file - an empty array for one written before
+## switches were recorded, or for a room that has none.
+func _read_switches(path: String) -> Variant:
+	_await_path(path)
+	var f := FileAccess.open(path, FileAccess.READ)
+	if not f:
+		return []
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	if not parsed is Dictionary:
+		return []
+	return (parsed as Dictionary).get("switches", [])
 
 
 ## The object entries of a slot file, or null if it cannot be read.
@@ -1508,6 +1557,7 @@ func _serialize_peripheral(node: Node, id: int, n3d: Node3D, node_to_id: Diction
 		entry["motion_plus"] = _ref(node_to_id, (node as Wiimote).get_motion_plus())
 	if node is RetroMouse:
 		entry["sensitivity"] = (node as RetroMouse).sensitivity
+		entry["stick_distance"] = (node as RetroMouse).stick_distance
 	if node is RetroController:
 		# Every real pad — NES, Virtual Boy, CX40 — is a RetroController with a
 		# scene of its own, so the type above maps the whole family back onto the
@@ -1651,10 +1701,12 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 			"retro_mouse":
 				var mouse := RETRO_MOUSE_SCENE.instantiate() as RetroMouse
 				mouse.sensitivity = data.get("sensitivity", 2400.0)
+				mouse.stick_distance = data.get("stick_distance", 0.035)
 				obj = mouse
 			"snes_mouse":
 				var snes := SNES_MOUSE_SCENE.instantiate() as SnesMouse
 				snes.sensitivity = data.get("sensitivity", 2400.0)
+				snes.stick_distance = data.get("stick_distance", 0.035)
 				obj = snes
 			"pad_receiver":
 				# The saved pad may well not be connected — switched off, flat, or

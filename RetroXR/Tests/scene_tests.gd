@@ -18,7 +18,7 @@ extends Node
 ## set_active_slot() writes user://scenes/prefs.json. Both are snapshotted at the
 ## start and put back at the end, so a red run cannot cost anyone their room.
 
-const GROUPS := ["slots", "ready", "transition", "autosave", "reload", "overlap", "fixture", "power", "vlc", "manifest"]
+const GROUPS := ["slots", "ready", "transition", "autosave", "reload", "overlap", "fixture", "switch", "power", "vlc", "manifest"]
 ## Scratch slot ids, in the arcade's real directory — slot_dir() is derived from
 ## the room id and cannot be pointed somewhere safer.
 const SLOT_A := "__scene_selftest_a"
@@ -62,6 +62,8 @@ func _ready() -> void:
 		await _test_overlap()
 	if _want_group("fixture"):
 		await _test_fixture()
+	if _want_group("switch"):
+		await _test_switch()
 	if _want_group("power"):
 		await _test_power()
 	if _want_group("vlc"):
@@ -525,6 +527,53 @@ func _test_fixture() -> void:
 	_ok(not tv_line.is_empty(), "fixture/the arcade still authors a TV node")
 	_ok(tv_line.contains("groups=[\"fixture\"]"),
 		"fixture/the arcade's TV is tagged as a fixture")
+
+
+# -- The room's wall switches -------------------------------------------------
+
+## A switch never moves, so it is not a fixture and the object walk never sees it:
+## the bedroom came back lit however it was left. Its state is recorded by path,
+## the same key object_sync uses when it ships the room to a late joiner.
+func _test_switch() -> void:
+	var sp := ScenePersistence.new("bedroom")
+	var sw := LightSwitch.new()
+	sw.name = "Ceiling"
+	add_child(sw)
+	sw.set_lights_on(false)
+
+	var snap := sp._snapshot(self)
+	_ok(snap.has("switches"), "switch/a room with switches writes the section")
+	var recs: Array = snap.get("switches", [])
+	_eq(recs.size(), 1, "switch/exactly one switch recorded")
+	var rec := recs[0] as Dictionary
+	_eq(str(rec.get("path", "")), "Ceiling", "switch/recorded by path")
+	_ok(not bool(rec.get("on", true)), "switch/records the state it was left in")
+
+	# The load path must actually move the switch, not just read it back.
+	sw.set_lights_on(true)
+	sp._restore_switches(self, recs)
+	_ok(not sw.lights_on, "switch/a saved-off switch comes back off")
+	sp._restore_switches(self, [{"path": "Ceiling", "on": true}])
+	_ok(sw.lights_on, "switch/a saved-on switch comes back on")
+
+	# A slot written before switches existed carries no section, and must leave the
+	# room on the state its .tscn authored.
+	sp._restore_switches(self, [])
+	_ok(sw.lights_on, "switch/an old slot changes nothing")
+	# And a switch the room no longer has is skipped, not an error.
+	sp._restore_switches(self, [{"path": "NoSuchNode", "on": false}])
+	_ok(true, "switch/a missing switch is skipped")
+
+	sw.queue_free()
+	await get_tree().process_frame
+	_ok(not sp._snapshot(self).has("switches"),
+		"switch/a room without switches writes no section")
+
+	# Worth nothing unless the bedroom still authors switches. Read from the .tscn
+	# because the room cannot be loaded here.
+	var src := FileAccess.get_file_as_string("res://Scenes/BedroomScene.tscn")
+	_ok(src.contains("light_switch.gd"),
+		"switch/the bedroom still authors a light switch")
 
 
 # ── A machine's core must not outlive the machine ─────────────────────────────
