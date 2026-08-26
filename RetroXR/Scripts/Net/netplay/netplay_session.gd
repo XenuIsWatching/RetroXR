@@ -2737,6 +2737,11 @@ func _resume_after_join(peer_id: int) -> void:
 	_joining.erase(peer_id)
 	_join_transfers.erase(peer_id)
 	_join_deadlines.erase(peer_id)
+	# The host reported "capturing" and "transferring" and then went quiet: its
+	# side of a join had no ending, so anything watching sat at 100% for ever.
+	# The joiner's own "verifying"/"loading" never reach here -- those are
+	# emitted on the joiner with peer_id 1.
+	join_state_progress.emit(peer_id, "done", 1, 1)
 	if _joining.is_empty():
 		_join_paused = false
 		_join_capture_pending = false

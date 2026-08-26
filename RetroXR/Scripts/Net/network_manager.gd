@@ -80,6 +80,13 @@ signal netplay_join_requested(peer_id: int, port: int)
 signal netplay_desync(peer_id: int, frame: int)
 signal netplay_session_stopped(reason: String)
 
+## Forwarded from the file transfer: what THIS peer is handing out, and to whom.
+## Fires on the sender, so in practice on the host.
+signal serve_started(peer_id: int, md5: String, kind: String, size: int)
+signal serve_progress(peer_id: int, md5: String, sent: int, total: int)
+signal serve_done(peer_id: int, md5: String)
+signal serve_refused(peer_id: int, md5: String, reason: String)
+
 ## Peer roster: peer_id -> {name: String, is_vr: bool, color_idx: int}
 var peers: Dictionary = {}
 
@@ -135,6 +142,17 @@ func _ready() -> void:
 	_file_transfer = FILE_TRANSFER.new()
 	_file_transfer.name = "FileTransfer"
 	add_child(_file_transfer)
+	_file_transfer.serve_started.connect(
+		func(peer_id: int, md5: String, kind: String, size: int) -> void:
+			serve_started.emit(peer_id, md5, kind, size))
+	_file_transfer.serve_progress.connect(
+		func(peer_id: int, md5: String, sent: int, total: int) -> void:
+			serve_progress.emit(peer_id, md5, sent, total))
+	_file_transfer.serve_done.connect(func(peer_id: int, md5: String) -> void:
+		serve_done.emit(peer_id, md5))
+	_file_transfer.serve_refused.connect(
+		func(peer_id: int, md5: String, reason: String) -> void:
+			serve_refused.emit(peer_id, md5, reason))
 	# React to host-driven scene switches (rebuild avatars in the new scene).
 	if has_node("/root/SceneManager"):
 		SceneManager.scene_changed.connect(_on_scene_changed)

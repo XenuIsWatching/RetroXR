@@ -130,13 +130,44 @@ func _run_host() -> void:
 		mf.store_string("%s %d" % [md5, NetFileTransfer.size_of(served)])
 		mf.close()
 
+	# What the host can see of its own serving. Until these signals existed the
+	# host had no idea a peer was downloading from it at all.
+	var seen := {"started": false, "progress": 0, "done": false, "last": 0, "total": 0}
+	NetworkManager.serve_started.connect(
+		func(peer: int, m: String, kind: String, size: int) -> void:
+			if m == md5:
+				seen["started"] = true
+				seen["total"] = size
+				_say("serving to peer %d: %s (%s, %d bytes)" % [peer, m.left(8), kind, size]))
+	NetworkManager.serve_progress.connect(
+		func(_peer: int, m: String, sent: int, total: int) -> void:
+			if m == md5:
+				seen["progress"] = int(seen["progress"]) + 1
+				seen["last"] = sent
+				_say("upload %d / %d" % [sent, total]))
+	NetworkManager.serve_done.connect(func(_peer: int, m: String) -> void:
+		if m == md5:
+			seen["done"] = true
+			_say("upload complete"))
+
 	if not await _until(func() -> bool: return NetworkManager.peers.size() >= 2, 75.0):
 		_fail("no one joined")
 		return
 	_say("joiner is connected; roster = %d" % NetworkManager.peers.size())
 
 	# Hold while the joiner pulls the file, then leave.
-	await _wait(12.0)
+	if not await _until(func() -> bool: return bool(seen["done"]), 30.0):
+		_fail("the host never saw its own upload finish")
+		return
+	if not bool(seen["started"]):
+		_fail("the host never saw the upload start")
+		return
+	if int(seen["progress"]) < 1:
+		_fail("the host saw no upload progress")
+		return
+	_say("host observed: started -> %d progress -> done (%d / %d bytes)"
+		% [int(seen["progress"]), int(seen["last"]), int(seen["total"])])
+	await _wait(2.0)
 	_say("host done")
 	_pass()
 

@@ -32,7 +32,7 @@ extends Node
 ## asynchronous.
 
 const NM_SCRIPT := preload("res://Scripts/Net/network_manager.gd")
-const GROUPS := ["cores", "substitute", "manifest", "hashcache", "progress", "readiness", "identity", "roomcode",
+const GROUPS := ["cores", "substitute", "manifest", "hashcache", "progress", "hudnotify", "readiness", "identity", "roomcode",
 	"punch", "wire", "owners", "assemble", "start", "lockstep", "desync", "join",
 	"transfer", "leave", "rollback", "link"]
 const PORT := 42913
@@ -63,6 +63,8 @@ func _ready() -> void:
 		_test_substitute()
 	if _want("manifest"):
 		_test_manifest()
+	if _want("hudnotify"):
+		_test_hudnotify()
 	if _want("progress"):
 		await _test_progress()
 	if _want("hashcache"):
@@ -2547,6 +2549,21 @@ class StubNM extends Node:
 	var _object_sync: Node = null
 	var host := true
 
+	# The surface NetHudNotifier subscribes to. Declared here rather than driving
+	# a real NetworkManager so the mapping from event to sentence can be tested
+	# without a peer, a camera or a viewport.
+	signal peer_registered(id: int, info: Dictionary)
+	signal peer_left(id: int)
+	signal serve_started(peer_id: int, md5: String, kind: String, size: int)
+	signal serve_progress(peer_id: int, md5: String, sent: int, total: int)
+	signal serve_done(peer_id: int, md5: String)
+	signal serve_refused(peer_id: int, md5: String, reason: String)
+	signal netplay_state_progress(peer_id: int, phase: String, received: int, total: int)
+	signal netplay_join_requested(peer_id: int, port: int)
+	signal netplay_desync(peer_id: int, frame: int)
+	signal netplay_blocked(reason: String, machine: Object, remedy: Dictionary)
+	signal netplay_session_stopped(reason: String)
+
 	func is_host() -> bool:
 		return host
 
@@ -2775,6 +2792,118 @@ func _test_manifest() -> void:
 	_ok(str(sums.get("md5", "")) == NetFileTransfer.hash_of(real),
 		"manifest/and the md5 agrees with the cached hash")
 	DirAccess.remove_absolute(real)
+
+
+# ══ Host HUD notifications ════════════════════════════════════════════════════
+# The mapping from event to sentence, with no 3D anywhere. The two cases that
+# matter most are the ones that stop this becoming noise: only the host speaks,
+# and a row is keyed so it is patched rather than piled up.
+
+func _hud_rig(is_host := true) -> Array:
+	var nm := StubNM.new()
+	nm.host = is_host
+	nm.peers = {
+		1: {"name": "Ryan", "is_vr": true, "color_idx": 0},
+		77: {"name": "Sam", "is_vr": true, "color_idx": 1},
+	}
+	add_child(nm)
+	var stack := MenuToasts.create()
+	add_child(stack)
+	var notifier := NetHudNotifier.new()
+	add_child(notifier)
+	notifier.setup(nm, stack)
+	return [nm, stack, notifier]
+
+
+## Visible rows on the stack. MenuToasts keeps its bars as children, so this is
+## what a player would actually see.
+func _hud_rows(stack: MenuToasts) -> int:
+	var n := 0
+	for c in stack.get_children():
+		if c is Control and (c as Control).visible:
+			n += 1
+	return n
+
+
+func _test_hudnotify() -> void:
+	var rig := _hud_rig()
+	var nm: StubNM = rig[0]
+	var stack: MenuToasts = rig[1]
+	var notifier: NetHudNotifier = rig[2]
+
+	# A join and a leave are the same peer, so they are the same row.
+	nm.peer_registered.emit(77, nm.peers[77])
+	_eq(_hud_rows(stack), 1, "hudnotify/a join raises one row")
+	nm.peer_left.emit(77)
+	_eq(_hud_rows(stack), 1, "hudnotify/a leave replaces it rather than adding")
+
+	# A transfer patches ONE row however many times it reports.
+	notifier.note_label("aa", "Nintendo Power 42.pdf")
+	nm.serve_started.emit(77, "aa", "book", 8388608)
+	var after_start := _hud_rows(stack)
+	for i in range(20):
+		nm.serve_progress.emit(77, "aa", (i + 1) * 262144, 8388608)
+	_eq(_hud_rows(stack), after_start,
+		"hudnotify/twenty progress reports stay one row")
+	nm.serve_done.emit(77, "aa")
+	_eq(_hud_rows(stack), after_start, "hudnotify/and finishing still one row")
+
+	# Twelve files at once are twelve rows, not one hundred and twelve. The cap
+	# collapses the surplus, which is why this counts <= MAX_VISIBLE + 1.
+	var fresh := _hud_rig()
+	var nm2: StubNM = fresh[0]
+	var stack2: MenuToasts = fresh[1]
+	for i in range(12):
+		nm2.serve_started.emit(77, "f%d" % i, "book", 1024 * (i + 1))
+		nm2.serve_progress.emit(77, "f%d" % i, 512, 1024 * (i + 1))
+	_ok(_hud_rows(stack2) <= MenuToasts.MAX_VISIBLE + 1,
+		"hudnotify/twelve transfers collapse rather than run off the panel")
+	_ok(_hud_rows(stack2) > 1, "hudnotify/but more than one is shown")
+
+	# THE case that stops this reporting the room's traffic to everyone in it.
+	var client := _hud_rig(false)
+	var cnm: StubNM = client[0]
+	var cstack: MenuToasts = client[1]
+	cnm.peer_registered.emit(77, cnm.peers[77])
+	cnm.serve_started.emit(77, "aa", "book", 1024)
+	cnm.serve_progress.emit(77, "aa", 512, 1024)
+	cnm.netplay_state_progress.emit(77, "capturing", 0, 0)
+	cnm.netplay_desync.emit(77, 900)
+	_eq(_hud_rows(cstack), 0, "hudnotify/a client is told nothing")
+
+	# An id the roster has already dropped still makes a sentence.
+	var gone := _hud_rig()
+	var gnm: StubNM = gone[0]
+	var gstack: MenuToasts = gone[1]
+	gnm.serve_done.emit(4242, "zz")
+	_eq(_hud_rows(gstack), 1, "hudnotify/an unknown peer still reports")
+
+	# The late-join stream: capture, send, and an ending. Before the host-side
+	# "done" existed this row hung at whatever the last ack said.
+	var join := _hud_rig()
+	var jnm: StubNM = join[0]
+	var jstack: MenuToasts = join[1]
+	jnm.netplay_state_progress.emit(77, "capturing", 0, 0)
+	_eq(_hud_rows(jstack), 1, "hudnotify/a capture pause is announced")
+	jnm.netplay_state_progress.emit(77, "transferring", 512, 1024)
+	_eq(_hud_rows(jstack), 1, "hudnotify/the send patches the same row")
+	jnm.netplay_state_progress.emit(77, "done", 1, 1)
+	_eq(_hud_rows(jstack), 1, "hudnotify/and it ends on that row")
+
+	# The rest of the vocabulary, each on its own key.
+	var misc := _hud_rig()
+	var mnm: StubNM = misc[0]
+	var mstack: MenuToasts = misc[1]
+	mnm.netplay_join_requested.emit(77, 1)
+	mnm.netplay_desync.emit(77, 900)
+	mnm.netplay_blocked.emit("'vba_next' has never been vetted", null, {})
+	mnm.netplay_session_stopped.emit("powered off")
+	_ok(_hud_rows(mstack) >= 2 and _hud_rows(mstack) <= MenuToasts.MAX_VISIBLE + 1,
+		"hudnotify/the other events each get a row, within the cap")
+
+	for r: Array in [rig, fresh, client, gone, join, misc]:
+		for n: Node in r:
+			n.queue_free()
 
 
 # ══ Late-join progress ════════════════════════════════════════════════════════

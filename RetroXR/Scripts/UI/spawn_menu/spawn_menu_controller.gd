@@ -120,6 +120,9 @@ var _locomotion_manager: LocomotionManager = null
 var _move_turn: Node = null
 var _player_body: XRToolsPlayerBody = null
 var _perf_hud: PerfHud = null
+## Host-side notifications that reach the player with the menu closed.
+var _hud_toasts: HudToasts = null
+var _net_notifier: NetHudNotifier = null
 
 # World scale (below 1.0 = player feels smaller / room feels bigger). Applied at
 # startup and tunable from the menu's Controls section. Not persisted — resets to
@@ -157,6 +160,7 @@ func _deferred_setup() -> void:
 		# Cache the un-scaled desktop eye height, then apply the default world scale.
 		_base_eye_height = _camera.transform.origin.y
 		_apply_world_scale(DEFAULT_WORLD_SCALE)
+		_build_hud_toasts()
 
 	# Find left and right XRController3D in a single pass
 	for node: Node in get_tree().root.find_children("*", "XRController3D", true, false):
@@ -694,6 +698,10 @@ func _show_menu() -> void:
 	var menu := _get_menu()
 	if menu:
 		menu.on_menu_shown()
+	# The menu carries its own toast stack and is directly in front of the
+	# player; two stacks saying the same thing is worse than one saying it once.
+	if _hud_toasts != null:
+		_hud_toasts.set_muted(true)
 
 
 func _hide_menu() -> void:
@@ -702,6 +710,8 @@ func _hide_menu() -> void:
 	var menu := _get_menu()
 	if menu:
 		menu.on_menu_hidden()
+	if _hud_toasts != null:
+		_hud_toasts.set_muted(false)
 	_smoothed_scroll_y = 0.0
 	_apply_menu_locomotion_blocks(false, false)
 
@@ -1306,6 +1316,23 @@ func _on_controller_hands_changed(enabled: bool) -> void:
 func _on_controller_bindings_changed() -> void:
 	for node in get_tree().get_nodes_in_group(ControllerBindings.CONSUMER_GROUP):
 		node.call("reload_bindings")
+
+
+## The host's notification HUD. Built once, alongside PerfHud and for the same
+## reasons: this node already owns the camera and the player-mounted UI, and the
+## rig's lifetime is the right one.
+##
+## It stays empty and invisible for anyone who never hosts, so it costs a
+## viewport and nothing else until something actually happens.
+func _build_hud_toasts() -> void:
+	if _hud_toasts != null or _camera == null:
+		return
+	_hud_toasts = HudToasts.create(_camera)
+	_camera.add_child(_hud_toasts)
+	_net_notifier = NetHudNotifier.new()
+	_net_notifier.name = "NetHudNotifier"
+	add_child(_net_notifier)
+	_net_notifier.setup(NetworkManager, _hud_toasts.stack())
 
 
 ## The performance HUD. Built on first use — every section can be off, and most

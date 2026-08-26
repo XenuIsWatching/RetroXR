@@ -41,9 +41,22 @@ const REQUEST_TIMEOUT_MS := 10000   # no chunk/ack progress for this long → fa
 const TRANSFER_KINDS := {"book": true, "video": true, "music": true,
 	"save": true, "dvd": true, "poster": true}
 
+## Receiver side: what THIS peer is pulling down.
 signal transfer_progress(md5: String, received: int, total: int)
 signal transfer_done(md5: String, path: String)
 signal transfer_failed(md5: String, reason: String)
+
+## Sender side: what this peer is HANDING OUT, and to whom.
+##
+## The host had all of this and published none of it -- _req_file builds a _sends
+## entry with the peer, the hash and the byte count, _pump_send finishes it and
+## _file_ack counts the acks, and not one of them said a word. A player pulling a
+## 700 MB video off the host was invisible to the host by construction. These
+## four carry no new state; they announce what _sends already knows.
+signal serve_started(peer_id: int, md5: String, kind: String, size: int)
+signal serve_progress(peer_id: int, md5: String, sent: int, total: int)
+signal serve_done(peer_id: int, md5: String)
+signal serve_refused(peer_id: int, md5: String, reason: String)
 
 var _nm: Node = null
 
@@ -368,21 +381,30 @@ func _req_file(md5: String, kind: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	# Server-side kind allowlist — the authoritative refusal.
 	if not TRANSFER_KINDS.has(kind):
-		_file_deny.rpc_id(sender, md5, "kind '%s' is not transferable" % kind)
+		_refuse(sender, md5, "kind '%s' is not transferable" % kind)
 		return
 	var path := str(_serve.get(md5, ""))
 	if path.is_empty() or not FileAccess.file_exists(path):
-		_file_deny.rpc_id(sender, md5, "file not available")
+		_refuse(sender, md5, "file not available")
 		return
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
-		_file_deny.rpc_id(sender, md5, "file unreadable")
+		_refuse(sender, md5, "file unreadable")
 		return
 	var key := "%d:%s" % [sender, md5]
 	_sends[key] = {"peer": sender, "md5": md5, "file": f,
 		"size": f.get_length(), "next": 0, "acked": -1}
+	serve_started.emit(sender, md5, kind, f.get_length())
 	_file_begin.rpc_id(sender, md5, f.get_length())
 	_pump_send(key)
+
+
+## Refuse a request and say so on BOTH ends. The deny went out to the client and
+## left nothing behind on the host, so a peer being turned away was something
+## only the peer could know.
+func _refuse(peer_id: int, md5: String, reason: String) -> void:
+	_file_deny.rpc_id(peer_id, md5, reason)
+	serve_refused.emit(peer_id, md5, reason)
 
 
 @rpc("authority", "call_remote", "reliable", CH_FILE)
@@ -415,6 +437,7 @@ func _pump_send(key: String) -> void:
 	if int(s["next"]) >= total_chunks and int(s["acked"]) >= total_chunks - 1:
 		f.close()
 		_sends.erase(key)
+		serve_done.emit(int(s["peer"]), str(s["md5"]))
 
 
 @rpc("authority", "call_remote", "reliable", CH_FILE)
@@ -445,6 +468,12 @@ func _file_ack(md5: String, upto: int) -> void:
 	if s.is_empty():
 		return
 	s["acked"] = maxi(int(s["acked"]), upto)
+	# On the ack, not the chunk. The client acks every ACK_EVERY chunks, so this
+	# is roughly one emission per 256 KB rather than one per 64 KB -- the same
+	# rule join_state_progress follows, and for the same reason: a progress bar
+	# is 300 px wide and does not need four updates to move one of them.
+	var sent := mini((int(s["acked"]) + 1) * CHUNK_SIZE, int(s["size"]))
+	serve_progress.emit(int(s["peer"]), str(s["md5"]), sent, int(s["size"]))
 	_pump_send(key)
 
 
