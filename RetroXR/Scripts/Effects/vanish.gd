@@ -21,6 +21,10 @@ extends Object
 
 const DURATION := 0.3
 
+## Earth gravity, so the drop reads as a real fall rather than a slide. Godot's
+## own default 3D gravity, not a number picked to look right.
+const FALL_GRAVITY := 9.8
+
 ## Marks a node already on its way out. Both the storage box's overlap poll and
 ## a snap zone can reach the same object, and the second call must be a no-op
 ## rather than a second tween fighting the first.
@@ -53,16 +57,36 @@ static func free_node(node: Node, duration: float = DURATION) -> void:
 		return
 	spatial.set_meta(META, true)
 
-	# Nothing may touch it while it shrinks: it must not be grabbed again, must
-	# not be re-detected by the box that is deleting it, and must not fall
-	# through the floor once its collision shape is a millimetre across.
+	# Nothing may touch it while it shrinks: it must not be grabbed again, and it
+	# must not be re-detected by the box that is deleting it.
 	_neutralise(spatial)
 
 	# Created from the node, so the tween dies with it if something frees the
 	# object out from under us anyway.
 	var tween := spatial.create_tween()
+	tween.set_parallel(true)
 	tween.tween_property(spatial, "scale", Vector3.ONE * 0.001, duration) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+
+	# And it falls while it goes, instead of hanging in the air.
+	#
+	# Integrated here rather than handed back to the physics server, which is not
+	# a preference: a RigidBody's transform is written from the server every tick
+	# and that transform carries no scale, so an unfrozen body would have the
+	# shrink wiped out from under it each frame. The body stays frozen and the
+	# drop is authored — real gravity, from a standing start, which over the
+	# 0.3 s of the animation is about 0.44 m.
+	#
+	# It keeps no collision (see _neutralise), so it falls THROUGH the box's base
+	# and the floor rather than landing on them. That is the point: something
+	# being deleted should sink out of the world, not settle onto it.
+	var start := spatial.global_position
+	tween.tween_method(func(t: float) -> void:
+		if not is_instance_valid(spatial):
+			return
+		spatial.global_position = start - Vector3(0.0, 0.5 * FALL_GRAVITY * t * t, 0.0),
+		0.0, duration, duration)
+
 	tween.finished.connect(func() -> void:
 		if is_instance_valid(spatial):
 			spatial.queue_free())
