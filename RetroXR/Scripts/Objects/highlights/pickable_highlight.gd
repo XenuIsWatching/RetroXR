@@ -4,7 +4,7 @@
 ##   - Ray hovering  → white   (highlight_updated signal on parent pickable)
 ##   - Ray held      → yellow  (XRTools ray-grab, plus desktop_hand pickup)
 ##   - Hand held     → blue    (picked_up / dropped signals on parent pickable, XR hand-grab path)
-##   - In trash      → red     (set_trash_mode(true) called by TrashCan — highest priority)
+##   - In trash      → red     (set_trash_mode(true) called by StorageBox — highest priority)
 ##
 ## Why the two separate paths: godot-xr-tools ray-grab bypasses the pickable's
 ## picked_up/grabbed signals entirely and only emits has_picked_up on the pickup
@@ -35,7 +35,7 @@ const OUTLINE_MASK_SHADER := preload("res://Shaders/outline_mask.gdshader")
 @export var ray_color:   Color = Color(1.0, 0.85, 0.0, 1.0)
 ## Color shown while the object is held by a physical hand grab.
 @export var held_color:  Color = Color(0.25, 0.6, 1.0, 1.0)
-## Color shown while the object is inside a TrashCan detection area (overrides held colour).
+## Color shown while the object is inside a StorageBox detection area (overrides held colour).
 @export var trash_color: Color = Color(1.0, 0.15, 0.15, 1.0)
 ## Color shown while a held TV remote is pointing at the object.
 @export var remote_color: Color = Color(0.5, 0.0, 0.13, 1.0)
@@ -198,7 +198,7 @@ func _update_state() -> void:
 		_set_overlays_visible(false)
 
 
-## Called by TrashCan when this object enters or exits the trash detection area.
+## Called by StorageBox when this object enters or exits the trash detection area.
 func set_trash_mode(in_trash: bool) -> void:
 	_is_in_trash = in_trash
 	_update_state()

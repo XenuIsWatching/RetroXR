@@ -66,12 +66,6 @@ furniture/light_switch.glb
     the grungy Object_5, whose toggle actually reads at arm's length, and hides
     the other. Front is +Z, and the plate leans ~13 deg off vertical as modelled.
 
-furniture/trash_can.glb
-    "Trash Can" by Yury Misiyuk (@Tim0)
-    https://sketchfab.com/3d-models/trash-can-0ad3407cd8104ba58f71885c0e58ca9a
-    1.1k tris. Open-top with a bin liner — the open top is required, TrashArea
-    has to sit in free space over the mouth for the drop-to-delete to fire.
-
 displays/crt_monitor.glb
     "CRT Computer Monitor" by fizyman
     https://sketchfab.com/3d-models/crt-computer-monitor-f2ff0013f86e4cd0a2aee183a23bdfee

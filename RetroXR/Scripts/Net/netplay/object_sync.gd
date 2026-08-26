@@ -508,11 +508,13 @@ func _request_despawn(net_id: int) -> void:
 		return
 	var node: Node = _registry.get(net_id)
 	if is_instance_valid(node):
-		# tree_exiting hook broadcasts _despawn to the remaining clients.
+		# tree_exiting hook broadcasts _despawn to the remaining clients. It now
+		# fires at the END of the shrink rather than on this frame — a despawn
+		# a third of a second later, which is what every peer is watching too.
 		if node.has_method("drop_and_free"):
 			node.call("drop_and_free")
 		else:
-			node.queue_free()
+			Vanish.free_node(node)
 
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -520,11 +522,15 @@ func _despawn(net_id: int) -> void:
 	var node: Node = _registry.get(net_id)
 	_unregister(net_id)
 	if is_instance_valid(node):
+		# The shrink outlives this _applying window, so the real tree_exiting
+		# arrives with the flag already down. It still does not echo back: the
+		# id was unregistered above, and _on_node_exiting drops anything the
+		# registry no longer maps to that node.
 		_applying = true
 		if node.has_method("drop_and_free"):
 			node.call("drop_and_free")
 		else:
-			node.queue_free()
+			Vanish.free_node(node)
 		_applying = false
 
 

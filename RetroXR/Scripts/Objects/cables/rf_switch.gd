@@ -15,7 +15,7 @@
 ##
 ## The type is also load-bearing three times over, which is the real argument against
 ## writing a slim sibling that only implements links():
-##   * TrashCan._free_lead casts plug.cable to CompositeCable — a sibling is
+##   * StorageBox._free_lead casts plug.cable to CompositeCable — a sibling is
 ##     un-binnable, and both of its plugs delete nothing
 ##   * ScenePersistence dispatches on `is CompositeCable` for both save and restore
 ##   * the netplay seat/release events are all inherited

@@ -1,7 +1,8 @@
-## TrashCan — a pickable trash can that deletes objects dropped inside it.
+## StorageBox — a pickable open-top cardboard box that deletes objects put in it.
 ## When a held XRToolsPickable enters the TrashArea, its PickableHighlight turns red.
-## Releasing the object while it is inside the area deletes it.
-class_name TrashCan
+## Releasing the object while it is inside the area deletes it: the object shrinks
+## away through Vanish.free_node() rather than blinking out on the release frame.
+class_name StorageBox
 extends XRToolsPickable
 
 @onready var _trash_area: Area3D = $TrashArea
@@ -32,7 +33,7 @@ func _process(_delta: float) -> void:
 		if pickable.is_picked_up() and not _objects_in_trash.has(pickable):
 			_objects_in_trash[pickable] = true
 			_set_trash_highlight(pickable, true)
-			print("[TrashCan] '%s' entered trash zone" % pickable.name)
+			print("[StorageBox] '%s' entered trash zone" % pickable.name)
 
 	# Handle existing tracked pickables.
 	for body in _objects_in_trash.keys().duplicate():
@@ -44,12 +45,12 @@ func _process(_delta: float) -> void:
 			# Left the detection zone — restore normal highlight.
 			_objects_in_trash.erase(body)
 			_set_trash_highlight(pickable, false)
-			print("[TrashCan] '%s' left trash zone" % pickable.name)
+			print("[StorageBox] '%s' left trash zone" % pickable.name)
 		elif not pickable.is_picked_up():
 			# Released inside the zone → delete it (with its dependents).
 			_objects_in_trash.erase(body)
 			_set_trash_highlight(pickable, false)
-			print("[TrashCan] deleting '%s'" % pickable.name)
+			print("[StorageBox] deleting '%s'" % pickable.name)
 			_delete_with_dependents(pickable)
 
 
@@ -68,7 +69,7 @@ func _process(_delta: float) -> void:
 ## device that owns it — so it just falls out of the can.
 func _delete_with_dependents(pickable: XRToolsPickable) -> void:
 	if pickable is CablePlug or pickable is ControllerPlug:
-		print("[TrashCan] '%s' is a cable plug — not deletable" % pickable.name)
+		print("[StorageBox] '%s' is a cable plug — not deletable" % pickable.name)
 		return
 
 	if pickable is RcaPlug:
@@ -92,11 +93,11 @@ func _delete_with_dependents(pickable: XRToolsPickable) -> void:
 		if held is RcaPlug:
 			_free_lead(held as RcaPlug)
 			continue
-		print("[TrashCan] deleting snapped '%s'" % held.name)
+		print("[StorageBox] deleting snapped '%s'" % held.name)
 		if held.has_method("drop_and_free"):
 			held.call("drop_and_free")
 		else:
-			held.queue_free()
+			Vanish.free_node(held)
 
 	# Free the object's own cable (spawned at the scene root).
 	var cable: Variant = pickable.get("_cable_instance")
@@ -110,7 +111,7 @@ func _delete_with_dependents(pickable: XRToolsPickable) -> void:
 	if pickable.has_method("drop_and_free"):
 		pickable.call("drop_and_free")
 	else:
-		pickable.queue_free()
+		Vanish.free_node(pickable)
 
 
 ## Free the whole composite lead one of its plugs belongs to.
@@ -134,7 +135,7 @@ func _free_lead(plug: RcaPlug) -> void:
 	# A console wears two sockets and so hands the same lead over twice.
 	if lead == null or lead.is_queued_for_deletion():
 		return
-	print("[TrashCan] deleting lead '%s'" % lead.name)
+	print("[StorageBox] deleting lead '%s'" % lead.name)
 	lead.drop_and_free()
 
 

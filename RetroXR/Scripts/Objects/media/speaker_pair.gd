@@ -244,4 +244,4 @@ func restore_box_poses(poses: Array) -> void:
 func drop_and_free() -> void:
 	if _line_in != null and is_instance_valid(_line_in):
 		_line_in.drop_object()
-	queue_free()
+	Vanish.free_node(self)

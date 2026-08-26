@@ -281,4 +281,6 @@ func drop_and_free() -> void:
 		_cable_plug.drop()
 	if _cable_instance != null and is_instance_valid(_cable_instance):
 		_cable_instance.queue_free()
-	queue_free()
+	# The cord goes at once, the body shrinks away: a VerletRope is a particle
+	# sim, so scaling its anchor would drag the cord rather than shrink it.
+	Vanish.free_node(self)

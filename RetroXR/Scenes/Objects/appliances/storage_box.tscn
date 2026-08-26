@@ -1,0 +1,248 @@
+[gd_scene load_steps=17 format=3 uid="uid://trashcan_001"]
+
+[ext_resource type="Script" path="res://Scripts/Objects/room/storage_box.gd" id="1_boxscript"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+[ext_resource type="Shader" path="res://Shaders/pbr_surface.gdshader" id="3_pbr"]
+[ext_resource type="Texture2D" path="res://imported-assets/shared/materials/Cardboard004_1K-JPG_Color.jpg" id="4_card_col"]
+[ext_resource type="Texture2D" path="res://imported-assets/shared/materials/Cardboard004_1K-JPG_NormalGL.jpg" id="5_card_nrm"]
+[ext_resource type="Texture2D" path="res://imported-assets/shared/materials/Cardboard004_1K-JPG_Roughness.jpg" id="6_card_rgh"]
+
+; --- Cardboard, on pbr_surface.gdshader -------------------------------------
+; The table's prop recipe, for the table's reasons: object_space, because the
+; box is a RigidBody the player carries between rooms and in world space the
+; corrugation would swim across it as it moved; contact_strength 0, because the
+; shader's corner darkening measures against a ROOM's extents and on a moving
+; prop that is a stain sliding over it.
+;
+; tiles_per_metre is 3.0 rather than the table's 0.9. This is a 0.34 m box, and
+; at the table's density a single flute would cover a whole wall.
+;
+; The tint lifts BLUE rather than warming the map. A tint can only multiply, and
+; this set's albedo is already a strong orange — measured off a render, the wall
+; came back at saturation 0.61, where corrugated board sits nearer 0.30. Warming
+; it further only deepened that, so the multiplier holds red back instead.
+[sub_resource type="ShaderMaterial" id="Mat_card"]
+shader = ExtResource("3_pbr")
+shader_parameter/albedo_tex = ExtResource("4_card_col")
+shader_parameter/roughness_tex = ExtResource("6_card_rgh")
+shader_parameter/normal_tex = ExtResource("5_card_nrm")
+shader_parameter/tint = Color(0.72, 0.78, 1, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 3.0
+shader_parameter/normal_strength = 1.0
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = true
+shader_parameter/swap_uv = false
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
+
+; The inside of the box, on thin liner panels a couple of millimetres in from
+; the walls. Same cardboard, darker: an open box is a cavity, and with the
+; shader's contact darkening off for props and no shadows at all on Quest,
+; nothing else would tell the inner faces from the outer ones — the box would
+; read as a solid block with a painted-on mouth. The depth is authored.
+[sub_resource type="ShaderMaterial" id="Mat_card_inner"]
+shader = ExtResource("3_pbr")
+shader_parameter/albedo_tex = ExtResource("4_card_col")
+shader_parameter/roughness_tex = ExtResource("6_card_rgh")
+shader_parameter/normal_tex = ExtResource("5_card_nrm")
+shader_parameter/tint = Color(0.4, 0.43, 0.55, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 3.0
+shader_parameter/normal_strength = 1.0
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = true
+shader_parameter/swap_uv = false
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_base"]
+size = Vector3(0.34, 0.012, 0.34)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall_z"]
+size = Vector3(0.34, 0.3, 0.012)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall_x"]
+size = Vector3(0.012, 0.3, 0.316)
+
+[sub_resource type="BoxMesh" id="BoxMesh_liner_base"]
+size = Vector3(0.312, 0.004, 0.312)
+
+[sub_resource type="BoxMesh" id="BoxMesh_liner_z"]
+size = Vector3(0.312, 0.29, 0.004)
+
+[sub_resource type="BoxMesh" id="BoxMesh_liner_x"]
+size = Vector3(0.004, 0.29, 0.312)
+
+[sub_resource type="BoxMesh" id="BoxMesh_flap_z"]
+size = Vector3(0.34, 0.008, 0.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_flap_x"]
+size = Vector3(0.1, 0.008, 0.34)
+
+[sub_resource type="BoxShape3D" id="BoxShape_wall"]
+size = Vector3(0.34, 0.3, 0.012)
+
+[sub_resource type="BoxShape3D" id="BoxShape_wall_x"]
+size = Vector3(0.012, 0.3, 0.316)
+
+[sub_resource type="BoxShape3D" id="BoxShape_base"]
+size = Vector3(0.34, 0.012, 0.34)
+
+[sub_resource type="BoxShape3D" id="BoxShape_pointer"]
+size = Vector3(0.34, 0.3, 0.34)
+
+[sub_resource type="CylinderShape3D" id="CylShape_trash_area"]
+radius = 0.19
+height = 0.25
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_box"]
+friction = 0.8
+
+; A small open-top cardboard box, built from primitives rather than a downloaded
+; shell. The open top is load-bearing, not cosmetic: TrashArea has to sit in free
+; space over the mouth for get_overlapping_bodies() to catch a released pickable,
+; so a lidded box would silently break drop-to-delete.
+;
+; The body is hollow — a base and four wall shapes, not one solid block — so an
+; object dropped in falls INTO it and sits there for the moment before it
+; shrinks away.
+[node name="StorageBox" type="RigidBody3D" groups=["spawned"]]
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_box")
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("1_boxscript")
+
+[node name="ColBase" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.144, 0)
+shape = SubResource("BoxShape_base")
+
+[node name="ColWallFront" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.164)
+shape = SubResource("BoxShape_wall")
+
+[node name="ColWallBack" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.164)
+shape = SubResource("BoxShape_wall")
+
+[node name="ColWallRight" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.164, 0, 0)
+shape = SubResource("BoxShape_wall_x")
+
+[node name="ColWallLeft" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.164, 0, 0)
+shape = SubResource("BoxShape_wall_x")
+
+[node name="Base" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.144, 0)
+mesh = SubResource("BoxMesh_base")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="WallFront" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.164)
+mesh = SubResource("BoxMesh_wall_z")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="WallBack" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.164)
+mesh = SubResource("BoxMesh_wall_z")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="WallRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.164, 0, 0)
+mesh = SubResource("BoxMesh_wall_x")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="WallLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.164, 0, 0)
+mesh = SubResource("BoxMesh_wall_x")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="LinerBase" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.136, 0)
+mesh = SubResource("BoxMesh_liner_base")
+surface_material_override/0 = SubResource("Mat_card_inner")
+
+[node name="LinerFront" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.002, 0.156)
+mesh = SubResource("BoxMesh_liner_z")
+surface_material_override/0 = SubResource("Mat_card_inner")
+
+[node name="LinerBack" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.002, -0.156)
+mesh = SubResource("BoxMesh_liner_z")
+surface_material_override/0 = SubResource("Mat_card_inner")
+
+[node name="LinerRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.156, 0.002, 0)
+mesh = SubResource("BoxMesh_liner_x")
+surface_material_override/0 = SubResource("Mat_card_inner")
+
+[node name="LinerLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.156, 0.002, 0)
+mesh = SubResource("BoxMesh_liner_x")
+surface_material_override/0 = SubResource("Mat_card_inner")
+
+; Four flaps folded out over the rim at 35 deg. The bases are R_x(-35) on the
+; front flap, R_x(+35) on the back, R_z(+35) on the right and R_z(-35) on the
+; left — each one tilting its own outward axis UP, away from the mouth, so the
+; box reads as opened rather than as a hole in a block.
+;
+; Written as ROWS, which is what a .tscn Transform3D lists and the transpose of
+; what the Transform3D(x_axis, y_axis, z_axis, origin) constructor takes. These
+; were checked by printing basis.x/.y/.z from a probe, not by eye: a flap on a
+; symmetric box looks plausible folded the wrong way.
+[node name="FlapFront" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.819152, 0.573576, 0, -0.573576, 0.819152, 0, 0.178679, 0.204958)
+mesh = SubResource("BoxMesh_flap_z")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="FlapBack" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.819152, -0.573576, 0, 0.573576, 0.819152, 0, 0.178679, -0.204958)
+mesh = SubResource("BoxMesh_flap_z")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="FlapRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.819152, -0.573576, 0, 0.573576, 0.819152, 0, 0, 0, 1, 0.204958, 0.178679, 0)
+mesh = SubResource("BoxMesh_flap_x")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="FlapLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.819152, 0.573576, 0, -0.573576, 0.819152, 0, 0, 0, 1, -0.204958, 0.178679, 0)
+mesh = SubResource("BoxMesh_flap_x")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("BoxShape_pointer")
+
+[node name="TrashArea" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+collision_layer = 0
+collision_mask = 65540
+monitoring = true
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TrashArea"]
+shape = SubResource("CylShape_trash_area")

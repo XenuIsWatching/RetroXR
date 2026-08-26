@@ -410,7 +410,7 @@ func _build() -> void:
 
 	_add_spawn_tab(tabs, "Objects", [
 		["Table",           "table"],
-		["Trash Can",       "trash_can"],
+		["Storage Box",     "trash_can"],
 		["VCR",             "vcr_player"],
 		["DVD Player",      "dvd_player"],
 		["CD Player",       "cd_player"],

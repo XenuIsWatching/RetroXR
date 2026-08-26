@@ -71,15 +71,15 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 
 ## Bin the whole switch, not just the box.
 ##
-## TrashCan._delete_with_dependents calls this on any pickable that has it and
+## StorageBox._delete_with_dependents calls this on any pickable that has it and
 ## queue_frees it otherwise, and freeing the box alone would leave the root, both
 ## ropes and both plugs alive with a freed anchor node — the ropes read their
 ## anchors' global transforms every frame. Binning a PLUG already takes the whole
-## switch with it, because plug.cable points at the root and TrashCan._free_lead
+## switch with it, because plug.cable points at the root and StorageBox._free_lead
 ## follows it; this is the same rule for the other handle.
 func drop_and_free() -> void:
 	var root := get_parent()
 	if root != null and is_instance_valid(root) and root.has_method("drop_and_free"):
 		root.call("drop_and_free")
 	else:
-		queue_free()
+		Vanish.free_node(self)

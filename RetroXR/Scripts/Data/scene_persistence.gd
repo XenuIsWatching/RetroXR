@@ -84,7 +84,7 @@ const GB_LINK_CABLE_SCENE    := preload("res://Scenes/Objects/cables/gb_link_cab
 const GC_GBA_CABLE_SCENE     := preload("res://Scenes/Objects/cables/gc_gba_cable.tscn")
 const PSX_LINK_CABLE_SCENE   := preload("res://Scenes/Objects/cables/psx_link_cable.tscn")
 const SPEAKER_PAIR_SCENE     := preload("res://Scenes/Objects/appliances/speaker_pair.tscn")
-const TRASH_CAN_SCENE        := preload("res://Scenes/Objects/appliances/trash_can.tscn")
+const STORAGE_BOX_SCENE      := preload("res://Scenes/Objects/appliances/storage_box.tscn")
 const TABLE_SCENE            := preload("res://Scenes/Objects/furniture/table.tscn")
 const RETRO_MOUSE_SCENE      := preload("res://Scenes/Objects/peripherals/retro_mouse.tscn")
 const SNES_MOUSE_SCENE       := preload("res://Scenes/Objects/peripherals/snes_mouse.tscn")
@@ -103,7 +103,7 @@ const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse
 ## _deserialize_object().
 const PLAIN_SCENES := {
 	"tv_remote": TV_REMOTE_SCENE,
-	"trash_can": TRASH_CAN_SCENE,
+	"trash_can": STORAGE_BOX_SCENE,
 	"table": TABLE_SCENE,
 	"light_gun": LIGHT_GUN_SCENE,
 	# Slots written before the rename say "ray_gun".
@@ -1316,7 +1316,7 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		return _base(id, "motion_plus", n3d)
 	elif node is TVRemote:
 		return _base(id, "tv_remote", n3d)
-	elif node is TrashCan:
+	elif node is StorageBox:
 		return _base(id, "trash_can", n3d)
 	elif node is Table:
 		# Pose only. Being in PLAIN_SCENES is not enough on its own — that map is
