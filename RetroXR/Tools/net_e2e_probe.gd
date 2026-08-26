@@ -13,18 +13,40 @@ extends Node
 ## Both roles print [e2e] lines and exit non-zero on failure. Run the host in the
 ## background, wait for the code file, then run the joiner.
 ##
-## STATE OF THE ROOM-CODE PATH, measured 2026-08-25: the registry is healthy --
-## POST /v1/rooms issues a code and GET /v1/rooms/<code> returns the room -- but
-## the punch server it hands out, punch.retroxr.app:8890, accepts a TCP
-## connection and never answers `register-host`. Punchthrough returns
-## PROTOCOL_ERROR, and because host_online() punches BEFORE claiming a code, no
-## code is ever issued and the player is told "Could not reach the RetroXR
-## server. Try hosting on LAN." Nothing on this side can work around that, which
-## is why --e2e-lan exists: it exercises the whole path either side of the punch
-## hop -- two processes, real ENet, roster, chunked transfer, hash verify.
+## WHY --e2e-lan EXISTS, and what the online path can and cannot prove here.
 ##
-## Re-check with:  curl https://net.retroxr.app/v1/punch     (should be 200)
-##                 printf 'register-host\n' | nc punch.retroxr.app 8890
+## Hosting online works: a real code is claimed and the room resolves. What
+## cannot be tested from ONE MACHINE is the last hop. Both processes leave via
+## the same public IP, so the peer punch is a NAT hairpin -- the router will not
+## reflect a packet from one inside host back to another via the public mapping
+## -- and the joiner reliably gets Result.UNPUNCHABLE:
+##
+##   status: Looking up RVVF56...
+##   status: Connecting to RVVF56...
+##   status: Could not reach the other player directly. [...] use LAN mode.
+##
+## That is the environment, not the code.
+##
+## Do not over-read it. Two DEVICES behind one router share a public IP too, so
+## the same shape is plausible there -- but that is a hypothesis, not something
+## anyone has observed: two processes on one host is a stronger constraint than
+## two devices, and many consumer routers do implement NAT loopback. Nobody has
+## measured the same-house case.
+##
+## It also does not stand in front of the real gate. A desktop on home wi-fi
+## against a Quest on a phone hotspot is two DIFFERENT public IPs, which is
+## precisely the case punchthrough exists for; that is the run still owed, and
+## it needs two networks.
+##
+## So --e2e-lan is the mode that actually gates a change: two processes, real
+## ENet, roster, chunked transfer, hash verify, everything either side of the
+## punch hop.
+##
+## Re-check the punch server with:
+##   curl https://net.retroxr.app/v1/punch                  (200 + endpoint)
+##   printf 'register-host\n' | nc punch.retroxr.app 8890   (must reply set-oid)
+## A silent socket that accepts and never answers is what a wedged noray looks
+## like; it was down that way on 2026-08-25 and a port check would not show it.
 
 var _role := ""
 var _out := ""
