@@ -12,8 +12,11 @@
 ## user://net_prefs.json, kept here rather than in AppPrefs because nothing else
 ## reads them.
 ##
-## It IS its own scroll container — the menu's _show_view wants a Control and a
-## ScrollContainer, and for this tab they were always the same node.
+## It used to BE its own scroll container. It now hosts three sub-tabs the way
+## the options tab does — SESSION (everything this tab always did), READINESS
+## (whether the people here can actually play together) and CONTENT (what the
+## room needs and what is moving) — so the scroll the thumbstick drives is
+## whichever sub-tab is showing, reported through scroll_changed.
 ##
 ## The keypad below was entering two digits per tap: a Viewport2Din3D delivered
 ## one pointer press to a Button as BOTH an InputEventScreenTouch and an
@@ -22,9 +25,18 @@
 ## events only. Release mode was never affected — the second event finds the
 ## button already released — which is why the rest of the menu was fine.
 class_name SpawnMenuNetView
-extends ScrollContainer
+extends VBoxContainer
+
+## The sub-tab changed, so the thumbstick should drive a different scroll.
+signal scroll_changed(scroll: ScrollContainer)
 
 const PREFS_PATH := "user://net_prefs.json"
+
+var _tabs: TabContainer = null
+var _pages: Array[ScrollContainer] = []
+var _readiness: NetReadinessPage = null
+var _content_page: NetContentPage = null
+var _content: NetplayContent = null
 
 var _status_lbl:   Label = null
 var _name_edit:    LineEdit = null
@@ -39,18 +51,29 @@ var _code_edit:    LineEdit = null
 var _code_lbl:     Label = null
 
 
-static func create() -> SpawnMenuNetView:
+## `menu` is the SpawnMenu2D, needed only so an in-flight transfer can raise a
+## toast that outlives this tab. Optional: the tab works standalone in a probe.
+static func create(menu: Node = null) -> SpawnMenuNetView:
 	var v := SpawnMenuNetView.new()
+	v._menu = menu
 	v._build()
 	return v
 
 
+var _menu: Node = null
+
+
 func _build() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_tabs = TabContainer.new()
+	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-	var vbox := MenuStyle.vbox(10)
-	add_child(vbox)
+	var vbox := _page("Session")
+	_build_readiness_page()
+	_build_content_page()
+
+	_tabs.tab_changed.connect(func(_i: int) -> void: scroll_changed.emit(active_scroll()))
+	add_child(TabStrip.wrap(_tabs))
 
 	var prefs := _load_prefs()
 
@@ -297,6 +320,10 @@ func _on_join() -> void:
 
 ## Re-read the session and repaint.
 func refresh() -> void:
+	if is_instance_valid(_readiness):
+		_readiness.refresh()
+	if is_instance_valid(_content_page):
+		_content_page.refresh()
 	if not is_instance_valid(_players_box):
 		return
 	var active: bool = NetworkManager.is_active()
@@ -315,6 +342,10 @@ func refresh() -> void:
 	for child in _players_box.get_children():
 		child.queue_free()
 	var self_id: int = NetworkManager.multiplayer.get_unique_id() if active else -1
+	# Which pad each player is actually holding. _owners is the map the input
+	# scheduler samples from, so it cannot drift from what is being played, and
+	# a peer holding no port at all is a spectator.
+	var ports := _ports_by_peer()
 	for id: int in NetworkManager.peers:
 		var info: Dictionary = NetworkManager.peers[id]
 		var row := MenuStyle.hbox(10)
@@ -327,12 +358,87 @@ func refresh() -> void:
 			suffix += "  (host)"
 		if id == self_id:
 			suffix += "  (you)"
+		if NetworkManager.netplay_running():
+			var held: Array = ports.get(id, [])
+			suffix += "  --  %s" % ("spectator" if held.is_empty()
+				else ", ".join(PackedStringArray(held)))
 		var ping: int = NetworkManager.ping_ms(id)
 		if ping > 0:
 			suffix += "  %d ms" % ping
 		row.add_child(MenuStyle.label("%s%s" % [info.get("name", "?"), suffix],
 			18, MenuStyle.COLOR_TITLE))
 		_players_box.add_child(row)
+
+
+## peer_id -> ["Port 1", "Machine 2 Port 1", ...].
+##
+## The machine is named only when there is more than one, because a cabled pair
+## is one session over two machines and "Port 1" alone would be ambiguous there
+## while being noise everywhere else.
+func _ports_by_peer() -> Dictionary:
+	var out: Dictionary = {}
+	var owners := NetworkManager.netplay_owners()
+	var machines: Dictionary = {}
+	for global_port: int in owners:
+		machines[NetworkManager.netplay_machine_of(global_port)] = true
+	var many := machines.size() > 1
+	for global_port: int in owners:
+		var peer := int(owners[global_port])
+		var port := NetworkManager.netplay_port_of(global_port) + 1
+		var text := "Port %d" % port
+		if many:
+			text = "Machine %d Port %d" % [
+				NetworkManager.netplay_machine_of(global_port) + 1, port]
+		if not out.has(peer):
+			out[peer] = []
+		(out[peer] as Array).append(text)
+	return out
+
+
+## A scrolling sub-tab. The TabContainer titles each tab after its child, so the
+## node name IS the label.
+func _page(title: String) -> VBoxContainer:
+	var page := MenuStyle.vscroll()
+	page.name = title
+	var vbox := MenuStyle.vbox(10)
+	page.add_child(vbox)
+	_tabs.add_child(page)
+	_pages.append(page)
+	return vbox
+
+
+func _build_readiness_page() -> void:
+	_readiness = NetReadinessPage.create()
+	_page("Readiness").add_child(_readiness)
+
+
+## The content page needs the RomM client and downloader, which the menu owns.
+## Without a menu it still builds and simply has no RomM route -- a missing ROM
+## then reads as missing rather than as fetchable, which is the truth.
+func _build_content_page() -> void:
+	_content = NetplayContent.new()
+	_content.name = "NetplayContent"
+	add_child(_content)
+	var client: RommClient = null
+	var downloader: RommDownloader = null
+	var scraper: AutoScraper = null
+	if _menu != null:
+		if "romm_client" in _menu:
+			client = _menu.get("romm_client")
+		if "romm_downloader" in _menu:
+			downloader = _menu.get("romm_downloader")
+		if "auto_scraper" in _menu:
+			scraper = _menu.get("auto_scraper")
+	_content.setup(NetworkManager, client, downloader, scraper)
+	_content_page = NetContentPage.create(_content, _menu)
+	_page("Content").add_child(_content_page)
+
+
+## The scroll the thumbstick should drive, i.e. whichever sub-tab is showing.
+func active_scroll() -> ScrollContainer:
+	if _tabs == null or _pages.is_empty():
+		return null
+	return _pages[clampi(_tabs.current_tab, 0, _pages.size() - 1)]
 
 
 func _load_prefs() -> Dictionary:

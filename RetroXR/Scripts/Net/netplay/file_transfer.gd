@@ -4,14 +4,16 @@
 ## MD5; the receiver verifies the hash before accepting, so a transfer is either
 ## byte-perfect or failed.
 ##
-## LEGAL SCOPE: only kinds in TRANSFER_KINDS may cross the wire. ROMs are
-## deliberately NOT transferable — commercial-game ROMs are copyrighted and
-## sending copies to another player is distribution. Netplay instead verifies
-## by hash that each peer already owns a byte-identical copy (the same stance
-## RetroArch's netplay takes). Books/videos/music are transferable: generic file
-## delivery for user-content-shaped media. Music albums are folders of tracks, so
-## they transfer per-track (NetObjectSync builds the manifest); each track is a
-## normal single-file transfer keyed by its own MD5.
+## LEGAL SCOPE: only kinds in TRANSFER_KINDS may cross the wire. ROMs and
+## BIOS/firmware are deliberately NOT transferable — commercial-game images are
+## copyrighted and sending copies to another player is distribution. Netplay
+## instead verifies by hash that each peer already owns a byte-identical copy
+## (the same stance RetroArch's netplay takes), and a peer who does not have it
+## may look it up on their OWN RomM server; nothing about that path fetches from
+## the host. Books, videos, music, discs, posters and save data are transferable:
+## generic delivery for user-content-shaped media. Music albums are folders of
+## tracks, so they transfer per-track (NetObjectSync builds the manifest); each
+## track is a normal single-file transfer keyed by its own MD5.
 ##
 ## Wire: chunked 64 KB on CH_FILE (reliable), window of 8 chunks in flight,
 ## client sends a cumulative ack every 4 chunks. Receiver writes
@@ -28,8 +30,16 @@ const WINDOW := 8            # chunks in flight before waiting for an ack
 const ACK_EVERY := 4         # client acks every N received chunks
 const REQUEST_TIMEOUT_MS := 10000   # no chunk/ack progress for this long → fail
 
-## Kinds allowed on the wire. "rom" is intentionally absent (see header).
-const TRANSFER_KINDS := {"book": true, "video": true, "music": true}
+## Kinds allowed on the wire. "rom" and "firmware" are intentionally absent, and
+## this dictionary is where that rule LIVES -- a kind not named here cannot be
+## served or requested, so refusing a ROM is a property of the data rather than a
+## check every new call site has to remember to write. Adding a kind is a
+## deliberate edit to one line, which is the point.
+##
+## "save" covers memory cards and scratch save folders, "dvd" the video discs,
+## "poster" the wall art: all user content, none of it a commercial game image.
+const TRANSFER_KINDS := {"book": true, "video": true, "music": true,
+	"save": true, "dvd": true, "poster": true}
 
 signal transfer_progress(md5: String, received: int, total: int)
 signal transfer_done(md5: String, path: String)
@@ -69,10 +79,42 @@ static func hash_of(path: String) -> String:
 	if sums.is_empty():
 		return ""
 	_hash_mutex.lock()
-	_hash_cache[path] = {"mtime": mtime, "md5": sums["md5"], "size": sums["size"]}
+	# sha1 is kept because RomHasher computed it on this same pass anyway and
+	# discarding it means a second full read of the file later. RomM's by-hash
+	# lookup falls back to sha1, and ScreenScraper matches on both.
+	_hash_cache[path] = {"mtime": mtime, "md5": sums["md5"], "sha1": sums["sha1"],
+		"size": sums["size"]}
 	_save_hash_cache()
 	_hash_mutex.unlock()
 	return str(sums["md5"])
+
+
+## {md5, sha1, size} for a file, via the same cache. Empty if unreadable.
+##
+## An entry written before sha1 was cached has only the md5, so a miss on sha1
+## is a rehash rather than a wrong answer.
+static func checksums_of(path: String) -> Dictionary:
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return {}
+	_hash_mutex.lock()
+	_load_hash_cache()
+	var mtime := FileAccess.get_modified_time(path)
+	var entry: Dictionary = _hash_cache.get(path, {})
+	_hash_mutex.unlock()
+	if not entry.is_empty() and int(entry.get("mtime", -1)) == mtime \
+			and not str(entry.get("sha1", "")).is_empty():
+		return {"md5": str(entry["md5"]), "sha1": str(entry["sha1"]),
+			"size": int(entry.get("size", 0))}
+	var sums := RomHasher.compute_checksums(path)
+	if sums.is_empty():
+		return {}
+	_hash_mutex.lock()
+	_hash_cache[path] = {"mtime": mtime, "md5": sums["md5"], "sha1": sums["sha1"],
+		"size": sums["size"]}
+	_save_hash_cache()
+	_hash_mutex.unlock()
+	return {"md5": str(sums["md5"]), "sha1": str(sums["sha1"]),
+		"size": int(sums["size"])}
 
 
 ## Cache-only lookup: returns the MD5 if already known for this exact file

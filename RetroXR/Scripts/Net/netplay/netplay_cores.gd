@@ -267,3 +267,70 @@ static func crc_from_state(core_name: String) -> bool:
 static func uses_scratch_saves(core_name: String) -> bool:
 	var e: Dictionary = CORES.get(core_name, {})
 	return bool(e.get("scratch_saves", false))
+
+## Every vetted core covering this system, strongest first.
+##
+## `systems` had no reader until this: the session gate is by core NAME, so the
+## table knew which machine each entry was for and could not be asked. Ranking
+## is strategy first (STRATEGY_ORDER), then state_transfer, then cross_play --
+## the order a player feels them in. A core that cannot hold a session at all is
+## not a candidate, so this ignores debug_allow_unverified for the same reason
+## listed_strategy does: that switch answers true for every name there is, and a
+## suggestion built on it would recommend cores with no evidence behind them.
+static func cores_for_system(systemid: String) -> Array[String]:
+	if systemid.is_empty():
+		return [] as Array[String]
+	var ranked: Array = []
+	for core: String in CORES:
+		var e: Dictionary = CORES[core]
+		if not (e.get("systems", []) as Array).has(systemid):
+			continue
+		var strategy := listed_strategy(core)
+		if strategy < 0:
+			continue
+		ranked.append({
+			"core": core,
+			"rank": STRATEGY_ORDER.find(strategy),
+			"state": 0 if state_transfer_capable(core) else 1,
+			"cross": 0 if allows_cross_play(core) else 1,
+		})
+	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a["rank"]) != int(b["rank"]):
+			return int(a["rank"]) < int(b["rank"])
+		if int(a["state"]) != int(b["state"]):
+			return int(a["state"]) < int(b["state"])
+		if int(a["cross"]) != int(b["cross"]):
+			return int(a["cross"]) < int(b["cross"])
+		return str(a["core"]) < str(b["core"]))
+	var out: Array[String] = []
+	for r: Dictionary in ranked:
+		out.append(str(r["core"]))
+	return out
+
+
+## The core to offer instead of `core_name` on this system, or "" if there is
+## none. Never suggests the core it was asked about, even when that core is
+## vetted -- a substitute for something that already works is noise.
+static func suggest_substitute(core_name: String, systemid: String) -> String:
+	for candidate: String in cores_for_system(systemid):
+		if candidate != core_name:
+			return candidate
+	return ""
+
+
+## Why this core may not hold a session, or "" when it may.
+##
+## is_capable() answers the gate; this answers the player. The two cases read
+## the same to a bool and want different remedies: an UNLISTED core has never
+## been measured and wants a different core, while a LISTED one failed vetting
+## and wants its own entry revisited. Reports the real reason even while
+## debug_allow_unverified is forcing the gate open, so the explainer does not
+## go blank the moment the switch is flipped.
+static func why_not_capable(core_name: String) -> String:
+	if core_name.is_empty():
+		return "no core is selected"
+	if not CORES.has(core_name):
+		return "'%s' has never been vetted for netplay determinism" % core_name
+	if not bool((CORES[core_name] as Dictionary).get("verified", false)):
+		return "'%s' is listed but its cold-start determinism is unproven" % core_name
+	return ""

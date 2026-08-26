@@ -91,6 +91,9 @@ var core_defaults: CoreDefaults = null
 var gamelist_manager: GamelistManager = null
 var scraper_client: ScreenscraperClient = null
 var scraper_config: ScraperConfig = null
+## Scrapes a ROM that arrived without anyone browsing for it -- a RomM download,
+## or a file matched by hash to join a session.
+var auto_scraper: AutoScraper = null
 
 ## Web file server (HTTP file manager accessible from a PC browser).
 var web_server: WebFileServer = null
@@ -230,6 +233,21 @@ func _init_scraper() -> void:
 	scraper_client.media_download_started.connect(_on_media_download_started)
 	scraper_client.media_download_completed.connect(_on_media_download_notice)
 	scraper_client.media_download_failed.connect(_on_media_download_notice_failed)
+
+	# Auto-scraping gets its OWN ScreenscraperClient rather than sharing the one
+	# above. The signals are the reason: scrape_completed carries a result and
+	# not the request it answers, so a manual scrape finishing while the queue
+	# was working would be consumed as the queue's own. Two clients cost one
+	# node; the account's rate limit is shared either way, and each client
+	# serialises its own requests.
+	var auto_client := ScreenscraperClient.new()
+	auto_client.name = "AutoScrapeClient"
+	auto_client.config = scraper_config
+	add_child(auto_client)
+	auto_scraper = AutoScraper.new()
+	auto_scraper.name = "AutoScraper"
+	add_child(auto_scraper)
+	auto_scraper.setup(auto_client, gamelist_manager, scraper_config)
 
 
 ## RomM: config + client + catalog + downloader + art cache, all wired to the
@@ -489,9 +507,12 @@ func _build_ui() -> void:
 			_active_scroll = s)
 	content.add_child(_scene_view)
 
-	_net_view = SpawnMenuNetView.create()
+	_net_view = SpawnMenuNetView.create(self)
 	_net_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	content.add_child(_net_view)
+	_net_view.scroll_changed.connect(func(sc: ScrollContainer) -> void:
+		if _net_view.visible:
+			_active_scroll = sc)
 
 	_about_view = SpawnMenuAboutView.create()
 	_about_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -566,7 +587,9 @@ func _show_about_view() -> void:
 
 
 func _show_net_view() -> void:
-	_show_view(_net_view, _net_view, _nav_net_btn)
+	# The view is no longer its own ScrollContainer — it hosts sub-tabs, so the
+	# scroll the thumbstick drives is whichever one is showing.
+	_show_view(_net_view, _net_view.active_scroll(), _nav_net_btn)
 	_net_view.refresh()
 
 

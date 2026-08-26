@@ -2104,6 +2104,13 @@ func _on_romm_dl_finished(rom_id: int, ok: bool, path: String, error: String) ->
 	var key := "romm:dl:%d" % rom_id
 	if ok:
 		_romm_notify_or_queue(key, "✅", "%s ready" % path.get_file().get_basename(), MenuToasts.DWELL_OK)
+		# A ROM that arrived by download is one nobody browsed to, so nobody is
+		# going to press Scrape on it either. Queued, not fetched now: the
+		# scraper is rate-limited and a batch download would outrun it.
+		if _menu != null and "auto_scraper" in _menu:
+			var scraper: AutoScraper = _menu.get("auto_scraper")
+			if scraper != null:
+				scraper.request(path, AutoScraper.systemid_for_path(path))
 	else:
 		_romm_notify_or_queue(key, "❌", "%s — %s" % [_romm_dl_label(rom_id), error],
 			MenuToasts.DWELL_FAIL)

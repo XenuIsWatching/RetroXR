@@ -2376,9 +2376,16 @@ func toggle_power() -> void:
 			return
 		# Host powering on a determinism-verified core → start lockstep netplay:
 		# every peer runs the core locally instead of the host-only placeholder.
-		if NetworkManager.is_host() and not is_powered_on and _netplay_eligible():
-			if NetworkManager.netplay_start_host(self, _resolve_core(), net_rom_md5()):
-				return   # cold start drives net_start_core on every peer
+		if NetworkManager.is_host() and not is_powered_on:
+			if _netplay_eligible():
+				if NetworkManager.netplay_start_host(self, _resolve_core(), net_rom_md5()):
+					return   # cold start drives net_start_core on every peer
+			else:
+				# This used to fall straight through to a local boot: no signal,
+				# no error, remote players stranded on the host-only placeholder
+				# and nothing anywhere saying why. It still boots locally -- that
+				# is the right fallback -- but it now says so.
+				_report_netplay_blocked()
 		if NetworkManager.is_client():
 			# Non-netplay core: emulation runs on the host only — send the intent.
 			NetworkManager.report_event(NetObjectSync.EV_SYS_POWER, {"sys": self})
@@ -2401,6 +2408,28 @@ func _netplay_eligible() -> bool:
 	var resolved_core := _resolve_core()
 	return NetworkManager.netplay_capable(resolved_core) \
 		and not net_boot_spec(resolved_core).is_empty()
+
+
+## Say why this machine is booting local-only, and what would fix it.
+##
+## Two different failures reach here and they want different words: a core that
+## has never been vetted (offer a substitute) and a boot this peer cannot
+## reproduce at all -- a BIOS-less machine, an unhashable ROM -- which no core
+## swap helps.
+func _report_netplay_blocked() -> void:
+	var resolved_core := _resolve_core()
+	var why := NetplayCores.why_not_capable(resolved_core)
+	if why.is_empty():
+		NetworkManager.netplay_blocked.emit(
+			"this machine's boot media cannot be shared with other players",
+			self, {})
+		return
+	var remedy: Dictionary = {}
+	var substitute := NetplayCores.suggest_substitute(resolved_core, systemid)
+	if not substitute.is_empty():
+		remedy = {"kind": "swap_core", "core": substitute, "machine": self,
+			"strategy": NetplayCores.listed_strategy(substitute)}
+	NetworkManager.netplay_blocked.emit(why, self, remedy)
 
 
 ## Which core this machine would actually load. Public because the core manager
@@ -2434,6 +2463,31 @@ func net_rom_md5() -> String:
 	return NetFileTransfer.hash_of(rom_path)
 
 
+## Why net_prepare_boot last refused, in words a player can act on. Read by the
+## session so the specific cause survives instead of being flattened into one
+## generic string on its way to the menu.
+var net_boot_failure: String = ""
+
+
+## "Your BIOS does not match the host's: scph5501.bin differs, scph1001.bin is
+## missing." Falls back to the bare statement when the rows are unavailable --
+## an older host sends only the digest.
+func _firmware_failure_text(core: String, diff: Array) -> String:
+	if diff.is_empty():
+		return "your BIOS for %s does not match the host's" % core
+	var parts: Array[String] = []
+	for d: Dictionary in diff:
+		var file := str(d.get("file", "?"))
+		match str(d.get("state", "")):
+			"missing":
+				parts.append("%s is missing" % file)
+			"extra":
+				parts.append("%s is not on the host" % file)
+			_:
+				parts.append("%s differs" % file)
+	return "your BIOS for %s does not match the host's: %s" % [core, ", ".join(parts)]
+
+
 ## Reproducible launch description for netplay. A BIOS-only core still has a
 ## full deterministic machine state; it simply has no copyrighted content to
 ## hash or transfer. Empty media is regenerated locally from its extension.
@@ -2449,6 +2503,17 @@ func net_boot_spec(core: String) -> Dictionary:
 		if md5.is_empty():
 			return {}
 		var game_boot := {"mode": "rom", "rom_md5": md5}
+		# sha1 and size are carried so a peer who does NOT have this ROM can ask
+		# their own RomM for it -- /api/roms/by-hash prefers md5 but falls back to
+		# sha1. Both come from the same cached pass, so this costs nothing after
+		# the first time. The label is metadata for the "you are missing this"
+		# row; the file itself is never sent.
+		var sums := NetFileTransfer.checksums_of(rom_path)
+		if not sums.is_empty():
+			game_boot["rom_sha1"] = str(sums.get("sha1", ""))
+			game_boot["rom_size"] = int(sums.get("size", 0))
+		game_boot["rom_label"] = rom_path.get_file().get_basename()
+		game_boot["systemid"] = systemid
 		var splash := BiosBoot.splash_options(core, systemid)
 		if not splash.is_empty():
 			game_boot["boot_options"] = splash
@@ -2469,8 +2534,16 @@ func net_boot_spec(core: String) -> Dictionary:
 
 
 func _add_net_firmware_signature(spec: Dictionary, core: String) -> void:
-	if not FirmwareRequirements.for_core(core).is_empty():
-		spec["firmware"] = _net_firmware_signature(core)
+	if FirmwareRequirements.for_core(core).is_empty():
+		return
+	var rows := _net_firmware_rows(core)
+	spec["firmware"] = _firmware_digest(rows)
+	# The digest alone is opaque: a peer whose BIOS differs learns only that
+	# SOMETHING does, which is not something a player can act on. These are file
+	# names and hashes -- a few hundred bytes of metadata -- and are read only
+	# when the digests already disagree, so the matching path costs nothing.
+	# No firmware bytes cross the wire here or anywhere else.
+	spec["firmware_rows"] = rows
 
 
 ## Fingerprint every firmware path declared by the core, including optional
@@ -2478,7 +2551,16 @@ func _add_net_firmware_signature(spec: Dictionary, core: String) -> void:
 ## just as much as the boot ROM; limiting this to BIOS-screen paths lets peers
 ## enter gameplay with different deterministic inputs.
 func _net_firmware_signature(core: String) -> String:
-	var rows: Array[String] = []
+	return _firmware_digest(_net_firmware_rows(core))
+
+
+## relative path -> md5, or "<missing>" for a declared file that is not there.
+##
+## The digest is derived from this rather than built alongside it, so the thing
+## compared and the thing shown to the player can never describe different sets
+## of files.
+func _net_firmware_rows(core: String) -> Dictionary:
+	var rows: Dictionary = {}
 	for requirement: Dictionary in FirmwareRequirements.for_core(core):
 		var relative := str(requirement.get("path", ""))
 		if relative.is_empty():
@@ -2487,18 +2569,27 @@ func _net_firmware_signature(core: String) -> String:
 		if DirAccess.dir_exists_absolute(dest):
 			_append_net_firmware_dir(dest, relative, rows)
 		elif FileAccess.file_exists(dest):
-			rows.append("%s=%s" % [relative, NetFileTransfer.hash_of(dest)])
+			rows[relative] = NetFileTransfer.hash_of(dest)
 		else:
-			rows.append("%s=<missing>" % relative)
-	rows.sort()
-	return "\n".join(PackedStringArray(rows)).sha256_text()
+			rows[relative] = "<missing>"
+	return rows
+
+
+## Unchanged on the wire: the same "path=hash" lines, sorted, newline-joined and
+## hashed. Only where the rows come from moved.
+func _firmware_digest(rows: Dictionary) -> String:
+	var lines: Array[String] = []
+	for relative: String in rows:
+		lines.append("%s=%s" % [relative, str(rows[relative])])
+	lines.sort()
+	return "\n".join(PackedStringArray(lines)).sha256_text()
 
 
 func _append_net_firmware_dir(root: String, relative: String,
-		rows: Array[String]) -> void:
+		rows: Dictionary) -> void:
 	var dir := DirAccess.open(root)
 	if dir == null:
-		rows.append("%s=<missing>" % relative)
+		rows[relative] = "<missing>"
 		return
 	dir.list_dir_begin()
 	var name := dir.get_next()
@@ -2508,7 +2599,7 @@ func _append_net_firmware_dir(root: String, relative: String,
 		if dir.current_is_dir():
 			_append_net_firmware_dir(full, child, rows)
 		else:
-			rows.append("%s=%s" % [child, NetFileTransfer.hash_of(full)])
+			rows[child] = NetFileTransfer.hash_of(full)
 		name = dir.get_next()
 	dir.list_dir_end()
 
@@ -2518,9 +2609,16 @@ func _append_net_firmware_dir(root: String, relative: String,
 ## installed on this peer.
 func net_prepare_boot(spec: Dictionary) -> bool:
 	var core := str(spec.get("core", ""))
+	net_boot_failure = ""
 	if spec.has("firmware") \
 			and str(spec.get("firmware", "")) != _net_firmware_signature(core):
-		push_warning("[RetroSystem] netplay: BIOS/firmware differs from the host")
+		# Name the files. The caller used to collapse every media failure into
+		# "cannot reproduce one machine's boot media", which does not even say
+		# the word firmware, let alone which file to go and fix.
+		var diff := NetplayReadiness.firmware_diff(
+			spec.get("firmware_rows", {}) as Dictionary, _net_firmware_rows(core))
+		net_boot_failure = _firmware_failure_text(core, diff)
+		push_warning("[RetroSystem] netplay: %s" % net_boot_failure)
 		return false
 	match str(spec.get("mode", "rom")):
 		"rom":
@@ -2563,6 +2661,7 @@ func net_resolve_rom(md5: String) -> bool:
 	var found := NetFileTransfer.resolve_by_md5(md5, "rom", 0, rom_path,
 		[RomLibrary.default_roms_root()])
 	if found.is_empty():
+		net_boot_failure = "you do not have the game this machine is running"
 		push_warning("[RetroSystem] netplay: no local ROM matches md5 %s… — not transferable" % md5.left(8))
 		return false
 	rom_path = found

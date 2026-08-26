@@ -61,6 +61,25 @@ signal status_changed(text: String)
 ## The room code a joiner has to be told, or empty when not hosting online.
 signal room_code_changed(code: String)
 
+## A machine that cannot hold a session, and what to press instead.
+##
+## Powering on an unvetted core used to fall through to a local boot with no
+## trace: no signal, no error, remote players left on the host-only placeholder
+## and nothing anywhere saying why. `remedy` is the NetplayReadiness dict, empty
+## when no vetted core covers the system.
+signal netplay_blocked(reason: String, machine: Object, remedy: Dictionary)
+
+## Late-join state movement: "capturing", "transferring", "verifying", "loading".
+##
+## The stream already tracked every byte and reported none of them, so a joiner
+## sat on a frozen menu for up to 15 s. Emitted on both ends.
+signal netplay_state_progress(peer_id: int, phase: String, received: int, total: int)
+
+## Forwarded from the session, which had these three and no listeners at all.
+signal netplay_join_requested(peer_id: int, port: int)
+signal netplay_desync(peer_id: int, frame: int)
+signal netplay_session_stopped(reason: String)
+
 ## Peer roster: peer_id -> {name: String, is_vr: bool, color_idx: int}
 var peers: Dictionary = {}
 
@@ -103,6 +122,15 @@ func _ready() -> void:
 	_netplay = NETPLAY.new()
 	_netplay.name = "Netplay"
 	add_child(_netplay)
+	_netplay.join_requested.connect(func(peer_id: int, port: int) -> void:
+		netplay_join_requested.emit(peer_id, port))
+	_netplay.desync_detected.connect(func(peer_id: int, frame: int) -> void:
+		netplay_desync.emit(peer_id, frame))
+	_netplay.session_stopped.connect(func(reason: String) -> void:
+		netplay_session_stopped.emit(reason))
+	_netplay.join_state_progress.connect(
+		func(peer_id: int, phase: String, received: int, total: int) -> void:
+			netplay_state_progress.emit(peer_id, phase, received, total))
 	# Fixed-path file delivery (M3) — books/videos by content hash.
 	_file_transfer = FILE_TRANSFER.new()
 	_file_transfer.name = "FileTransfer"
@@ -561,6 +589,29 @@ func netplay_capable(core_name: String) -> bool:
 ## True while a netplay game is running.
 func netplay_running() -> bool:
 	return _netplay != null and _netplay.is_running()
+
+
+## global port -> peer_id for the running session, or {}.
+##
+## This is the map the input scheduler samples from, so it cannot drift from
+## what is actually being played. A port is machine * PORTS_PER_MACHINE + port,
+## which is what lets a linked pair's two machines share one numbering; decode
+## it with netplay_port_of() / netplay_machine_of(). A peer holding no port at
+## all is a spectator.
+func netplay_owners() -> Dictionary:
+	if _netplay == null or not _netplay.is_running():
+		return {}
+	return (_netplay._owners as Dictionary).duplicate()
+
+
+## Which machine in the group a global port belongs to.
+func netplay_machine_of(global_port: int) -> int:
+	return global_port / NetplayWire.PORTS_PER_MACHINE
+
+
+## The port number on that machine, 0-based.
+func netplay_port_of(global_port: int) -> int:
+	return global_port % NetplayWire.PORTS_PER_MACHINE
 
 
 ## The system currently under netplay, or null.

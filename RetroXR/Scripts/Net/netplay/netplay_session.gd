@@ -67,7 +67,22 @@ signal join_requested(peer_id: int, port: int)
 signal desync_detected(peer_id: int, frame: int)
 signal session_stopped(reason: String)
 
+## How a late join is going, in bytes, on both ends.
+##
+## The stream already knew all of this and reported none of it: _np_state_progress
+## carries no payload at all, it only pushes a deadline out. So a joiner saw a
+## still menu for up to JOIN_TIMEOUT_MS and then either played or got one line of
+## refusal. The phases are the four places time actually goes -- "capturing"
+## while the host waits for a link boundary and serializes, "transferring" for
+## the chunk stream, "verifying" for the SHA-256 and decompress, and "loading"
+## while the core takes the state -- and the two silent ones at either end are
+## precisely the ones that look like a hang.
+signal join_state_progress(peer_id: int, phase: String, received: int, total: int)
+
 var _nm: Node = null
+
+## The specific reason _prepare_local_media last failed, or "" for none.
+var _media_failure: String = ""
 
 # Injectable seams for probes (else resolved from ObjectSync / RetroSystem).
 var system_override: Object = null
@@ -296,7 +311,8 @@ func start_host(system: Object, core: String, rom_md5: String, owners: Dictionar
 	_local_identities.clear()
 	if not _prepare_local_media():
 		push_warning("[Netplay] host cannot reproduce one machine's boot media")
-		_stop_local("host cannot prepare its boot media")
+		_stop_local(_media_failure if not _media_failure.is_empty()
+			else "host cannot prepare its boot media")
 		return false
 
 	# The host's core comes up FIRST, before anyone is invited. Until it does,
@@ -332,7 +348,8 @@ func _np_start(group_net_ids: PackedInt32Array, machine_specs: Array,
 		_fail_local_join("cannot resolve every machine in the game")
 		return
 	if not _prepare_local_media():
-		_fail_local_join("cannot reproduce one machine's boot media")
+		_fail_local_join(_media_failure if not _media_failure.is_empty()
+			else "cannot reproduce one machine's boot media")
 		return
 	if not _cold_start_local(start_frame):
 		_fail_local_join("cannot start one of the linked cores")
@@ -457,6 +474,7 @@ func _build_machine_specs(anchor_core: String, anchor_rom_md5: String) -> bool:
 ## description. ROMs remain verify-only; generated empty media and no-content
 ## boots are recreated locally. Only SRAM bytes cross the wire.
 func _prepare_local_media() -> bool:
+	_media_failure = ""
 	if _machine_specs.size() != _group.size():
 		return false
 	for i in range(_group.size()):
@@ -465,6 +483,11 @@ func _prepare_local_media() -> bool:
 		var mode := str(spec.get("mode", "rom"))
 		if machine != null and machine.has_method("net_prepare_boot"):
 			if not machine.net_prepare_boot(spec):
+				# Keep the machine's own words. Every caller used to replace them
+				# with one generic sentence that names neither the file nor even
+				# the kind of problem.
+				if "net_boot_failure" in machine:
+					_media_failure = str(machine.get("net_boot_failure"))
 				push_warning("[Netplay] machine %d cannot reproduce %s boot" % [i, mode])
 				return false
 		else:
@@ -693,6 +716,7 @@ func _poll_core_ready() -> void:
 			lib.RequestLoadState(state, _await_state_frame)
 		_await_states = []
 		_join_receive_deadline = _now() + JOIN_TIMEOUT_MS
+		join_state_progress.emit(1, "loading", 0, 0)
 		_np_state_progress.rpc_id(1, _await_join_serial)
 		return
 
@@ -2196,6 +2220,7 @@ func _begin_join_capture(peer_id: int) -> void:
 	_join_paused = true      # freeze the pipeline — everyone stalls at the gate
 	_join_capture_pending = true
 	_join_capture_frame = -1
+	join_state_progress.emit(peer_id, "capturing", 0, 0)
 	print("[Netplay] pausing at a common frame for peer %d's snapshot" % peer_id)
 
 
@@ -2312,10 +2337,12 @@ func _begin_join_transfer(peer_id: int) -> void:
 		"sent": 0,
 		"acked": 0,
 		"total": total_chunks,
+		"bytes_total": packed_total,
 		"end_sent": false,
 	}
 	_join_transfers[peer_id] = transfer
 	_join_deadlines[peer_id] = _now() + JOIN_TIMEOUT_MS
+	join_state_progress.emit(peer_id, "transferring", 0, packed_total)
 	_np_state_begin.rpc_id(peer_id, _join_serial, sizes, hashes, raw_sizes)
 	_pump_join_transfer(peer_id)
 
@@ -2407,6 +2434,12 @@ func _np_state_chunk(serial: int, ordinal: int, machine: int, offset: int,
 		_incoming_join["machine"] = machine + 1
 		_incoming_join["offset"] = 0
 	_join_receive_deadline = _now() + JOIN_TIMEOUT_MS
+	var got := int(_incoming_join.get("bytes", 0)) + data.size()
+	_incoming_join["bytes"] = got
+	var want := 0
+	for s: int in sizes:
+		want += s
+	join_state_progress.emit(1, "transferring", got, want)
 	var total_received := int(_incoming_join["received"])
 	if total_received % STATE_ACK_EVERY == 0 \
 			or int(_incoming_join["machine"]) == sizes.size():
@@ -2425,6 +2458,11 @@ func _np_state_ack(serial: int, received: int) -> void:
 		return
 	transfer["acked"] = received
 	_join_deadlines[peer_id] = _now() + JOIN_TIMEOUT_MS
+	# On the ack rather than per chunk: the joiner acks every STATE_ACK_EVERY, so
+	# this stays a handful of emissions a second instead of one per 64 KiB.
+	var bytes_total := int(transfer.get("bytes_total", 0))
+	join_state_progress.emit(peer_id, "transferring",
+		mini(received * STATE_CHUNK_SIZE, bytes_total), bytes_total)
 	_pump_join_transfer(peer_id)
 
 
@@ -2465,6 +2503,7 @@ func _np_state_end(serial: int) -> void:
 		return
 	_incoming_join = {}
 	_join_receive_deadline = 0
+	join_state_progress.emit(1, "verifying", 1, 1)
 	_np_state_progress.rpc_id(1, serial)
 	_accept_join_snapshot(snapshot, core_states)
 
@@ -2636,7 +2675,8 @@ func _accept_join_snapshot(snapshot: Dictionary, states: Array) -> void:
 		_fail_local_join("cannot resolve every machine in the game")
 		return
 	if not _prepare_local_media():
-		_fail_local_join("cannot reproduce one machine's boot media")
+		_fail_local_join(_media_failure if not _media_failure.is_empty()
+			else "cannot reproduce one machine's boot media")
 		return
 	var frame := int(snapshot["frame"])
 	if not _cold_start_local(frame):

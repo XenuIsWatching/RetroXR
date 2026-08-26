@@ -32,9 +32,9 @@ extends Node
 ## asynchronous.
 
 const NM_SCRIPT := preload("res://Scripts/Net/network_manager.gd")
-const GROUPS := ["cores", "identity", "roomcode", "punch", "wire", "owners",
-	"assemble", "start", "lockstep", "desync", "join", "transfer", "leave",
-	"rollback", "link"]
+const GROUPS := ["cores", "substitute", "manifest", "readiness", "identity", "roomcode",
+	"punch", "wire", "owners", "assemble", "start", "lockstep", "desync", "join",
+	"transfer", "leave", "rollback", "link"]
 const PORT := 42913
 
 ## What a real fceumm reports, near enough. The exact strings do not matter to
@@ -59,6 +59,12 @@ func _ready() -> void:
 
 	if _want("cores"):
 		_test_cores()
+	if _want("substitute"):
+		_test_substitute()
+	if _want("manifest"):
+		_test_manifest()
+	if _want("readiness"):
+		_test_readiness()
 	if _want("badge"):
 		_test_badge()
 	if _want("identity"):
@@ -2654,6 +2660,199 @@ func _until(cond: Callable, ticks := 600) -> bool:
 		if cond.call():
 			return true
 	return false
+
+
+# ══ Substituting a vetted core ════════════════════════════════════════════════
+# `systems` had no reader before this, so these are the first cases that can
+# fail if an entry's system list is wrong.
+
+func _test_substitute() -> void:
+	var gb := NetplayCores.cores_for_system("game_boy")
+	_ok(gb.has("gambatte") and gb.has("mgba") and gb.has("tgbdual"),
+		"substitute/every vetted Game Boy core is offered")
+	_ok(not gb.has("fceumm"), "substitute/a core for another system is not")
+	var nes := NetplayCores.cores_for_system("nes")
+	_ok(nes.size() == 1 and nes[0] == "fceumm",
+		"substitute/the NES has exactly one vetted core")
+	_ok(NetplayCores.cores_for_system("").is_empty(),
+		"substitute/no system means no candidates")
+	_ok(NetplayCores.cores_for_system("dreamcast").is_empty(),
+		"substitute/a system with no vetted core offers none")
+
+	# dolphin is verified:false, so it must never be recommended even though it
+	# is the only entry naming the GameCube.
+	_ok(not NetplayCores.cores_for_system("gamecube").has("dolphin"),
+		"substitute/an unverified core is never a candidate")
+	_ok(NetplayCores.suggest_substitute("dolphin", "gamecube").is_empty(),
+		"substitute/nothing to offer for the GameCube yet")
+
+	_ok(NetplayCores.suggest_substitute("vba_next", "game_boy_advance") != "",
+		"substitute/an unvetted GBA core gets an offer")
+	_ok(NetplayCores.suggest_substitute("vba_next", "game_boy_advance") != "vba_next",
+		"substitute/never offers the core it was asked about")
+	_ok(NetplayCores.suggest_substitute("mgba", "game_boy_advance") != "mgba",
+		"substitute/nor when that core is itself vetted")
+
+	# Ranking: rollback beats determinism-only, and state_transfer breaks a tie.
+	var gba := NetplayCores.cores_for_system("game_boy_advance")
+	_ok(gba[0] == "gpsp" or gba[0] == "mgba",
+		"substitute/a rollback core leads the GBA list")
+
+	# The debug switch opens the session gate; it must not invent evidence.
+	var before := NetplayCores.cores_for_system("game_boy_advance")
+	NetplayCores.debug_allow_unverified = true
+	_ok(NetplayCores.cores_for_system("game_boy_advance") == before,
+		"substitute/the debug switch does not add candidates")
+	_ok(NetplayCores.why_not_capable("vba_next") != "",
+		"substitute/nor does it blank the explainer")
+	NetplayCores.debug_allow_unverified = false
+
+	_ok(NetplayCores.why_not_capable("fceumm").is_empty(),
+		"substitute/a vetted core has nothing to explain")
+	_ok(NetplayCores.why_not_capable("dolphin").contains("unproven"),
+		"substitute/a listed-but-unverified core says so")
+	_ok(NetplayCores.why_not_capable("vba_next").contains("never been vetted"),
+		"substitute/an unlisted core reads differently")
+	_ok(NetplayCores.why_not_capable("") != "",
+		"substitute/no core at all is still a reason")
+
+
+# ══ What may cross the wire ═══════════════════════════════════════════════════
+# The legal boundary. TRANSFER_KINDS is where it is enforced, so these cases
+# guard the const itself rather than any one call site: a kind that is not in it
+# cannot be served or requested at all.
+
+func _test_manifest() -> void:
+	_ok(not NetFileTransfer.TRANSFER_KINDS.has("rom"),
+		"manifest/a ROM is not a transferable kind")
+	_ok(not NetFileTransfer.TRANSFER_KINDS.has("firmware"),
+		"manifest/nor is firmware")
+	_ok(not NetplayContent.is_transferable("rom"),
+		"manifest/NetplayContent refuses a ROM")
+	_ok(not NetplayContent.is_transferable("firmware"),
+		"manifest/and refuses firmware")
+	for kind: String in ["book", "video", "music", "save", "dvd", "poster"]:
+		_ok(NetplayContent.is_transferable(kind),
+			"manifest/%s may be sent" % kind)
+
+	# NEVER_SENT has to win even if a kind were added to TRANSFER_KINDS by
+	# mistake, which is the failure this belt-and-braces exists for.
+	_ok(NetplayContent.NEVER_SENT.has("rom") and NetplayContent.NEVER_SENT.has("firmware"),
+		"manifest/the never-sent list names both")
+
+	_ok(NetplayContent.key_for("rom", "abc") == "rom:abc",
+		"manifest/a row key survives a rebuild")
+
+	# The sha1 the RomM lookup needs rides the same cached pass as the md5.
+	var tmp := "user://__np_manifest_test.bin"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	f.store_string("netplay manifest test")
+	f.close()
+	var real := ProjectSettings.globalize_path(tmp)
+	var sums := NetFileTransfer.checksums_of(real)
+	_ok(not sums.is_empty(), "manifest/checksums come back")
+	_ok(not str(sums.get("sha1", "")).is_empty(),
+		"manifest/including the sha1 RomM falls back to")
+	_ok(str(sums.get("md5", "")) == NetFileTransfer.hash_of(real),
+		"manifest/and the md5 agrees with the cached hash")
+	DirAccess.remove_absolute(real)
+
+
+# ══ Readiness verdicts ════════════════════════════════════════════════════════
+# The distinction these exist to protect: PENDING is not WARN. serialize_size
+# is 0 on both peers at every cold start, and calling that a mismatch describes
+# a healthy session as broken.
+
+func _test_readiness() -> void:
+	var R := NetplayReadiness
+
+	var good := R.machine_row(1, "NES", "fceumm", "nes")
+	_ok(int(good["verdict"]) == R.Verdict.READY, "readiness/a vetted core is ready")
+	_ok((good["remedy"] as Dictionary).is_empty(),
+		"readiness/a ready machine needs no remedy")
+
+	var bad := R.machine_row(2, "GBA", "vba_next", "game_boy_advance")
+	_ok(int(bad["verdict"]) == R.Verdict.BLOCKED, "readiness/an unvetted core blocks")
+	_ok(str((bad["remedy"] as Dictionary).get("kind", "")) == "swap_core",
+		"readiness/and offers a swap")
+	_ok(not str((bad["remedy"] as Dictionary).get("core", "")).is_empty(),
+		"readiness/naming a real core")
+
+	var hopeless := R.machine_row(3, "GameCube", "dolphin", "gamecube")
+	_ok(int(hopeless["verdict"]) == R.Verdict.BLOCKED,
+		"readiness/an unverified core blocks too")
+	_ok((hopeless["remedy"] as Dictionary).is_empty(),
+		"readiness/with no remedy when nothing covers the system")
+
+	# Dolphin's seven forced options override the player's own config, so they
+	# have to be visible somewhere.
+	var forced := 0
+	for d: Dictionary in (hopeless["detail"] as Array):
+		if str(d["name"]) == "Forced option":
+			forced += 1
+	_ok(forced == 0, "readiness/an unvetted core lists no strategy detail")
+	var det := R.machine_row(4, "GameCube", "dolphin", "gamecube")
+	_ok(int(det["verdict"]) == R.Verdict.BLOCKED, "readiness/dolphin stays blocked")
+
+	# Identity: both halves, and the 0 case.
+	var want := {"library_name": "FCEUmm", "library_version": "1", "api_version": 1,
+		"serialize_size": 0, "arch": "x86_64"}
+	var same := want.duplicate()
+	var row := R.peer_row(7, "Sam", "fceumm", want, same)
+	_ok(int(row["verdict"]) == R.Verdict.READY, "readiness/matching builds are ready")
+	var words := ""
+	for d: Dictionary in (row["detail"] as Array):
+		if str(d["name"]) == "Savestate size":
+			words = str(d["value"])
+	_ok(words == "not measured yet",
+		"readiness/serialize_size 0 reads as unmeasured, not a mismatch")
+
+	_ok(int(R.peer_row(7, "Sam", "fceumm", {}, {})["verdict"]) == R.Verdict.PENDING,
+		"readiness/an empty identity is PENDING, not blocked")
+	_ok(int(R.peer_row(7, "Sam", "fceumm", want, {})["verdict"]) == R.Verdict.PENDING,
+		"readiness/one side still starting is PENDING")
+
+	var other := want.duplicate()
+	other["arch"] = "arm64"
+	_ok(int(R.peer_row(7, "Sam", "gambatte", want, other)["verdict"]) == R.Verdict.BLOCKED,
+		"readiness/a cross-arch peer blocks on a same-arch core")
+	_ok(int(R.peer_row(7, "Sam", "fceumm", want, other)["verdict"]) == R.Verdict.READY,
+		"readiness/but not on the one core cleared for it")
+
+	# Media: three ROM states and a firmware difference that names the file.
+	_ok(int(R.media_row(1, "NES", "have", "Mario", "abc", [])["verdict"]) == R.Verdict.READY,
+		"readiness/a held ROM is ready")
+	var romm := R.media_row(1, "NES", "romm", "Mario", "abc", [])
+	_ok(int(romm["verdict"]) == R.Verdict.WARN, "readiness/a fetchable ROM warns")
+	_ok(str((romm["remedy"] as Dictionary).get("kind", "")) == "fetch_rom",
+		"readiness/and offers the fetch")
+	var gone := R.media_row(1, "NES", "missing", "Mario", "abc", [])
+	_ok(int(gone["verdict"]) == R.Verdict.BLOCKED, "readiness/a missing ROM blocks")
+	_ok((gone["remedy"] as Dictionary).is_empty(),
+		"readiness/a missing ROM is never offered as a transfer")
+
+	var diff := R.firmware_diff({"a.bin": "1", "b.bin": "2"}, {"a.bin": "9"})
+	_ok(diff.size() == 2, "readiness/firmware diff finds both problems")
+	var by_file: Dictionary = {}
+	for d: Dictionary in diff:
+		by_file[str(d["file"])] = str(d["state"])
+	_ok(str(by_file.get("a.bin", "")) == "differs", "readiness/a changed file is named")
+	_ok(str(by_file.get("b.bin", "")) == "missing", "readiness/a missing file is named")
+	_ok(R.firmware_diff({"a.bin": "1"}, {"a.bin": "1"}).is_empty(),
+		"readiness/agreeing firmware produces no rows")
+	var fw := R.media_row(1, "PS1", "have", "Game", "abc",
+		[{"file": "scph5501.bin", "state": "differs"}])
+	_ok(int(fw["verdict"]) == R.Verdict.BLOCKED, "readiness/a BIOS difference blocks")
+
+	# The worst row wins, and PENDING outranks WARN.
+	_ok(R.overall([good, bad]) == R.Verdict.BLOCKED, "readiness/blocked wins")
+	_ok(R.overall([good, romm]) == R.Verdict.WARN, "readiness/warn beats ready")
+	_ok(R.overall([good]) == R.Verdict.READY, "readiness/all ready is ready")
+	var pending := R.peer_row(7, "Sam", "fceumm", {}, {})
+	_ok(R.overall([romm, pending]) == R.Verdict.PENDING,
+		"readiness/an unfinished check outranks a warning")
+	_ok(not R.all_ready([romm]), "readiness/a warning is not ready")
+	_ok(R.all_ready([good]), "readiness/a clean list is")
 
 
 func _want(name: String) -> bool:

@@ -114,6 +114,42 @@ func node_for_id(net_id: int) -> Node:
 	return node if is_instance_valid(node) else null
 
 
+## Every file-backed object in the room, as manifest rows for the CONTENT page.
+##
+## A view over what is already tracked rather than a second inventory: the kind
+## and property come from _file_desc, the hash from the net_md5 meta the spawn
+## path already stamped. `transferable` is read from TRANSFER_KINDS so the UI
+## cannot disagree with the layer that enforces it.
+##
+## `have` is whether THIS peer can open the file, which is the question the page
+## is actually asking -- a client with an empty path is missing it whatever the
+## host has.
+func content_manifest() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for net_id: int in _registry:
+		var node: Node = _registry[net_id]
+		if not is_instance_valid(node):
+			continue
+		var d := _file_desc(node)
+		if d.is_empty():
+			continue
+		var kind := str(d["kind"])
+		var path := str(node.get(str(d["prop"])))
+		var md5 := str(node.get_meta("net_md5", ""))
+		if md5.is_empty():
+			md5 = NetFileTransfer.cached_hash_of(path)
+		out.append({
+			"net_id": net_id,
+			"class": kind,
+			"md5": md5,
+			"size": NetFileTransfer.size_of(path) if not path.is_empty() else 0,
+			"label": path.get_file() if not path.is_empty() else str(node.name),
+			"have": not path.is_empty() and FileAccess.file_exists(path),
+			"transferable": NetFileTransfer.TRANSFER_KINDS.has(kind),
+		})
+	return out
+
+
 ## Peer currently holding this replicated object: host=1, remote peer id, or 0.
 ## Used when a netplay session assigns its initial port owners.
 func holder_peer(node: Object) -> int:
@@ -1287,9 +1323,9 @@ func _file_desc(node: Node) -> Dictionary:
 	if node is VCRTape:
 		return {"kind": "video", "prop": "video_path"}
 	if node is DVDDisc:
-		# DVD images are large + copyrighted — verify-only by hash, never sent
-		# (same stance as ROMs). Only single-file images (.iso/.img) can be
-		# hash-verified; a VIDEO_TS folder simply won't resolve on a peer.
+		# Transferable, like the tapes: a disc image is user media. Only
+		# single-file images (.iso/.img) carry a hash at all — a VIDEO_TS folder
+		# has no single md5, so it neither transfers nor resolves on a peer.
 		return {"kind": "dvd", "prop": "dvd_path"}
 	if node is AudioDisc or node is AudioCassette:
 		# Music albums are folders (no single hash) + potentially copyrighted —
@@ -1409,10 +1445,15 @@ func _resolve_file_fields(node: Node, entry: Dictionary) -> void:
 		# Host hasn't hashed it yet — _file_info will re-enter when it has.
 		node.set(prop, "")
 		return
-	if kind == "rom" or kind == "dvd":
+	if kind == "rom":
 		# Verify-only: find our own byte-identical copy, never transfer.
-		var dirs: Array = [RomLibrary.default_roms_root()] if kind == "rom" \
-			else [RomLibrary.default_dvd_root()]
+		#
+		# DVDs used to share this branch on the grounds that a video disc is as
+		# copyrighted as a game. They are now treated like the VCR tapes beside
+		# them -- user media the room may hand over -- which is an owner's
+		# decision about their own library, not a technical one. ROMs and
+		# firmware remain the hard line and are not negotiable here.
+		var dirs: Array = [RomLibrary.default_roms_root()]
 		var local_copy := NetFileTransfer.resolve_by_md5(md5, kind, size, path, dirs)
 		if not local_copy.is_empty():
 			node.set(prop, local_copy)
