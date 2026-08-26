@@ -15,6 +15,12 @@ class_name ScenePersistence
 extends RefCounted
 
 
+## How far an async restore has got, so a loading screen can say "14 of 31"
+## instead of spinning. Only instantiate_objects_async() emits it; the
+## synchronous variant finishes inside one frame and has nothing to report.
+signal restore_progress(done: int, total: int)
+
+
 const ROOMS_DIR     := "user://scenes"
 const DEFAULT_ROOM  := "arcade"
 ## The arcade's own directory, named because the save/restore probes reach for it.
@@ -847,6 +853,9 @@ func instantiate_objects_async(root: Node, objects: Array) -> Dictionary:
 	_restore_generation += 1
 	var generation := _restore_generation
 	var deadline := Time.get_ticks_usec() + FRAME_BUDGET_USEC
+	var total := objects.size()
+	var done := 0
+	restore_progress.emit(0, total)
 	for entry: Variant in objects:
 		# A saved bespoke console names a GLB that may still be warming at boot.
 		# Spawning it now would load() that GLB synchronously inside _ready —
@@ -857,13 +866,18 @@ func instantiate_objects_async(root: Node, objects: Array) -> Dictionary:
 			_let_go(held)
 			return spawned
 		_spawn_entry(root, entry, spawned, entries, held)
+		done += 1
 		if Time.get_ticks_usec() < deadline:
 			continue
+		restore_progress.emit(done, total)
 		await tree.process_frame
 		if not _still_ours(root, generation):
 			_let_go(held)
 			return spawned
 		deadline = Time.get_ticks_usec() + FRAME_BUDGET_USEC
+	# The connection pass still has to seat every plug, so this is not "done" —
+	# it is the last point where a count of objects means anything.
+	restore_progress.emit(total, total)
 	_hold_still_group(root, held)
 	await _restore_connections_async(root, spawned, entries, generation)
 	_let_go(held)

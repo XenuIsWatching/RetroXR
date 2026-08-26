@@ -1,5 +1,8 @@
 shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_opaque;
+// depth_test_disabled puts the bar in the transparent pass, where render_priority
+// is honoured, so the panel can be drawn over a curtain that is itself covering a
+// live room. ALPHA is never written, so it still paints solid.
+render_mode unshaded, cull_disabled, depth_draw_never, depth_test_disabled;
 
 uniform float progress : hint_range(0.0, 1.0) = 0.0;
 uniform bool failed = false;

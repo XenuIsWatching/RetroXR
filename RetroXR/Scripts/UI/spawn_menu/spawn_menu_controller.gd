@@ -290,6 +290,17 @@ func _on_scene_ready(scene_id: String) -> void:
 		sm.notify_scene_content_ready(scene_id)
 
 
+## Whichever loading owner is waiting on this restore. Boot and a room change
+## both come through _autoload_slot, and only one of them is ever registered.
+func _on_restore_progress(done: int, total: int) -> void:
+	if not has_node("/root/LoadingOverlay"):
+		return
+	var text := "RESTORING OBJECTS  %d / %d" % [done, total]
+	var fraction := float(done) / float(maxi(total, 1))
+	for owner: StringName in [&"transition", &"boot_restore"]:
+		LoadingOverlay.set_phase(owner, text, fraction)
+
+
 func _autoload_slot(room: String) -> void:
 	var sm := get_node_or_null("/root/SceneManager")
 	if sm == null or sm.current_scene_id != room or not sm.room_has_slots(room):
@@ -300,7 +311,9 @@ func _autoload_slot(room: String) -> void:
 		return
 	var slot: String = sm.active_slot(room)
 	if slot != "clean" and get_tree().current_scene != null:
-		await ScenePersistence.new(room).load_slot_async(get_tree().current_scene, slot)
+		var persistence := ScenePersistence.new(room)
+		persistence.restore_progress.connect(_on_restore_progress)
+		await persistence.load_slot_async(get_tree().current_scene, slot)
 
 
 # ── Rebinding ─────────────────────────────────────────────────────────────────

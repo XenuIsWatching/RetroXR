@@ -89,8 +89,18 @@ var _last_load_failed: bool = false
 
 
 func _ready() -> void:
-	_warm_models.call_deferred()
 	load_prefs()
+	# Cold boot has no LoadingRig — the engine loads the room directly — so the
+	# curtain is claimed here, before anything expensive starts. Both owners are
+	# registered together so the warm finishing first cannot flash the room at a
+	# restore that has not registered yet.
+	if has_node("/root/LoadingOverlay"):
+		LoadingOverlay.begin(&"boot_warm", "STARTING UP", 1.0)
+		if room_has_slots(current_scene_id) and active_slot(current_scene_id) != "clean":
+			# Weighted heavier because it is the phase the player actually notices:
+			# the warm is invisible, the restore is their room arriving.
+			LoadingOverlay.begin(&"boot_restore", "STARTING UP", 2.0)
+	_warm_models.call_deferred()
 	scene_content_ready.connect(func(_id: String) -> void: _autosave_accum = 0.0)
 
 
@@ -197,6 +207,13 @@ func notify_scene_content_ready(scene_id: String) -> void:
 	if not is_room_ready(scene_id):
 		return
 	_content_ready_scene_id = scene_id
+	# Ended here rather than from a scene_content_ready listener: this boundary
+	# has several listeners now, and which of them ran first would otherwise
+	# decide whether the curtain was still up when they looked. Only one of these
+	# two is ever registered; end() ignores the other.
+	if has_node("/root/LoadingOverlay"):
+		LoadingOverlay.end(&"boot_restore")
+		LoadingOverlay.end(&"transition")
 	scene_content_ready.emit(scene_id)
 
 
@@ -362,6 +379,17 @@ func _run_transition(scene_id: String, path: String, title: String) -> void:
 	tree.current_scene = incoming
 	if player != null:
 		player.enter_world()
+	# Hand the curtain from the rig — which had to leave, it owns a
+	# WorldEnvironment — to a panel on the player's own rig, in this same frame.
+	# Otherwise the room is on screen and empty while its objects are still being
+	# spawned, which is the pop-in this whole thing exists to hide.
+	#
+	# After enter_world(), because the panel is parented to the seated PlayerRig;
+	# before scene_ready, because a listener starts the restore synchronously.
+	if has_node("/root/LoadingOverlay"):
+		LoadingOverlay.resume()
+		LoadingOverlay.begin(&"transition", "LOADING  %s" % title, 1.0)
+		LoadingOverlay.set_phase(&"transition", "RESTORING OBJECTS", 0.0)
 	# Keep the transition claimed while listeners run. If one of them requests
 	# another room it is coalesced, rather than re-entering this coroutine while
 	# it is still returning from the ready signal.
@@ -375,6 +403,10 @@ func _fail_transition(rig: LoadingRig, path: String, reason: String) -> void:
 	push_error("SceneManager: failed to load '%s' (%s)" % [path, reason])
 	_last_load_failed = true
 	_failed_loading_rig = rig
+	# The rig stays up showing the error; a second panel behind it would be wrong,
+	# and nothing resumed the overlay on this path.
+	if has_node("/root/LoadingOverlay"):
+		LoadingOverlay.end(&"transition")
 	rig.show_load_error()
 	_finish_transition()
 
@@ -461,4 +493,10 @@ func _warm_models() -> void:
 		await get_tree().process_frame
 	ModelWarmer.request_shells()
 	await ModelWarmer.warm_stand_ins(self)
+	# The curtain lifts here, not after warm_shells. The shells cost ~7 s and only
+	# make FUTURE spawns cheap — nothing on screen at boot is waiting on them, and
+	# holding the room back for it would turn a short boot into a long black one.
+	# The stand-ins are what a slot restore actually instantiates.
+	if has_node("/root/LoadingOverlay"):
+		LoadingOverlay.end(&"boot_warm")
 	await ModelWarmer.warm_shells(self)

@@ -40,6 +40,7 @@ SaveSync="*res://Scripts/Data/romm/romm_save_sync.gd"
 StateSync="*res://Scripts/Data/romm/romm_state_sync.gd"
 RA="*res://Scripts/Data/ra/ra_session.gd"
 HeldPhysics="*res://Scripts/Interaction/held_object_physics.gd"
+LoadingOverlay="*res://Scripts/UI/loading_overlay.gd"
 
 [debug]
 

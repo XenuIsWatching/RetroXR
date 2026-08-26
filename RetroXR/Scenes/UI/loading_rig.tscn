@@ -1,8 +1,7 @@
-[gd_scene format=3 uid="uid://cl0adr1g0001"]
+[gd_scene load_steps=4 format=3 uid="uid://cl0adr1g0001"]
 
 [ext_resource type="Script" path="res://Scripts/UI/widgets/loading_rig.gd" id="1_rig"]
-[ext_resource type="Texture2D" path="res://Textures/app_icon.png" id="2_icon"]
-[ext_resource type="Shader" path="res://Shaders/loading_progress.gdshader" id="3_progress"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/loading_panel.tscn" id="2_panel"]
 
 [sub_resource type="Environment" id="Env_loading"]
 background_mode = 1
@@ -10,43 +9,6 @@ background_color = Color(0.008, 0.01, 0.025, 1)
 ambient_light_source = 3
 ambient_light_color = Color(0.3, 0.4, 0.7, 1)
 ambient_light_energy = 0.35
-
-[sub_resource type="SystemFont" id="Font_load"]
-font_names = PackedStringArray("Consolas", "Courier New", "monospace")
-
-[sub_resource type="StandardMaterial3D" id="Mat_frame"]
-shading_mode = 0
-albedo_color = Color(0.10, 0.14, 0.30, 1)
-
-[sub_resource type="QuadMesh" id="Mesh_frame"]
-material = SubResource("Mat_frame")
-size = Vector2(7.5, 4.25)
-
-[sub_resource type="StandardMaterial3D" id="Mat_panel"]
-shading_mode = 0
-albedo_color = Color(0.025, 0.03, 0.075, 1)
-
-[sub_resource type="QuadMesh" id="Mesh_panel"]
-material = SubResource("Mat_panel")
-size = Vector2(7.28, 4.03)
-
-[sub_resource type="StandardMaterial3D" id="Mat_icon"]
-transparency = 1
-shading_mode = 0
-albedo_texture = ExtResource("2_icon")
-
-[sub_resource type="QuadMesh" id="Mesh_icon"]
-material = SubResource("Mat_icon")
-size = Vector2(1.15, 1.15)
-
-[sub_resource type="ShaderMaterial" id="Mat_progress"]
-render_priority = 1
-shader = ExtResource("3_progress")
-shader_parameter/progress = 0.0
-shader_parameter/failed = false
-
-[sub_resource type="QuadMesh" id="Mesh_progress"]
-size = Vector2(5.9, 0.34)
 
 [node name="LoadingRig" type="Node3D"]
 script = ExtResource("1_rig")
@@ -59,61 +21,4 @@ environment = SubResource("Env_loading")
 [node name="XRCamera3D" type="XRCamera3D" parent="XROrigin3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
 
-[node name="LoadingScreen" type="Node3D" parent="."]
-
-[node name="Frame" type="MeshInstance3D" parent="LoadingScreen"]
-position = Vector3(0, 1.65, -10.08)
-mesh = SubResource("Mesh_frame")
-
-[node name="Panel" type="MeshInstance3D" parent="LoadingScreen"]
-position = Vector3(0, 1.65, -10.06)
-mesh = SubResource("Mesh_panel")
-
-[node name="Icon" type="MeshInstance3D" parent="LoadingScreen"]
-position = Vector3(0, 2.65, -10)
-mesh = SubResource("Mesh_icon")
-
-[node name="BrandLabel" type="Label3D" parent="LoadingScreen"]
-position = Vector3(0, 1.82, -9.98)
-pixel_size = 0.012
-modulate = Color(0.28, 0.72, 1, 1)
-outline_modulate = Color(0.01, 0.015, 0.04, 1)
-text = "RETRO XR"
-font = SubResource("Font_load")
-font_size = 72
-outline_size = 12
-
-[node name="TitleLabel" type="Label3D" parent="LoadingScreen"]
-position = Vector3(0, 1.18, -9.98)
-pixel_size = 0.0105
-modulate = Color(0.92, 0.94, 1, 1)
-outline_modulate = Color(0.01, 0.015, 0.04, 1)
-text = "LOADING"
-font = SubResource("Font_load")
-font_size = 58
-outline_size = 10
-
-[node name="StatusLabel" type="Label3D" parent="LoadingScreen"]
-position = Vector3(0, 0.62, -9.98)
-pixel_size = 0.008
-modulate = Color(0.56, 0.62, 0.78, 1)
-outline_modulate = Color(0.01, 0.015, 0.04, 1)
-text = "PREPARING ROOM"
-font = SubResource("Font_load")
-font_size = 42
-outline_size = 8
-
-[node name="ProgressBar" type="MeshInstance3D" parent="LoadingScreen"]
-position = Vector3(0, 0.12, -9.98)
-mesh = SubResource("Mesh_progress")
-surface_material_override/0 = SubResource("Mat_progress")
-
-[node name="PercentLabel" type="Label3D" parent="LoadingScreen"]
-position = Vector3(0, -0.28, -9.98)
-pixel_size = 0.0075
-modulate = Color(0.28, 1, 0.7, 1)
-outline_modulate = Color(0.01, 0.015, 0.04, 1)
-text = "0%"
-font = SubResource("Font_load")
-font_size = 40
-outline_size = 8
+[node name="LoadingPanel" parent="." instance=ExtResource("2_panel")]

@@ -1,0 +1,167 @@
+[gd_scene load_steps=17 format=3 uid="uid://cl0adp4n0001"]
+
+[ext_resource type="Script" path="res://Scripts/UI/widgets/loading_panel.gd" id="1_panel"]
+[ext_resource type="Texture2D" path="res://Textures/app_icon.png" id="2_icon"]
+[ext_resource type="Shader" path="res://Shaders/loading_progress.gdshader" id="3_progress"]
+
+[sub_resource type="SystemFont" id="Font_load"]
+font_names = PackedStringArray("Consolas", "Courier New", "monospace")
+
+[sub_resource type="StandardMaterial3D" id="Mat_curtain"]
+transparency = 1
+shading_mode = 0
+no_depth_test = true
+depth_draw_mode = 1
+cull_mode = 2
+disable_receive_shadows = true
+albedo_color = Color(0.008, 0.01, 0.025, 1)
+render_priority = 20
+
+[sub_resource type="QuadMesh" id="Mesh_curtain"]
+material = SubResource("Mat_curtain")
+size = Vector2(44, 30)
+
+[sub_resource type="StandardMaterial3D" id="Mat_frame"]
+transparency = 1
+shading_mode = 0
+no_depth_test = true
+depth_draw_mode = 1
+cull_mode = 2
+albedo_color = Color(0.10, 0.14, 0.30, 1)
+render_priority = 21
+
+[sub_resource type="QuadMesh" id="Mesh_frame"]
+material = SubResource("Mat_frame")
+size = Vector2(7.5, 4.25)
+
+[sub_resource type="StandardMaterial3D" id="Mat_panel"]
+transparency = 1
+shading_mode = 0
+no_depth_test = true
+depth_draw_mode = 1
+cull_mode = 2
+albedo_color = Color(0.025, 0.03, 0.075, 1)
+render_priority = 22
+
+[sub_resource type="QuadMesh" id="Mesh_panel"]
+material = SubResource("Mat_panel")
+size = Vector2(7.28, 4.03)
+
+[sub_resource type="StandardMaterial3D" id="Mat_icon"]
+transparency = 1
+shading_mode = 0
+no_depth_test = true
+depth_draw_mode = 1
+cull_mode = 2
+albedo_texture = ExtResource("2_icon")
+render_priority = 24
+
+[sub_resource type="QuadMesh" id="Mesh_icon"]
+material = SubResource("Mat_icon")
+size = Vector2(1.15, 1.15)
+
+[sub_resource type="ShaderMaterial" id="Mat_progress"]
+resource_local_to_scene = true
+render_priority = 23
+shader = ExtResource("3_progress")
+shader_parameter/progress = 0.0
+shader_parameter/failed = false
+
+[sub_resource type="QuadMesh" id="Mesh_progress"]
+size = Vector2(5.9, 0.34)
+
+[node name="LoadingPanel" type="Node3D"]
+script = ExtResource("1_panel")
+
+[node name="Curtain" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.65, -10.5)
+cast_shadow = 0
+mesh = SubResource("Mesh_curtain")
+
+[node name="Screen" type="Node3D" parent="."]
+
+[node name="Frame" type="MeshInstance3D" parent="Screen"]
+position = Vector3(0, 1.65, -10.08)
+cast_shadow = 0
+mesh = SubResource("Mesh_frame")
+
+[node name="Panel" type="MeshInstance3D" parent="Screen"]
+position = Vector3(0, 1.65, -10.06)
+cast_shadow = 0
+mesh = SubResource("Mesh_panel")
+
+[node name="Icon" type="MeshInstance3D" parent="Screen"]
+position = Vector3(0, 2.65, -10)
+cast_shadow = 0
+mesh = SubResource("Mesh_icon")
+
+[node name="BrandLabel" type="Label3D" parent="Screen"]
+position = Vector3(0, 1.82, -9.98)
+pixel_size = 0.012
+no_depth_test = true
+render_priority = 25
+outline_render_priority = 24
+modulate = Color(0.28, 0.72, 1, 1)
+outline_modulate = Color(0.01, 0.015, 0.04, 1)
+text = "RETRO XR"
+font = SubResource("Font_load")
+font_size = 72
+outline_size = 12
+
+[node name="TitleLabel" type="Label3D" parent="Screen"]
+position = Vector3(0, 1.18, -9.98)
+pixel_size = 0.0105
+no_depth_test = true
+render_priority = 25
+outline_render_priority = 24
+modulate = Color(0.92, 0.94, 1, 1)
+outline_modulate = Color(0.01, 0.015, 0.04, 1)
+text = "LOADING"
+font = SubResource("Font_load")
+font_size = 58
+outline_size = 10
+
+[node name="StatusLabel" type="Label3D" parent="Screen"]
+position = Vector3(0, 0.62, -9.98)
+pixel_size = 0.008
+no_depth_test = true
+render_priority = 25
+outline_render_priority = 24
+modulate = Color(0.56, 0.62, 0.78, 1)
+outline_modulate = Color(0.01, 0.015, 0.04, 1)
+text = "PREPARING ROOM"
+font = SubResource("Font_load")
+font_size = 42
+outline_size = 8
+
+[node name="ProgressBar" type="MeshInstance3D" parent="Screen"]
+position = Vector3(0, 0.12, -9.98)
+cast_shadow = 0
+mesh = SubResource("Mesh_progress")
+surface_material_override/0 = SubResource("Mat_progress")
+
+[node name="PercentLabel" type="Label3D" parent="Screen"]
+position = Vector3(0, -0.28, -9.98)
+pixel_size = 0.0075
+no_depth_test = true
+render_priority = 25
+outline_render_priority = 24
+modulate = Color(0.28, 1, 0.7, 1)
+outline_modulate = Color(0.01, 0.015, 0.04, 1)
+text = "0%"
+font = SubResource("Font_load")
+font_size = 40
+outline_size = 8
+
+[node name="DetailLabel" type="Label3D" parent="Screen"]
+position = Vector3(0, -0.72, -9.98)
+pixel_size = 0.0062
+no_depth_test = true
+render_priority = 25
+outline_render_priority = 24
+modulate = Color(0.45, 0.55, 0.7, 1)
+outline_modulate = Color(0.01, 0.015, 0.04, 1)
+text = ""
+font = SubResource("Font_load")
+font_size = 34
+outline_size = 6

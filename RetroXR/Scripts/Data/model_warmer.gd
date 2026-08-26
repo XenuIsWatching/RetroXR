@@ -55,6 +55,13 @@ static var _held: Dictionary = {}
 ## this load instead of starting (or worse, BLOCKING on) a second one.
 static var _pending: Dictionary = {}
 
+## How far the current pass has got, for anything drawing a progress bar over it
+## (LoadingOverlay). Counters rather than a signal because this class is entirely
+## static and Godot 4 has no static signal; a reader polls three ints.
+static var warm_done := 0
+static var warm_total := 0
+static var warm_phase := ""
+
 
 ## True once every stand-in has been warmed and thrown away.
 static func is_warmed() -> bool:
@@ -153,6 +160,9 @@ static func warm_stand_ins(host: Node) -> void:
 	var mem0: float = Performance.get_monitor(Performance.MEMORY_STATIC)
 	var tex0: float = Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED)
 	var n := 0
+	warm_phase = "stand-ins"
+	warm_total = ids.size()
+	warm_done = 0
 	for id: String in ids:
 		var scene_path: String = SystemModelRegistry.row_for(id).get("scene", "")
 		if not scene_path.is_empty():
@@ -161,6 +171,7 @@ static func warm_stand_ins(host: Node) -> void:
 			return
 		if await _draw_once(sv, tree, id):
 			n += 1
+		warm_done += 1
 
 	sv.queue_free()
 	await tree.process_frame
@@ -239,15 +250,25 @@ static func warm_shells(host: Node) -> void:
 
 	request_shells()
 	var n := 0
-	for path: String in SystemModelRegistry.shell_assets():
+	var assets: Array = SystemModelRegistry.shell_assets()
+	warm_phase = "shell assets"
+	warm_total = assets.size()
+	warm_done = 0
+	for path: String in assets:
 		if await acquire(path) != null:
 			n += 1
+		warm_done += 1
 	if not is_instance_valid(host) or not host.is_inside_tree():
 		return
 
 	var sv := _make_warm_viewport(host)
-	for id: String in SystemModelRegistry.bespoke_ids():
+	var bespoke: Array = SystemModelRegistry.bespoke_ids()
+	warm_phase = "shell draws"
+	warm_total = bespoke.size()
+	warm_done = 0
+	for id: String in bespoke:
 		await _draw_once(sv, tree, id)
+		warm_done += 1
 	sv.queue_free()
 	await tree.process_frame
 
