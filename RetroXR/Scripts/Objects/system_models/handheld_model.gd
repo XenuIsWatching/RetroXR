@@ -62,24 +62,15 @@ var _glb: Node3D = null
 
 ## Screen-cast light: the built-in LCD tints a SpotLight3D aimed OUT of the glass,
 ## so a powered handheld throws a glow on whatever it's pointed at — the
-## personal-scale sibling of the TV's ambilight, and the same recipe (see tv.tscn's
-## Ambilight: a spot sitting just off the screen, energy 0.6, 50° cone, tinted to
-## the average frame colour). This started as an OmniLight, which sat INSIDE the
-## shell and lit the whole device from within instead of casting anywhere.
-## Off when the screen shows no picture; colour is the throttled frame average.
-const SCREEN_LIGHT_ENERGY := 0.6
-## Cone width, matching the TV ambilight's.
-const SCREEN_LIGHT_ANGLE := 50.0
-## Reach, as a multiple of the screen's long edge, clamped. A 47 mm Game Boy LCD
-## has no business throwing the TV's 2.5 m cone, and a 25 mm Pokémon-mini screen
-## still wants to glow a little way out.
-const SCREEN_LIGHT_RANGE_FACTOR := 12.0
-const SCREEN_LIGHT_RANGE_MIN := 0.35
-const SCREEN_LIGHT_RANGE_MAX := 0.9
+## personal-scale sibling of the TV's ambilight. This started as an OmniLight,
+## which sat INSIDE the shell and lit the whole device from within instead of
+## casting anywhere.
+## Off when the screen shows no picture; ScreenCastLight transfers only a tiny
+## GPU-blurred result and derives output from this panel's physical area.
 ## Clearance from the glass — the cone must start outside it (see the TV's
 ## ambilight, which sits just proud of its screen).
 const SCREEN_LIGHT_OFFSET := 0.006
-var _screen_light: SpotLight3D = null
+var _screen_light: ScreenCastLight = null
 
 
 func is_handheld() -> bool:
@@ -132,30 +123,27 @@ func _setup_screen_light() -> void:
 ## the screen's own normal. Parented to the screen so it tracks a GLB-repositioned
 ## (or lid-mounted) screen automatically. Reusable for devices with more than one
 ## screen (see RetroSystemModelDualScreen).
-func _make_screen_light(screen: MeshInstance3D) -> SpotLight3D:
+func _make_screen_light(screen: MeshInstance3D) -> ScreenCastLight:
 	if screen == null:
 		return null
-	var light := SpotLight3D.new()
+	var light := ScreenCastLight.new()
 	light.name = "ScreenCastLight"
 	# A QuadMesh screen faces its local +Z, but a SpotLight3D emits along its local
 	# -Z — so flip it, or the cone points back through the device.
 	light.rotation_degrees = Vector3(180.0, 0.0, 0.0)
-	light.spot_angle = SCREEN_LIGHT_ANGLE
-	light.spot_range = _screen_light_range(screen)
-	light.shadow_enabled = false
-	light.light_energy = 0.0
 	light.position = Vector3(0.0, 0.0, SCREEN_LIGHT_OFFSET)
 	screen.add_child(light)
+	light.configure_screen(_physical_screen_size(screen))
 	return light
 
 
-## Reach for one screen's cast light, proportional to that screen's long edge.
-func _screen_light_range(screen: MeshInstance3D) -> float:
+## Authored panel dimensions in metres. QuadMesh sizes are physical in these
+## model scenes; screen_size remains the fallback for a custom screen mesh.
+func _physical_screen_size(screen: MeshInstance3D) -> Vector2:
 	var s := screen_size
 	if screen.mesh is QuadMesh:
 		s = (screen.mesh as QuadMesh).size
-	return clampf(maxf(s.x, s.y) * SCREEN_LIGHT_RANGE_FACTOR,
-		SCREEN_LIGHT_RANGE_MIN, SCREEN_LIGHT_RANGE_MAX)
+	return Vector2(s.x * absf(screen.scale.x), s.y * absf(screen.scale.y))
 
 
 ## Cache the authored shell nodes and read the device dimensions back from their
@@ -284,31 +272,17 @@ func _update_screen_light() -> void:
 	_drive_screen_light(_screen, _screen_light)
 
 
-## Drive one screen-cast light from its screen's live picture: on when the screen
-## shows a frame, tinted to the throttled average frame colour. get_image() is a
-## GPU→CPU readback, so it's rate-limited by QualityManager like the TV ambilight.
-## The per-light throttle counter rides on the light (meta) so several screens can
-## share this without a member counter each.
-func _drive_screen_light(screen: MeshInstance3D, light: SpotLight3D) -> void:
+## Drive one screen-cast light without reading its full-resolution picture back
+## to the CPU. Dual-screen callers pass the panel's framebuffer region.
+func _drive_screen_light(screen: MeshInstance3D, light: ScreenCastLight,
+		region: Rect2 = Rect2(0.0, 0.0, 1.0, 1.0)) -> void:
 	if light == null or screen == null:
 		return
 	var tex := _screen_emission_texture(screen.get_surface_override_material(0))
 	if tex == null:
-		light.light_energy = 0.0
+		light.turn_off()
 		return
-	light.light_energy = SCREEN_LIGHT_ENERGY
-	var f: int = int(light.get_meta("sl_frame", 0)) + 1
-	var interval: int = QualityManager.ambilight_interval if QualityManager else 10
-	if f < interval:
-		light.set_meta("sl_frame", f)
-		return
-	light.set_meta("sl_frame", 0)
-	var img := tex.get_image()
-	if img == null:
-		return
-	img.resize(1, 1, Image.INTERPOLATE_BILINEAR)
-	var avg := img.get_pixel(0, 0)
-	light.light_color = Color(avg.r, avg.g, avg.b)
+	light.show_picture(tex, region)
 
 
 ## The live picture texture out of whichever material the core installed (it uses

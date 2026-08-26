@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/rca_port.tscn" id="10_rcaport"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/vga_port.tscn" id="11_vgaport"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/coax_port.tscn" id="12_coaxport"]
+[ext_resource type="Script" uid="uid://d3screencastlight" path="res://Scripts/Objects/screen_cast_light.gd" id="13_screenlight"]
 
 [sub_resource type="PhysicsMaterial" id="PhysMat_tv"]
 friction = 0.8
@@ -209,9 +210,10 @@ direction = 1
 [node name="Ambilight" type="SpotLight3D" parent="." unique_id=603587175]
 transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0.05, 0.162)
 light_color = Color(0.5, 0.5, 0.5, 1)
-light_energy = 0.6
-spot_range = 2.5
-spot_angle = 50.0
+light_energy = 1.2
+spot_range = 4.5
+spot_angle = 65.0
+script = ExtResource("13_screenlight")
 
 [node name="SpeakerL" type="Marker3D" parent="." unique_id=501234568]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.23, -0.0375, 0.156)

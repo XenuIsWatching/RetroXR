@@ -90,7 +90,7 @@ var _av_ports: Array = []
 ## The aerial socket, Source.RF's one hole. Always fitted: every television has one,
 ## and unlike the VGA socket there is no cabinet in the project that would not.
 @onready var _rf_port: XRToolsSnapZone = $RfPort
-@onready var _ambilight: SpotLight3D = $Ambilight
+@onready var _ambilight: ScreenCastLight = $Ambilight
 @onready var _mute_btn: VRButton = $MuteButton
 @onready var _audio_mode_btn: VRButton = $AudioModeButton
 @onready var _vol_down_btn: VRButton = $VolumeDownButton
@@ -254,13 +254,9 @@ var scale_factor: float = 1.0
 # Everything that follows from changing it — see tv_resize.gd.
 var _resize: TvResize = null
 
-# Frame counter for ambilight sampling
-var _ambilight_frame: int = 0
-# The light's authored energy, so we can restore it after blanking (TV off).
-var _ambilight_energy: float = 0.6
-
 # The "no signal" blue — shared by the screen texture and the ambilight tint.
 const BLUE_SCREEN_COLOR := Color(0.0, 0.05, 0.65)
+const STATIC_LIGHT_COLOR := Color(0.42, 0.44, 0.46)
 
 
 ## The resize helper is built HERE and not in _ready, because _ready applies the
@@ -345,12 +341,6 @@ func _ready() -> void:
 	_resize.apply()
 	_float_lock = FloatLock.attach(self, ignore_gravity)
 
-	if _ambilight:
-		_ambilight_energy = _ambilight.light_energy
-		# Random phase so multiple TVs don't all sample (GPU readback) on the
-		# same frame.
-		_ambilight_frame = randi() % 16
-
 	# The tscn's dark bezel material is the OFF look; blue is the ON-with-no-
 	# signal look. Blue carries a tiny texture so the CRT watcher can wrap it
 	# (curvature/scanlines apply to the blue screen too) and ambilight samples it.
@@ -364,6 +354,8 @@ func _ready() -> void:
 		var screen_scale := _screen_mesh.scale
 		if aabb.size.x > 0.0 and aabb.size.y > 0.0:
 			_screen_size_m = Vector2(aabb.size.x * screen_scale.x, aabb.size.y * screen_scale.y)
+	if _ambilight:
+		_ambilight.configure_screen(_screen_size_m * scale_factor, scale_factor)
 
 	# Now the fitted tube's size is known. A shell that moved it without saying
 	# where its speakers went gets them computed; everything else keeps the
@@ -726,37 +718,42 @@ func _process(_delta: float) -> void:
 	if not _ambilight or not _ambilight.visible:
 		return
 
-	# Static screen states never touch the texture: get_image() is a GPU→CPU
-	# readback that stalls the whole pipeline on Quest, and an idle TV (off /
-	# blue "no signal") has nothing new to sample anyway.
+	# Static states do not run the tiny projector viewport. A live full-resolution
+	# picture stays on the GPU; only its already-blurred 12x8 result is transferred.
 	var override := _screen_mesh.get_surface_override_material(0)
 	if not _tv_enabled or override == _dark_material:
-		_ambilight.light_energy = 0.0
+		_ambilight.turn_off()
 		return
-	_ambilight.light_energy = _ambilight_energy
 	if _crt_source_tex == _blue_texture:
-		_ambilight.light_color = BLUE_SCREEN_COLOR
+		_ambilight.show_solid(BLUE_SCREEN_COLOR)
 		return
-
-	_ambilight_frame += 1
-	var interval: int = QualityManager.ambilight_interval if QualityManager else 10
-	if _ambilight_frame < interval:
+	if override is ShaderMaterial and (override as ShaderMaterial).shader == STATIC_SHADER:
+		_ambilight.show_solid(STATIC_LIGHT_COLOR)
 		return
-	_ambilight_frame = 0
-
-	# Live source (emulator / tape / disc): sample the average screen color from
-	# the current texture (works for system emission materials, VCR materials
-	# and the CRT wrapper alike).
 	var tex := _screen_texture()
 	if not tex:
+		_ambilight.turn_off()
 		return
-	var img := tex.get_image()
-	if not img:
-		return
+	_ambilight.show_picture(tex, _screen_light_rect(override))
 
-	img.resize(1, 1, Image.INTERPOLATE_BILINEAR)
-	var avg := img.get_pixel(0, 0)
-	_ambilight.light_color = Color(avg.r, avg.g, avg.b)
+
+## Region of a composite framebuffer that is actually visible on the tube. A
+## shared 3D light cannot differ per eye, so stereo uses the selected eye when
+## forced and the left-eye region in the ordinary per-eye mode.
+func _screen_light_rect(mat: Material) -> Rect2:
+	if not (mat is ShaderMaterial) or (mat as ShaderMaterial).shader != WINDOW_SHADER:
+		return Rect2(0.0, 0.0, 1.0, 1.0)
+	var shader_mat := mat as ShaderMaterial
+	var packed: Variant = shader_mat.get_shader_parameter("source_rect")
+	if not (packed is Vector4):
+		return Rect2(0.0, 0.0, 1.0, 1.0)
+	var value := packed as Vector4
+	var rect := Rect2(value.x, value.y, value.z, value.w)
+	if stereo_mode == 2:
+		var shift: Variant = shader_mat.get_shader_parameter("eye_shift")
+		if shift is float:
+			rect.position.x += float(shift)
+	return rect
 
 
 # ── Screen source (blue / dark states) ─────────────────────────────────────────
@@ -2220,6 +2217,8 @@ func get_scale_factor() -> float:
 func set_tv_scale(factor: float) -> void:
 	scale_factor = clampf(factor, MIN_SCALE, MAX_SCALE)
 	_resize.apply()
+	if _ambilight:
+		_ambilight.configure_screen(_screen_size_m * scale_factor, scale_factor)
 
 
 func _on_tv_grabbed(_pickable: Node3D, _by: Node3D) -> void:

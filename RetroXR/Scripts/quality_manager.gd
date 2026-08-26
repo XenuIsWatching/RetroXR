@@ -146,8 +146,10 @@ const DISPLAY_RATE_HEADSET := 72.0
 ## pixels are resolved away by the compositor.
 const EYE_BUFFER_PANEL := 1.229
 
-## Ambilight sampling interval (frames between color updates)
-var ambilight_interval: int = 10
+## Frames between tiny GPU-blurred regional samples for TV/handheld glow.
+## Six is 12 Hz at the Quest baseline of 72 Hz: responsive after the blur, while
+## avoiding a separate canvas draw for every active screen on every eye frame.
+var screen_light_interval: int = 6
 
 ## Viewport.MSAA_* level applied to the root (XR) viewport.
 var msaa_3d: int = Viewport.MSAA_2X
@@ -171,7 +173,9 @@ var _desktop: bool
 
 func _ready() -> void:
 	_desktop = OS.get_name() != "Android"
-	ambilight_interval = 10 if _desktop else 30
+	# The old full-frame readback needed a 30-frame Quest throttle. The new path
+	# transfers only an older, completed 12x8 pass, so both renderers use this cadence.
+	screen_light_interval = 6
 	# Quest starts where it always was; desktop takes the tier these settings exist
 	# to provide. Applied before _load_prefs so a saved preset wins.
 	apply_preset(Preset.LOW if not _desktop else Preset.MEDIUM, false)
