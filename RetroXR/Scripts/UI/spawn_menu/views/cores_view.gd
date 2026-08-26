@@ -47,6 +47,10 @@ var _editing_options_core: String = ""
 ## The system that editor was opened from — leaving for another system drops it,
 ## or picking a different tile would land on the previous system's core.
 var _editing_options_system: String = ""
+## Substring the option editor is filtered by. Kept on the view because that
+## page is rebuilt whole (a reset reopens the system), and a filter that cleared
+## itself on every reset would be worse than none.
+var _options_filter: String = ""
 var _manager_cores_by_system: Dictionary = {}
 
 # BIOS / Extras tab
@@ -424,6 +428,9 @@ func _populate_core_options(systemid: String, core_name: String, vbox: VBoxConta
 	back.add_theme_font_size_override("font_size", 17)
 	back.pressed.connect(func() -> void:
 		_editing_options_core = ""
+		# Dropped on the way out: carried into another core it would open that
+		# page already filtered, most likely to nothing at all.
+		_options_filter = ""
 		_manager_browser.open_system(systemid)
 	)
 	vbox.add_child(back)
@@ -460,11 +467,56 @@ func _populate_core_options(systemid: String, core_name: String, vbox: VBoxConta
 	vbox.add_child(reset)
 	vbox.add_child(HSeparator.new())
 
+	var search := LineEdit.new()
+	search.placeholder_text = "Search options"
+	search.clear_button_enabled = true
+	search.custom_minimum_size = Vector2(0, 52)
+	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	search.add_theme_font_size_override("font_size", 17)
+	search.text = _options_filter
+	vbox.add_child(search)
+
+	var rows := VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(rows)
+
+	var none := Label.new()
+	none.add_theme_font_size_override("font_size", 17)
+	none.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
+	none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	none.custom_minimum_size = Vector2(0, 60)
+	none.visible = false
+	vbox.add_child(none)
+
+	# holder -> the text it is matched against, built once. Rows are hidden
+	# rather than rebuilt: rebuilding the page would take the focus off the box
+	# being typed into, which loses the rest of the word.
+	var haystacks: Dictionary = {}
 	var keys: Array = definitions.keys()
 	keys.sort()
 	for key: String in keys:
-		_add_core_option_row(root, core_name, systemid, key, definitions[key],
-			String(values.get(key, "")), vbox)
+		var holder := _add_core_option_row(root, core_name, systemid, key, definitions[key],
+			String(values.get(key, "")), rows)
+		if holder == null:
+			continue
+		var desc: String = definitions[key].GetDescription()
+		# The key as well as the label: a core's own documentation names the key.
+		haystacks[holder] = ("%s %s" % [key, desc]).to_lower()
+
+	var apply_filter := func(text: String) -> void:
+		_options_filter = text.strip_edges()
+		var needle := _options_filter.to_lower()
+		var shown := 0
+		for holder: Control in haystacks:
+			var hit: bool = needle.is_empty() or String(haystacks[holder]).contains(needle)
+			holder.visible = hit
+			if hit:
+				shown += 1
+		none.text = "No option matches \"%s\"." % _options_filter
+		none.visible = shown == 0 and not needle.is_empty()
+	search.text_changed.connect(apply_filter)
+	apply_filter.call(_options_filter)
 
 
 ## What this frontend hands the core, above the core's own options.
@@ -514,11 +566,13 @@ func _add_frontend_section(core_name: String, vbox: VBoxContainer) -> void:
 ## One option row: description, then < value > to cycle. Writes straight through
 ## to the core's option file — there is no Apply, because the file IS the state
 ## the next launch reads.
+## Returns the row's holder so the search box can hide it, or null when the core
+## published no values for the key and there is nothing to show.
 func _add_core_option_row(root: String, core_name: String, _systemid: String, key: String,
-		defn: Object, current_val: String, vbox: VBoxContainer) -> void:
+		defn: Object, current_val: String, vbox: VBoxContainer) -> Control:
 	var values_arr: Array = defn.GetValues()
 	if values_arr.is_empty():
-		return
+		return null
 
 	var desc: String = defn.GetDescription()
 	if desc.is_empty():
@@ -592,8 +646,14 @@ func _add_core_option_row(root: String, core_name: String, _systemid: String, ke
 	prev_btn.pressed.connect(func() -> void: step.call(-1))
 	next_btn.pressed.connect(func() -> void: step.call(1))
 
-	vbox.add_child(row)
-	vbox.add_child(HSeparator.new())
+	# Row and rule in one holder so the search box hides them together --
+	# hiding the row alone leaves a stack of bare separators behind.
+	var holder := VBoxContainer.new()
+	holder.add_theme_constant_override("separation", 0)
+	holder.add_child(row)
+	holder.add_child(HSeparator.new())
+	vbox.add_child(holder)
+	return holder
 
 
 func _option_value_label(v: Object) -> String:

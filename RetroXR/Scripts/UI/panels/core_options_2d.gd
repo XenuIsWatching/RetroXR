@@ -37,6 +37,11 @@ const COLOR_LOCKED := Color(1.00, 0.72, 0.20)
 # ── State ──────────────────────────────────────────────────────────────────────
 var _options_scroll: ScrollContainer
 var _options_rows: VBoxContainer
+## Substring the Options tab is filtered by. A core can publish well over a
+## hundred keys, and the list is alphabetical by description, so finding one by
+## scrolling means knowing what its author called it.
+var _options_filter: String = ""
+var _options_search: LineEdit = null
 var _controllers_scroll: ScrollContainer
 var _controllers_rows: VBoxContainer
 ## Handhelds only — see _add_pad_row.
@@ -117,6 +122,15 @@ func _build_ui() -> void:
 	var opts_outer := VBoxContainer.new()
 	opts_outer.name = "Options"
 	tabs.add_child(opts_outer)
+
+	_options_search = LineEdit.new()
+	_options_search.placeholder_text = "Search options"
+	_options_search.clear_button_enabled = true
+	_options_search.custom_minimum_size = Vector2(0, 44)
+	_options_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_options_search.add_theme_font_size_override("font_size", 16)
+	_options_search.text_changed.connect(_on_options_filter_changed)
+	opts_outer.add_child(_options_search)
 
 	_options_scroll = ScrollContainer.new()
 	_options_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -314,24 +328,70 @@ func _show_options_placeholder() -> void:
 	_options_rows.add_child(lbl)
 
 
+## Typing filters the list, so both this and the FRONTEND/reset rows above it
+## are dropped while a filter is set: they are not core options and would sit
+## between the box and whatever the search actually found.
+func _on_options_filter_changed(text: String) -> void:
+	_options_filter = text.strip_edges()
+	_refresh_options()
+
+
+## Matched against the key as well as the shown description: a core's own
+## documentation and its forum threads name the key, not the label.
+func _matches_filter(key: String, defn) -> bool:
+	if _options_filter.is_empty():
+		return true
+	var needle := _options_filter.to_lower()
+	if key.to_lower().contains(needle):
+		return true
+	return _option_desc(key, defn).to_lower().contains(needle)
+
+
+## The description the row shows, falling back the same way the row itself does.
+func _option_desc(key: String, defn) -> String:
+	var desc: String = defn.GetDescriptionCategorized()
+	if desc.is_empty():
+		desc = defn.GetDescription()
+	if desc.is_empty():
+		desc = key
+	return desc
+
+
 func _refresh_options() -> void:
 	for c in _options_rows.get_children():
 		c.queue_free()
 
-	_add_frontend_row()
+	var filtering := not _options_filter.is_empty()
+	if not filtering:
+		_add_frontend_row()
 
 	if _definitions.is_empty():
 		_show_options_placeholder()
 		return
 
-	_add_reset_row()
+	if not filtering:
+		_add_reset_row()
 
 	var keys: Array = _definitions.keys()
 	keys.sort()
+	var shown := 0
 	for key in keys:
+		if not _matches_filter(key, _definitions[key]):
+			continue
 		_add_option_row(key, _definitions[key], String(_values.get(key, "")))
+		shown += 1
 
-	print("[CoreOptions2D] %d option rows built" % keys.size())
+	if shown == 0:
+		var none := Label.new()
+		none.text = "No option matches \"%s\"." % _options_filter
+		none.add_theme_font_size_override("font_size", 16)
+		none.add_theme_color_override("font_color", COLOR_ROW)
+		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		none.custom_minimum_size = Vector2(0, 60)
+		_options_rows.add_child(none)
+
+	print("[CoreOptions2D] %d of %d option rows built" % [shown, keys.size()])
 
 
 ## Which API this core is told the frontend would rather render with — the same
@@ -423,11 +483,7 @@ func _add_option_row(key: String, defn, current_val: String) -> void:
 	if _forced.has(key):
 		current_val = str(_forced[key])
 
-	var desc: String = defn.GetDescriptionCategorized()
-	if desc.is_empty():
-		desc = defn.GetDescription()
-	if desc.is_empty():
-		desc = key
+	var desc := _option_desc(key, defn)
 
 	var row := HBoxContainer.new()
 	row.custom_minimum_size = Vector2(0, 52)
