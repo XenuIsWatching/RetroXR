@@ -34,6 +34,10 @@ var _state_frame := -1
 var _ref: Dictionary = {}
 var _ref_frame := -1
 var _opts: Dictionary = {}
+## Drive the pad, unless asked not to. An idle machine replays almost perfectly
+## whatever is broken underneath it, so zeros here would make this probe green
+## against faults netplay_spike catches 180 frames after the save.
+var idle := false
 
 
 func _ready() -> void:
@@ -46,6 +50,8 @@ func _ready() -> void:
 			save_at = int(a.trim_prefix("--save-at="))
 		elif a.begins_with("--check-at="):
 			check_at = int(a.trim_prefix("--check-at="))
+		elif a == "--idle":
+			idle = true
 		elif a.begins_with("--opt="):
 			var kv := a.trim_prefix("--opt=").split("=", true, 1)
 			if kv.size() == 2:
@@ -72,6 +78,23 @@ func _ready() -> void:
 	print("[div] %s / %s  save@%d check@%d" % [core, rom.get_file(), save_at, check_at])
 
 
+## netplay_spike's timeline, verbatim. The two probes have to drive the same
+## machine or a mismatch there cannot be localised by an address here.
+func _input_for_frame(f: int) -> int:
+	if idle:
+		return 0
+	var btn := 0
+	if (f >= 180 and f < 195) or (f >= 300 and f < 320):
+		btn |= 1 << 3          # START
+	if f >= 400:
+		btn |= 1 << 7          # RIGHT
+		if (f % 90) < 25:
+			btn |= 1 << 8      # A
+		if (f % 51) < 10:
+			btn |= 1 << 0      # B
+	return btn
+
+
 func _process(_d: float) -> void:
 	if _lib == null or _phase.ends_with("_wait"):
 		return
@@ -79,6 +102,7 @@ func _process(_d: float) -> void:
 	while _feed < cur + 40:
 		var a := PackedInt32Array()
 		a.resize(20)
+		a[0] = _input_for_frame(_feed)
 		_lib.PostNetplayInputs(_feed, a)
 		_feed += 1
 	if _phase == "A" and cur >= save_at and _state.is_empty():
