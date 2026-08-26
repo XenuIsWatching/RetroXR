@@ -805,6 +805,30 @@ transform = Transform3D(7, 0, 0, 0, 7, 0, 0, 0, 7, 12, -0.05, -53)
 [node name="TreeRow" parent="Exterior" instance=ExtResource("9_trees")]
 transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, -256.9, -0.04, -26)
 
+; NormalTree_2 stood directly behind the street lamp from the window: the lamp
+; head sits at y 2.85 and this row's canopies run up to 4.99, so the glowing head
+; was buried in foliage and the two read as one object in the same spot.
+;
+; Moved along the verge to the far end rather than nudged. The canopies here are
+; 3.7-6.8 m wide with only ~0.75 m between them, so the row is very nearly a
+; continuous hedge — sliding it sideways just puts a different tree behind the
+; lamp, and a 0.75 m gap at 26 m only lines up from one exact eye position. Taking
+; this one out of the middle leaves a 6.97 m hole between NormalTree_1 and _3,
+; centred on x -10.5, which is where the sightline from the window crosses this
+; row (-9.6 to -10.4 across the positions a player stands in). It clears from
+; every one of them.
+;
+; Local x, so it is scaled by the row's 1.2: 205.3896 + 20.8708 puts the canopy at
+; 11.77..17.24, which leaves the same ~0.74 m to NormalTree_5 that the row uses
+; between every other pair. Nothing overlaps.
+; position, NOT transform. Every tree in this kit carries scale 100 and an
+; R_x(-90) basis, so writing a whole Transform3D here means restating those by
+; hand — and getting it wrong collapsed this canopy from 5.47 m wide to 0.06 m,
+; which still passed a sightline check because a 60 mm tree blocks nothing.
+; Overriding the position alone leaves the basis exactly as the kit authored it.
+[node name="NormalTree_2" parent="Exterior/TreeRow/RootNode" index="1"]
+position = Vector3(226.2604, 0, 0)
+
 [node name="TreeRowFar" parent="Exterior" instance=ExtResource("9_trees")]
 transform = Transform3D(-1.4, 0, 0, 0, 1.4, 0, 0, 0, -1.4, 289, -0.04, -45)
 
