@@ -145,6 +145,14 @@ func _process(delta: float) -> void:
 ## player's view is exactly the clutter this is trying not to be.
 func _apply_visibility() -> void:
 	var wanted := not _muted and _has_content()
+	# A CanvasLayer is NOT part of a Node3D's visibility hierarchy -- it has its
+	# own flag and ignores its parent's. Setting only `visible` here left the
+	# desktop panel on screen through every mute, so opening the menu showed two
+	# toast stacks at once and an empty stack never went away.
+	if _desktop:
+		if _canvas != null and _canvas.visible != wanted:
+			_canvas.visible = wanted
+		return
 	if visible != wanted:
 		visible = wanted
 		if wanted:

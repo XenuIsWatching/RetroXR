@@ -31,8 +31,10 @@ const KEY_SESSION := "hud:session"
 
 var _nm: Node = null
 var _stack: MenuToasts = null
-## md5 -> a name to show. A hash is not a sentence.
-var _labels: Dictionary = {}
+## md5 -> filename, for transfers currently in flight. Filled from serve_started
+## and dropped when the transfer ends, so it is bounded by what is actually
+## moving rather than by everything that ever moved.
+var _names: Dictionary = {}
 
 
 ## `nm` is the NetworkManager (injected so a test can pass a stand-in).
@@ -54,17 +56,8 @@ func setup(nm: Node, stack: MenuToasts) -> void:
 	_nm.netplay_session_stopped.connect(_on_session_stopped)
 
 
-## Let the room name a file, so an upload can say what it is rather than what it
-## hashes to. Optional: an unnamed transfer still reports, just less prettily.
-func note_label(md5: String, label: String) -> void:
-	if not md5.is_empty() and not label.is_empty():
-		_labels[md5] = label
-
-
 func _ready() -> void:
-	# Names outlive the transfers that used them; a room is not that big, but a
-	# long session with a lot of media should not grow this for ever.
-	set_process(false)
+	set_process(false)   # purely signal-driven
 
 
 func _speaking() -> bool:
@@ -84,7 +77,7 @@ func _who(peer_id: int) -> String:
 
 
 func _what(md5: String) -> String:
-	return str(_labels.get(md5, "a file"))
+	return str(_names.get(md5, "a file"))
 
 
 func _on_peer_registered(peer_id: int, info: Dictionary) -> void:
@@ -105,9 +98,12 @@ func _on_peer_left(peer_id: int) -> void:
 		"%s left" % _who(peer_id), MenuToasts.DWELL_OK)
 
 
-func _on_serve_started(peer_id: int, md5: String, _kind: String, size: int) -> void:
+func _on_serve_started(peer_id: int, md5: String, _kind: String, size: int,
+		name: String) -> void:
 	if not _speaking():
 		return
+	if not name.is_empty():
+		_names[md5] = name
 	_stack.notify(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.UPLOAD),
 		"Sending %s to %s" % [_what(md5), _who(peer_id)], 0.0, 0.0)
 	if size <= 0:
@@ -129,6 +125,7 @@ func _on_serve_done(peer_id: int, md5: String) -> void:
 		return
 	_stack.finish(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.CHECK),
 		"Sent %s to %s" % [_what(md5), _who(peer_id)], MenuToasts.DWELL_OK)
+	_names.erase(md5)
 
 
 func _on_serve_refused(peer_id: int, md5: String, reason: String) -> void:
@@ -137,6 +134,7 @@ func _on_serve_refused(peer_id: int, md5: String, reason: String) -> void:
 	_stack.finish(KEY_UPLOAD % [peer_id, md5], String.chr(MenuIcons.ERROR),
 		"Could not send %s to %s -- %s" % [_what(md5), _who(peer_id), reason],
 		MenuToasts.DWELL_FAIL)
+	_names.erase(md5)
 
 
 ## The late-join stream. "capturing" is the one that matters most to a host:

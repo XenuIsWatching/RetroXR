@@ -53,7 +53,7 @@ signal transfer_failed(md5: String, reason: String)
 ## _file_ack counts the acks, and not one of them said a word. A player pulling a
 ## 700 MB video off the host was invisible to the host by construction. These
 ## four carry no new state; they announce what _sends already knows.
-signal serve_started(peer_id: int, md5: String, kind: String, size: int)
+signal serve_started(peer_id: int, md5: String, kind: String, size: int, name: String)
 signal serve_progress(peer_id: int, md5: String, sent: int, total: int)
 signal serve_done(peer_id: int, md5: String)
 signal serve_refused(peer_id: int, md5: String, reason: String)
@@ -394,7 +394,11 @@ func _req_file(md5: String, kind: String) -> void:
 	var key := "%d:%s" % [sender, md5]
 	_sends[key] = {"peer": sender, "md5": md5, "file": f,
 		"size": f.get_length(), "next": 0, "acked": -1}
-	serve_started.emit(sender, md5, kind, f.get_length())
+	# The name comes from here because here is where it is known. Anything
+	# downstream that wanted to show "Nintendo Power 42.pdf" rather than a hash
+	# would otherwise need its own way to learn it, which is a side channel that
+	# starts out empty and stays that way.
+	serve_started.emit(sender, md5, kind, f.get_length(), path.get_file())
 	_file_begin.rpc_id(sender, md5, f.get_length())
 	_pump_send(key)
 

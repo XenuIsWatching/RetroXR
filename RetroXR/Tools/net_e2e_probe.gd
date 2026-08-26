@@ -134,11 +134,11 @@ func _run_host() -> void:
 	# host had no idea a peer was downloading from it at all.
 	var seen := {"started": false, "progress": 0, "done": false, "last": 0, "total": 0}
 	NetworkManager.serve_started.connect(
-		func(peer: int, m: String, kind: String, size: int) -> void:
+		func(peer: int, m: String, kind: String, size: int, fname: String) -> void:
 			if m == md5:
 				seen["started"] = true
 				seen["total"] = size
-				_say("serving to peer %d: %s (%s, %d bytes)" % [peer, m.left(8), kind, size]))
+				_say("serving to peer %d: %s '%s' (%s, %d bytes)" % [peer, m.left(8), fname, kind, size]))
 	NetworkManager.serve_progress.connect(
 		func(_peer: int, m: String, sent: int, total: int) -> void:
 			if m == md5:

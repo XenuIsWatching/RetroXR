@@ -2554,7 +2554,7 @@ class StubNM extends Node:
 	# without a peer, a camera or a viewport.
 	signal peer_registered(id: int, info: Dictionary)
 	signal peer_left(id: int)
-	signal serve_started(peer_id: int, md5: String, kind: String, size: int)
+	signal serve_started(peer_id: int, md5: String, kind: String, size: int, name: String)
 	signal serve_progress(peer_id: int, md5: String, sent: int, total: int)
 	signal serve_done(peer_id: int, md5: String)
 	signal serve_refused(peer_id: int, md5: String, reason: String)
@@ -2817,6 +2817,15 @@ func _hud_rig(is_host := true) -> Array:
 
 ## Visible rows on the stack. MenuToasts keeps its bars as children, so this is
 ## what a player would actually see.
+## What one keyed row actually SAYS. Row counts prove the keying; only the text
+## proves the sentence.
+func _hud_text(stack: MenuToasts, key: String) -> String:
+	var toasts: Dictionary = stack.get("_toasts")
+	var toast: Dictionary = toasts.get(key, {})
+	var lbl: Label = toast.get("label")
+	return lbl.text if lbl != null and is_instance_valid(lbl) else ""
+
+
 func _hud_rows(stack: MenuToasts) -> int:
 	var n := 0
 	for c in stack.get_children():
@@ -2838,15 +2847,24 @@ func _test_hudnotify() -> void:
 	_eq(_hud_rows(stack), 1, "hudnotify/a leave replaces it rather than adding")
 
 	# A transfer patches ONE row however many times it reports.
-	notifier.note_label("aa", "Nintendo Power 42.pdf")
-	nm.serve_started.emit(77, "aa", "book", 8388608)
+	nm.serve_started.emit(77, "aa", "book", 8388608, "Nintendo Power 42.pdf")
 	var after_start := _hud_rows(stack)
 	for i in range(20):
 		nm.serve_progress.emit(77, "aa", (i + 1) * 262144, 8388608)
 	_eq(_hud_rows(stack), after_start,
 		"hudnotify/twenty progress reports stay one row")
+	# The FILE has to be named. This carried a hash before, because the only way
+	# to learn a name was a setter nothing ever called -- the toast read
+	# "Sending a file to Sam" for every upload the host ever made.
+	_ok(_hud_text(stack, "hud:up:77:aa").contains("Nintendo Power 42.pdf"),
+		"hudnotify/an upload names the file")
+	_ok(_hud_text(stack, "hud:up:77:aa").contains("Sam"),
+		"hudnotify/and the player it is going to")
+
 	nm.serve_done.emit(77, "aa")
 	_eq(_hud_rows(stack), after_start, "hudnotify/and finishing still one row")
+	_ok(_hud_text(stack, "hud:up:77:aa").contains("Nintendo Power 42.pdf"),
+		"hudnotify/the finished row still names it")
 
 	# Twelve files at once are twelve rows, not one hundred and twelve. The cap
 	# collapses the surplus, which is why this counts <= MAX_VISIBLE + 1.
@@ -2854,7 +2872,7 @@ func _test_hudnotify() -> void:
 	var nm2: StubNM = fresh[0]
 	var stack2: MenuToasts = fresh[1]
 	for i in range(12):
-		nm2.serve_started.emit(77, "f%d" % i, "book", 1024 * (i + 1))
+		nm2.serve_started.emit(77, "f%d" % i, "book", 1024 * (i + 1), "f%d.pdf" % i)
 		nm2.serve_progress.emit(77, "f%d" % i, 512, 1024 * (i + 1))
 	_ok(_hud_rows(stack2) <= MenuToasts.MAX_VISIBLE + 1,
 		"hudnotify/twelve transfers collapse rather than run off the panel")
@@ -2865,7 +2883,7 @@ func _test_hudnotify() -> void:
 	var cnm: StubNM = client[0]
 	var cstack: MenuToasts = client[1]
 	cnm.peer_registered.emit(77, cnm.peers[77])
-	cnm.serve_started.emit(77, "aa", "book", 1024)
+	cnm.serve_started.emit(77, "aa", "book", 1024, "x.pdf")
 	cnm.serve_progress.emit(77, "aa", 512, 1024)
 	cnm.netplay_state_progress.emit(77, "capturing", 0, 0)
 	cnm.netplay_desync.emit(77, 900)

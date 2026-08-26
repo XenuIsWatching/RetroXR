@@ -82,7 +82,7 @@ signal netplay_session_stopped(reason: String)
 
 ## Forwarded from the file transfer: what THIS peer is handing out, and to whom.
 ## Fires on the sender, so in practice on the host.
-signal serve_started(peer_id: int, md5: String, kind: String, size: int)
+signal serve_started(peer_id: int, md5: String, kind: String, size: int, name: String)
 signal serve_progress(peer_id: int, md5: String, sent: int, total: int)
 signal serve_done(peer_id: int, md5: String)
 signal serve_refused(peer_id: int, md5: String, reason: String)
@@ -143,8 +143,8 @@ func _ready() -> void:
 	_file_transfer.name = "FileTransfer"
 	add_child(_file_transfer)
 	_file_transfer.serve_started.connect(
-		func(peer_id: int, md5: String, kind: String, size: int) -> void:
-			serve_started.emit(peer_id, md5, kind, size))
+		func(peer_id: int, md5: String, kind: String, size: int, name: String) -> void:
+			serve_started.emit(peer_id, md5, kind, size, name))
 	_file_transfer.serve_progress.connect(
 		func(peer_id: int, md5: String, sent: int, total: int) -> void:
 			serve_progress.emit(peer_id, md5, sent, total))
