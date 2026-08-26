@@ -1,0 +1,43 @@
+Shared scene assets — attribution and licences.
+
+Assets here are used by MORE THAN ONE room, so they do not live under any one
+room's folder. Scenes/Objects/furniture/table.tscn is the first of them: the
+same table is spawned in the bedroom, the den and the arcade, and pointing it at
+imported-assets/bedroom/ would have made the other two rooms load bedroom
+assets to draw a table.
+
+  CC0 1.0 — https://creativecommons.org/publicdomain/zero/1.0/
+
+
+=== CC0 — no attribution required, given anyway =================================
+
+materials/Wood066_*
+    "Wood 066" — ambientCG
+    https://ambientcg.com/a/Wood066
+    Smooth brown wood. Skins the spawnable table — top, aprons and legs, the
+    last two a shade darker off the same set.
+
+    Color, NormalGL and Roughness only, the same three the room materials keep:
+    the pack also ships NormalDX (the wrong convention for Godot, so every bump
+    would read as a dent) and Displacement (nothing here uses parallax, and it
+    is expensive on the mobile backend).
+
+    Sampled in OBJECT space by Shaders/pbr_surface.gdshader, because the table
+    is a RigidBody the player carries around — in world space the grain would
+    swim across the top as it moved.
+
+materials/Cardboard004_*
+    "Cardboard 004" — ambientCG
+    https://ambientcg.com/a/Cardboard004
+    Corrugated brown cardboard. Skins the spawnable storage box — outer walls,
+    base and the four folded-out flaps, with a darker second material on the
+    inner faces.
+
+    Color, NormalGL and Roughness only, for the reasons the Wood066 entry gives:
+    the pack also ships NormalDX (inverted green, so every flute would read as a
+    groove) and Displacement (nothing here uses parallax). This set ships no
+    AmbientOcclusion at all.
+
+    Sampled in OBJECT space by Shaders/pbr_surface.gdshader — the box is a
+    RigidBody the player carries, and in world space the corrugation would swim
+    across it as it moved.

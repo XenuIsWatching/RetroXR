@@ -17,6 +17,8 @@
 class_name WindowBlinds
 extends Node3D
 
+const SLAT_SHADER: Shader = preload("res://Shaders/blind_slat.gdshader")
+
 
 signal drop_changed(drop: float)
 
@@ -34,6 +36,18 @@ signal drop_changed(drop: float)
 @export var stack_pitch: float = 0.0055
 
 @export var slat_color: Color = Color(0.87, 0.85, 0.79)
+
+## Peak bow of a hanging slat's middle, in metres. 6 mm is a draught through a
+## closed window, not a gale — at more than about 12 mm the slats visibly pass
+## through each other, because the gap between them is only a few millimetres
+## wider than the slat is thick.
+@export var sway_amplitude: float = 0.006
+@export var sway_speed: float = 1.1
+
+## Lower bound on the window sun while the blind is down, used ONLY when the sun
+## actually casts shadows. See _apply(): with shadows on, the slats do the
+## occluding and the light has to survive for them to occlude it.
+@export_range(0.0, 1.0) var shadowed_min_open: float = 0.85
 
 ## 0 = raised (stacked at the headrail), 1 = lowered (covering the window).
 @export_range(0.0, 1.0) var drop: float = 1.0:
@@ -77,6 +91,7 @@ var _daylight: Light3D = null
 var _env: Environment = null
 
 var _slats: MultiMeshInstance3D = null
+var _slat_mat: ShaderMaterial = null
 var _bottom: MeshInstance3D = null
 var _tween: Tween = null
 
@@ -107,12 +122,18 @@ func _build() -> void:
 	mm.mesh = slat
 	mm.instance_count = slat_count
 
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = slat_color
-	# Vinyl, not paper: a little sheen so the slats separate under the sun rather
-	# than reading as one flat sheet.
-	mat.roughness = 0.42
-	mat.metallic = 0.0
+	# On blind_slat.gdshader rather than a StandardMaterial3D, for the sway. The
+	# movement is a vertex displacement, so it costs no per-frame GDScript over 48
+	# MultiMesh instances — see that shader's header. Sheen and colour are the
+	# same vinyl as before, now as shader parameters.
+	var mat := ShaderMaterial.new()
+	mat.shader = SLAT_SHADER
+	mat.set_shader_parameter("slat_color", slat_color)
+	mat.set_shader_parameter("slat_roughness", 0.42)
+	mat.set_shader_parameter("slat_half_width", width * 0.5)
+	mat.set_shader_parameter("sway_speed", sway_speed)
+	mat.set_shader_parameter("sway_amplitude", 0.0)
+	_slat_mat = mat
 
 	_slats = MultiMeshInstance3D.new()
 	_slats.name = "Slats"
@@ -164,11 +185,33 @@ func _apply() -> void:
 		_bottom.position = Vector3(0.0, y - 0.012, 0.0)
 	var open := openness()
 	if _sun != null:
-		_sun.light_energy = sun_energy * open
+		# Two different occlusion models, picked by whether the sun can cast.
+		#
+		# With NO shadows — Quest, and any LOW preset — nothing stops the spot, so
+		# fading it out as the blind comes down IS the occlusion. That is the
+		# original behaviour and it has to stay.
+		#
+		# With real shadows, the slats occlude it themselves, and they are not a
+		# solid sheet: at 48 slats over 1.18 m the pitch is 24.6 mm against a
+		# 19 mm slat, so roughly 5 mm of daylight survives between every pair.
+		# That gap is what stripes a floor under a real vinyl mini blind — and
+		# fading the spot to zero would leave nothing to cast it. So the energy
+		# gets a floor and the geometry does the work.
+		var lit: float = open
+		if _sun.shadow_enabled:
+			lit = maxf(open, shadowed_min_open)
+		_sun.light_energy = sun_energy * lit
 	if _daylight != null:
 		_daylight.light_energy = lerpf(daylight_shut, daylight_open, open)
 	if _env != null:
 		_env.ambient_light_energy = lerpf(ambient_shut, ambient_open, open)
+
+	# Only the HANGING slats can move. Raised ones are bunched against the
+	# headrail with stack_pitch between them and no free length to bow, so the
+	# amplitude follows the drop rather than being a constant — a fully raised
+	# blind that still fluttered would read as a stack of loose vinyl.
+	if _slat_mat != null:
+		_slat_mat.set_shader_parameter("sway_amplitude", sway_amplitude * drop)
 
 
 ## Replace the daylight BASE these three energies are scaled from.

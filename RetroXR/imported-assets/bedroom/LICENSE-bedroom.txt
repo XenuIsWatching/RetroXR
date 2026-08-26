@@ -117,10 +117,28 @@ materials/Plaster001_*
     walls read as damaged. Almost the entire PaintedPlaster series is tagged
     "broken", "old" or "cracks"; the Plaster series is where the clean ones are.
 
-materials/Carpet012_*
-    "Carpet 012" — ambientCG
-    https://ambientcg.com/a/Carpet012
-    Same three maps kept, same reasons.
+materials/Carpet016_*
+    "Carpet 016" — ambientCG
+    https://ambientcg.com/a/Carpet016
+    Same reasons for dropping NormalDX and Displacement, but FOUR maps are kept
+    here, not three: this is the one set in the room that ships an
+    AmbientOcclusion map, and pile is exactly the deep micro-relief a tiling AO
+    does describe. The Plaster series ships none at all, and would not want one
+    — a tiling AO knows nothing about where a room's corners are, so the wall
+    and corner shading is analytic instead (Shaders/pbr_surface.gdshader).
+
+materials/Wood049_*
+    "Wood 049" — ambientCG
+    https://ambientcg.com/a/Wood049
+    Tagged oak/furniture/interior. The door LEAF only — surface 4 of the kit's
+    single mesh — on BOTH doors, the room's and the closet's. Each jamb and
+    casing keeps the room's painted trim. Color, NormalGL and Roughness kept, as
+    with the plaster.
+
+    The doors are WHITE, and this is still a wood set on purpose: pbr_surface's
+    paint_over covers the oak's colour while its grain, mill marks and roughness
+    variation keep coming through the normal and roughness maps. A painted panel
+    door is not a uniform surface, it just is not brown.
 
 exterior/  — see exterior/LICENSE-exterior.txt (Kenney + Quaternius, both CC0).
 

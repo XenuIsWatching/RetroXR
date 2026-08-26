@@ -1,7 +1,11 @@
-[gd_scene load_steps=12 format=3 uid="uid://table_001"]
+[gd_scene load_steps=16 format=3 uid="uid://table_001"]
 
 [ext_resource type="Script" path="res://Scripts/Objects/room/table.gd" id="1_tablescript"]
 [ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+[ext_resource type="Shader" path="res://Shaders/pbr_surface.gdshader" id="3_pbr"]
+[ext_resource type="Texture2D" path="res://imported-assets/shared/materials/Wood066_1K-JPG_Color.jpg" id="4_wood_col"]
+[ext_resource type="Texture2D" path="res://imported-assets/shared/materials/Wood066_1K-JPG_NormalGL.jpg" id="5_wood_nrm"]
+[ext_resource type="Texture2D" path="res://imported-assets/shared/materials/Wood066_1K-JPG_Roughness.jpg" id="6_wood_rgh"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_table"]
 size = Vector3(2, 0.2, 0.8)
@@ -12,17 +16,66 @@ size = Vector3(0.05, 0.7, 0.05)
 [sub_resource type="BoxMesh" id="BoxMesh_table"]
 size = Vector3(2, 0.05, 0.8)
 
-[sub_resource type="StandardMaterial3D" id="Mat_table"]
-albedo_color = Color(0.18, 0.1, 0.06, 1)
-metallic = 0.05
-roughness = 0.55
+; --- Wood, on pbr_surface.gdshader ------------------------------------------
+; object_space, and that is not a preference. The table is a RigidBody the player
+; picks up and carries between rooms; sampled in world space its grain would swim
+; across the top as the table moved. Its own frame travels with it.
+;
+; Which also fixes the tiling: these are BoxMeshes, whose UVs Godot normalises to
+; 0..1 per face however big the box is, so the 2 m top and the 0.05 m leg were
+; getting the same tile count. tiles_per_metre is a real density for both.
+;
+; contact_strength 0 — the shader's corner darkening measures against a ROOM's
+; extents, and this table stands in three different rooms and gets carried around
+; inside them. Room-space shading on a prop that moves would be a stain that
+; slides across it.
+[sub_resource type="ShaderMaterial" id="Mat_table"]
+shader = ExtResource("3_pbr")
+shader_parameter/albedo_tex = ExtResource("4_wood_col")
+shader_parameter/roughness_tex = ExtResource("6_wood_rgh")
+shader_parameter/normal_tex = ExtResource("5_wood_nrm")
+shader_parameter/tint = Color(0.82, 0.74, 0.66, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 0.9
+shader_parameter/normal_strength = 0.9
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = true
+shader_parameter/swap_uv = false
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
 
 [sub_resource type="BoxMesh" id="BoxMesh_table_apron_long"]
 size = Vector3(2, 0.08, 0.03)
 
-[sub_resource type="StandardMaterial3D" id="Mat_table_apron"]
-albedo_color = Color(0.12, 0.07, 0.04, 1)
-roughness = 0.6
+; Aprons and legs: the same wood a shade darker, the way a rail sits in shadow
+; under a top. A separate material rather than a tint on the same one because the
+; top and the legs are different nodes with their own overrides already.
+[sub_resource type="ShaderMaterial" id="Mat_table_apron"]
+shader = ExtResource("3_pbr")
+shader_parameter/albedo_tex = ExtResource("4_wood_col")
+shader_parameter/roughness_tex = ExtResource("6_wood_rgh")
+shader_parameter/normal_tex = ExtResource("5_wood_nrm")
+shader_parameter/tint = Color(0.62, 0.56, 0.5, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 1.4
+shader_parameter/normal_strength = 0.9
+shader_parameter/roughness_scale = 1.05
+shader_parameter/object_space = true
+shader_parameter/swap_uv = false
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
 
 [sub_resource type="BoxMesh" id="BoxMesh_table_apron_short"]
 size = Vector3(0.03, 0.08, 0.74)

@@ -15,6 +15,11 @@
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_Color.jpg" id="23_rug_col"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_NormalGL.jpg" id="24_rug_nrm"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_Roughness.jpg" id="25_rug_rgh"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Carpet016_1K-JPG_AmbientOcclusion.jpg" id="26_rug_ao"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Wood049_1K-JPG_Color.jpg" id="53_wood_col"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Wood049_1K-JPG_NormalGL.jpg" id="54_wood_nrm"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Wood049_1K-JPG_Roughness.jpg" id="55_wood_rgh"]
+[ext_resource type="Shader" path="res://Shaders/pbr_surface.gdshader" id="56_roomsurf"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/ceiling_fan.glb" id="14_fan"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/door.glb" id="19_door"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/switch_plate_2gang.res" id="28_plate"]
@@ -59,6 +64,12 @@ background_mode = 2
 sky = SubResource("Sky_bedroom")
 ambient_light_source = 2
 ambient_light_color = Color(1, 0.84, 0.7, 1)
+; DO NOT tune the room's brightness here. TimeOfDay._apply_daylight OWNS this
+; property and overwrites it from its KEYS table on the first deferred apply, so
+; an authored value only ever survives until the scene finishes loading — it was
+; briefly raised to 0.34 here and measured 0.090 at runtime, which is the night
+; key, not this number. It is the same trap as authoring energy on a
+; "ceiling_light". The curve is the place to change it.
 ambient_light_energy = 0.25
 tonemap_mode = 2
 glow_enabled = true
@@ -114,16 +125,32 @@ size = Vector2(5.2, 4.4)
 [sub_resource type="BoxShape3D" id="Shape_floor"]
 size = Vector3(5.2, 0.2, 4.4)
 
-; Wall-to-wall carpet. uv1_scale 4 puts roughly one 1K tile per 1.3 m, so the
-; pile reads as texture at standing height rather than as a visible repeat.
-[sub_resource type="StandardMaterial3D" id="Mat_carpet"]
-albedo_color = Color(0.95, 0.92, 0.86, 1)
-albedo_texture = ExtResource("23_rug_col")
-roughness_texture = ExtResource("25_rug_rgh")
-normal_enabled = true
-normal_scale = 1.0
-normal_texture = ExtResource("24_rug_nrm")
-uv1_scale = Vector3(4, 4, 1)
+; Wall-to-wall carpet. tiles_per_metre is a real metric density now, so the pile
+; matches the plaster's scale where the two meet at the baseboard instead of
+; being a third, unrelated tiling the way uv1_scale 4 on a PlaneMesh was.
+; Carpet016 is the one set in this room that ships an AmbientOcclusion map, and
+; it earns it: pile is exactly the kind of deep micro-relief a tiling AO does
+; describe. The plaster has no AO map, and would not want one — see the shader.
+[sub_resource type="ShaderMaterial" id="Mat_carpet"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("23_rug_col")
+shader_parameter/roughness_tex = ExtResource("25_rug_rgh")
+shader_parameter/normal_tex = ExtResource("24_rug_nrm")
+shader_parameter/ao_tex = ExtResource("26_rug_ao")
+shader_parameter/tint = Color(1, 0.97, 0.9, 1)
+shader_parameter/tiles_per_metre = 0.8
+shader_parameter/normal_strength = 1.0
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = false
+shader_parameter/swap_uv = false
+shader_parameter/ao_enabled = true
+shader_parameter/ao_strength = 0.45
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.45
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.5
 
 ; Painted drywall (ambientCG Plaster001, surface photogrammetry).
 ;
@@ -146,18 +173,91 @@ uv1_scale = Vector3(4, 4, 1)
 ; the same tint compounded into orange and the walls read as adobe. The room's
 ; ambient is Color(1, 0.84, 0.70) and the ceiling globe is warm, so the warmth
 ; wants to come from the light, not from the paint as well.
-[sub_resource type="StandardMaterial3D" id="Mat_wall"]
-albedo_color = Color(0.72, 0.7, 0.67, 1)
-albedo_texture = ExtResource("20_wall_col")
-roughness_texture = ExtResource("22_wall_rgh")
-normal_enabled = true
-normal_scale = 1.0
-normal_texture = ExtResource("21_wall_nrm")
-uv1_scale = Vector3(2.5, 2.5, 1)
+;
+; It is on room_surface.gdshader rather than a StandardMaterial3D for two
+; reasons the shader's own header sets out at length. Short version: a BoxMesh
+; normalises its UVs per face, so ONE uv1_scale gave the 5.2 m south wall 0.48
+; tiles/m and the 0.5 m strip beside the door 5.0 — a 10x step at the corner
+; where they meet — and nothing darkens a corner on Quest, where shadows are off
+; and SSAO is a no-op on the mobile backend.
+[sub_resource type="ShaderMaterial" id="Mat_wall"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("20_wall_col")
+shader_parameter/roughness_tex = ExtResource("22_wall_rgh")
+shader_parameter/normal_tex = ExtResource("21_wall_nrm")
+shader_parameter/tint = Color(0.72, 0.7, 0.67, 1)
+shader_parameter/tiles_per_metre = 0.75
+shader_parameter/normal_strength = 1.15
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = false
+shader_parameter/swap_uv = false
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.45
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.5
 
-[sub_resource type="StandardMaterial3D" id="Mat_ceiling"]
-albedo_color = Color(0.78, 0.75, 0.7, 1)
-roughness = 0.95
+; The ceiling was a flat untextured colour, which in VR is a large surface
+; directly overhead. Same plaster as the walls at the same metric density, so the
+; two agree where they meet, tinted lighter the way a ceiling is painted.
+[sub_resource type="ShaderMaterial" id="Mat_ceiling"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("20_wall_col")
+shader_parameter/roughness_tex = ExtResource("22_wall_rgh")
+shader_parameter/normal_tex = ExtResource("21_wall_nrm")
+shader_parameter/tint = Color(0.8, 0.78, 0.75, 1)
+shader_parameter/tiles_per_metre = 0.75
+shader_parameter/normal_strength = 0.7
+shader_parameter/roughness_scale = 1.1
+shader_parameter/object_space = false
+shader_parameter/swap_uv = false
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.45
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.5
+
+; White painted door leaf. The kit's leaf and its jamb are two surfaces of ONE
+; mesh, so the leaf is re-skinned through surface_material_override/4 and the
+; jamb keeps its painted trim.
+;
+; It is still a WOOD set (ambientCG Wood049, oak) even though the door is white:
+; paint_over 0.9 covers the oak's colour while its grain, mill marks and
+; roughness variation keep coming through the normal and roughness maps. That is
+; what separates a painted door from the flat white one the kit shipped — a
+; painted panel door is not a uniform surface, it just is not brown.
+;
+; object_space, unlike every other user of this shader: the door is a yawed prop,
+; and sampling it in the room's frame would run the grain through the leaf at 90
+; deg to its own stiles. Its model frame is also why the shell must NOT use this
+; flag — each wall piece would restart its tiling at its own centre and the
+; corner step would come straight back.
+[sub_resource type="ShaderMaterial" id="Mat_door_wood"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("53_wood_col")
+shader_parameter/roughness_tex = ExtResource("55_wood_rgh")
+shader_parameter/normal_tex = ExtResource("54_wood_nrm")
+shader_parameter/tint = Color(0.9, 0.89, 0.86, 1)
+shader_parameter/paint_over = 0.9
+shader_parameter/tiles_per_metre = 0.55
+shader_parameter/normal_strength = 0.55
+shader_parameter/roughness_scale = 0.75
+shader_parameter/object_space = true
+shader_parameter/swap_uv = true
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.3
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.5
 
 ; One shared trim material for baseboard, door casing and window casing, so the
 ; room's woodwork all matches. Slightly glossier than the wall so it reads as
@@ -172,6 +272,43 @@ size = Vector3(5.2, 2.6, 0.15)
 [sub_resource type="BoxShape3D" id="Shape_wall_ns"]
 size = Vector3(5.2, 2.6, 0.15)
 
+; South wall is split around the CLOSET opening: 1.0 wide x 2.1 high, centred
+; x = -1.5. Same opening size as the room door, because it takes the same door
+; kit — the assembly measures 0.956 x 2.065, so it seats in a 1.0 x 2.1 hole with
+; the jamb taking up the slack, exactly as it does on the west wall. The left
+; stretch of this wall was the only clear one: the two posters sit at x 0.95 and
+; 1.88, and the west corner is at -2.525.
+[sub_resource type="BoxMesh" id="Mesh_wall_s_w"]
+size = Vector3(0.6, 2.6, 0.15)
+
+[sub_resource type="BoxMesh" id="Mesh_wall_s_e"]
+size = Vector3(3.6, 2.6, 0.15)
+
+[sub_resource type="BoxMesh" id="Mesh_wall_s_head"]
+size = Vector3(1, 0.5, 0.15)
+
+; --- Closet shell -------------------------------------------------------------
+; Sits BEHIND the south wall, so it is never in shot with the door shut. Built
+; anyway: without it the opening looks straight through the wall at the suburb,
+; and a closed door is a scene decision rather than a permanent one. Six boxes,
+; which is nothing next to leaving a hole in the room.
+[sub_resource type="BoxMesh" id="Mesh_closet_back"]
+size = Vector3(1.15, 2.2, 0.05)
+
+[sub_resource type="BoxMesh" id="Mesh_closet_side"]
+size = Vector3(0.05, 2.1, 0.6)
+
+[sub_resource type="BoxMesh" id="Mesh_closet_cap"]
+size = Vector3(1.1, 0.05, 0.6)
+
+[sub_resource type="BoxMesh" id="Mesh_closet_shelf"]
+size = Vector3(1, 0.028, 0.55)
+
+[sub_resource type="BoxMesh" id="Mesh_closet_rail"]
+size = Vector3(0.94, 0.026, 0.026)
+
+; Baseboard runs, split around the closet the way the west wall's is split around
+; the door. Unit meshes scaled along the wall, same as every other run.
 [sub_resource type="BoxMesh" id="Mesh_wall_e"]
 size = Vector3(0.15, 2.6, 4.4)
 
@@ -320,14 +457,25 @@ loop_mode = 1
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath("FanPivot:rotation")
+; Spins the ROTOR, not the fixture. This used to turn FanPivot, which parents the
+; whole GLB — so the glass shade, the bulb, the lamp base, the downrod and the
+; ceiling canopy all revolved with the blades. Fan_Blade_Supports holds the arms
+; and Fan-Blades beneath it, and its siblings (Lightbulb_Cover, Lightbulb_001,
+; Lightbulb_Base, Fan_Support_Shaft, Fan_Support) are exactly the parts that must
+; stay still.
+;
+; About local Z, not Y. The kit is a Collada export whose blades lie in their
+; node's local XY plane — the blade mesh AABB is 4.6 x 4.6 wide and ~0 thick in
+; Z — so Z is the shaft axis in that frame however the fixture is oriented in
+; the room. Rotating about Y here would tumble the blades end over end.
+tracks/0/path = NodePath("FanPivot/Fan/Sketchfab_model/Collada visual scene group/Ceiling/Fan_Center/Fan_Blade_Supports:rotation")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
 "times": PackedFloat32Array(0, 2),
 "transitions": PackedFloat32Array(1, 1),
 "update": 0,
-"values": [Vector3(0, 0, 0), Vector3(0, 6.28319, 0)]
+"values": [Vector3(0, 0, 0), Vector3(0, 0, 6.28319)]
 }
 
 [sub_resource type="AnimationLibrary" id="AnimLib_fan"]
@@ -419,6 +567,50 @@ sky_mode = 2
 [node name="PlayerRig" parent="." instance=ExtResource("2_playerrig")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.55, 0, 0.55)
 
+; --- Closet -------------------------------------------------------------------
+; Behind the south wall's opening. In "poster_flat" like Room and Floor: these
+; are flat slabs, and poster_conform.gd reads that group to skip surface
+; conforming — a poster stuck to the inside of a closet should lie flat too.
+[node name="Closet" type="StaticBody3D" parent="." groups=["poster_flat"]]
+collision_mask = 0
+
+[node name="Back" type="MeshInstance3D" parent="Closet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.05, 2.875)
+mesh = SubResource("Mesh_closet_back")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="SideLeft" type="MeshInstance3D" parent="Closet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.025, 1.05, 2.575)
+mesh = SubResource("Mesh_closet_side")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="SideRight" type="MeshInstance3D" parent="Closet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 1.05, 2.575)
+mesh = SubResource("Mesh_closet_side")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="Top" type="MeshInstance3D" parent="Closet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.125, 2.575)
+mesh = SubResource("Mesh_closet_cap")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="Base" type="MeshInstance3D" parent="Closet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, -0.025, 2.575)
+mesh = SubResource("Mesh_closet_cap")
+surface_material_override/0 = SubResource("Mat_carpet")
+
+; Shelf with the hanging rail under it, the standard single-rail closet. Both on
+; the room's trim paint, so they match the baseboard and the door casing.
+[node name="Shelf" type="MeshInstance3D" parent="Closet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.76, 2.56)
+mesh = SubResource("Mesh_closet_shelf")
+surface_material_override/0 = SubResource("Mat_trim")
+
+[node name="Rail" type="MeshInstance3D" parent="Closet"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.66, 2.53)
+mesh = SubResource("Mesh_closet_rail")
+surface_material_override/0 = SubResource("Mat_trim")
+
 [node name="Floor" type="StaticBody3D" parent="." groups=["poster_flat"]]
 collision_mask = 0
 
@@ -457,9 +649,19 @@ surface_material_override/0 = SubResource("Mat_wall")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, -2.2)
 shape = SubResource("Shape_wall_ns")
 
-[node name="SouthWall" type="MeshInstance3D" parent="Room"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 2.2)
-mesh = SubResource("Mesh_wall_ns")
+[node name="SouthWallW" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 1.3, 2.2)
+mesh = SubResource("Mesh_wall_s_w")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="SouthWallE" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 1.3, 2.2)
+mesh = SubResource("Mesh_wall_s_e")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="SouthWallHead" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.35, 2.2)
+mesh = SubResource("Mesh_wall_s_head")
 surface_material_override/0 = SubResource("Mat_wall")
 
 [node name="SouthWallCol" type="CollisionShape3D" parent="Room"]
@@ -911,8 +1113,28 @@ shape = SubResource("Shape_door")
 ; Six-panel door with its jambs, knob and hinges, from the Interior Trim Assets
 ; kit. Yawed 90 deg so its width runs along the west wall's opening. Closed and
 ; collidered — the opening was a hole straight through to the sky before this.
+; Surface 4 is the leaf, surface 0 the jamb and casing; 1-3 are the hinges and
+; the two knob halves. Only the leaf takes the oak.
 [node name="Door" parent="Furniture" instance=ExtResource("19_door")]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.6, -2.018, 0.89)
+
+[node name="Door Jamb_001_Trim_0" parent="Furniture/Door" index="0"]
+surface_material_override/4 = SubResource("Mat_door_wood")
+; Closet door. The same kit as the room door, so the opening could be authored at
+; the size that door is known to seat in rather than a new one guessed at.
+;
+; R_y(180) from the west-wall instance, because "into the room" is -Z here and +X
+; there. Its origin is x -1.805 rather than the opening centre -1.5: the assembly
+; is not centred on its own node, and rotating it moves that offset from +Z to
+; +X. -1.805 was DERIVED — the west door's node origin and the measured world
+; centre give a local offset of (-0.305, 3.081, 0), which under this basis lands
+; at (0.305, 3.081, 0). Do not eyeball this number; a probe printed the AABB.
+[node name="ClosetDoor" parent="Furniture" instance=ExtResource("19_door")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.805, -2.018, 2.2)
+
+[node name="Door Jamb_001_Trim_0" parent="Furniture/ClosetDoor" index="0"]
+surface_material_override/4 = SubResource("Mat_door_wood")
+
 [node name="PosterMemphis" type="Node3D" parent="."]
 
 [node name="Frame" type="MeshInstance3D" parent="PosterMemphis"]
@@ -1015,13 +1237,23 @@ transform = Transform3D(5.2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.121, -2.112)
 mesh = SubResource("Mesh_cap_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
-[node name="SouthBase" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(5.2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.055, 2.116)
+[node name="SouthBaseW" type="MeshInstance3D" parent="Baseboard"]
+transform = Transform3D(0.6, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 0.055, 2.116)
 mesh = SubResource("Mesh_base_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
-[node name="SouthCap" type="MeshInstance3D" parent="Baseboard"]
-transform = Transform3D(5.2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.121, 2.112)
+[node name="SouthCapW" type="MeshInstance3D" parent="Baseboard"]
+transform = Transform3D(0.6, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 0.121, 2.112)
+mesh = SubResource("Mesh_cap_ns")
+surface_material_override/0 = SubResource("Mat_trim")
+
+[node name="SouthBaseE" type="MeshInstance3D" parent="Baseboard"]
+transform = Transform3D(3.6, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0.055, 2.116)
+mesh = SubResource("Mesh_base_ns")
+surface_material_override/0 = SubResource("Mat_trim")
+
+[node name="SouthCapE" type="MeshInstance3D" parent="Baseboard"]
+transform = Transform3D(3.6, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0.121, 2.112)
 mesh = SubResource("Mesh_cap_ns")
 surface_material_override/0 = SubResource("Mat_trim")
 
@@ -1079,15 +1311,51 @@ light_energy = 1.2
 light_cull_mask = 1
 omni_range = 7.0
 
-; Golden-hour sun through the window. See the note in this file's history: this is
-; a SpotLight3D rather than a DirectionalLight because shadows are OFF on Quest,
-; so a directional sun lights the room through its walls. The cone does the
-; occluding a shadow map would normally do — at the window plane it is 1.27 m
+; Carpet bounce. A real floor throws light back up into the underside of the bed,
+; the desk and the sills, and with no GI and no shadows there is nothing else in
+; this room doing that — which is why furniture undersides read as painted-on.
+;
+; Deliberately WIDE and DIM rather than small and bright: a tiny near-surface
+; light dies on the mobile backend, rendering as black, a flat disc or garbage.
+; Sits at 1.1 m with a nearly flat falloff. It was first authored at 0.35 m and
+; energy 0.35, which put a visible POOL of light on the carpet in the middle of
+; the room — an omni that low is close enough to the floor to relight it as a
+; source rather than stand in for its bounce. High, dim and flat is what reads
+; as bounce; low and bright reads as a lamp lying on the carpet.
+; Parented to FanGlobeLight, and that is load-bearing rather than tidiness. As a
+; sibling it was an always-on light nothing could switch off: with every
+; switchable light off at night it MORE THAN DOUBLED the room, mean frame luma
+; 0.256 against 0.115 without it. It is meant to be the ceiling light's bounce,
+; so it has to die with the ceiling light — and light_switch.gd toggles
+; `visible` on that fixture, which hides its children too. Deliberately NOT in
+; the "ceiling_light" group: QualityManager._adjust_lights rewrites the energy
+; of everything in that group, which would turn this into a second ceiling
+; globe. Local Y is -1.19 to sit at 1.1 m world.
+; Masked to layer 1 and no_shadow like every other interior light, or it would
+; reach out into the suburb.
+[node name="FloorBounce" type="OmniLight3D" parent="FanGlobeLight" groups=["no_shadow"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.19, 0)
+light_color = Color(1, 0.88, 0.74, 1)
+light_energy = 0.18
+light_cull_mask = 1
+omni_range = 8.0
+omni_attenuation = 0.35
+
+; Golden-hour sun through the window. It is a SpotLight3D rather than a
+; DirectionalLight because shadows are off on QUEST, so a directional sun there
+; lights the room through its walls. The cone does the occluding a shadow map
+; would normally do — at the window plane it is 1.27 m
 ; across against a 1.5 x 1.2 m opening, so nothing spills onto the wall around it.
 ;
 ; Energy is owned by the blinds, which scale it by how far they are open. The
 ; authored 3.0 is what shows with them fully raised.
-[node name="WindowSun" type="SpotLight3D" parent="." groups=["no_shadow"]]
+; NOT in "no_shadow", unlike every other light in this room, and that is what
+; puts blind-slat shadows across the floor. QualityManager.configure_light gives
+; any light outside that group `shadows_enabled()`, which is true on the desktop
+; MEDIUM preset and false on the Quest LOW one — so the slat shadows are a PCVR
+; feature that costs the headset nothing and needs no code to switch. The cone
+; still does the occluding on Quest exactly as it did before.
+[node name="WindowSun" type="SpotLight3D" parent="."]
 transform = Transform3D(-0.991, -0.057, 0.116, 0, 0.895, 0.444, -0.129, 0.44, -0.888, -0.6, 2.6, -4.5)
 light_color = Color(1, 0.83, 0.62, 1)
 light_energy = 3.6
