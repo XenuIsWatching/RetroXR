@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3 uid="uid://object_opts_pnl_1"]
+
+[ext_resource type="Script" path="res://Scripts/UI/panels/object_options_panel.gd" id="1_panelscript"]
+[ext_resource type="PackedScene" uid="uid://clujaf3u776a3" path="res://addons/godot-xr-tools/objects/viewport_2d_in_3d.tscn" id="2_viewport2d3d"]
+[ext_resource type="PackedScene" uid="uid://object_opts_2d_01" path="res://Scenes/UI/object_options_2d.tscn" id="3_objectopts2d"]
+
+[node name="ObjectOptionsPanel" type="Node3D"]
+script = ExtResource("1_panelscript")
+
+[node name="ObjectOptionsViewport" parent="." instance=ExtResource("2_viewport2d3d")]
+screen_size = Vector2(0.34, 0.1)
+scene = ExtResource("3_objectopts2d")
+viewport_size = Vector2(340, 100)
+transparent = 1

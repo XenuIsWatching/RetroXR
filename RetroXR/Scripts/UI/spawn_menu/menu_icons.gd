@@ -49,6 +49,8 @@ const DOT       := 0xF09DE   # md-circle_medium   — the one in use right now
 const ROTATE_CCW := 0xF0E2   # fa-rotate_left     — turn a poster
 const ROTATE_CW  := 0xF01E   # fa-rotate_right
 const BACKSPACE := 0xF006E   # md-backspace       — on-menu keypad
+const LOCK      := 0xF033E   # md-lock            — pinned where it stands
+const LOCK_OPEN := 0xF033F   # md-lock_open       — free to be picked up
 const NETPLAY   := 0xF06F3   # md-network         — this core can hold a session
 
 const TINT_DOWNLOAD := Color(0.45, 0.70, 1.00)

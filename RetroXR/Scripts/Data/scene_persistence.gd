@@ -34,7 +34,8 @@ const _NUMBER_FIELDS := [
 	"page_leaf", "sensitivity", "device_type", "port_index", "volume", "cords",
 	"pad_ordinal", "fit_mode", "roll",
 ]
-const _BOOL_FIELDS := ["video_out", "ignore_gravity", "crt_enabled", "half_pages", "stuck"]
+const _BOOL_FIELDS := ["video_out", "ignore_gravity", "crt_enabled", "half_pages", "stuck",
+	"locked"]
 const _REFERENCE_FIELDS := [
 	"tv", "cartridge", "memcard", "tape", "disc", "media", "system",
 	"nunchuk", "motion_plus",
@@ -1116,6 +1117,10 @@ func _base(id: int, type_name: String, n3d: Node3D) -> Dictionary:
 		floating = bool(n3d.get("ignore_gravity"))
 	if floating:
 		out["ignore_gravity"] = true
+	# Pinned in place. Written only when ON, for the same reason as the flag
+	# above: a room of ordinary props saves exactly as it did before it existed.
+	if ObjectLock.is_locked(n3d):
+		out["locked"] = true
 	var articulated := _serialize_articulated_controls(n3d)
 	if not articulated.is_empty():
 		out["articulated"] = articulated
@@ -1713,6 +1718,10 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 	# this flag in _ready and parks the body at the pose restored just above.
 	if "ignore_gravity" in obj:
 		obj.set("ignore_gravity", bool(data.get("ignore_gravity", false)))
+	# Before the caller adds the child, so a locked object is already frozen at
+	# the pose written just above and never joins the fall into place.
+	if bool(data.get("locked", false)):
+		ObjectLock.set_locked(obj, true)
 	return obj
 
 

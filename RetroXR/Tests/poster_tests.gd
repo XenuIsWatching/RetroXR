@@ -461,8 +461,11 @@ func _test_menu() -> void:
 	var src := FileAccess.get_file_as_string(
 		"res://Scripts/UI/spawn_menu/spawn_menu_controller.gd")
 	# BOTH chains — the VR pointer's and the desktop Tab's. Missing either means the
-	# menu silently does nothing on that platform.
-	_eq(src.count("node is Poster"), 2, "menu/registered in both host chains")
+	# menu silently does nothing on that platform. The chains used to name each
+	# type; they now ask the object, and a poster is a pickable with a menu of
+	# its own, so it is matched by either half of that test.
+	_eq(src.count('node.has_method("toggle_options_ui") or node is XRToolsPickable'), 2,
+		"menu/registered in both host chains")
 
 	var panel := p.get_node_or_null("PosterOptionsPanel")
 	_ok(panel != null, "menu/the panel is on the poster")

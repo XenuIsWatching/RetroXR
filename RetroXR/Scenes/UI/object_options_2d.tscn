@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://object_opts_2d_01"]
+
+[ext_resource type="Script" path="res://Scripts/UI/panels/object_options_2d.gd" id="1"]
+
+[node name="ObjectOptions2D" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+script = ExtResource("1")

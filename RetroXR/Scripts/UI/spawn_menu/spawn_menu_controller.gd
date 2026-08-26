@@ -368,7 +368,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var host := _raycast_options_host()
 			if host:
 				HeldHint.note_on(host, &"options_point")
-				host.toggle_options_ui(_camera)
+				_open_options_for(host)
 				get_viewport().set_input_as_handled()
 				return
 		if not disabled:
@@ -412,11 +412,21 @@ func _on_controller_button(action_name: String) -> void:
 		var host := _get_pointed_options_host(_left_pointer)
 		if host:
 			HeldHint.note_on(host, &"options_point")
-			host.toggle_options_ui(_camera)
+			_open_options_for(host)
 			return
 		if not disabled:
 			_note_menu_verb_used()
 			_toggle_menu()
+
+
+## Open (or close) whatever menu this object has. An object that grew its own
+## settings panel owns the verb; everything else gets the generic one, which
+## carries the lock row and nothing more.
+func _open_options_for(host: Node3D) -> void:
+	if host.has_method("toggle_options_ui"):
+		host.toggle_options_ui(_camera)
+	else:
+		ObjectOptionsPanel.toggle_for(host, _camera)
 
 
 ## Count one use of the menu verb, so its row eventually retires.
@@ -535,7 +545,11 @@ func _get_pointed_options_host(pointer: XRToolsFunctionPointer) -> Node3D:
 		# If the pointer is inside any viewport, it's a UI click — not an object click
 		if node is XRToolsViewport2DIn3D:
 			return null
-		if node is RetroSystem or node is VCRPlayer or node is DVDPlayer or node is RetroAudioPlayer or node is PDFBook or node is RetroCartridge or node is RetroTV or node is RetroMouse or node is MemoryCard or node is Poster:
+		# Anything with a menu of its own, and — since a lock is a verb every
+		# pickable has — anything that can be picked up at all. The named types
+		# used to be listed here one by one, which is why a table or a trash can
+		# had no menu to open.
+		if node.has_method("toggle_options_ui") or node is XRToolsPickable:
 			return node as Node3D
 		node = node.get_parent()
 	return null
@@ -569,7 +583,11 @@ func _options_host_from_target(tgt: Node3D) -> Node3D:
 	while node:
 		if node is XRToolsViewport2DIn3D:
 			return null
-		if node is RetroSystem or node is VCRPlayer or node is DVDPlayer or node is RetroAudioPlayer or node is PDFBook or node is RetroCartridge or node is RetroTV or node is RetroMouse or node is MemoryCard or node is Poster:
+		# Anything with a menu of its own, and — since a lock is a verb every
+		# pickable has — anything that can be picked up at all. The named types
+		# used to be listed here one by one, which is why a table or a trash can
+		# had no menu to open.
+		if node.has_method("toggle_options_ui") or node is XRToolsPickable:
 			return node as Node3D
 		node = node.get_parent()
 	return null
@@ -919,7 +937,7 @@ func _place_spawned(obj: Node3D, _type: String) -> void:
 ## stops showing a row once it is learned, so this is not a permanent tax on
 ## every spawn.
 func _teach_verbs(obj: Node3D) -> void:
-	var has_options: bool = obj.has_method("toggle_options_ui")
+	var has_options: bool = obj.has_method("toggle_options_ui") or obj is XRToolsPickable
 	if not has_options:
 		return
 	var hint := HeldHint.for_node(obj)
