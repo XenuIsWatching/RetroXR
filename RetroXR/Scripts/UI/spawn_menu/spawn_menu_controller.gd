@@ -917,6 +917,18 @@ func _place_spawned(obj: Node3D, _type: String) -> void:
 		fwd = Vector3.FORWARD
 	fwd = fwd.normalized()
 	obj.global_position = global_position + fwd * 0.5
+	# Face the player. Nothing set the basis before this, so every object came
+	# out on its scene-default heading wherever it was spawned. Yaw only: the
+	# turn is about UP, so a console can never spawn pitched or rolled.
+	if not get_viewport().use_xr:
+		var eye := global_position
+		if is_instance_valid(_camera):
+			eye = _camera.global_position
+		var away := obj.global_position - eye
+		away.y = 0.0
+		if away.length_squared() < 0.001:
+			away = fwd
+		obj.global_rotation = Vector3(0.0, atan2(away.x, away.z), 0.0)
 	# In a multiplayer session the host registers + broadcasts; a client's
 	# local copy is converted into a spawn request the host executes (the copy
 	# is freed, so a client can't receive it in hand — it spawns placed).
