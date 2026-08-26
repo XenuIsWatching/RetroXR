@@ -174,6 +174,21 @@ static func strategies_for(core_name: String) -> Array:
 	return out
 
 
+## The strongest strategy this core is VETTED for, or -1 when it is not.
+##
+## For anything that describes a core to the player rather than gating a
+## session. It deliberately ignores debug_allow_unverified: that switch makes
+## is_capable() answer true for every core name there is, so a caller using it
+## to decide what to show would mark the whole list the moment it is flipped.
+static func listed_strategy(core_name: String) -> int:
+	if not CORES.has(core_name):
+		return -1
+	if not bool((CORES[core_name] as Dictionary).get("verified", false)):
+		return -1
+	var listed: Array = strategies_for(core_name)
+	return int(listed[0]) if not listed.is_empty() else -1
+
+
 ## True when the core supports rollback netplay: verified deterministic AND
 ## cheap enough to savestate every frame (rollback rewinds via a state ring).
 static func rollback_capable(core_name: String) -> bool:

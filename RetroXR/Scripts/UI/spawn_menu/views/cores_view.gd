@@ -301,6 +301,10 @@ func _populate_manager_detail(systemid: String, vbox: VBoxContainer) -> void:
 		if CoreRecommendations.is_recommended(systemid, cn):
 			row.add_child(MenuIcons.recommended_badge(16))
 
+		var netplay_lbl := MenuIcons.netplay_badge(16, cn)
+		if netplay_lbl != null:
+			row.add_child(netplay_lbl)
+
 		var btn := Button.new()
 		btn.text = "Default" if is_def else "Set default"
 		btn.disabled = is_def
@@ -1946,6 +1950,9 @@ func _build_core_entry(systemid: String, core_name: String, remote_date: String,
 		left.add_child(MenuIcons.recommended_badge(13))
 	if MenuIcons.is_experimental(info):
 		left.add_child(MenuIcons.experimental_badge(13))
+	var netplay_lbl := MenuIcons.netplay_badge(13, core_name)
+	if netplay_lbl != null:
+		left.add_child(netplay_lbl)
 
 	if not info.is_empty():
 		left.add_child(MenuStyle.label(info.get("license", ""), 13, MenuStyle.COLOR_LICENSE))

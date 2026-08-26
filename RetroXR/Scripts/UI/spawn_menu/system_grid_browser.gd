@@ -83,10 +83,16 @@ const BADGE_MARK_PX := 26.0
 ## corner and may reach a little past this line; the reserve only has to stop the
 ## name running UNDER it, and the ellipsis lands well before that.
 const BADGE_RESERVE_PX := 52.0
+## Right margin given up for a top-right corner glyph when there is no source
+## badge below it. Narrower than BADGE_RESERVE_PX because a glyph carries no
+## count beside it; when both show, the wider reserve covers each.
+const CORNER_GLYPH_RESERVE_PX := 34.0
 
 # ── State ──────────────────────────────────────────────────────────────────────
 # Each entry: { "systemid": String, "name": String, "badge": String (optional),
-#               "alt_tile": bool (optional) }
+#               "alt_tile": bool (optional),
+#               "corner_glyph": String, "corner_glyph_color": Color,
+#               "corner_glyph_tip": String (all optional) }
 var _systems: Array = []
 var _detail_populator: Callable = Callable()
 var _current_systemid: String = ""
@@ -605,13 +611,24 @@ func _make_tile(s: Dictionary) -> Button:
 	var mark_here := int(s.get("badge_here", -1))
 	var has_pair := has_mark and mark_here >= 0
 
+	# A glyph for the top-right corner, supplied by the host the same way the
+	# source badge is. Kept as text plus a colour rather than a lookup here, so
+	# this browser stays clear of whatever the mark happens to mean.
+	var corner_glyph: String = s.get("corner_glyph", "")
+	var has_glyph := corner_glyph != ""
+
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.set_anchors_preset(Control.PRESET_FULL_RECT)
 	row.offset_left = 12
 	# Keep the name clear of the corner badge, which is an overlay and so does
 	# not take part in this layout.
-	row.offset_right = -BADGE_RESERVE_PX if has_mark else -12.0
+	var right_reserve := -12.0
+	if has_mark:
+		right_reserve = -BADGE_RESERVE_PX
+	elif has_glyph:
+		right_reserve = -CORNER_GLYPH_RESERVE_PX
+	row.offset_right = right_reserve
 	row.add_theme_constant_override("separation", 10)
 	btn.add_child(row)
 
@@ -658,6 +675,24 @@ func _make_tile(s: Dictionary) -> Button:
 		badge_lbl.add_theme_color_override("font_color", COLOR_LICENSE)
 		badge_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		col.add_child(badge_lbl)
+
+	# The host's glyph, pinned to the top-right corner — the mirror of the source
+	# badge below it, and an overlay for the same reason.
+	if has_glyph:
+		var glyph_lbl := Label.new()
+		glyph_lbl.text = corner_glyph
+		glyph_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		glyph_lbl.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		glyph_lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		glyph_lbl.grow_vertical = Control.GROW_DIRECTION_END
+		glyph_lbl.offset_right = -8
+		glyph_lbl.offset_top = 6
+		glyph_lbl.add_theme_font_override("font", MenuIcons.symbols())
+		glyph_lbl.add_theme_font_size_override("font_size", 22)
+		glyph_lbl.add_theme_color_override("font_color",
+			s.get("corner_glyph_color", Color(1, 1, 1)))
+		glyph_lbl.tooltip_text = s.get("corner_glyph_tip", "")
+		btn.add_child(glyph_lbl)
 
 	# Source badge, pinned to the bottom-right corner: a small mark plus a count,
 	# outside the name column so a long name cannot push it around.

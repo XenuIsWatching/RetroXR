@@ -630,7 +630,10 @@ func _populate_cartridges_tab() -> void:
 			if romm_cache != null:
 				s["badge_here"] = romm_cache.rom_ids_for_system(sid).size()
 
-	_mark_systems_without_a_core(systems)
+	# One directory scan, shared by both passes.
+	var by_system := FirmwareRequirements.installed_cores_by_system()
+	_mark_systems_without_a_core(systems, by_system)
+	_mark_netplay_systems(systems, by_system)
 
 	_cartridges_browser.set_systems(systems)
 	# If a system detail is open, re-run it so newly-added ROMs appear. Detail
@@ -654,8 +657,7 @@ func _populate_cartridges_tab() -> void:
 ## A platform counts as covered when any installed core is filed under it, or when
 ## the core it would actually boot is installed. Both, because a core often serves
 ## a platform it is not filed under: the default is what a cartridge here launches.
-func _mark_systems_without_a_core(systems: Array) -> void:
-	var by_system := FirmwareRequirements.installed_cores_by_system()
+func _mark_systems_without_a_core(systems: Array, by_system: Dictionary) -> void:
 	var installed_names: Dictionary = {}
 	for sid: String in by_system:
 		for e: Dictionary in (by_system[sid] as Array):
@@ -668,6 +670,31 @@ func _mark_systems_without_a_core(systems: Array) -> void:
 			var dflt := core_defaults.get_default_core(sid)
 			covered = not dflt.is_empty() and installed_names.has(dflt)
 		s["alt_tile"] = not covered
+
+
+## The netplay mark, in the tile's top-right corner: an installed core for this
+## system is vetted for online play, tinted by the strongest strategy any of them
+## offers. Takes the installed map rather than fetching it, so the directory scan
+## behind it runs once for the whole grid instead of once per tile.
+##
+## Installed, not merely known: the mark says what this device can do now, which
+## is the question a cartridge tile is answering.
+func _mark_netplay_systems(systems: Array, by_system: Dictionary) -> void:
+	for s: Dictionary in systems:
+		var sid: String = str(s.get("systemid", ""))
+		var best := -1
+		for e: Dictionary in (by_system.get(sid, []) as Array):
+			var strategy := NetplayCores.listed_strategy(str(e.get("core_name", "")))
+			if strategy < 0:
+				continue
+			if best < 0 or NetplayCores.STRATEGY_ORDER.find(strategy) \
+					< NetplayCores.STRATEGY_ORDER.find(best):
+				best = strategy
+		if best < 0:
+			continue
+		s["corner_glyph"] = String.chr(MenuIcons.NETPLAY)
+		s["corner_glyph_color"] = MenuIcons.netplay_tint(best)
+		s["corner_glyph_tip"] = "Online play: %s" % NetplaySession.strategy_str(best).capitalize()
 
 
 

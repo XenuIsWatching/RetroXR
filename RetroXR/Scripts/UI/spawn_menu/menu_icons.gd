@@ -47,6 +47,7 @@ const DOT       := 0xF09DE   # md-circle_medium   — the one in use right now
 const ROTATE_CCW := 0xF0E2   # fa-rotate_left     — turn a poster
 const ROTATE_CW  := 0xF01E   # fa-rotate_right
 const BACKSPACE := 0xF006E   # md-backspace       — on-menu keypad
+const NETPLAY   := 0xF06F3   # md-network         — this core can hold a session
 
 const TINT_DOWNLOAD := Color(0.45, 0.70, 1.00)
 const TINT_BUSY     := Color(1.00, 0.75, 0.25)
@@ -119,6 +120,33 @@ static func experimental_badge(font_size: int) -> Label:
 	lbl.add_theme_font_override("font", symbols())
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.tooltip_text = "The core's authors mark this one as experimental — expect bugs"
+	return lbl
+
+
+## The colour a strategy is drawn in, brightest for the strongest.
+static func netplay_tint(strategy: int) -> Color:
+	match strategy:
+		NetplayCores.Strategy.ROLLBACK:
+			return MenuStyle.COLOR_NETPLAY
+		NetplayCores.Strategy.DETERMINISM:
+			return MenuStyle.COLOR_NETPLAY_DET
+		_:
+			return MenuStyle.COLOR_NETPLAY_LOCK
+
+
+## The netplay badge for a core, or null when the core is not vetted for one.
+## Takes the core name rather than a strategy so every caller gets the same
+## gate; NetplayCores.listed_strategy is the one that ignores the debug switch.
+static func netplay_badge(font_size: int, core_name: String) -> Label:
+	var strategy := NetplayCores.listed_strategy(core_name)
+	if strategy < 0:
+		return null
+	var word := NetplaySession.strategy_str(strategy).capitalize()
+	var lbl := MenuStyle.label("%s  Netplay · %s" % [String.chr(NETPLAY), word],
+		font_size, netplay_tint(strategy))
+	lbl.add_theme_font_override("font", symbols())
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.tooltip_text = "Verified for online play with other players running this core"
 	return lbl
 
 

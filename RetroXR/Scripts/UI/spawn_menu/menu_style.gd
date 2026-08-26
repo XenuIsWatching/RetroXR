@@ -26,6 +26,11 @@ const COLOR_DESC         := Color(0.55, 0.55, 0.68)
 const COLOR_BTN_DL       := Color(0.15, 0.45, 0.15)
 ## Lighter than COLOR_BTN_DL, which is a button fill and unreadable as text here.
 const COLOR_RECOMMENDED  := Color(0.45, 0.85, 0.45)
+## Netplay, by strategy, brightest first. Light enough to read as text: the only
+## other purple here is COLOR_TILE_ALT, a dark tile fill that is not.
+const COLOR_NETPLAY      := Color(0.70, 0.55, 1.00)
+const COLOR_NETPLAY_DET  := Color(0.56, 0.46, 0.78)
+const COLOR_NETPLAY_LOCK := Color(0.46, 0.40, 0.60)
 const COLOR_BTN_UPD      := Color(0.45, 0.30, 0.10)
 const COLOR_BTN_REUP     := Color(0.18, 0.18, 0.35)
 const COLOR_BTN_BUSY     := Color(0.25, 0.20, 0.10)

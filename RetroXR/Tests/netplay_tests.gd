@@ -59,6 +59,8 @@ func _ready() -> void:
 
 	if _want("cores"):
 		_test_cores()
+	if _want("badge"):
+		_test_badge()
 	if _want("identity"):
 		_test_identity()
 	if _want("roomcode"):
@@ -256,6 +258,57 @@ func _test_cores() -> void:
 		for s: int in (e["strategies"] as Array):
 			_ok(NetplayCores.STRATEGY_ORDER.has(s),
 				"cores/%s names only real strategies" % core)
+
+
+# ══ The core list's netplay badge ═════════════════════════════════════════════
+# What the menu tells a player about a core, which is a different question from
+# what a session will allow. is_capable() answers true for EVERY core name once
+# the debug switch is on, so a badge built on it would mark the whole list; the
+# badge reads listed_strategy instead, and these pin that difference.
+
+func _test_badge() -> void:
+	_eq(NetplayCores.listed_strategy("fceumm"), NetplayCores.Strategy.ROLLBACK,
+		"badge/a vetted core reports its strongest strategy")
+	_eq(NetplayCores.listed_strategy("pcsx_rearmed"), NetplayCores.Strategy.DETERMINISM,
+		"badge/a determinism-only core reports determinism")
+	_eq(NetplayCores.listed_strategy("dolphin"), -1,
+		"badge/a listed but unvetted core reports none")
+	_eq(NetplayCores.listed_strategy("__never_vetted"), -1,
+		"badge/an unlisted core reports none")
+	_eq(NetplayCores.listed_strategy(""), -1, "badge/no core at all reports none")
+
+	# The whole reason listed_strategy exists rather than reusing is_capable.
+	var was := NetplayCores.debug_allow_unverified
+	NetplayCores.debug_allow_unverified = true
+	_eq(NetplayCores.listed_strategy("__never_vetted"), -1,
+		"badge/the debug switch does not badge an unlisted core")
+	_eq(NetplayCores.listed_strategy("dolphin"), -1,
+		"badge/nor an unvetted one")
+	NetplayCores.debug_allow_unverified = was
+
+	_ok(MenuIcons.netplay_badge(13, "dolphin") == null,
+		"badge/an unvetted core gets no badge")
+	_ok(MenuIcons.netplay_badge(13, "__never_vetted") == null,
+		"badge/an unlisted core gets no badge")
+
+	var lbl := MenuIcons.netplay_badge(13, "fceumm")
+	_ok(lbl != null, "badge/a vetted core gets one")
+	if lbl == null:
+		return
+	_ok(lbl.text.contains("Rollback"), "badge/it names the strategy")
+	_ok(lbl.text.contains(String.chr(MenuIcons.NETPLAY)),
+		"badge/it carries the glyph codepoint")
+
+	# A tofu box is a SILENT failure: the label still draws, at the right size, as
+	# a hollow rectangle. Both halves matter — that a font is attached, and that
+	# the attached font really has this Private Use Area character.
+	var f: Font = lbl.get_theme_font("font")
+	_ok(f != null, "badge/it has a font attached")
+	if f != null:
+		_ok(f.has_char(MenuIcons.NETPLAY),
+			"badge/the attached font really has U+%X" % MenuIcons.NETPLAY)
+
+	lbl.free()
 
 
 # ══ Core build identity ═══════════════════════════════════════════════════════
