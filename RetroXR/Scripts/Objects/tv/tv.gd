@@ -66,9 +66,15 @@ const AV_INPUT_NAMES := ["Composite 1", "Composite 2", "Composite 3", "Composite
 ## Cabinet variants. A shell supplies geometry plus Marker3D seats; every
 ## functional node stays on this TV. See Scripts/Objects/tv/tv_shell.gd.
 const _SHELL_SCENES := {
-	"crt_90s":     "res://Scenes/Objects/tv_models/crt_90s.tscn",
-	"crt_monitor": "res://Scenes/Objects/tv_models/crt_monitor.tscn",
 	"crt_plain":   "res://Scenes/Objects/tv_models/crt_plain.tscn",
+}
+
+## One-time aliases for scene records written while the removed imported shells
+## existed. The old television becomes the stock set; the old VGA monitor becomes
+## the retained primitive VGA monitor so its connector and source remain valid.
+const _LEGACY_TV_MODELS := {
+	"crt_90s": "",
+	"crt_monitor": "crt_plain",
 }
 
 var _shell: RetroTVShell = null
@@ -78,6 +84,7 @@ var _shell: RetroTVShell = null
 var _speakers_seated: bool = false
 
 @onready var _screen_mesh: MeshInstance3D = $ScreenMesh
+@onready var _tube_collar: MeshInstance3D = $TubeCollar
 ## Composite 1's video socket. Kept as a named handle because that one socket is
 ## named from outside this script — a console's captive lead restores into it
 ## (system.gd::_snap_cable_to_tv), netplay names it, and the save file names it.
@@ -174,6 +181,7 @@ var _crt_params := {
 	"crt_glass_reflection": 0.35,
 	"crt_glass_roughness": 0.12,
 	"crt_glass_wear": 0.35,
+	"crt_character": 0.35,
 }
 
 # Phosphor persistence ping-pong (Shaders/phosphor_decay.gdshader). A viewport
@@ -391,6 +399,8 @@ func _ready() -> void:
 ## Only nodes the shell actually names a seat for are moved; everything else keeps
 ## its tv.tscn pose, so a shell describes differences rather than the whole layout.
 func _load_shell() -> void:
+	if _LEGACY_TV_MODELS.has(tv_model):
+		tv_model = _LEGACY_TV_MODELS[tv_model]
 	if tv_model.is_empty():
 		return
 	var path: String = _SHELL_SCENES.get(tv_model, "")
@@ -409,6 +419,7 @@ func _load_shell() -> void:
 	$TVBody.hide()
 
 	_seat_node(_screen_mesh, _shell.screen_seat())
+	_seat_node(_tube_collar, _shell.screen_seat())
 	_seat_av_row(_shell.port_seat())
 	_seat_vga_port(_shell.vga_port_seat())
 	_seat_node(_ambilight, _shell.ambilight_seat())
@@ -868,6 +879,9 @@ func _update_crt() -> void:
 	var mat := _screen_mesh.get_surface_override_material(0) as ShaderMaterial
 	if mat == null:
 		return
+	var powered: Variant = mat.get_shader_parameter("crt_powered")
+	if powered == null or bool(powered) != _tv_enabled:
+		mat.set_shader_parameter("crt_powered", _tv_enabled)
 	# Writing a uniform a shader does not declare is harmless, so this does not
 	# have to know which of the display shaders is currently showing.
 	var cur: Variant = mat.get_shader_parameter("crt_enabled")
@@ -1154,6 +1168,7 @@ func _known_display_materials() -> Array[ShaderMaterial]:
 ## slider. They keep the mask/raster fixed to the glass and vary the shared wear
 ## map between otherwise identical televisions.
 func _apply_derived_crt_params(mat: ShaderMaterial) -> void:
+	mat.set_shader_parameter("crt_powered", _tv_enabled)
 	var wear_variant := int(get_instance_id() % 4)
 	mat.set_shader_parameter("crt_glass_wear_flip", Vector2(
 		float(wear_variant & 1), float((wear_variant >> 1) & 1)))
@@ -1173,6 +1188,9 @@ func _apply_derived_crt_params(mat: ShaderMaterial) -> void:
 	var lines := 240.0
 	var tex := mat.get_shader_parameter("source_tex") as Texture2D
 	if tex != null:
+		var tex_size := tex.get_size()
+		if tex_size.x > 0 and tex_size.y > 0:
+			mat.set_shader_parameter("crt_source_texel_size", Vector2.ONE / Vector2(tex_size))
 		var h: float = tex.get_size().y
 		# A window shader shows one sub-rect of a composite framebuffer, so a DS
 		# panel has half the lines the texture does.

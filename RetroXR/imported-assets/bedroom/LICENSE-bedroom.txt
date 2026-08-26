@@ -1,6 +1,6 @@
 Bedroom scene assets — attribution and licences.
 
-ATTRIBUTION IS REQUIRED for everything under furniture/ and displays/crt_monitor.
+ATTRIBUTION IS REQUIRED for everything under furniture/.
 Those are Creative Commons Attribution (CC BY 4.0): free for commercial use, but
 the author must be credited. The credits below must also appear on the in-app
 About screen, alongside the existing screenscraper.fr and Systematic icon-set
@@ -66,19 +66,7 @@ furniture/light_switch.glb
     the grungy Object_5, whose toggle actually reads at arm's length, and hides
     the other. Front is +Z, and the plate leans ~13 deg off vertical as modelled.
 
-displays/crt_monitor.glb
-    "CRT Computer Monitor" by fizyman
-    https://sketchfab.com/3d-models/crt-computer-monitor-f2ff0013f86e4cd0a2aee183a23bdfee
-    3.7k tris. Separate monitor_glass and monitor_plastic meshes, so the glass
-    can be hidden and RetroTV's own ScreenMesh put in its place.
-
-
 === CC0 — no attribution required, given anyway =================================
-
-displays/television_02.*  (+ displays/textures/)
-    "Television 02" by Benny Weimer — Poly Haven
-    https://polyhaven.com/a/television_02
-    2.3k tris, 1K textures. A 14" set; the hero TV.
 
 furniture/table_lamp.glb
     "CC0 - Table Lamp 7" by plaggy

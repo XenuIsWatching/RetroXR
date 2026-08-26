@@ -2,12 +2,13 @@
 
 [ext_resource type="Script" path="res://Scripts/Objects/tv/tv_shell.gd" id="1_shell"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/tv_models/crt_hood.res" id="2_hood"]
+[ext_resource type="Shader" path="res://Shaders/tv_plastic.gdshader" id="3_tvplastic"]
 
-; EDITOR NOTE: see crt_90s.tscn — the shell is a runtime swap, so the editor shows
-; RetroTV's stock box body rather than this cabinet. Open this scene to see it.
+; EDITOR NOTE: the shell is a runtime swap, so the editor shows RetroTV's stock
+; box body rather than this cabinet. Open this scene directly to see it.
 ;
-; A 14" VGA monitor built out of primitives, the only shell here that is not an
-; imported GLB. Everything is a BoxMesh but the tube hood and the foot, which keeps
+; A 14" VGA monitor built entirely out of primitives. Everything is a BoxMesh but
+; the tube hood and the foot, which keeps
 ; every dimension a number in this file rather than a measurement taken off someone
 ; else's mesh — and costs no licence, no attribution and no decimation pass.
 ;
@@ -17,8 +18,7 @@
 ;
 ; Origin at the CENTRE of the cabinet, because RetroTV's own origin is the centre
 ; of its stock 0.5 x 0.4 x 0.3 body and body_size drives a collider centred there.
-; A GLB shell has to be offset down half its height (see crt_90s.tscn); authoring
-; from primitives we simply build about the origin.
+; Authoring from primitives lets the whole cabinet build directly about the origin.
 ;
 ; NO phono row, NO aerial socket and NO bezel button row. This is a computer
 ; monitor: it takes its picture over the DE-15 on the back and nothing else.
@@ -81,13 +81,21 @@ size = Vector3(0.032, 0.024, 0.006)
 
 ; The house beige, lifted verbatim from pc_tower.tscn so the monitor and the tower
 ; that drives it are the same plastic: grubby-warm rather than clean grey.
-[sub_resource type="StandardMaterial3D" id="Mat_beige"]
-albedo_color = Color(0.77, 0.73, 0.63, 1)
-roughness = 0.62
+[sub_resource type="ShaderMaterial" id="Mat_beige"]
+shader = ExtResource("3_tvplastic")
+shader_parameter/plastic_color = Color(0.77, 0.73, 0.63, 1)
+shader_parameter/plastic_roughness = 0.62
+shader_parameter/grain_scale = 680.0
+shader_parameter/grain_normal = 0.05
+shader_parameter/grain_roughness = 0.07
 
-[sub_resource type="StandardMaterial3D" id="Mat_bezel"]
-albedo_color = Color(0.81, 0.77, 0.67, 1)
-roughness = 0.55
+[sub_resource type="ShaderMaterial" id="Mat_bezel"]
+shader = ExtResource("3_tvplastic")
+shader_parameter/plastic_color = Color(0.81, 0.77, 0.67, 1)
+shader_parameter/plastic_roughness = 0.55
+shader_parameter/grain_scale = 720.0
+shader_parameter/grain_normal = 0.045
+shader_parameter/grain_roughness = 0.06
 
 [sub_resource type="StandardMaterial3D" id="Mat_dark"]
 albedo_color = Color(0.07, 0.07, 0.08, 1)

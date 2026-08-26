@@ -73,8 +73,8 @@ void fragment() {
 	}
 	vec3 picture = clamp(col, 0.0, 1.0);
 	float glass_wear = crt_glass_wear_mask(wuv);
-	ALBEDO = vec3(0.006, 0.008, 0.012) * crt_glass_reflection;
-	EMISSION = picture + crt_glass_sheen(picture, wuv, NORMAL, VIEW, glass_wear);
+	ALBEDO = crt_glass_albedo(wuv);
+	EMISSION = picture + crt_glass_sheen(picture, NORMAL, VIEW, glass_wear, INV_VIEW_MATRIX);
 	METALLIC = 0.0;
 	SPECULAR = crt_glass_specular_value(glass_wear);
 	ROUGHNESS = crt_glass_roughness_value(glass_wear);

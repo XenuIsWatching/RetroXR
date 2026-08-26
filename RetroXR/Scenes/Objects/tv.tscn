@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://Scenes/UI/tv_options_panel.tscn" id="6_tvoptspanel"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/tv_models/tv_screen_curved.res" id="7_screencurved"]
 [ext_resource type="Shader" uid="uid://dp0ojf0bxhg8y" path="res://Shaders/phosphor_decay.gdshader" id="8_phosphor"]
+[ext_resource type="ArrayMesh" path="res://Scenes/Objects/tv_models/tv_tube_collar.res" id="9_tubecollar"]
+[ext_resource type="Shader" path="res://Shaders/tv_plastic.gdshader" id="9_tvplastic"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/rca_port.tscn" id="10_rcaport"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/vga_port.tscn" id="11_vgaport"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/coax_port.tscn" id="12_coaxport"]
@@ -20,8 +22,18 @@ size = Vector3(0.5, 0.4, 0.3)
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(0.5, 0.4, 0.3)
 
-[sub_resource type="StandardMaterial3D" id="Mat_tvbody"]
-albedo_color = Color(0.1, 0.1, 0.1, 1)
+[sub_resource type="ShaderMaterial" id="Mat_tvbody"]
+shader = ExtResource("9_tvplastic")
+shader_parameter/plastic_color = Color(0.1, 0.1, 0.105, 1)
+shader_parameter/plastic_roughness = 0.64
+shader_parameter/grain_scale = 720.0
+shader_parameter/grain_normal = 0.052
+shader_parameter/grain_roughness = 0.065
+
+[sub_resource type="StandardMaterial3D" id="Mat_tube_collar"]
+albedo_color = Color(0.012, 0.016, 0.024, 1)
+metallic_specular = 0.42
+roughness = 0.3
 
 [sub_resource type="StandardMaterial3D" id="Mat_screen"]
 albedo_color = Color(0, 0, 0, 1)
@@ -70,6 +82,11 @@ shape = SubResource("BoxShape3D_body")
 [node name="TVBody" type="MeshInstance3D" parent="." unique_id=768779981]
 mesh = SubResource("BoxMesh_body")
 surface_material_override/0 = SubResource("Mat_tvbody")
+
+[node name="TubeCollar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0.151)
+mesh = ExtResource("9_tubecollar")
+surface_material_override/0 = SubResource("Mat_tube_collar")
 
 [node name="ScreenMesh" type="MeshInstance3D" parent="." unique_id=1026455476]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0.151)
@@ -193,7 +210,7 @@ transform = Transform3D(1, 0, 0, 0, -1, 8.742278e-08, 0, -8.742278e-08, -1, -0.1
 direction = 1
 
 ; VGA in — a computer monitor's input, not a television's. OFF as authored: a shell
-; opts in by carrying a VgaPortSeat marker and only crt_monitor.tscn does, so the
+; opts in by carrying a VgaPortSeat marker and only crt_plain.tscn does, so the
 ; wood-cabinet sets and the stock body never grow a DE-15 socket. tv.gd seats and
 ; enables it when the marker is there (see _seat_vga_port).
 ;

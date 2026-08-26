@@ -85,11 +85,14 @@ uniform float crt_brightness : hint_range(0.5, 2.0) = 1.0;
 // ── Faceplate glass ─────────────────────────────────────────────────────
 // The picture is emitted from behind a dark dielectric surface rather than
 // written straight into unshaded ALBEDO. The renderer supplies the real light /
-// reflection-probe response; the very broad analytic sheen below is a cheap,
-// stereo-safe fallback for the mobile renderer and rooms without a useful probe.
+// reflection-probe response; the analytic world-space sheen below is a cheap
+// fallback for the mobile renderer and rooms without a useful probe.
 uniform float crt_glass_reflection : hint_range(0.0, 1.0) = 0.35;
 uniform float crt_glass_roughness : hint_range(0.02, 0.6) = 0.12;
 uniform float crt_glass_wear : hint_range(0.0, 1.0) = 0.35;
+uniform float crt_character : hint_range(0.0, 1.0) = 0.35;
+uniform bool crt_powered = true;
+uniform vec2 crt_source_texel_size = vec2(0.0015625, 0.0020833333);
 uniform sampler2D crt_glass_wear_tex : hint_default_black, filter_linear_mipmap, repeat_disable;
 // One of four mirrored orientations, assigned per set so a row of televisions
 // does not advertise that it shares one fingerprint mask.
@@ -138,32 +141,49 @@ float crt_glass_clearcoat_roughness_value(float wear) {
 	return mix(crt_glass_roughness, max(crt_glass_roughness, 0.38), wear);
 }
 
-// A restrained front-surface glint. It is deliberately broad and keyed to tube
-// UV, so it cannot alias or disagree between the two eyes. Fresnel supplies the
-// view-dependent part; real environment/specular response is configured by each
-// calling shader through ALBEDO / SPECULAR / ROUGHNESS.
-vec3 crt_glass_sheen(vec3 picture, vec2 uv, vec3 normal, vec3 view, float wear) {
+// The unlit tube is absorptive blue-grey glass rather than a black emissive
+// picture. Extra density at the perimeter suggests the longer path through the
+// curved faceplate while the separate collar supplies actual binocular depth.
+vec3 crt_glass_albedo(vec2 uv) {
+	vec2 edge_uv = abs(uv - 0.5) * 2.0;
+	float edge = smoothstep(0.70, 1.0, max(edge_uv.x, edge_uv.y));
+	vec3 active = vec3(0.006, 0.008, 0.012) * crt_glass_reflection;
+	vec3 unlit = vec3(0.008, 0.013, 0.022)
+		* mix(0.62, 1.32, crt_glass_reflection) * mix(1.0, 0.55, edge);
+	return crt_powered ? active : unlit;
+}
+
+// A restrained front-surface glint. The reflected ray is transformed to WORLD
+// space before it meets the fallback room light, so turning or carrying the set
+// moves the reveal across the fingerprints instead of pinning it to one screen
+// corner. inv_view is passed in because Godot exposes built-ins only directly in
+// fragment(), not inside included helpers.
+vec3 crt_glass_sheen(vec3 picture, vec3 normal, vec3 view, float wear, mat4 inv_view) {
 	if (crt_glass_reflection <= 0.0) {
 		return vec3(0.0);
 	}
-	float ndv = clamp(abs(dot(normalize(normal), normalize(view))), 0.0, 1.0);
+	vec3 n = normalize(normal);
+	vec3 v = normalize(view);
+	float ndv = clamp(abs(dot(n, v)), 0.0, 1.0);
 	float fresnel = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
 
-	// A soft, slightly diagonal room-light streak. This is not meant to depict a
-	// particular window; it merely keeps a dark tube from reading as matte paint
-	// when reflection probes are unavailable or reduced on mobile.
-	vec2 p = uv - vec2(0.5);
-	float band = abs(p.x + p.y * 0.58 - 0.16);
-	float broad_highlight = 1.0 - smoothstep(0.10, 0.36, band);
-	broad_highlight *= 1.0 - smoothstep(0.08, 0.62, uv.y);
+	// A broad overhead/window lobe in the room, not on the tube. The curved glass
+	// supplies a changing normal across its face, while moving the TV changes that
+	// normal in world space. Both make the highlight travel naturally.
+	vec3 reflected_world = normalize((inv_view * vec4(reflect(-v, n), 0.0)).xyz);
+	vec3 room_light = normalize(vec3(-0.48, 0.68, 0.56));
+	float window_lobe = pow(max(dot(reflected_world, room_light), 0.0), 5.0);
+	float overhead = smoothstep(0.18, 0.82, reflected_world.y) * 0.28;
+	float environment = max(window_lobe, overhead);
 
 	// Bright phosphors overpower reflections; black glass carries them clearly.
 	float darkness = 1.0 - smoothstep(0.03, 0.75, crt_luminance(picture));
-	float strength = (0.12 * fresnel + 0.075 * broad_highlight)
-		* mix(0.28, 1.0, darkness) * crt_glass_reflection;
+	float off_boost = crt_powered ? 1.0 : 0.62;
+	float strength = (0.12 * fresnel + 0.075 * environment)
+		* mix(0.28, 1.0, darkness) * crt_glass_reflection * off_boost;
 	// Wear is revealed only where the faceplate is already reflective. Dark
 	// phosphors and grazing angles expose it; a bright picture overwhelms it.
-	float reflection = max(fresnel, broad_highlight);
+	float reflection = max(fresnel, environment);
 	float artifact = wear * (0.025 + 0.20 * reflection)
 		* mix(0.20, 1.0, darkness) * crt_glass_reflection;
 	return CRT_GLASS_TINT * (strength + artifact);
@@ -295,7 +315,7 @@ vec3 crt_smear_sample(sampler2D tex, vec2 uv, vec3 base) {
 // windowed out of a composite framebuffer (a DS panel) can't pull glow in from the
 // other screen packed alongside it.
 vec3 crt_glow_rect(sampler2D tex, vec2 uv, vec4 rect) {
-	if (crt_halation <= 0.0) {
+	if (crt_halation <= 0.0 && crt_character <= 0.0) {
 		return vec3(0.0);
 	}
 	vec2 r = crt_glow_radius / vec2(textureSize(tex, 0));
@@ -307,7 +327,13 @@ vec3 crt_glow_rect(sampler2D tex, vec2 uv, vec4 rect) {
 	       + texture(tex, clamp(uv + vec2( r.x, -r.y), lo, hi)).rgb
 	       + texture(tex, clamp(uv + vec2(-r.x, -r.y), lo, hi)).rgb;
 	g *= 0.25;
-	return g * g * vec3(1.0, 0.82, 0.68) * crt_halation;
+	// CRT character adds a small broad phosphor bloom without taking ownership of
+	// the existing expert Halation control. At zero, this is bit-identical to the
+	// old path. A squared response keeps the subtle default at 0.0196 additional
+	// gain while opening enough range at 1.00 to be easy to judge.
+	float character_shape = crt_character * crt_character;
+	float glow_strength = crt_halation + 0.160 * character_shape;
+	return g * g * vec3(1.0, 0.82, 0.68) * glow_strength;
 }
 
 vec3 crt_glow(sampler2D tex, vec2 uv) {
@@ -406,7 +432,39 @@ float crt_beam(vec2 wuv, float lum) {
 	return mix(1.0, w, crt_scanline_strength);
 }
 
+// Approximate a sub-texel gun convergence error from local derivatives of the
+// finished source colour. This avoids extra texture taps and therefore works on
+// gameplay, VHS, static and packed stereo through the same shared stage. The
+// displacement is radial, zero through the centre, and capped below one source
+// texel at the corners.
+vec3 crt_apply_convergence(vec3 col, vec2 wuv) {
+	if (crt_character <= 0.0) {
+		return col;
+	}
+	vec2 centred = (wuv - 0.5) * 2.0;
+	float edge = smoothstep(0.58, 1.15, length(centred));
+	vec2 delta_uv = normalize(centred + vec2(1e-6))
+		* crt_source_texel_size * (0.75 * crt_character * edge);
+
+	vec2 uv_dx = dFdx(wuv);
+	vec2 uv_dy = dFdy(wuv);
+	float det = uv_dx.x * uv_dy.y - uv_dx.y * uv_dy.x;
+	if (abs(det) < 1e-8) {
+		return col;
+	}
+	vec2 screen_delta = vec2(
+		delta_uv.x * uv_dy.y - delta_uv.y * uv_dy.x,
+		uv_dx.x * delta_uv.y - uv_dx.y * delta_uv.x
+	) / det;
+	vec3 slope = dFdx(col) * screen_delta.x + dFdy(col) * screen_delta.y;
+	vec3 shifted = col;
+	shifted.r += slope.r;
+	shifted.b -= slope.b;
+	return max(shifted, vec3(0.0));
+}
+
 vec3 crt_apply_full(vec3 col, vec3 glow, vec2 wuv) {
+	col = crt_apply_convergence(col, wuv);
 	// Gun transfer characteristic. Applied to the signal before the beam paints it,
 	// so the beam width below responds to post-gamma brightness like real current.
 	col = pow(max(col, vec3(0.0)), vec3(crt_gamma));
@@ -432,6 +490,14 @@ vec3 crt_apply_full(vec3 col, vec3 glow, vec2 wuv) {
 	// Halation has already crossed the faceplate and lost the phosphor structure,
 	// so it is added after the mask rather than filtered through it.
 	col += glow;
+
+	// Bright phosphors softly catch the thick inner edge of the faceplate. This is
+	// local to the perimeter and disappears exactly at CRT character zero.
+	vec2 rim_uv = abs(wuv - 0.5) * 2.0;
+	float rim = smoothstep(0.76, 0.98, max(rim_uv.x, rim_uv.y));
+	float hot = pow(max(crt_luminance(col) - 0.48, 0.0), 2.0);
+	float character_shape = crt_character * crt_character;
+	col += vec3(1.0, 0.72, 0.48) * hot * rim * (0.200 * character_shape);
 
 	vec2 vc = wuv - 0.5;
 	col *= 1.0 - dot(vc, vc) * crt_vignette * 2.0;

@@ -1,17 +1,23 @@
-## Captures the TV glass active and powered off at clean/default/heavy wear.
+## Captures glass wear, reflection rotation, and CRT character on both retained
+## primitive cabinets, active and powered off.
 ##
 ##   godot --path RetroXR --resolution 960x720 \
 ##     res://Tools/tv_glass_wear_probe.tscn
 ##
 ## Windowed: the dummy headless renderer does not produce useful material shots.
-## Images land in res://probe_out/ and are intentionally gitignored.
+## Images land beside the project in build_out/tv_probe/. Keeping render targets
+## outside res:// prevents the editor from hot-importing one PNG while the next
+## validation frame is being drawn.
 extends Node3D
 
 const TV_SCENE := preload("res://Scenes/Objects/tv.tscn")
 const LEVELS := [0.0, 0.35, 1.0]
+const ROTATION_ANGLES := [-30.0, -15.0, 0.0, 15.0, 30.0]
+const OUTPUT_DIR := "res://../build_out/tv_probe"
 
 var _viewport: SubViewport
 var _tv: RetroTV
+var _source: StubSource
 
 
 class StubSource extends Node3D:
@@ -56,7 +62,10 @@ func _run() -> void:
 	key.light_color = Color(0.58, 0.72, 1.0)
 	key.light_energy = 6.0
 	key.omni_range = 2.0
-	key.shadow_enabled = true
+	# The close screen/collar can shadow the entire flat primitive bezel at this
+	# diagnostic angle. Room shadowing is not under test, so keep the material key
+	# unoccluded and let the separate rotation sweep judge the glass response.
+	key.shadow_enabled = false
 	_viewport.add_child(key)
 	var rim := OmniLight3D.new()
 	rim.position = Vector3(0.55, 0.92, 0.15)
@@ -64,6 +73,15 @@ func _run() -> void:
 	rim.light_energy = 3.0
 	rim.omni_range = 1.5
 	_viewport.add_child(rim)
+	# Constant neutral fill keeps the non-emissive cabinet readable after the TV's
+	# own screen-cast light switches off. It is deliberately shadowless: these
+	# captures judge materials, not room-light occlusion.
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-24.0, -18.0, 0.0)
+	fill.light_color = Color(0.72, 0.76, 0.84)
+	fill.light_energy = 0.7
+	fill.shadow_enabled = false
+	_viewport.add_child(fill)
 
 	_tv = TV_SCENE.instantiate() as RetroTV
 	_tv.position = Vector3(0.0, 1.0, 0.0)
@@ -78,14 +96,14 @@ func _run() -> void:
 	camera.look_at(Vector3(0.0, 1.02, 0.0), Vector3.UP)
 	camera.current = true
 
-	var source := StubSource.new()
-	source.texture = _test_picture()
-	_viewport.add_child(source)
-	_tv._connected_systems[RetroTV.Source.COMPOSITE_1] = source
+	_source = StubSource.new()
+	_source.texture = _test_picture()
+	_viewport.add_child(_source)
+	_tv._connected_systems[RetroTV.Source.COMPOSITE_1] = _source
 	_tv.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(12)
 
-	DirAccess.make_dir_recursive_absolute("res://probe_out")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUTPUT_DIR))
 	for level: float in LEVELS:
 		_tv.set_crt_param("crt_glass_wear", level)
 		await _wait(8)
@@ -95,7 +113,15 @@ func _run() -> void:
 		await _capture("off", level)
 		_tv.remote_power_toggle()
 		await _wait(8)
-	print("[glass-wear] captured 6 validation images")
+	await _capture_rotation_sweep()
+	# Rotation sweep leaves the stock set off. Turn it back on for the character
+	# matrix, then repeat that matrix on the only retained shell.
+	_tv.remote_power_toggle()
+	await _wait(8)
+	await _capture_character_matrix("stock")
+	await _replace_tv_with_plain_monitor()
+	await _capture_character_matrix("plain")
+	print("[glass-wear] captured 6 wear, 5 rotation and 12 character images")
 	get_tree().quit(0)
 
 
@@ -117,12 +143,77 @@ func _capture(state: String, level: float) -> void:
 	await _wait(2)
 	await RenderingServer.frame_post_draw
 	var label := "%03d" % int(round(level * 100.0))
-	var path := "res://probe_out/tv_glass_wear_%s_%s.png" % [state, label]
+	var path := "%s/tv_glass_wear_%s_%s.png" % [OUTPUT_DIR, state, label]
 	var error := _viewport.get_texture().get_image().save_png(path)
 	if error != OK:
 		printerr("[glass-wear] could not save %s: %s" % [path, error])
 		get_tree().quit(1)
 	print("[glass-wear] %s" % path)
+
+
+## With the camera and room lights fixed, turn the powered-off set itself. The
+## fingerprints must stay on the glass while the sheen that reveals them travels.
+func _capture_rotation_sweep() -> void:
+	_tv.set_crt_param("crt_glass_wear", 1.0)
+	_tv.remote_power_toggle()
+	await _wait(8)
+	_tv.hide_osd()
+	for angle: float in ROTATION_ANGLES:
+		_tv.rotation.y = deg_to_rad(angle)
+		await _wait(8)
+		await RenderingServer.frame_post_draw
+		var label := "m%02d" % abs(int(angle)) if angle < 0.0 else "p%02d" % int(angle)
+		var path := "%s/tv_glass_wear_rotate_%s.png" % [OUTPUT_DIR, label]
+		var error := _viewport.get_texture().get_image().save_png(path)
+		if error != OK:
+			printerr("[glass-wear] could not save %s: %s" % [path, error])
+			get_tree().quit(1)
+		print("[glass-wear] %s" % path)
+	_tv.rotation.y = 0.0
+
+
+func _capture_character_matrix(model: String) -> void:
+	_tv.set_crt_param("crt_glass_wear", 0.35)
+	for level: float in LEVELS:
+		_tv.set_crt_param("crt_character", level)
+		await _wait(8)
+		await _capture_character(model, "active", level)
+		_tv.remote_power_toggle()
+		await _wait(16)
+		await _capture_character(model, "off", level)
+		_tv.remote_power_toggle()
+		await _wait(8)
+
+
+func _capture_character(model: String, state: String, level: float) -> void:
+	_tv.hide_osd()
+	# Repeated power/material switches rebuild clustered lights asynchronously on
+	# the real renderers. Let that settle so the PNG records steady-state cabinet
+	# lighting rather than an intermediate frame containing emissive glass alone.
+	await _wait(30)
+	await RenderingServer.frame_post_draw
+	var label := "%03d" % int(round(level * 100.0))
+	var path := "%s/tv_character_%s_%s_%s.png" % [OUTPUT_DIR, model, state, label]
+	var error := _viewport.get_texture().get_image().save_png(path)
+	if error != OK:
+		printerr("[glass-wear] could not save %s: %s" % [path, error])
+		get_tree().quit(1)
+	print("[glass-wear] %s" % path)
+
+
+func _replace_tv_with_plain_monitor() -> void:
+	_viewport.remove_child(_tv)
+	_tv.queue_free()
+	await _wait(3)
+	_tv = TV_SCENE.instantiate() as RetroTV
+	_tv.tv_model = "crt_plain"
+	_tv.position = Vector3(0.0, 1.0, 0.0)
+	_tv.freeze = true
+	_viewport.add_child(_tv)
+	await _wait(40)
+	_tv._connected_systems[RetroTV.Source.VGA] = _source
+	_tv.set_source(RetroTV.Source.VGA)
+	await _wait(12)
 
 
 func _wait(frames: int) -> void:

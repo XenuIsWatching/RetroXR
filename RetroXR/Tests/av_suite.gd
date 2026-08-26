@@ -106,6 +106,7 @@ func _run() -> void:
 		["routing/picture and sound on different inputs: picture wins", _r_video_wins],
 		["routing/a machine on VGA is filed on the VGA input", _r_vga],
 		["display/a monitor lands on its own socket, not the tuner", _d_monitor_default],
+		["display/removed TV models migrate to retained primitives", _d_legacy_tv_models],
 		["wiring/VGA alone reaches the monitor", _w_vga_only],
 		["wiring/composite alone reaches the television", _w_composite_only],
 		["wiring/VGA and composite together reach BOTH", _w_both_video],
@@ -130,7 +131,7 @@ func _run() -> void:
 		["display/the aerial input on the right channel shows the machine", _d_rf_tuned],
 		["display/the afterglow does not carry over from the last machine", _d_no_ghost],
 		["display/a source's own stage shader is used", _d_stage],
-		["display/glass wear follows its slider, source and save", _d_glass_wear],
+		["display/glass controls follow sliders, source, power and save", _d_glass_wear],
 		["display/two sets get their own window of one picture", _d_stage_per_tv],
 		["display/the picture shape follows the button on the TV input", _d_tv_aspect],
 		["guard/a host that is not shown is refused", _g_refused],
@@ -433,7 +434,7 @@ func _r_video_wins() -> void:
 ## had them share one slot — plug in either and it evicts the other.
 func _r_vga() -> void:
 	var tv := TV_SCENE.instantiate() as RetroTV
-	tv.tv_model = "crt_monitor"
+	tv.tv_model = "crt_plain"
 	tv.freeze = true
 	add_child(tv)
 	tv.add_to_group("spawned")
@@ -469,7 +470,7 @@ func _r_vga() -> void:
 
 func _d_monitor_default() -> void:
 	var tv := TV_SCENE.instantiate() as RetroTV
-	tv.tv_model = "crt_monitor"
+	tv.tv_model = "crt_plain"
 	tv.freeze = true
 	add_child(tv)
 	tv.add_to_group("spawned")
@@ -480,6 +481,30 @@ func _d_monitor_default() -> void:
 	_check_eq(tv.current_source, RetroTV.Source.VGA, "a monitor starts on its DE-15")
 	_check(not tv._source_available(RetroTV.Source.COMPOSITE_1),
 		"and does not offer a phono input it has no socket for")
+	_check(tv.get_node_or_null("TubeCollar") != null,
+		"the retained primitive monitor keeps the physical tube collar")
+
+
+func _d_legacy_tv_models() -> void:
+	var old_tv := TV_SCENE.instantiate() as RetroTV
+	old_tv.tv_model = "crt_90s"
+	old_tv.freeze = true
+	add_child(old_tv)
+	_spawned.append(old_tv)
+	var old_monitor := TV_SCENE.instantiate() as RetroTV
+	old_monitor.tv_model = "crt_monitor"
+	old_monitor.freeze = true
+	old_monitor.position = Vector3(3.0, 1.0, 0.0)
+	add_child(old_monitor)
+	_spawned.append(old_monitor)
+	await _wait(40)
+	_check_eq(old_tv.tv_model, "", "the removed television migrates to the stock body")
+	_check(old_tv._shell == null and old_tv.get_node("TVBody").visible,
+		"the migrated television retains stock primitive geometry")
+	_check_eq(old_monitor.tv_model, "crt_plain",
+		"the removed VGA monitor migrates to the primitive monitor")
+	_check(old_monitor._shell != null and old_monitor._vga_port.enabled,
+		"the migrated monitor retains its VGA connector")
 
 
 # ── Wiring: a machine with more than one output ───────────────────────────────
@@ -494,7 +519,7 @@ func _d_monitor_default() -> void:
 
 func _monitor() -> RetroTV:
 	var tv := TV_SCENE.instantiate() as RetroTV
-	tv.tv_model = "crt_monitor"      # a DE-15 and no phono row at all
+	tv.tv_model = "crt_plain"      # a DE-15 and no phono row at all
 	tv.freeze = true
 	tv.position = Vector3(0, 1, 0)
 	add_child(tv)
@@ -963,6 +988,10 @@ func _d_glass_wear() -> void:
 	await _wait(30)
 	_check_eq(tv.get_crt_params().get("crt_glass_wear"), 0.35,
 		"new sets start with subtle wear")
+	_check_eq(tv.get_crt_params().get("crt_character"), 0.35,
+		"new sets start with subtle CRT character")
+	_check(tv._tube_collar.get_parent() == tv,
+		"the physical collar is independent of the collapsing screen mesh")
 
 	# Exercise the actual UI signal, not merely the television setter.
 	var ui := TV_OPTIONS_UI.instantiate() as TVOptions2D
@@ -975,6 +1004,10 @@ func _d_glass_wear() -> void:
 	wear_slider.value = 0.8
 	_check_eq(tv.get_crt_params().get("crt_glass_wear"), 0.8,
 		"the Glass wear slider reaches the television")
+	var character_slider := ui._crt_sliders["crt_character"]["slider"] as HSlider
+	character_slider.value = 0.75
+	_check_eq(tv.get_crt_params().get("crt_character"), 0.75,
+		"the CRT character slider reaches the television")
 
 	# A source-owned stage replaces the ordinary gameplay material. The set must
 	# seed the replacement with the same wear texture, value and per-set flip.
@@ -989,6 +1022,8 @@ func _d_glass_wear() -> void:
 	if active != null:
 		_check_eq(active.get_shader_parameter("crt_glass_wear"), 0.8,
 			"wear survives a source-stage switch")
+		_check_eq(active.get_shader_parameter("crt_character"), 0.75,
+			"CRT character survives a source-stage switch")
 		_check_eq(active.get_shader_parameter("crt_glass_wear_tex"), RetroTV.GLASS_WEAR_TEXTURE,
 			"the mipmapped mask reaches the source stage")
 		_check(active.get_shader_parameter("crt_glass_wear_flip") is Vector2,
@@ -1008,6 +1043,8 @@ func _d_glass_wear() -> void:
 	if dark != null:
 		_check_eq(dark.get_shader_parameter("crt_glass_wear"), 0.8,
 			"powered-off glass keeps the chosen wear")
+		_check_eq(dark.get_shader_parameter("crt_powered"), false,
+			"powered-off glass receives explicit unlit state")
 
 	# ScenePersistence already stores the complete CRT dictionary. Assert the new
 	# key is in that real record and can seed a television before it enters a tree.
@@ -1015,6 +1052,8 @@ func _d_glass_wear() -> void:
 	var record: Dictionary = persistence._serialize_node(tv, 1, {})
 	_check_eq((record.get("crt_params", {}) as Dictionary).get("crt_glass_wear"), 0.8,
 		"the scene record persists Glass wear")
+	_check_eq((record.get("crt_params", {}) as Dictionary).get("crt_character"), 0.75,
+		"the scene record persists CRT character")
 	var restored := TV_SCENE.instantiate() as RetroTV
 	restored.set_crt_params(record.get("crt_params", {}))
 	restored.freeze = true
@@ -1024,6 +1063,8 @@ func _d_glass_wear() -> void:
 	await _wait(4)
 	_check_eq(restored.get_crt_params().get("crt_glass_wear"), 0.8,
 		"a restored television keeps Glass wear")
+	_check_eq(restored.get_crt_params().get("crt_character"), 0.75,
+		"a restored television keeps CRT character")
 
 
 func _d_stage_per_tv() -> void:
