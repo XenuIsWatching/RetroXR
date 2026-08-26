@@ -53,6 +53,14 @@ const CORES: Dictionary = {
 		"systems": ["game_boy", "game_boy_color"],
 		"options": {"gambatte_frame_dupe": "disabled"},
 	},
+	"tgbdual": {
+		"verified": true,
+		"state_transfer": true,
+		"strategies": [Strategy.ROLLBACK, Strategy.LOCKSTEP],
+		"cross_play": false,
+		"systems": ["game_boy", "game_boy_color"],
+		"options": {"tgbdual_gblink_enable": "disabled"},
+	},
 	"mgba": {
 		"verified": true,
 		"state_transfer": true,
