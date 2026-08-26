@@ -61,6 +61,14 @@ const CORES: Dictionary = {
 		"systems": ["game_boy_advance", "game_boy", "game_boy_color"],
 		"options": {},
 	},
+	"gpsp": {
+		"verified": true,
+		"state_transfer": true,
+		"strategies": [Strategy.ROLLBACK, Strategy.LOCKSTEP],
+		"cross_play": false,
+		"systems": ["game_boy_advance"],
+		"options": {"gpsp_rtc_time_source": "deterministic"},
+	},
 	"dolphin": {
 		"verified": false,
 		"state_transfer": false,
