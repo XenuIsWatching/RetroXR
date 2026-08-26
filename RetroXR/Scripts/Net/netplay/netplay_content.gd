@@ -42,6 +42,13 @@ var _rows: Dictionary = {}
 ## md5 -> rom_id, for RomM lookups already answered.
 var _romm_hits: Dictionary = {}
 var _lookups_in_flight: Dictionary = {}
+## systemid -> true once its folder has been swept, so a rebuild does not sweep
+## it again.
+var _warmed: Dictionary = {}
+## md5 -> state, so rebuilding the page does not re-walk a ROM folder per row.
+## Dropped whenever a download finishes or a session ends, which are the only
+## things that can change the answer.
+var _rom_state_cache: Dictionary = {}
 
 
 func setup(nm: Node, client: RommClient, downloader: RommDownloader,
@@ -55,6 +62,9 @@ func setup(nm: Node, client: RommClient, downloader: RommDownloader,
 		_romm_downloader.download_finished.connect(_on_romm_finished)
 	if _nm != null and _nm.has_signal("netplay_state_progress"):
 		_nm.netplay_state_progress.connect(_on_state_progress)
+	if _nm != null and _nm.has_signal("session_ended"):
+		_nm.session_ended.connect(func(_r: String) -> void: invalidate())
+
 
 ## Pre-hash only the folders this session could possibly need.
 ##
@@ -68,15 +78,18 @@ func setup(nm: Node, client: RommClient, downloader: RommDownloader,
 ## Mostly belt-and-braces now that lookups are narrowed by systemid AND exact
 ## size: it earns its keep when an older host sends no rom_size, which puts the
 ## size prefilter out of action.
-func warm_for_session() -> void:
+##
+## Once per system, not once per rebuild. rebuild() runs whenever the page is
+## opened or the room changes, and each sweep walks a folder and stats every
+## file in it -- worth doing once, pointless to repeat.
+func warm_for_session(rows: Array) -> void:
 	var dirs: Array = []
-	for row: Dictionary in _machine_rows():
+	for row: Dictionary in rows:
 		var sid := str(row.get("systemid", ""))
-		if sid.is_empty():
+		if sid.is_empty() or _warmed.has(sid):
 			continue
-		var dir := RomLibrary.rom_dir_for_system(sid)
-		if not dirs.has(dir):
-			dirs.append(dir)
+		_warmed[sid] = true
+		dirs.append(RomLibrary.rom_dir_for_system(sid))
 	if not dirs.is_empty():
 		NetFileTransfer.warm_cache_async(dirs)
 
@@ -104,10 +117,18 @@ func rebuild() -> void:
 	_rows.clear()
 	for row: Dictionary in _room_rows():
 		_rows[key_for(str(row["class"]), str(row["md5"]))] = row
-	for row: Dictionary in _machine_rows():
+	var machines := _machine_rows()
+	for row: Dictionary in machines:
 		_rows[key_for(str(row["class"]), str(row["md5"]))] = row
-	warm_for_session()
+	warm_for_session(machines)
 	manifest_changed.emit()
+
+
+## Forget what was resolved from disk. Called when something that could change
+## the answer happens -- a download landing, a session ending -- rather than on
+## every rebuild, which is what made the page re-walk a ROM folder to redraw.
+func invalidate() -> void:
+	_rom_state_cache.clear()
 
 
 ## Every row, worst first: what blocks the session before what merely decorates
@@ -261,17 +282,24 @@ func _machine_rows() -> Array[Dictionary]:
 ## same-size prefilter when it is non-zero, so passing 0 makes it hash every
 ## file in the ROM tree instead of the handful that could possibly match.
 func _rom_state(md5: String, size := 0, systemid := "") -> String:
+	# Memoized: resolve_by_md5 lists a directory and may hash, and rebuild()
+	# asks once per machine every time the page is opened. The answer only
+	# changes when a download lands or the session ends, and both clear this.
+	if _rom_state_cache.has(md5):
+		return str(_rom_state_cache[md5])
 	var dirs: Array = [RomLibrary.rom_dir_for_system(systemid)] if not systemid.is_empty() \
 		else [RomLibrary.default_roms_root()]
 	var found := NetFileTransfer.resolve_by_md5(md5, "rom", size, "", dirs)
+	var state := STATE_MISSING
 	if not found.is_empty():
 		# Found locally rather than downloaded, which is the other way a ROM
 		# turns up unscraped: it was on the shelf all along and nobody opened it.
 		note_rom_available(found, "")
-		return STATE_HAVE
-	if _romm_hits.has(md5):
-		return STATE_ROMM
-	return STATE_MISSING
+		state = STATE_HAVE
+	elif _romm_hits.has(md5):
+		state = STATE_ROMM
+	_rom_state_cache[md5] = state
+	return state
 
 
 ## Blocking problems first, then things in flight, then the merely absent.
@@ -334,6 +362,8 @@ func _on_romm_finished(rom_id: int, ok: bool, path: String, _error: String) -> v
 		if int(hit.get("id", 0)) != rom_id:
 			continue
 		row["state"] = STATE_HAVE if ok else STATE_MISSING
+		# The file on disk just changed, so the memoized answer is now wrong.
+		_rom_state_cache.erase(str(row.get("md5", "")))
 		item_changed.emit(key, str(row["state"]), 0, int(row.get("size", 0)))
 		if ok and not path.is_empty():
 			note_rom_available(path, str(row.get("systemid", "")))

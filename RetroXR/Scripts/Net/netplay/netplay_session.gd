@@ -2406,8 +2406,17 @@ func _np_state_begin(serial: int, state_sizes: PackedInt64Array,
 		"machine": 0,
 		"offset": 0,
 		"received": 0,
+		"bytes": 0,
+		"bytes_total": _sum(state_sizes),
 	}
 	_join_receive_deadline = _now() + JOIN_TIMEOUT_MS
+
+
+static func _sum(values: PackedInt64Array) -> int:
+	var total := 0
+	for v: int in values:
+		total += v
+	return total
 
 
 @rpc("authority", "call_remote", "reliable", CH_CONTROL)
@@ -2436,13 +2445,16 @@ func _np_state_chunk(serial: int, ordinal: int, machine: int, offset: int,
 	_join_receive_deadline = _now() + JOIN_TIMEOUT_MS
 	var got := int(_incoming_join.get("bytes", 0)) + data.size()
 	_incoming_join["bytes"] = got
-	var want := 0
-	for s: int in sizes:
-		want += s
-	join_state_progress.emit(1, "transferring", got, want)
 	var total_received := int(_incoming_join["received"])
-	if total_received % STATE_ACK_EVERY == 0 \
-			or int(_incoming_join["machine"]) == sizes.size():
+	var last := int(_incoming_join["machine"]) == sizes.size()
+	if total_received % STATE_ACK_EVERY == 0 or last:
+		# Reported on the ack boundary, not per chunk. A 256 MiB state is 4096
+		# chunks, and a signal per chunk means 4096 label and bar updates for a
+		# bar that is 300 px wide -- work done during the one transfer the player
+		# is actually waiting on. The total is summed once at _np_state_begin
+		# rather than re-added here for the same reason.
+		join_state_progress.emit(1, "transferring", got,
+			int(_incoming_join.get("bytes_total", 0)))
 		_np_state_ack.rpc_id(1, serial, total_received)
 
 

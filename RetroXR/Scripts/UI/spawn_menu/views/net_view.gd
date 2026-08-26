@@ -72,7 +72,10 @@ func _build() -> void:
 	_build_readiness_page()
 	_build_content_page()
 
-	_tabs.tab_changed.connect(func(_i: int) -> void: scroll_changed.emit(active_scroll()))
+	_tabs.tab_changed.connect(func(_i: int) -> void:
+		scroll_changed.emit(active_scroll())
+		# Refresh the page being opened, rather than all of them on a timer.
+		_refresh_pages())
 	add_child(TabStrip.wrap(_tabs))
 
 	var prefs := _load_prefs()
@@ -207,7 +210,7 @@ func _build() -> void:
 	ping_timer.autostart = true
 	ping_timer.timeout.connect(func() -> void:
 		if NetworkManager.is_active() and visible:
-			refresh()
+			refresh_session()
 	)
 	vbox.add_child(ping_timer)
 
@@ -319,11 +322,30 @@ func _on_join() -> void:
 
 
 ## Re-read the session and repaint.
+## Everything, including the two sub-pages. For opening the tab, changing
+## sub-tab, and session events -- NOT for the ping timer.
 func refresh() -> void:
+	_refresh_pages()
+	refresh_session()
+
+
+## The sub-pages, which cost real work: the content page stats files and walks a
+## ROM folder, and both rebuild their rows. Only called when something actually
+## changed.
+func _refresh_pages() -> void:
 	if is_instance_valid(_readiness):
 		_readiness.refresh()
 	if is_instance_valid(_content_page):
 		_content_page.refresh()
+
+
+## Just the cheap parts: button states, the room code, the player list and its
+## ping readouts.
+##
+## Split out because the 1 s timer below drives it. Running the whole refresh at
+## 1 Hz meant re-statting every file in the room, re-walking a ROM directory and
+## kicking a background hash sweep once a second, for the sake of a ping number.
+func refresh_session() -> void:
 	if not is_instance_valid(_players_box):
 		return
 	var active: bool = NetworkManager.is_active()
