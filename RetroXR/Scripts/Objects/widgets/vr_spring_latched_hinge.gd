@@ -310,12 +310,17 @@ func _step_spring_open(delta: float) -> void:
 static func mount(host: Node3D, lid: MeshInstance3D, open_deg: float) -> VRSpringLatchedHinge:
 	if host == null or lid == null:
 		return null
-	var ab: AABB = lid.global_transform * lid.get_aabb()   # world-space lid box
+	# In the HOST's own frame, never the world's. An axis-aligned world box picks
+	# its back edge by world -Z, so a console standing at any yaw but zero gets its
+	# hinge on whichever side happens to face away — at 180 deg that is the FRONT,
+	# and the lid swings down over it. A restored room sets the saved rotation
+	# before adding the child, so the shell is already turned when this runs.
+	var to_host := host.global_transform.affine_inverse()
+	var ab: AABB = (to_host * lid.global_transform) * lid.get_aabb()
 	var pivot := Node3D.new()
 	pivot.name = "DiscLidPivot"
 	host.add_child(pivot)
-	pivot.global_transform = Transform3D(
-		host.global_transform.basis * Basis(Vector3.UP, PI),
+	pivot.transform = Transform3D(Basis(Vector3.UP, PI),
 		Vector3(ab.get_center().x, ab.position.y, ab.position.z))
 	var world := lid.global_transform
 	lid.reparent(pivot, false)
@@ -328,7 +333,7 @@ static func mount(host: Node3D, lid: MeshInstance3D, open_deg: float) -> VRSprin
 	hinge.engage_radius = clampf(maxf(ab.size.x, ab.size.z) * 0.4, 0.03, 0.09)
 	pivot.add_child(hinge)
 	# Grab box over the lid (in pivot-local), thin along the lid's normal.
-	hinge.position = pivot.to_local(ab.get_center())
+	hinge.position = pivot.transform.affine_inverse() * ab.get_center()
 	var col := CollisionShape3D.new()
 	col.name = "CollisionShape3D"
 	var box := BoxShape3D.new()
