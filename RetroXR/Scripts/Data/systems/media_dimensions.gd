@@ -44,7 +44,9 @@ const CART_SIZE_DEFAULT := Vector3(0.10, 0.08, 0.015)
 ## cart's connector is) and the paper label faces +Z.
 const FLOPPY_SIZE := Vector3(0.090, 0.094, 0.0033)
 
-## Systems whose media is a floppy disk rather than a cartridge.
+## Systems whose media is a SHUTTERED DISK rather than a cartridge -- a sliding
+## metal cover over a head window, and a shell that goes into a slot rather than
+## onto a connector.
 ##
 ## This is every platform the PC tower is hardware for (SystemModelRegistry's
 ## _COMPUTER_PLATFORMS) except scummvm, which shipped on CD and appears in
@@ -57,6 +59,13 @@ const FLOPPY_SIZE := Vector3(0.090, 0.094, 0.0033)
 ## machines and it has exactly one 3.5-inch drive on its bezel. One medium per
 ## shell beats sixteen exceptions to it.
 const FLOPPY_SYSTEMS: Dictionary = {
+	# Not PC media, and not the tower's: a 64DD disk and a Famicom Disk System
+	# disk are both shuttered magnetic disks that slide into a drive, and both
+	# are loaded label-up with the shutter leading. Without an entry here they
+	# spawn as moulded cartridges with a connector edge, and a drive that pulls
+	# the shutter in first would appear to be swallowing them backwards.
+	"nintendo_64dd": true,
+	"fds": true,
 	"apple_ii": true,
 	"atari_8bit": true,
 	"atari_st": true,

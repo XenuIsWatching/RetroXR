@@ -2371,6 +2371,18 @@ func power_off() -> void:
 		return
 	print("[RetroSystem] Powering off")
 	_stop_core()
+	_restore_displaced_options()
+
+
+## Hand back what this machine's workaround pins took from the shared file, so a
+## 64DD run does not decide how every other Nintendo 64 renders.
+func _restore_displaced_options() -> void:
+	if _displaced_options.is_empty() or _displaced_core.is_empty():
+		return
+	if CoreOptionsStore.merge_values(_resolve_dir(), _displaced_core, _displaced_options):
+		print("[RetroSystem] restored displaced core options: %s" % str(_displaced_options))
+	_displaced_options.clear()
+	_displaced_core = ""
 
 
 ## Everything a machine does when its core goes away, whichever way it was
@@ -3049,6 +3061,23 @@ func _all_forced_options(core: String) -> Dictionary:
 ## order they were attached in, so a stack reads the same however it was built.
 var _expansions: Array[RetroExpansion] = []
 
+## True while rom_path holds a path the STACK chose rather than the console's
+## own cartridge. Only that may be taken back out when the stack stops offering
+## one; a cartridge a player put in the slot is not ours to clear.
+var _stack_set_rom_path := false
+
+## Option values this machine displaced in the shared <core>.opt, and the core
+## the file belongs to, so power_off can put them back.
+##
+## The forced-options file is per CORE, not per machine, so a pin set for a 64DD
+## outlives the run and reaches every other console using that core: one
+## cartridge-less boot would leave every plain Nintendo 64 on a renderer its
+## owner never chose. Pins that describe the HARDWARE -- a drive that is
+## physically bolted on -- are re-pinned every launch and are fine to leave; this
+## is for the ones that describe a WORKAROUND.
+var _displaced_options: Dictionary = {}
+var _displaced_core := ""
+
 
 ## The socket on top and the foot underneath, built from the model's own box.
 ##
@@ -3241,12 +3270,21 @@ func _warn_missing_sidecar(spec: Dictionary) -> void:
 ## next power-on.
 func _apply_expansion_launch() -> Dictionary:
 	var spec := expansion_boot()
-	if spec.is_empty():
-		return {}
-	var roms := _expansion_roms(spec)
+	var roms := _expansion_roms(spec) if not spec.is_empty() else ([] as Array[String])
+
 	if roms.is_empty():
+		# Nothing to boot from the stack: either it has been unbolted, or every
+		# bay in it is empty, which is the ordinary state of a drive with no disk
+		# in it. Either way the last disk this machine saw is not in it any more,
+		# and only what WE put in rom_path may be taken back out -- a cartridge
+		# in the console's own slot is not ours to clear.
+		if _stack_set_rom_path:
+			rom_path = _host_media_path()
+			_stack_set_rom_path = false
 		return spec
+
 	rom_path = roms[0]
+	_stack_set_rom_path = true
 	return spec
 
 
@@ -3370,6 +3408,16 @@ func _apply_forced_core_options(dir: String, core: String) -> void:
 	# Through the store, which owns this file: set_core_option already writes it
 	# that way, and two writers with their own idea of the format is how the same
 	# file came out in a different order depending on which one touched it last.
+	# Remember what the renderer pin displaces. It is the only forced option here
+	# that is a workaround rather than a description of the hardware, so it is the
+	# only one that has to be handed back.
+	_displaced_options.clear()
+	_displaced_core = core
+	if forced.has("mupen64plus-rdp-plugin"):
+		var saved := CoreOptionsStore.load_values(dir, core)
+		if saved.has("mupen64plus-rdp-plugin"):
+			_displaced_options["mupen64plus-rdp-plugin"] = saved["mupen64plus-rdp-plugin"]
+
 	if CoreOptionsStore.merge_values(dir, core, forced):
 		print("[RetroSystem] forced core options applied: %s -> %s"
 			% [str(forced), CoreOptionsStore.opt_path(dir, core)])

@@ -220,7 +220,13 @@ func _build_media_bay() -> void:
 	if media.is_empty():
 		return
 	var s := size()
-	var front_loading := ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_BELOW
+	# A slit in the front is for media that SLIDES IN: a 64DD disk, an FDS disk.
+	# Which way the unit stacks does not decide that -- a Satellaview sits under
+	# a Super NES and takes a memory pack pushed into the top of it, and a
+	# Mega-CD sits under a Mega Drive and opens a lid. Deciding by mount buried
+	# the Satellaview's pack 92 mm inside the box, out of sight and out of reach,
+	# because it rode the slot travel meant for something a third of its length.
+	var front_loading := ExpansionCatalog.loader_of(expansion_id) == MediaDimensions.LOADER_SLOT
 
 	_bay = SNAP_ZONE_SCENE.instantiate() as XRToolsSnapZone
 	_bay.name = "MediaBay"
