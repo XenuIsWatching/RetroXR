@@ -45,6 +45,8 @@ func _ensure_ui_connected() -> void:
 		return
 	ui.sensitivity_changed.connect(_on_sens_changed)
 	ui.sensitivity_committed.connect(_on_sens_committed)
+	ui.stick_changed.connect(_on_stick_changed)
+	ui.stick_committed.connect(_on_stick_committed)
 	ui.close_requested.connect(hide_panel)
 	_ui_connected = true
 
@@ -56,7 +58,7 @@ func _populate() -> void:
 	if not ui:
 		call_deferred("_populate")
 		return
-	ui.populate(_mouse.sensitivity)
+	ui.populate(_mouse.sensitivity, _mouse.stick_distance)
 
 
 ## Live while the slider is dragged.
@@ -71,6 +73,19 @@ func _on_sens_changed(value: float) -> void:
 func _on_sens_committed(value: float) -> void:
 	if _mouse and is_instance_valid(_mouse):
 		_mouse.sensitivity = value
+
+
+## Live while the slider is dragged.
+func _on_stick_changed(value: float) -> void:
+	if _mouse and is_instance_valid(_mouse):
+		_mouse.stick_distance = value
+
+
+## Drag finished. Like sensitivity, how far a hand may hover before the mouse
+## lands is this player's feel and not room state, so it is not replicated.
+func _on_stick_committed(value: float) -> void:
+	if _mouse and is_instance_valid(_mouse):
+		_mouse.stick_distance = value
 
 
 # ── Placement, for FloatingObjectPanel3D ─────────────────────────────────────

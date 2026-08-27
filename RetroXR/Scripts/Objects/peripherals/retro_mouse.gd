@@ -6,7 +6,7 @@
 ## Surface stickiness: when the mouse comes near a surface it GLUES to the
 ## surface plane — the visible mouse is the hand's position projected onto the
 ## plane, so micro lifts and wobbles neither show nor move the cursor. Only
-## when the hand pulls farther than STICK_BREAK does the visual snap back to
+## when the hand pulls farther than the break threshold does the visual snap back to
 ## the hand's true position (and motion reporting stops until it re-lands).
 class_name RetroMouse
 extends XRToolsPickable
@@ -41,10 +41,25 @@ const PLUG_MESH := "res://Scenes/Objects/cables/ps2_plug_mouse.res"
 ## RETRO_DEVICE_MOUSE, from ScummVM to DOS.
 @export var systemid: String = ""
 
-## Base-to-surface distance that engages the stick (metres).
-const STICK_ON := 0.035
-## Hand-to-plane distance that breaks the stick (snap back to the hand).
-const STICK_BREAK := 0.07
+## Bounds for stick_distance (metres), shared with MouseOptions2D's slider.
+const STICK_MIN := 0.01
+const STICK_MAX := 0.10
+## How much farther than stick_distance the hand must pull before the stick
+## breaks. Held as a RATIO rather than a second setting so a player who raises
+## the engage distance does not get a mouse that lands and lets go at once.
+const STICK_BREAK_RATIO := 2.0
+## Slack on the raycast beyond stick_distance — the ray has to reach past the
+## engage threshold or the distance test never gets a hit to measure.
+const STICK_RAY_SLACK := 0.02
+
+## Base-to-surface distance that engages the stick (metres). A player setting,
+## because how high a hand hovers over a desk is a personal thing and the
+## surfaces vary: set it low and the mouse only lands when pressed down, high
+## and it grabs the table from a hover.
+@export var stick_distance: float = 0.035:
+	set(value):
+		stick_distance = clampf(value, STICK_MIN, STICK_MAX)
+		_apply_ray_length()
 
 ## libretro device type reported to the system when plugged in.
 var device_type: int = RETRO_DEVICE_MOUSE
@@ -126,6 +141,7 @@ func _ready() -> void:
 	# No VR drop row: in VR the mouse lets go on a plain grip release. The
 	# desktop Shift rule is read off desktop_shift_drop by HeldHint itself.
 	_hint = HeldHint.attach(self, false, HINT_HEIGHT)
+	_apply_ray_length()
 	_cache_buttons()
 	_spawn_cable()
 
@@ -184,7 +200,7 @@ func restore_port_connection(system: RetroSystem, port_index: int) -> void:
 		_pending_port_restore = {"system": system, "port_index": port_index}
 
 
-## Toggle the floating settings panel (sensitivity slider). Called by
+## Toggle the floating settings panel (sensitivity, stick distance). Called by
 ## SpawnMenuController when the menu button is pressed while pointing here.
 func toggle_options_ui(camera: Node3D) -> void:
 	if _options_panel == null:
@@ -236,6 +252,13 @@ func _physics_process(_delta: float) -> void:
 	_update_sticky()
 
 
+## The setter runs before @onready resolves _ray (and on a restored value set
+## before the node enters the tree), so this is a no-op until _ready calls it.
+func _apply_ray_length() -> void:
+	if _ray != null:
+		_ray.target_position = Vector3(0, -(stick_distance + STICK_RAY_SLACK), 0)
+
+
 func _update_sticky() -> void:
 	var held := is_picked_up() and (is_instance_valid(_holding_ctrl) or _desktop_held)
 	if not held:
@@ -246,13 +269,13 @@ func _update_sticky() -> void:
 	if not _stuck:
 		_ray.force_raycast_update()
 		if _ray.is_colliding() \
-				and global_position.distance_to(_ray.get_collision_point()) <= STICK_ON:
+				and global_position.distance_to(_ray.get_collision_point()) <= stick_distance:
 			_stick(_ray.get_collision_point(), _ray.get_collision_normal())
 
 	if _stuck:
 		# Break only when the HAND (the body follows it) pulls past the
 		# threshold — micro lifts stay glued and invisible.
-		if absf(_plane.distance_to(global_position)) > STICK_BREAK:
+		if absf(_plane.distance_to(global_position)) > stick_distance * STICK_BREAK_RATIO:
 			_unstick()
 			return
 		var before := _visual.global_position
