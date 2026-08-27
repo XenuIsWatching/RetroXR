@@ -495,9 +495,23 @@ func stencil_safe() -> bool:
 	return foveation_level == Foveation.OFF
 
 
+## Saved now, applied at the next launch — NOT to the session you are in.
+##
+## Measured: VRS is latched when the XR swapchain is created, and re-assigning
+## `vrs_mode` on a live session drops the attachment without building a new one.
+## So a mid-session change cannot raise or lower foveation, it can only lose it.
+## At 120 Hz on a x1.4 eye buffer, one call to this function while foveated took
+## the room from ~85 fps to ~59 — a bigger fall than HIGH-to-MEDIUM could ever
+## cost, because what actually happened is that foveation stopped.
+##
+## The same latch is why an Eye Buffer change turns foveation off until restart:
+## that row resizes the swapchain, and the attachment does not survive it.
 func set_foveation_level(level: int) -> void:
 	foveation_level = clampi(level, Foveation.OFF, Foveation.HIGH) as Foveation
-	apply_foveation()
+	# Only safe before the session exists. xr_init calls apply_foveation() itself
+	# at startup, ahead of `use_xr = true`, which is the one moment it takes.
+	if not get_tree().root.use_xr:
+		apply_foveation()
 	save_prefs()
 
 
