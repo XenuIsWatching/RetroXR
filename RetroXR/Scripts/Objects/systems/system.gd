@@ -2200,6 +2200,20 @@ func _after_core_started() -> void:
 	# swap). The emulation thread is only starting here, so this queues and is
 	# answered once the core is up.
 	_libretro.RequestDiskInfo()
+	# And re-make whatever link cable this machine is on.
+	#
+	# Stopping a core takes its endpoints out of LinkCoordinator, and that cuts
+	# the whole bus rather than idling one seat -- so after a machine is
+	# switched off the lead still in its socket is joined to nothing, and the
+	# console at the other end is left loose. Nothing puts it back by itself: a
+	# cable re-resolves when a PLUG MOVES, and powering a machine on moves no
+	# plug. Measured on a Quest, a GameCube and a Game Boy Advance on a link
+	# lead: the first power-on joined (bus 0 [P1 on, P2 on]), switching the
+	# handheld off left "nothing cabled, loose: m1:0 on", and every power-on
+	# after that re-attached under fresh endpoint ids and stayed loose. Four
+	# Swords never saw the handheld again until the lead was pulled and
+	# re-seated by hand.
+	net_refresh_link_cables()
 
 
 ## Should the power button do anything, and with what in the slot?
@@ -2365,6 +2379,15 @@ func _stop_core() -> void:
 	_options_panel.hide_panel()
 	_update_power_button_visual()
 	_model.on_power_off()
+	# Both directions, because the machine still running is the one left wrong.
+	#
+	# StopContent has just cut the bus from under a lead that is still in its
+	# socket, so the console at the other end holds a join to endpoints that no
+	# longer exist. Re-resolving here puts it back to a lead seated in a
+	# powered machine waiting for an unpowered one -- which is a state the
+	# coordinator handles, and the state it was in before this machine was ever
+	# switched on.
+	net_refresh_link_cables()
 
 
 ## Toggle power (used by the power button)
@@ -2779,6 +2802,11 @@ func net_link_buses() -> Array:
 
 
 func net_refresh_link_cables() -> void:
+	# There is no tree to sweep on the way out. Netplay only ever called this
+	# from a running room, but power-off calls it too now, and a machine can be
+	# stopped as its room is torn down -- when get_tree() is already null.
+	if not is_inside_tree():
+		return
 	var seen_cables := {}
 	for plug in get_tree().get_nodes_in_group("link_plug") \
 			+ get_tree().get_nodes_in_group("controller_plug"):
