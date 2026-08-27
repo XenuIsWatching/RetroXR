@@ -3160,7 +3160,15 @@ func restore_expansion(unit: RetroExpansion) -> void:
 	# stands on takes the console into ITS socket. Only the second half was here,
 	# so bolting a 64DD or a Mega-CD bound the two logically and seated neither --
 	# and an unfrozen console with nothing holding it simply fell through the join.
-	if ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_ABOVE:
+	var mount := ExpansionCatalog.mount_of(unit.expansion_id)
+
+	if mount == ExpansionCatalog.MOUNT_CARTRIDGE:
+		# It goes where a game would go, and fills the slot the way it does on
+		# the hardware.
+		if _cartridge_slot != null and _accepts_media(unit):
+			_cartridge_slot.pick_up_object(unit)
+			return
+	elif mount == ExpansionCatalog.MOUNT_ABOVE:
 		var socket := get_node_or_null("ExpansionSocket") as XRToolsSnapZone
 		if socket != null and _accepts_expansion(unit):
 			socket.pick_up_object(unit)
@@ -3956,6 +3964,11 @@ func _belongs_here(obj: Node3D, compat: Dictionary) -> bool:
 
 ## Slot gate: does this piece of media (cartridge/disc) belong in this system?
 func _accepts_media(obj: Node3D) -> bool:
+	# A cartridge-shaped expansion goes in this slot and fills it, the way it does
+	# on the hardware: a Mega Drive holds a 32X or a game, never both.
+	var unit := obj as RetroExpansion
+	if unit != null:
+		return ExpansionCatalog.host_of(unit.expansion_id) == systemid 			and ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE
 	return _belongs_here(obj, _MEDIA_COMPAT)
 
 
@@ -4173,6 +4186,15 @@ func _on_cart_tray_changed(down: bool) -> void:
 
 
 func _on_cartridge_inserted(cartridge: Node3D) -> void:
+	# An expansion in the cartridge slot is a machine being bolted on, not media
+	# being loaded: it has no ROM of its own, and what it runs goes into a slot
+	# of its own further up the stack.
+	var unit := cartridge as RetroExpansion
+	if unit != null:
+		add_collision_exception_with(unit)
+		unit.bind_to_host(self)
+		return
+
 	_snapped_cartridge = cartridge
 	# Prevent the frozen kinematic cartridge from physically pushing the system body.
 	# Slot/tray loaders let their MediaSlot/MediaTray own the exception (held until
@@ -4210,6 +4232,14 @@ func _on_cartridge_inserted(cartridge: Node3D) -> void:
 
 
 func _on_cartridge_removed() -> void:
+	# The slot says it is empty, not what left it. If what left was a bolted-on
+	# expansion, that is the join coming apart.
+	for held in get_expansions():
+		if ExpansionCatalog.mount_of(held.expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE:
+			remove_collision_exception_with(held)
+			held.unbind_from_host()
+			return
+
 	if _snapped_cartridge:
 		# On a push-tray bay this fires when the tray is LIFTED, with the cart still
 		# lying in it — the eject belongs to the cart actually leaving, which

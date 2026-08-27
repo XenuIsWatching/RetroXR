@@ -149,18 +149,21 @@ func _group_fit() -> void:
 	_check(socket != null and not socket.snap_filter.call(snes),
 		"fit/ and refuses a Super NES")
 
-	# The other direction: a unit that stands on a console wears the foot, and it
-	# is the CONSOLE that grew the socket.
+	# The other kind: a unit that IS a cartridge. It goes into the console's own
+	# slot and fills it, so neither machine grows a connector for it — a Mega
+	# Drive has no port on its roof, and modelling the 32X as a box that stands
+	# there put one on every console that takes one.
 	var thirty_two_x := await _unit("sega_32x")
 	var md := await _console("mega_drive")
-	_check(thirty_two_x.get_socket() == null, "fit/ a unit that stands on a console has no socket")
-	_check(thirty_two_x.get_node_or_null("ExpansionFoot") != null,
-		"fit/ it wears a foot instead")
-	var roof := md.get_node_or_null("ExpansionSocket") as XRToolsSnapZone
-	_check(roof != null, "fit/ the Mega Drive grew a socket on its roof")
-	_check(roof != null and roof.snap_filter.call(thirty_two_x),
-		"fit/ which takes a 32X")
-	_check(roof != null and not roof.snap_filter.call(dd),
+	_check(thirty_two_x.get_socket() == null, "fit/ a cartridge-shaped unit has no socket")
+	_check(thirty_two_x.get_node_or_null("ExpansionFoot") == null,
+		"fit/ and no foot either — the console's cartridge slot takes it")
+	_check(md.get_node_or_null("ExpansionSocket") == null,
+		"fit/ so the Mega Drive grows nothing on its roof")
+	_check(thirty_two_x.is_in_group("cartridge"),
+		"fit/ it joins the group the cartridge slot accepts")
+	_check(md._accepts_media(thirty_two_x), "fit/ the Mega Drive's slot takes a 32X")
+	_check(not md._accepts_media(dd),
 		"fit/ and refuses a 64DD, which belongs to another console entirely")
 
 	# A console nothing mounts above must not grow a socket — an empty one would
@@ -202,10 +205,10 @@ func _group_join() -> void:
 	var md := await _console("mega_drive")
 	var thirty_two_x := await _unit("sega_32x")
 	await _bolt(md, thirty_two_x)
-	_check(md.expansion_ids() == ["sega_32x"], "join/ a unit seated on the roof is bolted on")
+	_check(md.expansion_ids() == ["sega_32x"], "join/ a unit in the cartridge slot is bolted on")
 	_check(thirty_two_x.get_host() == md, "join/ and knows which console it is on")
-	await _unbolt(md.get_node("ExpansionSocket") as XRToolsSnapZone, thirty_two_x)
-	_check(md.expansion_ids().is_empty(), "join/ taking it off the roof unbolts it")
+	await _unbolt(md._cartridge_slot, thirty_two_x)
+	_check(md.expansion_ids().is_empty(), "join/ taking it out of the slot unbolts it")
 	await _clear()
 
 

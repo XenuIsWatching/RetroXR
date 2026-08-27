@@ -38,6 +38,13 @@ const MOUNT_BELOW := 0
 ## The expansion stands on the console — the console carries the top socket.
 const MOUNT_ABOVE := 1
 
+## The unit IS a cartridge: it goes into the console's own cartridge slot and
+## fills it, and whatever the unit runs then goes into a slot of its own. A 32X,
+## a Sufami Turbo and a Jaguar CD all attach this way, and none of the three
+## consoles they attach to has a port on its roof -- modelling them as boxes
+## that stand on top grew a socket on machines that never had one.
+const MOUNT_CARTRIDGE := 2
+
 
 ## Every expansion RetroXR models, keyed by its id. The id doubles as the media
 ## systemid wherever one exists, so the Games tab already spawns the right disks
@@ -83,7 +90,7 @@ const ROWS: Dictionary = {
 		"label": "Sufami Turbo",
 		"host": "super_nes",
 		"media": "sufami_turbo",
-		"mount": MOUNT_ABOVE,
+		"mount": MOUNT_CARTRIDGE,
 		"size": Vector3(0.12, 0.05, 0.10),
 		"loader": MediaDimensions.LOADER_NONE,
 	},
@@ -103,7 +110,7 @@ const ROWS: Dictionary = {
 		"label": "32X",
 		"host": "mega_drive",
 		"media": "sega_32x",
-		"mount": MOUNT_ABOVE,
+		"mount": MOUNT_CARTRIDGE,
 		"size": Vector3(0.15, 0.07, 0.14),
 		"loader": MediaDimensions.LOADER_NONE,
 	},
@@ -125,9 +132,12 @@ const ROWS: Dictionary = {
 		"label": "Jaguar CD",
 		"host": "atari_jaguar",
 		"media": "atari_jaguar",
-		"mount": MOUNT_ABOVE,
+		"mount": MOUNT_CARTRIDGE,
 		"size": Vector3(0.20, 0.09, 0.18),
 		"loader": MediaDimensions.LOADER_TRAY,
+		# A lid, not a drawer. The Jaguar CD opens upward the way a PlayStation or
+		# a GameCube does; the Mega-CD and the CD-ROM2 we model slide a tray out.
+		"lid": true,
 	},
 }
 
@@ -314,6 +324,11 @@ static func mount_of(id: String) -> int:
 
 static func size_of(id: String) -> Vector3:
 	return row(id).get("size", Vector3(0.3, 0.08, 0.25))
+
+
+## True when this unit opens with a hinged lid rather than sliding a tray out.
+static func lid_of(id: String) -> bool:
+	return bool(row(id).get("lid", false))
 
 
 static func loader_of(id: String) -> int:

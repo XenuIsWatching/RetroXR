@@ -50,6 +50,8 @@ var _foot: XRToolsGrabPointSnap = null
 ## This unit's own media bay, and what is in it.
 var _bay: XRToolsSnapZone = null
 var _slot: MediaSlot = null
+var _tray: MediaTray = null
+var _eject: VRButton = null
 var _media: Node3D = null
 
 var _body: MeshInstance3D = null
@@ -132,6 +134,14 @@ func _update_label() -> void:
 func _build_connector() -> void:
 	var s := size()
 	var span := Vector2(s.x, s.z)
+	if ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE:
+		# We ARE the cartridge. The console's own slot takes us, so there is no
+		# connector to build on either machine -- joining the group that slot
+		# accepts is the whole of it, and the slot's snap pose puts us where a
+		# cartridge goes.
+		add_to_group(MEDIA_GROUP)
+		return
+
 	if ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_BELOW:
 		# The console stands on us: we hold the socket, and only the console this
 		# unit was made for is allowed into it.
@@ -273,9 +283,26 @@ func _build_media_bay() -> void:
 		add_child(_slot)
 		_slot.inserted.connect(_on_media_in)
 		_slot.removed.connect(_on_media_out)
+	elif ExpansionCatalog.loader_of(expansion_id) == MediaDimensions.LOADER_TRAY:
+		# A CD unit. Every one of these loads from the top on the real hardware,
+		# and the disc consoles already have the pair that models it: a MediaTray
+		# for the lid and the seating, and a button that opens it. Reusing them
+		# means a Mega-CD behaves like every other disc machine in the room
+		# rather than like a slot that swallows a disc whole.
+		_bay.position = Vector3(0.0, s.y * 0.5, 0.0)
+		_build_well(s)
+		_tray = MediaTray.new()
+		_tray.host = self
+		_tray.slot = _bay
+		add_child(_tray)
+		if ExpansionCatalog.lid_of(expansion_id):
+			_tray.lid_pivot = _build_lid(s)
+		_tray.loaded.connect(_on_media_in)
+		_tray.unloaded.connect(_on_media_out)
+		_build_eject_button(s)
 	else:
-		# A well in the roof. The cart or disc stands proud of it, which is what a
-		# 32X cartridge does and what makes it obvious the unit is loaded.
+		# A well in the roof. The cart stands proud of it, which is what a 32X
+		# cartridge does and what makes it obvious the unit is loaded.
 		_bay.position = Vector3(0.0, s.y * 0.5, 0.0)
 		_build_well(s)
 		_bay.has_picked_up.connect(_on_media_in)
@@ -384,3 +411,75 @@ func restore_host(sys: RetroSystem) -> void:
 ## The socket, for the console to release when it is pulled off from the far side.
 func get_socket() -> XRToolsSnapZone:
 	return _socket
+
+
+## The OPEN button on a disc unit's front face.
+##
+## Built rather than authored because these units have no scene of their own --
+## the body is a measured box and everything on it is placed from ExpansionCatalog
+## dimensions. Same widget the consoles use, so it highlights, depresses and
+## takes a trigger press identically.
+func _build_eject_button(s: Vector3) -> void:
+	_eject = VRButton.new()
+	_eject.name = "EjectButton"
+	add_child(_eject)
+	_eject.position = Vector3(s.x * 0.30, -s.y * 0.18, s.z * 0.5 + 0.004)
+
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.026, 0.012, 0.010)
+	shape.shape = box
+	_eject.add_child(shape)
+
+	var mesh := MeshInstance3D.new()
+	mesh.name = "ButtonMesh"
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.024, 0.010, 0.008)
+	mesh.mesh = bm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.16, 0.16, 0.18)
+	mat.roughness = 0.5
+	mesh.set_surface_override_material(0, mat)
+	_eject.add_child(mesh)
+	_eject.set_button_mesh(mesh)
+
+	var label := Label3D.new()
+	label.text = "OPEN"
+	label.font_size = 48
+	label.pixel_size = 0.00016
+	label.position = Vector3(0.0, -0.012, 0.006)
+	label.modulate = Color(0.85, 0.85, 0.88)
+	_eject.add_child(label)
+
+	_eject.button_pressed.connect(func() -> void:
+		if _tray != null:
+			_tray.toggle_open())
+
+
+## The hinged lid over a disc well, and the pivot MediaTray swings it on.
+##
+## A lid rather than a drawer: every one of these units loads from the top and
+## opens upward, the way a PlayStation or a GameCube does, and MediaTray already
+## animates a pivot for exactly that. Hinged at the BACK edge so it opens away
+## from the player and never sweeps through the disc coming in.
+func _build_lid(s: Vector3) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.name = "LidPivot"
+	add_child(pivot)
+	pivot.position = Vector3(0.0, s.y * 0.5, -s.z * 0.5 + 0.004)
+
+	var lid := MeshInstance3D.new()
+	lid.name = "Lid"
+	var mesh := BoxMesh.new()
+	# Just inside the footprint, so the lid reads as a panel let into the roof
+	# rather than a slab dropped on top of it.
+	mesh.size = Vector3(s.x * 0.86, 0.008, s.z * 0.82)
+	lid.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.30, 0.31, 0.34)
+	mat.roughness = 0.45
+	lid.set_surface_override_material(0, mat)
+	pivot.add_child(lid)
+	# Half its own depth forward of the hinge, so the panel covers the well.
+	lid.position = Vector3(0.0, 0.004, mesh.size.z * 0.5)
+	return pivot

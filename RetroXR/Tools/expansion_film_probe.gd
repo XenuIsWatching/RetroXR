@@ -162,10 +162,21 @@ func _one(host_id: String, unit_id: String, media_id: String) -> void:
 	media.global_position = bay
 	await _wait(18)
 	await _hold(10)
+
+	# A disc unit has to be OPENED first, and the button is how a hand does it.
+	var eject := unit.get_node_or_null("EjectButton") as VRButton
+	if eject != null:
+		eject.button_pressed.emit()
+		await _wait(6)
+		await _hold(16)
 	await _carry(media, unit.global_position + Vector3(0.0, 0.02, 0.14), 18)
 	unit.restore_media(media)
 	await _wait(6)
-	await _hold(22)
+	await _hold(14)
+	if eject != null:
+		eject.button_pressed.emit()
+		await _wait(6)
+		await _hold(16)
 
 	# Once round the assembled machine.
 	for i in range(40):
