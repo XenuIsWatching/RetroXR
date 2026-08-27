@@ -3289,7 +3289,13 @@ func _start_subsystem_content(dir: String, core: String, spec: Dictionary) -> bo
 
 
 func _disk_drive_options(core: String) -> Dictionary:
-	if systemid != "nintendo_64dd":
+	# A 64DD reaches a machine two ways, and the systemid only says one of them.
+	# Launching a disk from the library makes a nintendo_64dd machine; bolting
+	# the drive under a console leaves the console a nintendo_64 with an
+	# expansion, and asking only about the systemid misses it entirely -- which
+	# left the assembled machine running with its drive switched off, on the one
+	# machine that visibly has one.
+	if systemid != "nintendo_64dd" and not expansion_ids().has("nintendo_64dd"):
 		return {}
 	if core == "parallel_n64":
 		return {"parallel-n64-64dd-hardware": "enabled"}
@@ -3306,8 +3312,22 @@ func _disk_drive_options(core: String) -> Dictionary:
 	# and this has to run on a headset. Pinned for the same reason the drive
 	# above is: with the default the player gets a black screen, and no amount
 	# of fiddling elsewhere fixes it.
-	if core == "mupen64plus_next":
-		return {"mupen64plus-rdp-plugin": "parallel"}
+	#
+	# Only while this core is actually being offered Vulkan, which is the
+	# default for every core and can be overridden per core in CORES > Manager >
+	# FRONTEND. ParaLLEl-RDP is a Vulkan renderer: pinning it on a core the
+	# player has moved to GL would turn a black screen into a refused load,
+	# which is a worse answer to the same question. Angrylion is the fallback
+	# because it needs no API at all -- slow, and still a picture.
+	#
+	# Only when the cartridge slot is empty, which is the boot GLideN64 cannot
+	# draw. With a cartridge in, the same core and the same drive render
+	# perfectly on the stock renderer -- measured -- and forcing a different one
+	# there would be changing the player's picture for no reason, on a file
+	# every nintendo_64 machine shares.
+	if core == "mupen64plus_next" and _host_media_path().is_empty():
+		var api := AppPrefs.hw_render_for(core)
+		return {"mupen64plus-rdp-plugin": "parallel" if api == "vulkan" else "angrylion"}
 	return {}
 
 

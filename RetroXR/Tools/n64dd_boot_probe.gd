@@ -23,8 +23,15 @@ const SAMPLE_AT := [4.0, 8.0, 14.0, 20.0, 26.0]
 
 var root_dir := ""
 var shot := ""
-var cart_path := "Z:/roms/n64/F-Zero X (Japan).z64"
-var disk_path := "Z:/roms/n64dd/F-Zero X - Expansion Kit (Japan).ndd"
+var host_id := "nintendo_64"
+var unit_id := "nintendo_64dd"
+## A second unit, for a tower: Mega Drive + Mega-CD + 32X is its own combination
+## with its own core, not the two-unit recipes added together.
+var unit2_id := ""
+## Empty is meaningful: a console with nothing in its own slot is how most of
+## these combinations actually run, and how the 64DD picks its other core.
+var cart_path := ""
+var disk_path := ""
 var _sys: RetroSystem
 
 
@@ -39,6 +46,12 @@ func _ready() -> void:
 			cart_path = s.trim_prefix("--cart=")
 		elif s.begins_with("--disk="):
 			disk_path = s.trim_prefix("--disk=")
+		elif s.begins_with("--host="):
+			host_id = s.trim_prefix("--host=")
+		elif s.begins_with("--unit="):
+			unit_id = s.trim_prefix("--unit=")
+		elif s.begins_with("--unit2="):
+			unit2_id = s.trim_prefix("--unit2=")
 
 	get_tree().create_timer(SAMPLE_AT[-1] + 45.0).timeout.connect(func() -> void:
 		print("[n64dd] TIMEOUT")
@@ -55,14 +68,14 @@ func _wait(n: int) -> void:
 
 func _run() -> void:
 	var dd := EXPANSION_SCENE.instantiate() as RetroExpansion
-	dd.expansion_id = "nintendo_64dd"
+	dd.expansion_id = unit_id
 	dd.freeze = true
 	add_child(dd)
 	dd.global_position = Vector3(0, 1, 0)
 	await _wait(20)
 
 	var n64 := SYSTEM_SCENE.instantiate() as RetroSystem
-	n64.systemid = "nintendo_64"
+	n64.systemid = host_id
 	if not root_dir.is_empty():
 		n64.core_directory = root_dir
 	n64.freeze = true
@@ -71,27 +84,41 @@ func _run() -> void:
 	await _wait(30)
 	_sys = n64
 
-	# Bolt the console onto the drive.
-	dd.get_socket().pick_up_object(n64)
+	# Bolt the two together. Which of them wears the socket depends on which way
+	# the pair stacks -- a 64DD is a base, a 32X sits on top -- and
+	# restore_expansion takes either direction.
+	n64.restore_expansion(dd)
 	await _wait(10)
+
+	if not unit2_id.is_empty():
+		var dd2 := EXPANSION_SCENE.instantiate() as RetroExpansion
+		dd2.expansion_id = unit2_id
+		dd2.freeze = true
+		add_child(dd2)
+		await _wait(20)
+		n64.restore_expansion(dd2)
+		await _wait(10)
+
 	print("[n64dd] stack=%s" % str(n64.expansion_ids()))
 
 	# The cartridge into the console, the disk into the drive underneath.
-	var cart := CART_SCENE.instantiate() as Node3D
-	cart.systemid = "nintendo_64"
-	cart.rom_path = cart_path
-	cart.freeze = true
-	add_child(cart)
-	await _wait(10)
-	n64.restore_cartridge(cart)
+	if not cart_path.is_empty():
+		var cart := CART_SCENE.instantiate() as Node3D
+		cart.systemid = host_id
+		cart.rom_path = cart_path
+		cart.freeze = true
+		add_child(cart)
+		await _wait(10)
+		n64.restore_cartridge(cart)
 
-	var disk := CART_SCENE.instantiate() as Node3D
-	disk.systemid = "nintendo_64dd"
-	disk.rom_path = disk_path
-	disk.freeze = true
-	add_child(disk)
-	await _wait(10)
-	dd.restore_media(disk)
+	if not disk_path.is_empty():
+		var disk := CART_SCENE.instantiate() as Node3D
+		disk.systemid = ExpansionCatalog.media_of(unit_id)
+		disk.rom_path = disk_path
+		disk.freeze = true
+		add_child(disk)
+		await _wait(10)
+		dd.restore_media(disk)
 	await _wait(10)
 
 	var spec := n64.expansion_boot()
@@ -119,8 +146,8 @@ func _run() -> void:
 		print("[n64dd] t=%4.1f frames=%-6d lit=%s" % [
 			at, frames, ("%.4f" % lit) if lit >= 0.0 else "(no image)"])
 
-	print("[n64dd] RESULT frames=%d lit=%.4f" % [
-		int(n64._libretro.GetFrameCount()), best_lit])
+	print("[n64dd] RESULT %s+%s frames=%d lit=%.4f" % [
+		host_id, unit_id, int(n64._libretro.GetFrameCount()), best_lit])
 
 
 func _lit_fraction(img: Image) -> float:
