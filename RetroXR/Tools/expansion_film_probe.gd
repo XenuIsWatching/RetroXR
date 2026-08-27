@@ -104,74 +104,76 @@ func _carry(what: Node3D, to: Vector3, steps: int) -> void:
 		await _grab()
 
 
+## Every combination the catalog knows, each with a piece of its own media.
+## Paths are only labels here -- nothing is launched, so a file that is not
+## present still shows the shape of the media going in.
+const REEL := [
+	{"host": "nintendo_64",  "unit": "nintendo_64dd", "media": "nintendo_64dd"},
+	{"host": "nes",          "unit": "fds",           "media": "fds"},
+	{"host": "super_nes",    "unit": "satellaview",   "media": "satellaview"},
+	{"host": "super_nes",    "unit": "sufami_turbo",  "media": "sufami_turbo"},
+	{"host": "mega_drive",   "unit": "sega_cd",       "media": "sega_cd"},
+	{"host": "mega_drive",   "unit": "sega_32x",      "media": "sega_32x"},
+	{"host": "pc_engine",    "unit": "pc_engine_cd",  "media": "pc_engine_cd"},
+	{"host": "atari_jaguar", "unit": "jaguar_cd",     "media": "atari_jaguar"},
+]
+
+
 func _film() -> void:
-	# The drive first, alone on the stage: it is the base the console stands on.
-	var dd := EXPANSION_SCENE.instantiate() as RetroExpansion
-	dd.expansion_id = "nintendo_64dd"
-	dd.freeze = true
-	add_child(dd)
-	dd.global_position = STAGE
-	await _wait(20)
-	await _hold(20)
+	for entry: Dictionary in REEL:
+		await _one(str(entry["host"]), str(entry["unit"]), str(entry["media"]))
 
-	# The console, brought in from the side and lowered onto it.
-	var n64 := SYSTEM_SCENE.instantiate() as RetroSystem
-	n64.systemid = "nintendo_64"
-	n64.freeze = true
-	add_child(n64)
-	n64.global_position = STAGE + Vector3(0.42, 0.30, 0.0)
+
+## One machine: assemble it, load it, look around it, take it away again.
+func _one(host_id: String, unit_id: String, media_id: String) -> void:
+	var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
+	unit.expansion_id = unit_id
+	unit.freeze = true
+	add_child(unit)
+	unit.global_position = STAGE
+	await _wait(24)
+
+	var host := SYSTEM_SCENE.instantiate() as RetroSystem
+	host.systemid = host_id
+	host.freeze = true
+	add_child(host)
+	# Brought in from the side, then lowered on -- whichever way this pair
+	# stacks, restore_expansion takes both directions.
+	var above := ExpansionCatalog.mount_of(unit_id) == ExpansionCatalog.MOUNT_ABOVE
+	host.global_position = STAGE + (Vector3(0.42, -0.24, 0.0) if above else Vector3(0.42, 0.30, 0.0))
 	await _wait(30)
-	await _hold(12)
-	await _carry(n64, STAGE + Vector3(0.0, 0.16, 0.0), 26)
-
-	# The join itself. pick_up_object is what a release into the socket ends in,
-	# so the console seats exactly where a hand would have put it.
-	# Unfrozen for the join: a snap zone poses what it picks up by moving the
-	# body, and a frozen one simply stays where it was left.
-	# Unfrozen for the join, as a carried machine would be.
-	n64.freeze = false
-	dd.get_socket().pick_up_object(n64)
+	await _hold(10)
+	await _carry(host, STAGE + (Vector3(0.0, -0.16, 0.0) if above else Vector3(0.0, 0.16, 0.0)), 20)
+	host.freeze = false
+	host.restore_expansion(unit)
 	await _wait(6)
-	print("[film] seated: gap=%.4f (0 = flush)" % [
-		(n64.global_position.y + n64._body_aabb().position.y)
-		- (dd.global_position.y + dd.size().y * 0.5)])
-	await _hold(26)
+	await _hold(18)
 
-	# A cartridge into the console on top.
-	var cart := CART_SCENE.instantiate() as Node3D
-	cart.systemid = "nintendo_64"
-	cart.rom_path = "Z:/roms/n64/F-Zero X (Japan).z64"
-	cart.freeze = true
-	add_child(cart)
-	cart.global_position = n64.global_position + Vector3(0.0, 0.34, -0.02)
-	await _wait(20)
-	await _hold(12)
-	await _carry(cart, n64.global_position + Vector3(0.0, 0.10, -0.02), 20)
-	n64.restore_cartridge(cart)
+	# The media the unit itself takes -- a disk, a disc, a pack, a cartridge.
+	var media := CART_SCENE.instantiate() as Node3D
+	media.systemid = media_id
+	media.rom_path = "Z:/roms/%s/demo" % media_id
+	media.freeze = true
+	add_child(media)
+	var bay := unit.global_position + Vector3(0.30, 0.10, 0.22)
+	media.global_position = bay
+	await _wait(18)
+	await _hold(10)
+	await _carry(media, unit.global_position + Vector3(0.0, 0.02, 0.14), 18)
+	unit.restore_media(media)
 	await _wait(6)
-	await _hold(24)
+	await _hold(22)
 
-	# And a disk into the drive underneath — the half the console has no slot for.
-	var disk := CART_SCENE.instantiate() as Node3D
-	disk.systemid = "nintendo_64dd"
-	disk.rom_path = "Z:/roms/n64dd/F-Zero X - Expansion Kit (Japan).ndd"
-	disk.freeze = true
-	add_child(disk)
-	disk.global_position = dd.global_position + Vector3(0.34, 0.02, 0.16)
-	await _wait(20)
-	await _hold(12)
-	await _carry(disk, dd.global_position + Vector3(0.02, 0.0, 0.10), 20)
-	dd.restore_media(disk)
-	await _wait(6)
-	await _hold(20)
-
-	# Round the assembled machine, so both halves and both pieces of media are
-	# visible in one move.
-	for i in range(56):
-		var a: float = lerp(0.0, TAU * 0.5, float(i) / 55.0)
-		_look_from(STAGE + Vector3(cos(a + 0.8) * 0.78, 0.34, sin(a + 0.8) * 0.78))
+	# Once round the assembled machine.
+	for i in range(40):
+		var a: float = lerp(0.0, TAU * 0.45, float(i) / 39.0)
+		_look_from(STAGE + Vector3(cos(a + 0.7) * 0.80, 0.30, sin(a + 0.7) * 0.80))
 		await _wait(1)
 		await _grab()
+	_look_from(Vector3(0.62, 1.34, 0.62))
 
-	print("[film] stack=%s core=%s" % [str(n64.expansion_ids()), n64.resolve_core_name()])
-	await _hold(16)
+	print("[film] %s + %s -> %s" % [host_id, unit_id, host.resolve_core_name()])
+	for n in [media, host, unit]:
+		if is_instance_valid(n):
+			n.queue_free()
+	await _wait(12)

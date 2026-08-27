@@ -3155,11 +3155,26 @@ func on_expansion_media_changed(_unit: RetroExpansion) -> void:
 func restore_expansion(unit: RetroExpansion) -> void:
 	if unit == null:
 		return
+	# Whichever machine owns the socket is the one that has to do the taking: a
+	# unit that stands on this console goes into OUR socket, a unit this console
+	# stands on takes the console into ITS socket. Only the second half was here,
+	# so bolting a 64DD or a Mega-CD bound the two logically and seated neither --
+	# and an unfrozen console with nothing holding it simply fell through the join.
 	if ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_ABOVE:
 		var socket := get_node_or_null("ExpansionSocket") as XRToolsSnapZone
-		if socket != null:
+		if socket != null and _accepts_expansion(unit):
 			socket.pick_up_object(unit)
 			return
+	else:
+		var base := unit.get_socket()
+		if base != null:
+			base.pick_up_object(self)
+			return
+	# No socket on either side -- a combination the catalog does not describe, or
+	# a machine whose body was never measured. Bind it logically so the stack is
+	# at least reported correctly, rather than silently doing nothing.
+	push_warning("[RetroSystem] %s and %s have no socket between them; bound without a physical join"
+		% [systemid, unit.expansion_id])
 	unit.bind_to_host(self)
 
 
