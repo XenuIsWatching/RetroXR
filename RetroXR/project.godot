@@ -20,6 +20,7 @@ run/main_scene="res://Scenes/BedroomScene.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://Textures/app_icon.png"
 run/main_scene.rendermodelprobe="res://Tools/quest_render_model_probe.tscn"
+run/main_scene.poweronprobe="res://Tools/power_on_stall_probe.tscn"
 
 [audio]
 
