@@ -1,0 +1,59 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/systems/expansion.gd" id="1_expscript"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+
+; Every shape and mesh below is a PLACEHOLDER. RetroExpansion._build_body
+; replaces all three from ExpansionCatalog's size for the unit's id, because one
+; scene serves eight different boxes and the authored figures would only ever be
+; right for one of them. They are here so the scene loads with something real in
+; it and so the node types are fixed by the scene rather than by code.
+[sub_resource type="PhysicsMaterial" id="PhysMat_expansion"]
+friction = 0.8
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(0.3, 0.08, 0.25)
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.3, 0.08, 0.25)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
+size = Vector3(0.32, 0.1, 0.27)
+
+; ── a console expansion ───────────────────────────────────────────────────────
+;
+; The group is load-bearing: a console's expansion socket names it as its
+; snap_require, and XRToolsSnapZone.can_preview refuses to draw the snap ghost
+; for a zone without one. Layer/mask and the damping are the console's, so a base
+; and the machine standing on it behave the same way in the hand and on a table.
+[node name="Expansion" type="RigidBody3D" groups=["retro_expansion"]]
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_expansion")
+freeze_mode = 1
+linear_damp = 5.0
+angular_damp = 8.0
+script = ExtResource("1_expscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_body")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_body")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+; Placed on the front face by _build_body, which is the only place that knows how
+; tall this particular unit is.
+[node name="NameLabel" type="Label3D" parent="."]
+pixel_size = 0.001
+font_size = 20
+outline_size = 4
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("BoxShape3D_pointer")
