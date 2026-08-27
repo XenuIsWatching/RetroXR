@@ -30,6 +30,8 @@ const ACTIVE_COLOR := Color(1.0, 0.82, 0.28, 1.0)
 
 const OUTLINE_SHADER := preload("res://Shaders/outline.gdshader")
 const OUTLINE_MASK_SHADER := preload("res://Shaders/outline_mask.gdshader")
+## Stand-in for the pair above while foveation is on — see QualityManager.stencil_safe().
+const OUTLINE_HULL_SHADER := preload("res://Shaders/outline_hull.gdshader")
 
 # Mild HDR glow — enough to read as "hovered" without blooming out under the
 # room's glow post-process (2.0 rendered green x3, far too bright).
@@ -92,7 +94,8 @@ func _init() -> void:
 	extra_cull_margin = 16.0
 
 	_outline_material = ShaderMaterial.new()
-	_outline_material.shader = OUTLINE_SHADER
+	_outline_material.shader = (OUTLINE_SHADER if QualityManager.stencil_safe()
+		else OUTLINE_HULL_SHADER)
 	_outline_material.render_priority = 2
 	_outline_material.set_shader_parameter("outline_color", HOVER_COLOR)
 	_outline_material.set_shader_parameter("outline_width", OUTLINE_WIDTH)
@@ -100,11 +103,15 @@ func _init() -> void:
 	_outline_material.set_shader_parameter("fade_start", FADE_START)
 	_outline_material.set_shader_parameter("fade_end", FADE_END)
 
-	var mask := ShaderMaterial.new()
-	mask.shader = OUTLINE_MASK_SHADER
-	mask.render_priority = 1
-	mask.next_pass = _outline_material
-	material_override = mask
+	if QualityManager.stencil_safe():
+		var mask := ShaderMaterial.new()
+		mask.shader = OUTLINE_MASK_SHADER
+		mask.render_priority = 1
+		mask.next_pass = _outline_material
+		material_override = mask
+	else:
+		# Foveation is on: no stencil may be drawn, so the hull stands alone.
+		material_override = _outline_material
 
 
 ## Point the overlay at the mesh it should trace. Safe to call repeatedly.

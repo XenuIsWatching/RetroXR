@@ -216,8 +216,9 @@ func _build(vr_mode: bool) -> void:
 			+ "after changing it."))
 
 	# Foveation shades the edges of each eye at a fraction of the centre's rate.
-	# It is offered knowing it is broken on this stack, because the row is also
-	# how anyone finds out that it has been fixed.
+	# Driven through the viewport's VRS rather than XR_FB foveation, which on this
+	# stack is either inert or a flat brown screen — QualityManager's enum has the
+	# measurements.
 	if QualityManager.supports_foveation():
 		var fov_opt := VRDropdown.create("Foveation",
 			[["Off", QualityManager.Foveation.OFF],
@@ -230,9 +231,10 @@ func _build(vr_mode: bool) -> void:
 		vbox.add_child(fov_opt)
 
 		vbox.add_child(MenuStyle.hint("Spends fewer pixels at the edges of each eye, where the "
-			+ "lens throws detail away anyway, and hands the saving to the centre. WARNING: on "
-			+ "this headset anything above Off has been rendering the whole view as one flat "
-			+ "colour. If that happens, set it back to Off."))
+			+ "lens throws detail away anyway, and hands the saving to the centre — worth about "
+			+ "a third of the frame, which is what pays for a bigger Eye Buffer. While it is on, "
+			+ "the hover outline around an object is hidden by anything in front of it instead "
+			+ "of showing through."))
 
 	# Requests to the runtime, not clock speeds — and nothing reads back, since
 	# Godot binds the setters and no getter. The rows show what was asked for.

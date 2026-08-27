@@ -43,11 +43,44 @@ enum PerfLevel { POWER_SAVINGS, SUSTAINED_LOW, SUSTAINED_HIGH, BOOST }
 ## over-samples the periphery anyway. Where it works it pays for the eye-buffer
 ## scale outright (12.92 ms / 71 fps against 17.04 / 56 at x1.229, Quest 3).
 ##
-## It does not currently work here. At LOW and above the whole eye buffer renders
-## as one flat colour on this stack — Godot 4.7 + vendors 5.1 + 4x MSAA +
-## multiview on a Quest 3 (21351c5). OFF is the default for that reason, and the
-## menu row says so; anyone turning it up is testing whether it is still true.
+## It works, but NOT down the road it looks like it should, and the wrong road
+## is the one the property name points at. Measured on a Quest 3, Godot 4.7 +
+## vendors 5.1, at the panel-native eye buffer:
+##
+##   XR_FB foveation (`foveation_level`)      what happens
+##   ---------------------------------------  --------------------------------
+##   level 3, rooms' glow ON                   nothing. Godot force-disables
+##                                             subsampled images ("rendering
+##                                             features are in use") and the
+##                                             level is a silent no-op: same GPU
+##                                             time, same image at every radius.
+##   level 3, glow OFF                         the whole eye buffer paints one
+##                                             flat brown — 21351c5, and it was
+##                                             never about MSAA. Glow had been
+##                                             hiding it by disabling the path.
+##   subsampled images off, any level          nothing, at any radius.
+##
+## So that route is unusable: it is either inert or it is a brown screen. What
+## works is Godot's own VRS, which reaches the same density map without the
+## subsampled allocation — `vrs_mode = VRS_XR` with the interface's radial
+## generator. Same room, same MSAA 4x, eye buffer x1.4, at 120 Hz:
+##
+##   VRS off   85 fps, 11.1 ms      VRS high   120 fps, 7.9 ms
+##
+## and peripheral detail falls to 0.80 of the centre's where every unfoveated
+## capture measures 1.8-2.0, which is the check that separates the two paths.
+## Glow survives it. The stencil outline does not — see stencil_safe().
 enum Foveation { OFF, LOW, MEDIUM, HIGH }
+
+## How each Foveation level is expressed to Godot's VRS generator. `min_radius`
+## is how far out, in eye-buffer pixels, full rate is kept — the centre a reader
+## actually looks through — and `strength` how hard the rate falls off past it.
+## OFF is absent on purpose: it selects VRS_DISABLED rather than a weak tier.
+const VRS_TIERS := {
+	Foveation.LOW:    {"min_radius": 45.0, "strength": 0.5},
+	Foveation.MEDIUM: {"min_radius": 30.0, "strength": 1.0},
+	Foveation.HIGH:   {"min_radius": 20.0, "strength": 2.0},
+}
 
 ## Render scale and the eye buffer are deliberately absent: both are a taste call
 ## about how much resolution to buy, not a quality tier, so a preset never moves
@@ -164,6 +197,10 @@ var display_rate: float = 0.0
 var cpu_level: PerfLevel = PerfLevel.SUSTAINED_HIGH
 var gpu_level: PerfLevel = PerfLevel.SUSTAINED_HIGH
 var foveation_level: Foveation = Foveation.OFF
+## Engine glow. The rooms author it; this is the switch that can take it away,
+## because it is the only full-frame post-process the mobile backend still runs
+## and it is what reads the eye buffer back.
+var glow_enabled: bool = true
 ## Desktop window state. Empty resolution means "leave the window where it is".
 var window_mode: String = ""
 var resolution: String = ""
@@ -432,6 +469,17 @@ func supports_foveation() -> bool:
 	return bool(xr.call("is_foveation_supported"))
 
 
+## Whether a stencil-based material may be drawn this session.
+##
+## False while foveation is on, and that is a crash guard rather than a taste
+## call: with VRS active, drawing the outline_mask/outline stencil pair loses the
+## Vulkan device inside two seconds on a Quest 3 (a fault in the opaque pass,
+## two runs out of two, never once with VRS off). The highlight overlays ask this
+## and take the stencil-free outline_hull instead; see that shader for the trade.
+func stencil_safe() -> bool:
+	return foveation_level == Foveation.OFF
+
+
 func set_foveation_level(level: int) -> void:
 	foveation_level = clampi(level, Foveation.OFF, Foveation.HIGH) as Foveation
 	apply_foveation()
@@ -447,7 +495,28 @@ func apply_foveation() -> void:
 	if not supports_foveation():
 		return
 	var xr := XRServer.find_interface("OpenXR")
-	xr.set("foveation_level", int(foveation_level))
+	# XR_FB_foveation stays OFF at every level. Measured on this stack, it has
+	# exactly two outcomes and neither is foveation: with the rooms' glow on,
+	# Godot force-disables subsampled images and the level becomes a silent
+	# no-op; with glow off, subsampled images engage and the whole eye buffer
+	# paints one flat brown. See the enum comment for the table.
+	#
+	# `xr/openxr/foveation_eye_tracked` is false in project.godot for the same
+	# reason it is pinned here: the runtime logs that it skips
+	# XR_META_foveation_eye_tracked outright, for want of an
+	# `oculus.software.eye_tracking` manifest feature this app does not want.
+	xr.set("foveation_level", 0)
+	# Godot's own VRS instead, which reaches the same density map without the
+	# subsampled allocation that breaks. The interface generates a radial rate
+	# texture from these two, so the level is expressed as a strength and a
+	# clean-centre radius rather than an FB profile.
+	var tier: Dictionary = VRS_TIERS.get(foveation_level, {})
+	if tier.is_empty():
+		get_tree().root.vrs_mode = Viewport.VRS_DISABLED
+		return
+	xr.set("vrs_min_radius", tier["min_radius"])
+	xr.set("vrs_strength", tier["strength"])
+	get_tree().root.vrs_mode = Viewport.VRS_XR
 
 
 ## Window mode and resolution were the only GRAPHICS rows that reset every launch,
@@ -613,10 +682,21 @@ func apply_ao_quality() -> void:
 		configure_environment(node as WorldEnvironment)
 
 
+func set_glow_enabled(on: bool) -> void:
+	glow_enabled = on
+	apply_ao_quality()
+	_mark_custom()
+	save_prefs()
+
+
 func configure_environment(world_env: WorldEnvironment) -> void:
 	if world_env == null or world_env.environment == null:
 		return
 	var env := world_env.environment
+	# Every room authors glow on and matched, so this is a straight assignment
+	# rather than a remembered per-room value. The one Environment that authors
+	# it off, Resources/env_quest.tres, is referenced by no scene.
+	env.glow_enabled = glow_enabled
 	env.ssao_enabled = ao_quality != AOQuality.OFF and supports_post_effects()
 	if not env.ssao_enabled:
 		return
@@ -674,6 +754,9 @@ func _load_prefs() -> void:
 		PerfLevel.POWER_SAVINGS, PerfLevel.BOOST) as PerfLevel
 	foveation_level = clampi(_prefs_int(data, "foveation_level", foveation_level),
 		Foveation.OFF, Foveation.HIGH) as Foveation
+	var glow: Variant = data.get("glow_enabled")
+	if typeof(glow) == TYPE_BOOL:
+		glow_enabled = glow
 
 
 func save_prefs() -> void:
@@ -695,6 +778,7 @@ func save_prefs() -> void:
 		"cpu_level": int(cpu_level),
 		"gpu_level": int(gpu_level),
 		"foveation_level": int(foveation_level),
+		"glow_enabled": glow_enabled,
 	}))
 	file.close()
 

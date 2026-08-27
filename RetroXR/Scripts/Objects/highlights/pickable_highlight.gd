@@ -28,6 +28,8 @@ extends Node3D
 
 const OUTLINE_SHADER := preload("res://Shaders/outline.gdshader")
 const OUTLINE_MASK_SHADER := preload("res://Shaders/outline_mask.gdshader")
+## Stand-in for the pair above while foveation is on — see QualityManager.stencil_safe().
+const OUTLINE_HULL_SHADER := preload("res://Shaders/outline_hull.gdshader")
 
 ## Color shown while the pointer ray is hovering over the object.
 @export var hover_color: Color = Color(1.0, 1.0, 1.0, 1.0)
@@ -69,13 +71,20 @@ func _ready() -> void:
 	set_process(false)
 
 	_outline_material = ShaderMaterial.new()
-	_outline_material.shader = OUTLINE_SHADER
 	_outline_material.render_priority = 2
 
-	_mask_material = ShaderMaterial.new()
-	_mask_material.shader = OUTLINE_MASK_SHADER
-	_mask_material.render_priority = 1
-	_mask_material.next_pass = _outline_material
+	if QualityManager.stencil_safe():
+		_outline_material.shader = OUTLINE_SHADER
+		_mask_material = ShaderMaterial.new()
+		_mask_material.shader = OUTLINE_MASK_SHADER
+		_mask_material.render_priority = 1
+		_mask_material.next_pass = _outline_material
+	else:
+		# Foveation is on, so the stencil pair would take the GPU down with it.
+		# One hull, no mask pass, and _mask_material is what the overlays are
+		# actually given — so it becomes the hull rather than gaining a next_pass.
+		_outline_material.shader = OUTLINE_HULL_SHADER
+		_mask_material = _outline_material
 	_sync_material_params()
 
 	var parent := get_parent()

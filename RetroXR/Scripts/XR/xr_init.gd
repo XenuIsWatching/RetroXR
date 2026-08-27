@@ -59,9 +59,11 @@ func _ready():
 
 
 ## Report what the session actually came up with, so a bad eye-buffer size is
-## visible in logcat instead of only in the headset. `foveation` should read 0 —
-## anything else means foveation crept back in and the view will be a flat colour
-## (21351c5); on a Quest 3 at the default eye-buffer scale, expect
+## visible in logcat instead of only in the headset. `foveation` reads 0 on a
+## working session and that is now the CORRECT value at every menu setting:
+## foveation is driven through the viewport's VRS, not XR_FB's foveation_level,
+## which QualityManager pins at 0 because it is inert or brown (see its enum).
+## On a Quest 3 at the default eye-buffer scale, expect
 ## "eye buffer (2064.72, 2163.04) per eye, window (4128, 2208), foveation 0".
 ##
 ## Sampled once, at startup. The GRAPHICS tab's Eye Buffer row moves it later, and
