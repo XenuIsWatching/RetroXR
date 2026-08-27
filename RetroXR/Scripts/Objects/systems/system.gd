@@ -3089,8 +3089,6 @@ func _accepts_expansion(obj: Node3D) -> bool:
 func _on_expansion_seated(obj: Node3D) -> void:
 	var unit := obj as RetroExpansion
 	if unit != null:
-		# The zone will not move a frozen body on its own; see ExpansionPort.seat.
-		ExpansionPort.seat(get_node_or_null("ExpansionSocket") as XRToolsSnapZone, unit)
 		unit.bind_to_host(self)
 
 
@@ -3325,7 +3323,16 @@ func _disk_drive_options(core: String) -> Dictionary:
 	# perfectly on the stock renderer -- measured -- and forcing a different one
 	# there would be changing the player's picture for no reason, on a file
 	# every nintendo_64 machine shares.
-	if core == "mupen64plus_next" and _host_media_path().is_empty():
+	#
+	# Cartridge-less is a fact about what the CORE is handed, not about whether
+	# the console's own slot is occupied, and the two come apart here. A machine
+	# spawned as a nintendo_64dd holds its disk in that very slot and still boots
+	# with no cartridge; an assembled machine keeps the cartridge in the console
+	# and the disk in the drive underneath. Reading the slot alone got this
+	# backwards for the standalone machine -- the case the pin was written for --
+	# and it went black again.
+	var cartridge_less := systemid == "nintendo_64dd" or _host_media_path().is_empty()
+	if core == "mupen64plus_next" and cartridge_less:
 		var api := AppPrefs.hw_render_for(core)
 		return {"mupen64plus-rdp-plugin": "parallel" if api == "vulkan" else "angrylion"}
 	return {}

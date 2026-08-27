@@ -90,30 +90,6 @@ static func build_foot(host: Node3D, bottom_y: float, span: Vector2) -> XRToolsG
 	return point
 
 
-## Put `obj` exactly where `zone` says it belongs, now.
-##
-## Needed because the grab driver a snap zone builds is a RemoteTransform3D, and
-## a RemoteTransform3D does not move a frozen RigidBody. Measured: the driver is
-## created carrying the correct pose and the body never follows it, so a console
-## bolted to a base hangs a few centimetres above it -- and then drops into place
-## the first time anything moves the base, because that is what finally changes
-## the driver's own transform. Media never showed this, because the slots
-## position their contents themselves rather than relying on the driver.
-##
-## This is the pose the zone computed, not a correction to it: the two faces are
-## already flush by construction.
-static func seat(zone: XRToolsSnapZone, obj: Node3D) -> void:
-	if not (is_instance_valid(zone) and is_instance_valid(obj)):
-		return
-	var pose := zone.snap_pose_for(obj)
-	obj.global_transform = pose
-	# And again once the frame is over. This runs from the zone's own
-	# has_picked_up, which fires inside the physics step, and a transform written
-	# to a body there is overwritten before anyone sees it -- measured: the
-	# immediate assignment alone leaves the console exactly where it started.
-	obj.set_deferred("global_transform", pose)
-
-
 ## Detach whatever a socket is holding, without the socket having to be found
 ## again by name. Null-safe: a machine with no socket simply has nothing to drop.
 static func release(zone: XRToolsSnapZone) -> void:

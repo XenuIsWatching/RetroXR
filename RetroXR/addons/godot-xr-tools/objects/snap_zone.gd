@@ -433,24 +433,6 @@ func pick_up_object(target: Node3D) -> void:
 
 	target.pick_up(self)
 
-	# LOCAL PATCH (RetroXR): seat what we just took, now.
-	#
-	# pick_up builds a grab driver, and that driver is a RemoteTransform3D --
-	# which does not move a frozen RigidBody. A body released by a HAND still
-	# arrives, because the hand keeps moving and every move rewrites the
-	# driver's transform, which is what finally pushes the pose across. A body
-	# handed to a zone programmatically -- a save restore seating a cartridge, a
-	# console lowered onto an expansion -- never gets that nudge, so it hangs
-	# wherever it happened to be when the zone took it, sometimes a hand's width
-	# off the machine it is supposedly inside.
-	#
-	# Deferred as well as immediate: this runs inside the physics step, where a
-	# transform written to a body is overwritten before anyone sees it.
-	if is_instance_valid(picked_up_object) and picked_up_object is Node3D:
-		var seated := snap_pose_for(picked_up_object)
-		picked_up_object.global_transform = seated
-		picked_up_object.set_deferred("global_transform", seated)
-
 	# If object picked up then emit signal
 	if is_instance_valid(picked_up_object):
 		has_picked_up.emit(picked_up_object)

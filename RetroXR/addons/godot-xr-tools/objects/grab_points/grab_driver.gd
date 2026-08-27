@@ -37,6 +37,10 @@ var lerp_time : float = 0.0
 # blends the object back to the hand.
 const PREVIEW_BLEND_SPEED := 8.0    # blend/sec (~0.12 s each way)
 var _preview_zone : XRToolsSnapZone = null
+## LOCAL PATCH (RetroXR): false until this driver has driven its target at
+## least once. See the early-out in _physics_process.
+var _pushed_once := false
+
 var _preview_blend : float = 0.0
 # Cached bounding radius of the target so the preview engages at the same range
 # the socket's ghost used to (object surface reaching the grab sphere).
@@ -182,8 +186,18 @@ func _physics_process(delta : float) -> void:
 			_set_preview_collisions(false)
 			_preview_zone = null
 
-	if global_transform.is_equal_approx(destination):
+	# LOCAL PATCH (RetroXR): always push once, however the driver was built.
+	#
+	# create_snap and create_lerp set the driver's transform to the destination
+	# BEFORE remote_path is assigned, so a RemoteTransform3D built that way has
+	# nothing to report: its transform never changes, this early-out matches on
+	# the first tick, and the target is never moved. A hand-held object escapes
+	# it because the hand keeps moving; an object handed to a zone
+	# programmatically -- a save restore seating a cartridge, a console lowered
+	# onto an expansion -- does not, and simply stays where it was left.
+	if _pushed_once and global_transform.is_equal_approx(destination):
 		return
+	_pushed_once = true
 
 	# Apply the destination transform
 	global_transform = destination

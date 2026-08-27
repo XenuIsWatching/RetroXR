@@ -160,8 +160,6 @@ func _on_host_seated(obj: Node3D) -> void:
 	var sys := obj as RetroSystem
 	if sys == null:
 		return
-	# The zone will not move a frozen body on its own; see ExpansionPort.seat.
-	ExpansionPort.seat(_socket, sys)
 	_bind_host(sys)
 
 

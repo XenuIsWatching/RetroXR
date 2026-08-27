@@ -67,12 +67,17 @@ func _wait(n: int) -> void:
 
 
 func _run() -> void:
-	var dd := EXPANSION_SCENE.instantiate() as RetroExpansion
-	dd.expansion_id = unit_id
-	dd.freeze = true
-	add_child(dd)
-	dd.global_position = Vector3(0, 1, 0)
-	await _wait(20)
+	# An empty --unit models a machine that IS the platform rather than a console
+	# with something bolted under it: a nintendo_64dd spawned from the library
+	# holds its disk in its own slot.
+	var dd: RetroExpansion = null
+	if not unit_id.is_empty():
+		dd = EXPANSION_SCENE.instantiate() as RetroExpansion
+		dd.expansion_id = unit_id
+		dd.freeze = true
+		add_child(dd)
+		dd.global_position = Vector3(0, 1, 0)
+		await _wait(20)
 
 	var n64 := SYSTEM_SCENE.instantiate() as RetroSystem
 	n64.systemid = host_id
@@ -87,7 +92,8 @@ func _run() -> void:
 	# Bolt the two together. Which of them wears the socket depends on which way
 	# the pair stacks -- a 64DD is a base, a 32X sits on top -- and
 	# restore_expansion takes either direction.
-	n64.restore_expansion(dd)
+	if dd != null:
+		n64.restore_expansion(dd)
 	await _wait(10)
 
 	if not unit2_id.is_empty():
@@ -111,7 +117,7 @@ func _run() -> void:
 		await _wait(10)
 		n64.restore_cartridge(cart)
 
-	if not disk_path.is_empty():
+	if not disk_path.is_empty() and dd != null:
 		var disk := CART_SCENE.instantiate() as Node3D
 		disk.systemid = ExpansionCatalog.media_of(unit_id)
 		disk.rom_path = disk_path
@@ -123,7 +129,8 @@ func _run() -> void:
 
 	var spec := n64.expansion_boot()
 	print("[n64dd] core=%s cart=%s disk=%s" % [
-		n64.resolve_core_name(), n64._host_media_path(), dd.get_media_path()])
+		n64.resolve_core_name(), n64._host_media_path(),
+		(dd.get_media_path() if dd != null else "-")])
 	print("[n64dd] subsystem=%s pairing=%s" % [
 		str(spec.get("subsystem", {}).get("ident", "-")),
 		str(n64._expansion_roms(spec.get("subsystem", {})))])
