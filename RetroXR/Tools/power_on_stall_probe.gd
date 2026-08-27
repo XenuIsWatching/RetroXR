@@ -59,6 +59,14 @@ var _origin: XROrigin3D = null
 var _watch_mesh: MeshInstance3D = null
 var _first_pic_frame := -1
 var _fail := false
+## The machine whose picture the glass is supposed to be showing. The oracle is
+## IDENTITY against this node's own GetVideoTexture(), not brightness: a set
+## with no signal paints its own blue screen, which is bright, constant, and
+## passes every luminance threshold you would think to write. Three runs here
+## reported a luminance of exactly 0.694 -- a GBA game and a BIOS screen cannot
+## both be that -- which is how the blue screen was caught masquerading as a
+## picture.
+var _watch_sys: RetroSystem = null
 
 
 func _ready() -> void:
@@ -124,9 +132,23 @@ func _process(_dt: float) -> void:
 	_frame += 1
 	# Polled every frame rather than awaited, so the frame the picture lands on
 	# is the frame recorded -- that is the one a compile stall would sit in.
-	if _first_pic_frame < 0 and _picture_texture() != null:
+	if _first_pic_frame < 0 and _core_picture_is_on_glass():
 		_first_pic_frame = _frame
 		_mark("first picture")
+
+
+## Is the texture on the glass THE core's texture? Anything else -- the set's
+## blue screen, a stale frame from a previous run -- is not a picture.
+func _core_picture_is_on_glass() -> bool:
+	if _watch_sys == null or not is_instance_valid(_watch_sys):
+		return false
+	var lib: Libretro = _watch_sys.get_libretro_node()
+	if lib == null:
+		return false
+	var core_tex: Texture2D = lib.GetVideoTexture()
+	if core_tex == null:
+		return false
+	return _picture_texture() == core_tex
 
 
 ## The core's texture as it reaches the glass, whichever material is on it.
@@ -194,10 +216,12 @@ func _report(trial: String, from: int) -> void:
 	var lum := _luminance()
 	var pic_at: String = "NEVER" if _first_pic_frame < 0 \
 		else "f%d (+%d frames after power_on)" % [_first_pic_frame, _first_pic_frame - from]
-	print("[stall]     picture: %s  luminance %.3f" % [pic_at, lum])
+	print("[stall]     core picture on glass: %s  luminance %.3f  (still the core's own: %s)"
+		% [pic_at, lum, _core_picture_is_on_glass()])
 	if _first_pic_frame < 0 or lum < 0.02:
 		_fail = true
-		print("[stall]     INVALID: no picture reached the glass in this trial")
+		print("[stall]     INVALID: the core's texture never reached the glass "
+			+ "in this trial -- the set was painting something of its own")
 	elif _first_pic_frame >= from and _first_pic_frame < to:
 		print("[stall]     frame the picture landed on: %.1f ms (script %.1f ms)"
 			% [_deltas[_first_pic_frame], _proc_ms[_first_pic_frame]])
@@ -220,6 +244,7 @@ func _report(trial: String, from: int) -> void:
 ## model that failed to load is named rather than measured.
 func _watch(sys: RetroSystem, tv: RetroTV) -> void:
 	_first_pic_frame = -1
+	_watch_sys = sys
 	if use_tv and tv != null:
 		_watch_mesh = tv.get_screen_mesh()
 	else:
