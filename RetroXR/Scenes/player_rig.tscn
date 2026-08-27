@@ -62,6 +62,7 @@ active_button_action = "trigger_left"
 ; them; Godot would otherwise still contact them from their side.
 [node name="PlayerBody" parent="Staging/XROrigin3D" instance=ExtResource("4_playerbody")]
 collision_mask = 1019
+head_behavior_mode = 0
 player_calibrate_height = false
 
 [node name="MovementDesktopDirect" parent="Staging/XROrigin3D" instance=ExtResource("16_desktopdirect")]
