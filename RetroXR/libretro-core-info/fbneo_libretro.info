@@ -1,7 +1,7 @@
 # Software Information
 display_name = "Arcade (FinalBurn Neo)"
 authors = "Team FBNeo"
-supported_extensions = "zip|7z|cue|ccd"
+supported_extensions = "zip|7z|cue|ccd|chd"
 corename = "FinalBurn Neo"
 license = "Non-commercial"
 permissions = ""

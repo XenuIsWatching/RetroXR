@@ -1,7 +1,7 @@
 # Software Information
 display_name = "NEC - PC-98 (Neko Project II Kai)"
 authors = "Neko Project II Team, Tomohiro Yoshidomi"
-supported_extensions = "d98|zip|98d|fdi|fdd|2hd|tfd|d88|88d|hdm|xdf|dup|cmd|hdi|thd|nhd|hdd|hdn"
+supported_extensions = "d98|zip|98d|fdi|fdd|2hd|tfd|d88|88d|hdm|xdf|dup|cmd|hdi|thd|nhd|hdd|hdn|bin|dcp|dcu|dd6|ddb|fim|flp|h01|hd4|hd5|hd9|hdb|ima|img|nfd|slh|vhd"
 corename = "Neko Project II Kai"
 license = "MIT"
 permissions = ""

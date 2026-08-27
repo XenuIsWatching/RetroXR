@@ -1,7 +1,7 @@
 # Software Information
 display_name = "Nintendo - Game Boy Advance (mGBA)"
 authors = "endrift"
-supported_extensions = "gb|gbc|gba"
+supported_extensions = "gb|gbc|gba|sgb"
 corename = "mGBA"
 license = "MPLv2.0"
 permissions = ""

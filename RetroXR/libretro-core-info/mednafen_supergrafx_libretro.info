@@ -1,7 +1,7 @@
 # Software Information
 display_name = "NEC - PC Engine SuperGrafx (Beetle SuperGrafx)"
 authors = "Mednafen Team"
-supported_extensions = "pce|sgx|cue|ccd|chd"
+supported_extensions = "pce|sgx|cue|ccd|chd|m3u|toc"
 corename = "Beetle SuperGrafx"
 
 # Hardware Information

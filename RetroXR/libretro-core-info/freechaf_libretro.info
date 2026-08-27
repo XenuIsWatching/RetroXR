@@ -1,7 +1,7 @@
 # Software Information
 display_name = "Fairchild - ChannelF (FreeChaF)"
 authors = "David Richardson"
-supported_extensions = "bin|chf"
+supported_extensions = "bin|chf|rom"
 corename = "FreeChaF"
 license = "GPLv3"
 permissions = ""
