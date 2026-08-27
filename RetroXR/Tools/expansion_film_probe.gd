@@ -144,7 +144,10 @@ func _one(host_id: String, unit_id: String, media_id: String) -> void:
 	await _wait(30)
 	await _hold(10)
 	await _carry(host, STAGE + (Vector3(0.0, -0.16, 0.0) if above else Vector3(0.0, 0.16, 0.0)), 20)
-	host.freeze = false
+	# Left frozen. Whichever of the two gets picked up is frozen by the pickup
+	# itself; unfreezing the console meant that for a unit which mounts ABOVE it
+	# -- where the UNIT is the thing taken -- nothing held the console at all and
+	# it fell out of shot.
 	host.restore_expansion(unit)
 	await _wait(6)
 	await _hold(18)
