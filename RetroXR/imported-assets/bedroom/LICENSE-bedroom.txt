@@ -128,6 +128,51 @@ materials/Wood049_*
     variation keep coming through the normal and roughness maps. A painted panel
     door is not a uniform surface, it just is not brown.
 
+materials/Grass005_*
+    "Grass 005" — ambientCG
+    https://ambientcg.com/a/Grass005
+    Tagged clean/lawn/short. The front lawn, which is the single biggest surface
+    in the window: it used to be one flat Color(0.11, 0.14, 0.09) across a
+    140 x 140 plane. Four maps kept — this set ships an AmbientOcclusion and
+    grass is exactly the deep micro-relief one describes.
+
+materials/Road007_*
+    "Road 007" — ambientCG
+    https://ambientcg.com/a/Road007
+    Tagged center/dashed/lane: two solid edge lines and a dashed centre line are
+    IN the texture, so the street needs no extra geometry to be marked out. The
+    tile has to land across the road exactly once — see Mat_road in
+    BedroomScene.tscn for the swap_uv / tiles_per_metre / uv_offset that does it.
+
+materials/Rocks022_*
+    "Rocks 022" — ambientCG
+    https://ambientcg.com/a/Rocks022
+    Exposed aggregate: the driveway, the front walk and both sidewalks. Filed
+    under gravel/pebbles and named Rocks, but the preview is textbook exposed
+    aggregate — rounded stones set densely in mortar, the finish a 90s drive and
+    sidewalk have. ambientCG has nothing tagged "aggregate" at all, so this was
+    found by looking at previews rather than searching tags.
+
+    Four maps: its AmbientOcclusion earns its place the way the carpet's and the
+    lawn's do, because pebble-in-mortar is exactly the deep micro-relief a tiling
+    AO describes. It replaced Concrete048, which read as sand at this tint and
+    never looked like a driveway.
+
+materials/Ground048_*
+    "Ground 048" — ambientCG
+    https://ambientcg.com/a/Ground048
+    Bare earth for the planting beds.
+
+props/periwinkle_plant_1k.gltf  (+ props/textures/)
+    "Periwinkle Plant" — Poly Haven
+    https://polyhaven.com/a/periwinkle_plant
+    67k tris. Eight of them across a foundation bed and two beds out in the lawn.
+
+    Affordable only because THIS room targets PCVR. The same library's potted
+    plants were turned down earlier in this file at 96k and 70k on the Quest
+    budget, and its grass tufts are photoscans — grass_medium_01 is 1.6 MILLION
+    polygons and is not usable at any quality tier.
+
 exterior/  — see exterior/LICENSE-exterior.txt (Kenney + Quaternius, both CC0).
 
 

@@ -57,6 +57,14 @@ uniform float paint_over : hint_range(0.0, 1.0) = 0.0;
 // on a door the stiles want it vertical, and which way that falls out depends
 // on the face the axis-pick lands on.
 uniform bool swap_uv = false;
+
+// Slide the tile, in tiles, after scaling. World-position UVs start counting at
+// the world origin, which is fine for a texture that only has to tile — and
+// wrong for one whose CONTENT has to land somewhere specific. The road is the
+// case: its tile carries two solid edge lines and a dashed centre line, so the
+// tile boundary has to sit exactly on the kerb rather than wherever z=0 happens
+// to fall, or the lane markings run down the wrong part of the tarmac.
+uniform vec2 uv_offset = vec2(0.0, 0.0);
 uniform float normal_strength : hint_range(0.0, 2.0) = 1.0;
 uniform float roughness_scale : hint_range(0.0, 2.0) = 1.0;
 
@@ -113,7 +121,7 @@ void fragment() {
 	if (swap_uv) {
 		uv = uv.yx;
 	}
-	uv *= tiles_per_metre;
+	uv = uv * tiles_per_metre + uv_offset;
 
 	vec3 sampled = texture(albedo_tex, uv).rgb;
 	vec3 albedo = mix(sampled * tint.rgb, tint.rgb, paint_over);

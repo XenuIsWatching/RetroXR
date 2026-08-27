@@ -26,6 +26,17 @@ const EXTERIOR_LAYER := 2
 @export var darken: float = 0.62
 
 
+## Toned materials, keyed by the instance id of the material they came from.
+##
+## This cache is the whole point. The first version duplicated per SURFACE, so
+## two instances of the same GLB — HouseA and HouseFarB were literally the same
+## model — ended up holding two different material objects with identical
+## contents, and the renderer cannot batch across those. One duplicate per
+## distinct source material means every instance of a model shares one, which is
+## what lets them batch again. It matters more the more props go out here.
+var _toned: Dictionary = {}
+
+
 func _ready() -> void:
 	for node in find_children("*", "VisualInstance3D", true, false):
 		var vi := node as VisualInstance3D
@@ -43,18 +54,46 @@ func _tone_down(mi: MeshInstance3D) -> void:
 		# are already the colour we want, so leave those alone.
 		if mi.get_surface_override_material(i) != null:
 			continue
-		var src := mi.mesh.surface_get_material(i) as BaseMaterial3D
-		if src == null:
-			continue
-		# GLB materials are shared across every instance of the scene, so mutating
-		# one in place would retint the other houses too. Duplicate first — the
-		# same rule ModelMaterialFix follows.
-		var mat := src.duplicate() as BaseMaterial3D
-		var c := mat.albedo_color
-		var grey := c.get_luminance()
-		mat.albedo_color = Color(
-			lerp(c.r, grey, desaturate) * darken,
-			lerp(c.g, grey, desaturate) * darken,
-			lerp(c.b, grey, desaturate) * darken,
-			c.a)
-		mi.set_surface_override_material(i, mat)
+		var mat := _tone(mi.mesh.surface_get_material(i) as BaseMaterial3D)
+		if mat != null:
+			mi.set_surface_override_material(i, mat)
+
+
+## The muted copy of one source material, made once and reused.
+func _tone(src: BaseMaterial3D) -> BaseMaterial3D:
+	if src == null:
+		return null
+	var key := src.get_instance_id()
+	if _toned.has(key):
+		return _toned[key] as BaseMaterial3D
+	# GLB materials are shared across every instance of the scene, so mutating
+	# one in place would retint the other houses too. Duplicate first — the
+	# same rule ModelMaterialFix follows.
+	var mat := src.duplicate() as BaseMaterial3D
+
+	# Foliage goes in the OPAQUE pass, on the rule poster.gd already set for this
+	# project: scissor renders opaque and keeps writing depth.
+	#
+	# trees.glb declares its leaves "alphaMode": "BLEND", but do NOT assume that
+	# means Godot gives them TRANSPARENCY_ALPHA — measured, the importer hands
+	# them TRANSPARENCY_ALPHA_DEPTH_PRE_PASS (4), not 1. A first version of this
+	# only tested for 1 and therefore silently did nothing at all.
+	#
+	# That also corrects the reason for doing it. Depth-pre-pass DOES write depth,
+	# so the canopies were never mis-sorting; the win is cost, not correctness —
+	# it draws the geometry twice, and scissor gets the same depth behaviour in
+	# one pass.
+	if mat.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA \
+			or mat.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = 0.5
+
+	var c := mat.albedo_color
+	var grey := c.get_luminance()
+	mat.albedo_color = Color(
+		lerp(c.r, grey, desaturate) * darken,
+		lerp(c.g, grey, desaturate) * darken,
+		lerp(c.b, grey, desaturate) * darken,
+		c.a)
+	_toned[key] = mat
+	return mat

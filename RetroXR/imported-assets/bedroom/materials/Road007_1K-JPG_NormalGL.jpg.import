@@ -2,21 +2,18 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b817xkrw0vhjs"
-path.s3tc="res://.godot/imported/trees_NormalTree_Bark.png-dc5912c22bb3d6627670cf4ab64d4d9c.s3tc.ctex"
-path.etc2="res://.godot/imported/trees_NormalTree_Bark.png-dc5912c22bb3d6627670cf4ab64d4d9c.etc2.ctex"
+uid="uid://ulj7r4k3in5o"
+path.s3tc="res://.godot/imported/Road007_1K-JPG_NormalGL.jpg-0d0e9d1ada2f29fbedadd157a5cefbf3.s3tc.ctex"
+path.etc2="res://.godot/imported/Road007_1K-JPG_NormalGL.jpg-0d0e9d1ada2f29fbedadd157a5cefbf3.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "5bb061f5f7b954993bf440cb8bd45d4e"
-}
 
 [deps]
 
-source_file="res://imported-assets/bedroom/exterior/trees_NormalTree_Bark.png"
-dest_files=["res://.godot/imported/trees_NormalTree_Bark.png-dc5912c22bb3d6627670cf4ab64d4d9c.s3tc.ctex", "res://.godot/imported/trees_NormalTree_Bark.png-dc5912c22bb3d6627670cf4ab64d4d9c.etc2.ctex"]
+source_file="res://imported-assets/bedroom/materials/Road007_1K-JPG_NormalGL.jpg"
+dest_files=["res://.godot/imported/Road007_1K-JPG_NormalGL.jpg-0d0e9d1ada2f29fbedadd157a5cefbf3.s3tc.ctex", "res://.godot/imported/Road007_1K-JPG_NormalGL.jpg-0d0e9d1ada2f29fbedadd157a5cefbf3.etc2.ctex"]
 
 [params]
 
@@ -26,7 +23,7 @@ compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
@@ -41,5 +38,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=256
+process/size_limit=0
 detect_3d/compress_to=0

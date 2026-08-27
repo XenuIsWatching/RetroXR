@@ -7,6 +7,17 @@
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/exterior/house_two_a.glb" id="6_house2a"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/exterior/house_two_d.glb" id="7_house2d"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/exterior/house_two_e.glb" id="8_house2e"]
+[ext_resource type="PackedScene" path="res://imported-assets/bedroom/exterior/house_two_b.glb" id="64_house2b"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Rocks022_1K-JPG_Color.jpg" id="75_agg_col"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Rocks022_1K-JPG_NormalGL.jpg" id="76_agg_nrm"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Rocks022_1K-JPG_Roughness.jpg" id="77_agg_rgh"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Rocks022_1K-JPG_AmbientOcclusion.jpg" id="78_agg_ao"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Ground048_1K-JPG_Color.jpg" id="79_soil_col"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Ground048_1K-JPG_NormalGL.jpg" id="80_soil_nrm"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Ground048_1K-JPG_Roughness.jpg" id="81_soil_rgh"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Ground048_1K-JPG_AmbientOcclusion.jpg" id="82_soil_ao"]
+[ext_resource type="PackedScene" path="res://imported-assets/bedroom/props/periwinkle_plant_1k.gltf" id="83_periwinkle"]
+[ext_resource type="PackedScene" path="res://imported-assets/bedroom/props/potted_plant_04_1k.gltf" id="84_pot"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/exterior/trees.glb" id="9_trees"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/bedroom_exterior.gd" id="10_exterior"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Plaster001_1K-JPG_Color.jpg" id="20_wall_col"]
@@ -19,10 +30,18 @@
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Wood049_1K-JPG_Color.jpg" id="53_wood_col"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Wood049_1K-JPG_NormalGL.jpg" id="54_wood_nrm"]
 [ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Wood049_1K-JPG_Roughness.jpg" id="55_wood_rgh"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Grass005_1K-JPG_Color.jpg" id="57_grass_col"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Grass005_1K-JPG_NormalGL.jpg" id="58_grass_nrm"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Grass005_1K-JPG_Roughness.jpg" id="59_grass_rgh"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Grass005_1K-JPG_AmbientOcclusion.jpg" id="60_grass_ao"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Road007_1K-JPG_Color.jpg" id="61_road_col"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Road007_1K-JPG_NormalGL.jpg" id="62_road_nrm"]
+[ext_resource type="Texture2D" path="res://imported-assets/bedroom/materials/Road007_1K-JPG_Roughness.jpg" id="63_road_rgh"]
 [ext_resource type="Shader" path="res://Shaders/pbr_surface.gdshader" id="56_roomsurf"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/ceiling_fan.glb" id="14_fan"]
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/door.glb" id="19_door"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/switch_plate_2gang.res" id="28_plate"]
+[ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/wall_outlet_duplex.res" id="28_outlet"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/switch_toggle.res" id="28_toggle"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/light_switch.gd" id="29_switchscript"]
 [ext_resource type="Script" path="res://Scripts/Objects/highlights/glow_mesh.gd" id="35_glow"]
@@ -82,16 +101,158 @@ glow_strength = 0.7
 [sub_resource type="PlaneMesh" id="Mesh_ground"]
 size = Vector2(140, 140)
 
-[sub_resource type="StandardMaterial3D" id="Mat_ground"]
-albedo_color = Color(0.11, 0.14, 0.09, 1)
-roughness = 1.0
+; Lawn (ambientCG Grass005, tagged clean/lawn/short). This was a flat
+; Color(0.11, 0.14, 0.09) over a 140 x 140 plane, and it is the single biggest
+; surface in the window: from a metre back it filled the lower third of the view
+; with nothing at all.
+;
+; The tint is doing real work, not decoration. bedroom_exterior.gd::_tone_down()
+; desaturates and darkens every GLB out here to 0.62, but it SKIPS surfaces that
+; already carry an override — which this does. Left at full strength a
+; photographic lawn sits at full saturation beside houses muted to 0.62 and the
+; two stop belonging to the same street, so the muting is baked in here instead.
+[sub_resource type="ShaderMaterial" id="Mat_ground"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("57_grass_col")
+shader_parameter/roughness_tex = ExtResource("59_grass_rgh")
+shader_parameter/normal_tex = ExtResource("58_grass_nrm")
+shader_parameter/ao_tex = ExtResource("60_grass_ao")
+shader_parameter/tint = Color(0.5, 0.56, 0.42, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 0.4
+shader_parameter/normal_strength = 0.8
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = false
+shader_parameter/swap_uv = false
+shader_parameter/uv_offset = Vector2(0, 0)
+shader_parameter/ao_enabled = true
+shader_parameter/ao_strength = 0.6
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
 
 [sub_resource type="BoxMesh" id="Mesh_road"]
 size = Vector3(90, 0.04, 6.5)
 
-[sub_resource type="StandardMaterial3D" id="Mat_road"]
-albedo_color = Color(0.06, 0.06, 0.07, 1)
-roughness = 0.9
+; Tarmac with its lane markings in the texture (ambientCG Road007): two solid
+; edge lines and a dashed centre line, so the road needs no extra geometry to be
+; marked out.
+;
+; That content is why this material is fiddlier than the lawn. The tile has to
+; land ACROSS the road exactly once, with the boundary on the kerb:
+;   swap_uv    - the axis pick gives (x, z) for an up-facing surface, i.e. length
+;                then width, and the tile runs width then length. Swapped.
+;   0.153846   - 1/6.5, one tile across the road's 6.5 m width. Along its 90 m
+;                length it then repeats every 6.5 m, which is what the dashes are
+;                for.
+;   uv_offset  - world UVs count from the world origin, and this road spans
+;                z -23.25..-16.75, so without an offset the tile seam would fall
+;                mid-tarmac and the edge lines would run down the lanes.
+;                23.25 * 0.153846 = 3.5769 puts U = 0 exactly on the far kerb.
+; Exposed aggregate — the driveway, the front walk and BOTH sidewalks.
+;
+; ambientCG has nothing tagged "aggregate" (the search returns zero), so this was
+; picked by looking at previews rather than trusting tags: Rocks022 is filed
+; under gravel and pebbles, and is textbook exposed aggregate — rounded stones
+; set densely in mortar, which is the finish a 90s drive and sidewalk actually
+; have. Its AmbientOcclusion map earns its place for the same reason it did on
+; the carpet and the lawn: pebble-in-mortar is exactly the deep micro-relief a
+; tiling AO describes.
+;
+; tiles_per_metre sets the stone size and is a render check rather than
+; arithmetic — 1.7 puts one tile per 0.59 m, which lands the pebbles around
+; 20 mm. Judged from a camera over the drive, not from the window.
+[sub_resource type="ShaderMaterial" id="Mat_aggregate"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("75_agg_col")
+shader_parameter/roughness_tex = ExtResource("77_agg_rgh")
+shader_parameter/normal_tex = ExtResource("76_agg_nrm")
+shader_parameter/ao_tex = ExtResource("78_agg_ao")
+shader_parameter/tint = Color(0.6, 0.61, 0.6, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 1.7
+shader_parameter/normal_strength = 1.0
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = false
+shader_parameter/swap_uv = false
+shader_parameter/uv_offset = Vector2(0, 0)
+shader_parameter/ao_enabled = true
+shader_parameter/ao_strength = 0.75
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
+
+; Bare earth for the planting beds.
+[sub_resource type="ShaderMaterial" id="Mat_soil"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("79_soil_col")
+shader_parameter/roughness_tex = ExtResource("81_soil_rgh")
+shader_parameter/normal_tex = ExtResource("80_soil_nrm")
+shader_parameter/ao_tex = ExtResource("82_soil_ao")
+shader_parameter/tint = Color(0.52, 0.46, 0.4, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 1.1
+shader_parameter/normal_strength = 1.0
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = false
+shader_parameter/swap_uv = false
+shader_parameter/uv_offset = Vector2(0, 0)
+shader_parameter/ao_enabled = true
+shader_parameter/ao_strength = 0.7
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
+
+; Foundation bed along the house wall, under the window.
+[sub_resource type="BoxMesh" id="Mesh_bed_house"]
+size = Vector3(6.4, 0.04, 1.1)
+
+; Two beds out in the lawn. The foundation bed against the wall only shows when
+; the player leans into the glass: from a standing eye the sill hides the ground
+; until about z -4.0, and that bed sits at -3.6..-2.5. These are past that line,
+; so the yard has planting in it from where the player actually stands.
+[sub_resource type="BoxMesh" id="Mesh_bed_lawn"]
+size = Vector3(1.9, 0.035, 1.2)
+
+[sub_resource type="BoxMesh" id="Mesh_path"]
+size = Vector3(1.2, 0.02, 12.4)
+
+; Kerb to house: z -15.5 up to -2.6, so 12.9 long centred on -9.05. It used to be
+; 9 long at -11.2, which reached neither end — it stopped 6.7 m short of the wall
+; and never met the road, a driveway to nowhere.
+[sub_resource type="BoxMesh" id="Mesh_driveway"]
+size = Vector3(3.2, 0.02, 12.9)
+
+[sub_resource type="ShaderMaterial" id="Mat_road"]
+shader = ExtResource("56_roomsurf")
+shader_parameter/albedo_tex = ExtResource("61_road_col")
+shader_parameter/roughness_tex = ExtResource("63_road_rgh")
+shader_parameter/normal_tex = ExtResource("62_road_nrm")
+shader_parameter/tint = Color(0.62, 0.62, 0.64, 1)
+shader_parameter/paint_over = 0.0
+shader_parameter/tiles_per_metre = 0.153846
+shader_parameter/normal_strength = 0.6
+shader_parameter/roughness_scale = 1.0
+shader_parameter/object_space = false
+shader_parameter/swap_uv = true
+shader_parameter/uv_offset = Vector2(3.5769, 0)
+shader_parameter/ao_enabled = false
+shader_parameter/ao_strength = 1.0
+shader_parameter/room_half_extent = Vector2(2.525, 2.125)
+shader_parameter/floor_y = 0.0
+shader_parameter/ceiling_y = 2.6
+shader_parameter/contact_strength = 0.0
+shader_parameter/contact_distance = 0.45
+shader_parameter/corner_boost = 0.0
 
 [sub_resource type="BoxMesh" id="Mesh_kerb"]
 size = Vector3(90, 0.09, 1.4)
@@ -747,13 +908,18 @@ surface_material_override/0 = SubResource("Mat_trim")
 ; The window's sightline is narrow (~15 deg either side from a metre back), but
 ; the player can walk the room, so the street is built wide enough to survive
 ; looking out from an angle.
-; The whole street sits one storey down: this is an upstairs bedroom, which is
-; where a teenager's room actually is, and it fixes the composition. Looking
-; level across a ground-floor street fills the lower half of the window with
-; empty tarmac; looking DOWN on it puts rooftops, tree canopies and the road at
-; readable angles and gives the view somewhere to recede to.
+; Ground floor. This was -3.2 — the street one storey down, on the argument that
+; looking DOWN puts rooftops and canopies at readable angles while a level view
+; fills the window with empty tarmac. In practice it did the opposite: the room
+; sits 14 m back from the kerb, so looking down filled two thirds of the window
+; with flat empty LAWN and the room read as floating above the street.
+;
+; At eye level that same lawn compresses toward the horizon and costs a band
+; instead of a third of the view, and the room sits ON something. The tarmac the
+; old note warned about is real, and the answer to it is mid-ground detail —
+; fences, driveways, a parked car — not altitude.
 [node name="Exterior" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3.2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 script = ExtResource("10_exterior")
 
 [node name="Ground" type="MeshInstance3D" parent="Exterior"]
@@ -769,12 +935,12 @@ surface_material_override/0 = SubResource("Mat_road")
 [node name="KerbNear" type="MeshInstance3D" parent="Exterior"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, -16.2)
 mesh = SubResource("Mesh_kerb")
-surface_material_override/0 = SubResource("Mat_kerb")
+surface_material_override/0 = SubResource("Mat_aggregate")
 
 [node name="KerbFar" type="MeshInstance3D" parent="Exterior"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, -23.8)
 mesh = SubResource("Mesh_kerb")
-surface_material_override/0 = SubResource("Mat_kerb")
+surface_material_override/0 = SubResource("Mat_aggregate")
 
 ; Houses across the road, scale 7 (a 1.3-unit model becomes a 9 m frontage,
 ; 8 m to the ridge for the two-storey ones). Spaced 12 m so they read as separate
@@ -796,7 +962,14 @@ transform = Transform3D(7, 0, 0, 0, 7, 0, 0, 0, 7, 18, -0.05, -33)
 [node name="HouseFarA" parent="Exterior" instance=ExtResource("8_house2e")]
 transform = Transform3D(7, 0, 0, 0, 7, 0, 0, 0, 7, -14, -0.05, -52)
 
-[node name="HouseFarB" parent="Exterior" instance=ExtResource("6_house2a")]
+; house_two_b, not house_two_a. This was the SAME model as HouseA — the only
+; repeat in the street, and both are in the window at once. house_two_b was
+; already on disk and in LFS and had never been instanced.
+;
+; Nothing else needs a new model: the near row already runs x -25.55..22.58 with
+; 3.9 m between houses, and the window only sees about +/-21 m at that depth, so
+; there is neither room to add one nor view to put it in.
+[node name="HouseFarB" parent="Exterior" instance=ExtResource("64_house2b")]
 transform = Transform3D(7, 0, 0, 0, 7, 0, 0, 0, 7, 12, -0.05, -53)
 
 ; The tree row is one instance of a 5-tree mesh that lives at x 198..223 in its
@@ -831,6 +1004,99 @@ position = Vector3(226.2604, 0, 0)
 
 [node name="TreeRowFar" parent="Exterior" instance=ExtResource("9_trees")]
 transform = Transform3D(-1.4, 0, 0, 0, 1.4, 0, 0, 0, -1.4, 289, -0.04, -45)
+
+; --- Front yard --------------------------------------------------------------
+; The 14 m of lawn between this wall and the kerb was the emptiest part of the
+; view: at eye level it is a plain green band with nothing in it to say how far
+; away the road is. These are what break it up. All Kenney City Kit (Suburban),
+; CC0, the same author as the houses, so there is no style to reconcile.
+;
+; Everything here sits inside the window's view wedge. From a metre back the
+; opening only shows about x -11.7..9.9 at the kerb and x -3.6..1.8 five metres
+; out, so props outside that cost draw calls nobody ever sees.
+
+; --- Front yard --------------------------------------------------------------
+; What the window can SEE is the constraint. Through a 1.5 m opening from a metre
+; back the cone is narrow: about x -3.6..1.8 five metres out, widening to
+; -11.7..9.9 by the kerb. Props off at the sides are simply not in the picture.
+;
+; No fence across the front. One at the property line reads correctly and wrecks
+; the view: to keep the middle of the road visible past it from a standing eye it
+; would have to be under 0.36 m tall, which is edging rather than a fence. An
+; open lawn running to the sidewalk is what a US suburb looks like anyway.
+;
+; So the mid-ground is flat surfaces straight ahead, which fill the empty green
+; band without occluding anything, and they are the same photographic PBR the
+; lawn and road use rather than a second art style parked in the near field.
+; Two draw calls.
+
+; A walkway from the house out to the sidewalk, straight up the middle of the
+; window. A receding line up the centre does more for depth than anything
+; standing in the yard, and costs no occlusion at all.
+[node name="FrontPath" type="MeshInstance3D" parent="Exterior"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0.012, -9.4)
+mesh = SubResource("Mesh_path")
+surface_material_override/0 = SubResource("Mat_aggregate")
+
+[node name="Driveway" type="MeshInstance3D" parent="Exterior"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 0.012, -9.05)
+mesh = SubResource("Mesh_driveway")
+surface_material_override/0 = SubResource("Mat_aggregate")
+
+; --- Planting -----------------------------------------------------------------
+; A foundation bed along the house wall under the window, and a strip edging the
+; walk. Flat slabs like the path, bare earth, no alpha — and beds alone already
+; break the green field up before anything grows in them.
+[node name="BedHouse" type="MeshInstance3D" parent="Exterior"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0.02, -3.05)
+mesh = SubResource("Mesh_bed_house")
+surface_material_override/0 = SubResource("Mat_soil")
+
+[node name="BedLawnLeft" type="MeshInstance3D" parent="Exterior"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.75, 0.018, -6.6)
+mesh = SubResource("Mesh_bed_lawn")
+surface_material_override/0 = SubResource("Mat_soil")
+
+[node name="BedLawnRight" type="MeshInstance3D" parent="Exterior"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0.018, -7.4)
+mesh = SubResource("Mesh_bed_lawn")
+surface_material_override/0 = SubResource("Mat_soil")
+
+[node name="PlantE" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, -3.15, 0.035, -6.6)
+
+[node name="PlantF" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(-0.95, 0, 0, 0, 0.95, 0, 0, 0, -0.95, -2.35, 0.035, -6.7)
+
+[node name="PlantG" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(1.05, 0, 0, 0.5, 1.05, 0, 0.86, 0, 1.05, 0.6, 0.035, -7.4)
+
+[node name="PlantH" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(0.9, 0, 0, 0, 0.9, 0, 0, 0, 0.9, 1.35, 0.035, -7.35)
+
+; Poly Haven periwinkle, CC0, 67k tris. It was affordable only because this room
+; is a PCVR target — the same library's potted plants were turned down earlier at
+; 96k and 70k precisely on the Quest budget, and its grass tufts are photoscans
+; at 1.6 MILLION polys and are not usable anywhere.
+;
+; Four of them, in the bed the player looks straight down into. Sized and spaced
+; by hand rather than scattered: a tidy 90s foundation bed is planted, not
+; overgrown.
+[node name="PlantA" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, -2.75, 0.03, -3.1)
+
+[node name="PlantB" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(0.94, 0, 0, 0.5, 0.94, 0, 0.86, 0, 0.94, -1.55, 0.03, -3.2)
+
+[node name="PlantC" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(-1.05, 0, 0, 0, 1.05, 0, 0, 0, -1.05, 0.15, 0.03, -3.05)
+
+[node name="PlantD" parent="Exterior" instance=ExtResource("83_periwinkle")]
+transform = Transform3D(0.88, 0, 0, 0, 0.88, 0, 0, 0, 0.88, 1.35, 0.03, -3.25)
+
+; Already in the repo, licensed, and referenced by nothing until now.
+[node name="PotByDoor" parent="Exterior" instance=ExtResource("84_pot")]
+transform = Transform3D(1.6, 0, 0, 0, 1.6, 0, 0, 0, 1.6, 1.05, 0.03, -2.75)
 
 [node name="StreetLamp" type="Node3D" parent="Exterior"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 0, -16.4)
@@ -876,6 +1142,14 @@ transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.525, 1.2, 0.55)
 
 [node name="Plate" type="MeshInstance3D" parent="Furniture/SwitchPlate"]
 mesh = ExtResource("28_plate")
+
+; Grounded US duplex receptacle on the open north-wall run at customary low-wall
+; height. It uses the same ivory molded finish as the switch plate;
+; Tools/gen_wall_outlet.gd bakes both receptacles into one light mesh. Quad-style
+; local +Z already points into the room here, so no fitted rotation is required.
+[node name="WallOutlet" type="MeshInstance3D" parent="Furniture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65, 0.30, -2.125)
+mesh = ExtResource("28_outlet")
 
 ; Left gang: the ceiling fan globe.
 [node name="Ceiling" type="Node3D" parent="Furniture/SwitchPlate"]
