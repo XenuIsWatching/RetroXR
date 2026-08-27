@@ -67,6 +67,8 @@ var _values: Dictionary = {}
 ## The core this machine will run, for the FRONTEND row. Empty until the first
 ## populate(), and empty for a system whose core cannot be resolved at all.
 var _core_name: String = ""
+## Shows _core_name beside the title.
+var _core_lbl: Label = null
 # Options the system model pins; shown locked rather than hidden, so it is clear
 # why they cannot be changed instead of leaving them unexplained absences.
 var _forced: Dictionary = {}
@@ -98,10 +100,20 @@ func _build_ui() -> void:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "System Settings"
-	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_lbl.add_theme_font_size_override("font_size", 26)
 	title_lbl.add_theme_color_override("font_color", COLOR_TITLE)
 	title_row.add_child(title_lbl)
+
+	# Ellipsised and set to take the slack, so a long corename cannot push the
+	# close button off the page.
+	_core_lbl = Label.new()
+	_core_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_core_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_core_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_core_lbl.add_theme_font_size_override("font_size", 20)
+	_core_lbl.add_theme_color_override("font_color", COLOR_ROW)
+	title_row.add_child(_core_lbl)
+	_refresh_core_label()
 
 	var close_btn := Button.new()
 	close_btn.add_theme_font_override("font", MenuIcons.symbols())
@@ -263,6 +275,7 @@ func populate(definitions: Dictionary, current_values: Dictionary, controller_in
 	_forced = forced
 	_unavailable = unavailable
 	_core_name = core_name
+	_refresh_core_label()
 	print("[CoreOptions2D] populate() — %d options, %d ports" % [definitions.size(), controller_info.size()])
 	_refresh_options()
 	_refresh_controllers()
@@ -392,6 +405,17 @@ func _refresh_options() -> void:
 		_options_rows.add_child(none)
 
 	print("[CoreOptions2D] %d of %d option rows built" % [shown, keys.size()])
+
+
+## `corename` rather than the .info `display_name`, which is "Nintendo - SNES /
+## SFC (Snes9x)" and names the platform rather than the core.
+func _refresh_core_label() -> void:
+	if _core_lbl == null:
+		return
+	if _core_name.is_empty():
+		_core_lbl.text = ""
+	else:
+		_core_lbl.text = " - %s" % RomCompat.core_label(_core_name)
 
 
 ## Which API this core is told the frontend would rather render with — the same
