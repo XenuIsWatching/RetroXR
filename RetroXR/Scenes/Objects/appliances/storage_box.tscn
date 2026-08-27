@@ -108,13 +108,22 @@ size = Vector3(0.34, 0.3, 0.34)
 radius = 0.19
 height = 0.25
 
+; The cavity itself. Squared off rather than a second cylinder because the box
+; is square and an object can sit in a corner, and 1 mm clear of the liners on
+; each side (half-extent 0.153 against their inner faces at 0.154) so nothing
+; standing AGAINST an outer wall reaches in through it. The mouth cylinder above
+; is deliberately wider than the box and may not be extended downwards for that
+; reason.
+[sub_resource type="BoxShape3D" id="BoxShape_trash_cavity"]
+size = Vector3(0.306, 0.313, 0.306)
+
 [sub_resource type="PhysicsMaterial" id="PhysMat_box"]
 friction = 0.8
 
 ; A small open-top cardboard box, built from primitives rather than a downloaded
-; shell. The open top is load-bearing, not cosmetic: TrashArea has to sit in free
-; space over the mouth for get_overlapping_bodies() to catch a released pickable,
-; so a lidded box would silently break drop-to-delete.
+; shell. The open top is load-bearing, not cosmetic: TrashArea has to reach into
+; free space, over the mouth and down the cavity, for get_overlapping_bodies() to
+; catch a released pickable, so a lidded box would silently break drop-to-delete.
 ;
 ; The body is hollow — a base and four wall shapes, not one solid block — so an
 ; object dropped in falls INTO it and sits there for the moment before it
@@ -246,3 +255,14 @@ monitorable = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="TrashArea"]
 shape = SubResource("CylShape_trash_area")
+
+; The zone is two shapes, the mouth and the cavity under it, meeting at y=0.175.
+; The mouth alone would only catch an object still HELD over the box: one let go
+; low, or one that has fallen to the base and is picked up again, sits entirely
+; below 0.175 and never turned red. Together they run from the base at y=-0.138
+; to y=0.425.
+;
+; TrashArea's own origin is y=0.3, so this offset is 0.0185 - 0.3.
+[node name="CollisionCavity" type="CollisionShape3D" parent="TrashArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2815, 0)
+shape = SubResource("BoxShape_trash_cavity")
