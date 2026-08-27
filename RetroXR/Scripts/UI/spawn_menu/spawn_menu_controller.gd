@@ -7,6 +7,7 @@
 extends Node3D
 
 const SYSTEM_SCENE          := preload("res://Scenes/Objects/system.tscn")
+const EXPANSION_SCENE       := preload("res://Scenes/Objects/expansion.tscn")
 const TV_SCENE              := preload("res://Scenes/Objects/tv.tscn")
 const CART_SCENE            := preload("res://Scenes/Objects/media/cartridge.tscn")
 const DISC_SCENE            := preload("res://Scenes/Objects/media/disc.tscn")
@@ -1056,6 +1057,16 @@ func _on_spawn_requested(type: String) -> void:
 		sys.model_id = model_id
 		_place_spawned(sys, type)
 		return
+	# "expansion:<id>" — a machine that bolts onto a console. Checked with the
+	# other prefixed tokens and before the match below, for the same reason they
+	# are: `match` is literal equality and would drop this to the default, which
+	# spawns a console with the whole token as its systemid.
+	if type.begins_with("expansion:"):
+		var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
+		unit.expansion_id = type.substr("expansion:".length())
+		_place_spawned(unit, type)
+		return
+
 	# "memcard:<family>:<card_id>" — bring an EXISTING card back into the room
 	# rather than minting a blank one. The id is the card's filename, so the
 	# object lands already pointing at the saves it left behind. Same reason as

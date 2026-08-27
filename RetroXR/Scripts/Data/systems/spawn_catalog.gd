@@ -255,6 +255,14 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 			"model_id": SystemModelRegistry.PLACEHOLDER_ID})
 	items.append_array(imported)
 	items.append_array((_PERIPHERALS.get(systemid, []) as Array).duplicate(true))
+	# The machines that bolt onto this one. Listed with the peripherals because
+	# that is what they are to a player looking for one -- a thing you get out
+	# and attach -- and read from ExpansionCatalog so a new unit needs no entry
+	# here. Without these rows the units existed and could not be reached.
+	for expansion_id: String in ExpansionCatalog.ids_for_host(systemid):
+		items.append({"kind": "peripheral",
+			"label": ExpansionCatalog.label_of(expansion_id),
+			"spawn": "expansion:%s" % expansion_id})
 	# With the peripherals rather than the leads below: it is something you hold.
 	if _LIGHT_GUN_PLATFORMS.has(systemid):
 		items.append(_LIGHT_GUN.duplicate())
