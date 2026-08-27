@@ -282,7 +282,7 @@ limits/spatial_indexer/threaded_cull_minimum_instances.android=65536
 
 [threading]
 
-worker_pool/max_threads.android=2
+worker_pool/max_threads.android=4
 
 [xr]
 
