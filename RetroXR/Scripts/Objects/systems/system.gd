@@ -2186,8 +2186,12 @@ func power_on() -> void:
 	var no_content := rom_path.is_empty() 		and BiosBoot.boots_with_no_content(resolved_core, systemid) 		and BiosBoot.can_boot_empty(resolved_core, systemid)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", true)
-	_warn_missing_sidecar(stack_spec)
-	_libretro.StartContent(resolved_dir, resolved_core, rom_path)
+	# An assembled machine goes over as one piece if the core will take it that
+	# way; only if it will not do we fall back to a single path and say what the
+	# drive is about to lose.
+	if not _start_subsystem_content(resolved_dir, resolved_core, stack_spec):
+		_warn_missing_sidecar(stack_spec)
+		_libretro.StartContent(resolved_dir, resolved_core, rom_path)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", false)
 	_after_core_started()
@@ -3085,6 +3089,8 @@ func _accepts_expansion(obj: Node3D) -> bool:
 func _on_expansion_seated(obj: Node3D) -> void:
 	var unit := obj as RetroExpansion
 	if unit != null:
+		# The zone will not move a frozen body on its own; see ExpansionPort.seat.
+		ExpansionPort.seat(get_node_or_null("ExpansionSocket") as XRToolsSnapZone, unit)
 		unit.bind_to_host(self)
 
 
@@ -3244,6 +3250,42 @@ func _apply_expansion_launch() -> Dictionary:
 		return spec
 	rom_path = roms[0]
 	return spec
+
+
+## Hand the core every piece of the assembled machine at once, and say whether
+## that happened.
+##
+## This is what a cartridge and its expansion disk actually need. The single-path
+## load can only attach the two by filename convention -- the disk has to sit
+## beside the cartridge, named after it -- which no arrangement of objects in a
+## room can satisfy, so a stack that is plainly loaded boots as if the drive were
+## empty. libretro's own answer is a subsystem: the core publishes what
+## combinations it accepts and the frontend hands over the ordered set.
+##
+## Returns false whenever the ordinary load should be used instead: a combination
+## with no subsystem, a core bridge too old to have the call, or a bay standing
+## empty. An empty bay is the ordinary state of a drive with no disk in it, not a
+## fault, and the machine should still start on whatever IS loaded.
+##
+## The order is the CORE's, not the preference order the rest of this file uses.
+## For the 64DD the core declares its disk first and the cartridge second, which
+## is the reverse of which one a lone machine would boot from.
+func _start_subsystem_content(dir: String, core: String, spec: Dictionary) -> bool:
+	var sub: Dictionary = spec.get("subsystem", {})
+	if sub.is_empty():
+		return false
+	var ident := str(sub.get("ident", ""))
+	if ident.is_empty():
+		return false
+	if not _libretro.has_method("StartSubsystemContent"):
+		return false
+	var wanted: Array = sub.get("roms", [])
+	var paths := _expansion_roms(sub)
+	if paths.size() != wanted.size():
+		return false
+	print("[RetroSystem] subsystem load: %s %s <- %s" % [core, ident, str(paths)])
+	_libretro.StartSubsystemContent(dir, core, rom_path, ident, PackedStringArray(paths))
+	return true
 
 
 func _disk_drive_options(core: String) -> Dictionary:
