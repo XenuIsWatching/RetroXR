@@ -125,6 +125,9 @@ const OK := Color(0.55, 0.88, 0.55)
 const WARN := Color(0.95, 0.78, 0.35)
 const OVER := Color(0.96, 0.47, 0.38)
 const DIM := Color(0.62, 0.62, 0.76)
+## Indexed by QualityManager.Foveation, which the eye row names rather than
+## printing the raw ordinal.
+const FOVEATION_NAMES := ["Off", "Low", "Medium", "High"]
 
 ## How many emulator rows are drawn before the rest collapse into one line. Six
 ## running systems must not push MEMORY and SCENE off the panel, and the rows
@@ -185,6 +188,9 @@ var _ropes: Array[Node] = []
 var _systems: Array[Node] = []
 var _spawned_count := 0
 var _eye_text := ""
+## Set when the eye row is reporting foveation that was asked for but is not
+## attached, which is the one state in that row worth a colour.
+var _eye_warn := false
 var _peak_static := 0
 
 # Device clocks, sampled on the slow tick. The ceilings never move, so they are
@@ -604,7 +610,7 @@ func _update_frame() -> void:
 	_put("cpu", "%.1f / %.1f ms" % [proc_ms, phys_ms], DIM)
 
 	if _val.has("eye"):
-		_put("eye", _eye_text, DIM)
+		_put("eye", _eye_text, WARN if _eye_warn else DIM)
 	# Ungraded, like the two rows above it. A governor sitting at its ceiling is
 	# not a fault — it means the headroom is spent, which is a thing to know and
 	# not a thing to go red about. What judges this section is the rate and the
@@ -940,13 +946,27 @@ func _read_cpu_clock() -> String:
 ## Sampled every slow tick rather than once at startup: meta/dynamic_resolution
 ## lets the runtime LOWER the eye buffer under GPU load, which xr_init.gd notes
 ## it cannot see because it only reads this once.
+##
+## The level comes from QualityManager, NOT from the interface's own
+## `foveation_level` property. apply_foveation pins that property to 0 at every
+## level and drives Godot's VRS instead, so reading it back reported "fov 0"
+## whatever the row was set to — the readout could not distinguish foveation
+## working from foveation gone, which is the distinction this row exists for.
 func _eye_buffer_text() -> String:
 	var xr := XRServer.find_interface("OpenXR")
 	if xr == null or not xr.is_initialized():
+		_eye_warn = false
 		return "--"
 	var size: Vector2 = xr.get_render_target_size()
-	var fov: Variant = xr.get("foveation_level")
-	return "%d×%d  fov %s" % [int(size.x), int(size.y), str(fov)]
+	var level := int(QualityManager.foveation_level)
+	var fov: String = FOVEATION_NAMES[level] if level < FOVEATION_NAMES.size() else "?"
+	# Asked for but not attached: what an Eye Buffer change leaves behind for the
+	# rest of the session. Worth about 20% of the GPU, and otherwise unobservable.
+	_eye_warn = level != int(QualityManager.Foveation.OFF) \
+		and not QualityManager.foveation_live()
+	if _eye_warn:
+		fov += " LOST"
+	return "%d×%d  fov %s" % [int(size.x), int(size.y), fov]
 
 
 ## True where the GPU has no memory of its own and draws from system RAM — every

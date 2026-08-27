@@ -212,6 +212,14 @@ var display_rate: float = 0.0
 var cpu_level: PerfLevel = PerfLevel.SUSTAINED_HIGH
 var gpu_level: PerfLevel = PerfLevel.SUSTAINED_HIGH
 var foveation_level: Foveation = Foveation.OFF
+## Whether the VRS attachment `foveation_level` asks for is actually live.
+##
+## Tracked rather than read back, because nothing on this stack reports it.
+## `Viewport.vrs_mode` is the obvious candidate and is a trap: it goes on
+## answering VRS_XR after an eye-buffer resize has taken the attachment away,
+## so it describes what was requested, never what is attached. The one event
+## that destroys foveation is that resize, so that is what is recorded here.
+var _foveation_live: bool = false
 ## Engine glow. The rooms author it; this is the switch that can take it away,
 ## because it is the only full-frame post-process the mobile backend still runs
 ## and it is what reads the eye buffer back.
@@ -373,6 +381,13 @@ func apply_eye_buffer_scale() -> void:
 		return
 	var xr := XRServer.find_interface("OpenXR")
 	xr.set("render_target_size_multiplier", eye_buffer_scale)
+	# On a live session the resize frees and rebuilds both swapchains, and the VRS
+	# attachment does not survive it. Nothing brings it back short of a restart,
+	# so record the loss rather than leaving the HUD to report a level that is no
+	# longer being applied. At startup `use_xr` is still false and apply_foveation
+	# runs after this, so a launch is unaffected.
+	if get_tree().root.use_xr:
+		_foveation_live = false
 
 
 ## The rates this runtime will accept, straight from xrEnumerateDisplayRefreshRatesFB.
@@ -515,11 +530,12 @@ func set_foveation_level(level: int) -> void:
 	save_prefs()
 
 
-## Safe to call before the swapchain exists and safe to call mid-session: the
-## extension re-applies the profile on every swapchain creation, and a change made
-## while one is live goes through xrUpdateSwapchainFB on the rendering thread. A
-## resize from the eye-buffer row therefore carries the current level over on its
-## own.
+## Safe to call before the swapchain exists, and NOT a way to change foveation on
+## a live one. XR_FB_foveation did re-apply its profile on every swapchain
+## creation, which is what the rest of this comment used to promise; the VRS path
+## below carries no such guarantee, because its attachment is latched when the XR
+## swapchain is created. A mid-session call can only lose foveation, never raise
+## or restore it — see set_foveation_level.
 func apply_foveation() -> void:
 	if not supports_foveation():
 		return
@@ -542,10 +558,22 @@ func apply_foveation() -> void:
 	var tier: Dictionary = VRS_TIERS.get(foveation_level, {})
 	if tier.is_empty():
 		get_tree().root.vrs_mode = Viewport.VRS_DISABLED
+		_foveation_live = false
 		return
 	xr.set("vrs_min_radius", tier["min_radius"])
 	xr.set("vrs_strength", tier["strength"])
 	get_tree().root.vrs_mode = Viewport.VRS_XR
+	# Every caller reaches this before `use_xr` is true (xr_init) or refuses to
+	# run once it is (set_foveation_level), so the attachment really is live here.
+	_foveation_live = true
+
+
+## Whether foveation is actually shading the eye buffer right now, as opposed to
+## merely being the saved level. The two part company for a whole session the
+## first time the Eye Buffer row is used, which is a ~20% GPU difference with
+## nothing on screen to say so.
+func foveation_live() -> bool:
+	return foveation_level != Foveation.OFF and _foveation_live
 
 
 ## Window mode and resolution were the only GRAPHICS rows that reset every launch,
