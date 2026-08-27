@@ -186,7 +186,8 @@ func _build(vr_mode: bool) -> void:
 	if QualityManager.supports_eye_buffer_scale():
 		var eye_opt := VRDropdown.create("Eye Buffer",
 			[["85%", 0.85], ["100%", 1.0],
-			 ["123%", QualityManager.EYE_BUFFER_PANEL], ["140%", 1.4]],
+			 ["123%", QualityManager.EYE_BUFFER_PANEL], ["140%", 1.4],
+			 ["150%", 1.5], ["175%", 1.75], ["200%", 2.0]],
 			QualityManager.eye_buffer_scale, 4, Vector2(95, 52), 20)
 		eye_opt.item_selected.connect(func(id: Variant) -> void:
 			QualityManager.set_eye_buffer_scale(float(id)))
@@ -195,7 +196,9 @@ func _build(vr_mode: bool) -> void:
 		vbox.add_child(MenuStyle.hint("Resolution each eye is drawn at before the headset warps "
 			+ "it through the lenses. 100% is the runtime's recommendation, which under-samples "
 			+ "the centre of view; 123% matches the panel and is sharper where you look, for "
-			+ "real frame time. The picture blinks as it resizes."))
+			+ "real frame time. Past that keeps paying off on things seen across the room, a "
+			+ "game screen most of all, and is what Foveation buys you. The picture blinks as "
+			+ "it resizes."))
 
 	# Built from what the runtime enumerates, never a fixed list — a rate outside
 	# it is refused, and 120 Hz appears only once the headset's own display setting

@@ -167,16 +167,31 @@ const RENDER_SCALE_MAX := 1.5
 ## foveation_level >= 1 fills the whole eye buffer with one flat colour on this
 ## stack (Godot 4.7 + vendors 5.1 + 4x MSAA + multiview / Quest 3) — see 21351c5.
 const EYE_BUFFER_SCALE_MIN := 0.7
-const EYE_BUFFER_SCALE_MAX := 1.4
+const EYE_BUFFER_SCALE_MAX := 2.0
 ## Where a saved rate does not say otherwise. The headset takes the rate a heavy
 ## room can hold: at 120 Hz the 8.3 ms budget goes over on both CPU and GPU, and a
 ## missed frame is reprojected and repeated, so the higher rate buys stale frames
 ## rather than smoothness. A PCVR runtime drives a display whose rate it already
 ## knows, so it takes the highest one offered.
 const DISPLAY_RATE_HEADSET := 72.0
-## The Quest 3 panel edge over the runtime's recommendation, 2064/1680. The
-## default, and the highest value that buys anything: past the panel the extra
-## pixels are resolved away by the compositor.
+## The Quest 3 panel edge over the runtime's recommendation, 2064/1680, and the
+## default. It is NOT the ceiling, and the old claim here that past the panel the
+## extra pixels are "resolved away by the compositor" was wrong — supersampling
+## above panel resolution still suppresses the aliasing that minified content
+## (a core's picture across the room) shows. RetroGameDevVR ships 1.75-2.0.
+##
+## Measured in the bedroom, MSAA 4x, foveation HIGH, static head, no core
+## running — so this is a ceiling, not a promise about a busy arcade:
+##
+##   scale  per eye      72 Hz   120 Hz    120 Hz, foveation OFF
+##   1.00   1680x1760     72      120       120
+##   1.25   2100x2200     72      120       105
+##   1.50   2520x2640     72      105        78
+##   1.75   2940x3080     72       85        58
+##   2.00   3360x3520     72       68        43
+##
+## Which is what the cap is doing at 2.0 rather than 1.4: at the shipping 72 Hz
+## every step holds, and foveation is what pays for the top of the ladder.
 const EYE_BUFFER_PANEL := 1.229
 
 ## Frames between tiny GPU-blurred regional samples for TV/handheld glow.
