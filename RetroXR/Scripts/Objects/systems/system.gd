@@ -446,6 +446,10 @@ func _ready() -> void:
 	_update_name_label()
 	# Lay the name flat on the model's front face once meshes + text are built.
 	_place_name_label.call_deferred()
+	# Deferred for the same reason the label is: the socket sits on the model's
+	# top face and the foot under its bottom one, and neither is known until the
+	# meshes exist.
+	_build_expansion_hardware.call_deferred()
 	# A machine spawns switched off, and its leads are clamped only once they
 	# exist. Both ticks are armed by the things that make them worth running:
 	# power_on/net_start_core and _apply_video_out.
@@ -478,7 +482,14 @@ func _display_name() -> String:
 	var name_text := system_label
 	if name_text.is_empty() and not systemid.is_empty():
 		name_text = CoreInfoDatabase.shared().get_systemname_for_id(systemid)
-	return name_text if not name_text.is_empty() else systemid
+	if name_text.is_empty():
+		name_text = systemid
+	# What the player has actually built -- "Mega Drive + Mega-CD + 32X" -- so
+	# the nameplate says which machine this is while anything is bolted to it.
+	var ids := expansion_ids()
+	if not ids.is_empty():
+		name_text = ExpansionCatalog.stack_label(name_text, ids)
+	return name_text
 
 
 func _update_name_label() -> void:
@@ -2107,6 +2118,10 @@ func power_on() -> void:
 	# Resolved BEFORE the empty-slot check, which cannot be answered without
 	# knowing the core: whether a machine shows its BIOS is a fact about the core
 	# and the files in its system directory, not about the systemid.
+	# Before the core is resolved and before the verdict is taken: an assembled
+	# machine boots from the stack, not from the console's own slot, and both of
+	# those read rom_path.
+	var stack_spec := _apply_expansion_launch()
 	var resolved_core := _resolve_core()
 	var resolved_dir := _resolve_dir()
 
@@ -2171,6 +2186,7 @@ func power_on() -> void:
 	var no_content := rom_path.is_empty() 		and BiosBoot.boots_with_no_content(resolved_core, systemid) 		and BiosBoot.can_boot_empty(resolved_core, systemid)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", true)
+	_warn_missing_sidecar(stack_spec)
 	_libretro.StartContent(resolved_dir, resolved_core, rom_path)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", false)
@@ -2463,6 +2479,14 @@ func resolve_core_name() -> String:
 
 
 func _resolve_core() -> String:
+	# A console with something bolted to it is a different machine, and the
+	# combination names its own core: a Mega Drive on a Mega-CD is not the core
+	# either box would pick alone. Ahead of core_name, because the machine the
+	# player has physically built beats a default chosen for the bare console --
+	# and behind nothing, since a bare console never reaches this at all.
+	var spec := expansion_boot()
+	if not spec.is_empty() and not str(spec.get("core", "")).is_empty():
+		return str(spec["core"])
 	var c := core_name
 	if c.is_empty() and not systemid.is_empty():
 		var defaults := CoreDefaults.new()
@@ -3007,10 +3031,242 @@ func _all_forced_options(core: String) -> Dictionary:
 ## Keyed on the systemid as well as the core, and deliberately not added to
 ## CoreOptionsStore.HARDWARE_PINNED: that table is per key, and the same core
 ## runs the plain nintendo_64, where the drive really is the player's choice.
-func _disk_drive_options(core: String) -> Dictionary:
-	if systemid != "nintendo_64dd" or core != "parallel_n64":
+# ── expansions ────────────────────────────────────────────────────────────────
+#
+# A console and the unit bolted to it are two separate physical objects that
+# together behave as one machine. Which one wears the socket depends on which
+# way the pair stacks -- a 64DD is a base the N64 stands on, a 32X sits on top
+# of a Mega Drive -- and ExpansionCatalog is the only thing that knows. The
+# console side is deliberately thin: it keeps the list, answers what the stack
+# is, and hands the launch path one path to boot from.
+
+
+## Everything currently bolted to this console. Order is the catalog's, not the
+## order they were attached in, so a stack reads the same however it was built.
+var _expansions: Array[RetroExpansion] = []
+
+
+## The socket on top and the foot underneath, built from the model's own box.
+##
+## Only what the catalog says this console has: a machine nothing mounts above
+## must NOT grow a socket, because an empty one still lights a snap ghost and
+## offers a join that does not exist.
+func _build_expansion_hardware() -> void:
+	if systemid.is_empty():
+		return
+	var aabb := _body_aabb()
+	if aabb.size.x <= 0.0:
+		return          # no meshes yet; nothing to measure against
+	var span := Vector2(aabb.size.x, aabb.size.z)
+
+	if ExpansionCatalog.host_takes_top_unit(systemid) \
+			and get_node_or_null("ExpansionSocket") == null:
+		var socket := ExpansionPort.build_socket(self, aabb.end.y, span,
+			ExpansionPort.GROUP_EXPANSION, _accepts_expansion)
+		socket.has_picked_up.connect(_on_expansion_seated)
+		socket.has_dropped.connect(_on_expansion_lifted)
+
+	if ExpansionCatalog.host_stands_on_unit(systemid) \
+			and get_node_or_null("ExpansionFoot") == null:
+		# Registered by hand: XRToolsPickable collects grab points in its own
+		# _ready, which ran long before the model was measured.
+		_grab_points.push_back(ExpansionPort.build_foot(self, aabb.position.y, span))
+
+
+## Roof-socket gate: is this a unit that mounts on THIS console?
+func _accepts_expansion(obj: Node3D) -> bool:
+	var unit := obj as RetroExpansion
+	if unit == null:
+		return false
+	return ExpansionCatalog.host_of(unit.expansion_id) == systemid \
+		and ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_ABOVE
+
+
+func _on_expansion_seated(obj: Node3D) -> void:
+	var unit := obj as RetroExpansion
+	if unit != null:
+		unit.bind_to_host(self)
+
+
+func _on_expansion_lifted() -> void:
+	# The zone says it is empty, not what left it, so unbind whatever we hold
+	# that a socket is no longer holding.
+	for unit in _expansions.duplicate():
+		if is_instance_valid(unit) and ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_ABOVE:
+			unit.unbind_from_host()
+
+
+## Called from the unit's side of the join, whichever side owns the socket.
+func attach_expansion(unit: RetroExpansion) -> void:
+	if unit == null or _expansions.has(unit):
+		return
+	_expansions.append(unit)
+	_update_name_label()
+
+
+func detach_expansion(unit: RetroExpansion) -> void:
+	if unit == null or not _expansions.has(unit):
+		return
+	_expansions.erase(unit)
+	_update_name_label()
+
+
+## A disk going into or out of an expansion's own bay. The machine's boot media
+## can change without anything touching the console's cartridge slot.
+func on_expansion_media_changed(_unit: RetroExpansion) -> void:
+	_update_name_label()
+
+
+## Bolt `unit` on from the console's side. Used by the save restore and by a
+## MOUNT_ABOVE join, where it is the console that owns the socket.
+func restore_expansion(unit: RetroExpansion) -> void:
+	if unit == null:
+		return
+	if ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_ABOVE:
+		var socket := get_node_or_null("ExpansionSocket") as XRToolsSnapZone
+		if socket != null:
+			socket.pick_up_object(unit)
+			return
+	unit.bind_to_host(self)
+
+
+## The ids bolted to this console, in catalog order.
+func expansion_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for unit in _expansions:
+		if is_instance_valid(unit) and not unit.expansion_id.is_empty():
+			ids.append(unit.expansion_id)
+	return ExpansionCatalog.sorted_ids(ids)
+
+
+## The units themselves, for whoever needs the objects rather than the names.
+func get_expansions() -> Array[RetroExpansion]:
+	var out: Array[RetroExpansion] = []
+	for unit in _expansions:
+		if is_instance_valid(unit):
+			out.append(unit)
+	return out
+
+
+## The launch recipe for the machine as assembled, or {} when this combination
+## has none -- which is the ordinary state of a bare console.
+func expansion_boot() -> Dictionary:
+	var spec := ExpansionCatalog.boot_for(systemid, expansion_ids())
+	if spec.is_empty():
+		return spec
+	# A console with an empty cartridge slot is a different machine from one with
+	# a game in it: mupen64plus_next takes a cartridge and its disk together,
+	# parallel_n64 takes a lone disk. The recipe carries both and the slot picks.
+	if _host_media_path().is_empty() and spec.has("core_without_host"):
+		spec = spec.duplicate()
+		spec["core"] = spec["core_without_host"]
+	return spec
+
+
+## What is in the CONSOLE's own slot -- read from the cartridge, not from
+## rom_path, which the launch path overwrites with whatever the stack boots
+## from. Asking twice must give the same answer.
+func _host_media_path() -> String:
+	if _snapped_cartridge != null and is_instance_valid(_snapped_cartridge) \
+			and "rom_path" in _snapped_cartridge:
+		return str(_snapped_cartridge.get("rom_path"))
+	return ""
+
+
+## The paths the recipe names, in its order, skipping any bay that is empty. An
+## empty result means the stack has nothing to run, which is the ordinary state
+## of a drive with no disk in it and not a fault.
+##
+## The core is handed the FIRST survivor and no more: every combination in the
+## catalog loads through a plain retro_load_game with one path, because that is
+## what the cores themselves do. The rest of the list is not dead -- it is what
+## makes "cartridge if there is one, otherwise the disk" fall out of an ordered
+## list rather than a special case.
+func _expansion_roms(spec: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for token: String in spec.get("roms", []):
+		var path := ""
+		if token == "host":
+			path = _host_media_path()
+		else:
+			var id := token.substr("expansion:".length())
+			for unit in get_expansions():
+				if unit.expansion_id == id:
+					path = unit.get_media_path()
+					break
+		if not path.is_empty():
+			out.append(path)
+	return out
+
+
+## Say so when a disk is in the drive and the core is about to ignore it.
+##
+## mupen64plus_next attaches a 64DD disk to a cartridge only when the disk sits
+## beside the cartridge named after it, which is a convention no arrangement of
+## objects in a room can satisfy. The cartridge boots and looks completely
+## correct; the only tell is a missing line on the title screen. Better to say
+## it out loud than to let it pass for working.
+func _warn_missing_sidecar(spec: Dictionary) -> void:
+	var sidecar := str(spec.get("sidecar", ""))
+	if sidecar.is_empty() or _host_media_path().is_empty():
+		return
+	var disk := ""
+	for unit in get_expansions():
+		var p := unit.get_media_path()
+		if not p.is_empty():
+			disk = p
+			break
+	if disk.is_empty():
+		return
+	var expected := _host_media_path() + sidecar
+	if FileAccess.file_exists(expected):
+		return
+	push_warning("[RetroSystem] %s can only read a disk named %s from the cartridge's own folder; %s will be IGNORED and the cartridge will boot without the drive attached (see ExpansionCatalog)"
+		% [str(spec.get("core", "")), expected.get_file(), disk.get_file()])
+
+
+## Point rom_path at whatever the ASSEMBLED machine boots from, and return the
+## recipe so power_on can also ask about the sidecar and the pinned options.
+##
+## rom_path itself, rather than a second field carried alongside it: everything
+## downstream of here -- the power-on verdict, the content resolver, the SRAM
+## path, the achievements claim, the netplay hash -- reads that one field, and a
+## second source of truth would have to be threaded through all of them. The
+## console's own cartridge is not lost by this; it is still in the slot, which is
+## what _host_media_path asks, and the field is recomputed from scratch on the
+## next power-on.
+func _apply_expansion_launch() -> Dictionary:
+	var spec := expansion_boot()
+	if spec.is_empty():
 		return {}
-	return {"parallel-n64-64dd-hardware": "enabled"}
+	var roms := _expansion_roms(spec)
+	if roms.is_empty():
+		return spec
+	rom_path = roms[0]
+	return spec
+
+
+func _disk_drive_options(core: String) -> Dictionary:
+	if systemid != "nintendo_64dd":
+		return {}
+	if core == "parallel_n64":
+		return {"parallel-n64-64dd-hardware": "enabled"}
+	# mupen64plus_next boots a bare disk correctly and then draws nothing at all
+	# under GLideN64, which is its default renderer. Measured on the same core,
+	# the same disk and the same machine, changing only this option: GLideN64
+	# reaches the 64DD IPL logo and goes black and stays black, while parallel
+	# and angrylion both reach Mario Artist's title screen. The emulation is
+	# fine either way -- the frame counter climbs identically in all three -- so
+	# this is a renderer that cannot draw a cartridge-less boot, not a machine
+	# that fails to start.
+	#
+	# parallel rather than angrylion because angrylion is a software rasteriser
+	# and this has to run on a headset. Pinned for the same reason the drive
+	# above is: with the default the player gets a black screen, and no amount
+	# of fiddling elsewhere fixes it.
+	if core == "mupen64plus_next":
+		return {"mupen64plus-rdp-plugin": "parallel"}
+	return {}
 
 
 ## The measured options that make this machine show its own boot screen, unless
