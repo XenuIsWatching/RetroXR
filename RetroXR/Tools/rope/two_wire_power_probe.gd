@@ -5,6 +5,7 @@ const CORD_POLARIZED := preload("res://Scenes/Objects/cables/nema_1_15_polarized
 const PORT_STANDARD := preload("res://Scenes/Objects/cables/iec_c8_port.tscn")
 const PORT_POLARIZED := preload("res://Scenes/Objects/cables/iec_c8_polarized_port.tscn")
 const GROUNDED_CORD := preload("res://Scenes/Objects/cables/power_cord.tscn")
+const WALL_PORT := preload("res://Scenes/Objects/cables/power_port.tscn")
 const NEMA_STANDARD := preload("res://Scenes/Objects/cables/nema_1_15_plug.res")
 const NEMA_POLARIZED := preload("res://Scenes/Objects/cables/nema_1_15_polarized_plug.res")
 const C7_STANDARD := preload("res://Scenes/Objects/cables/iec_c7_plug.res")
@@ -205,11 +206,32 @@ func _run_checks() -> void:
 	_check(not p0.can_preview(c7p),"C7P is rejected by ordinary C8")
 	p0.queue_free(); p1.queue_free()
 
-	var grounded := GROUNDED_CORD.instantiate()
+	var grounded := GROUNDED_CORD.instantiate() as Node3D
+	grounded.visible = false
+	add_child(grounded)
 	_check((grounded.get_node("VerletRope") as VerletRope).ribbon_count == 1,"existing grounded cord remains single-jacket")
 	_check((grounded.get_node("WallPlug") as PowerPlug).connector_group == "nema_5_15_plug","existing grounded wall group is unchanged")
 	_check((grounded.get_node("AppliancePlug") as PowerPlug).connector_group == "iec_c13_plug","existing grounded appliance group is unchanged")
-	grounded.free()
+
+	# A two-prong plug into a grounded wall outlet, which is what a real 5-15R
+	# takes: the same two blade slots, ground hole left empty. Asserted in both
+	# directions, because the value of the rule is the half it still refuses.
+	var outlet := WALL_PORT.instantiate() as PowerPort
+	var two_slot := WALL_PORT.instantiate() as PowerPort
+	two_slot.accepted_plug = "nema_1_15_plug"
+	add_child(outlet); add_child(two_slot)
+	var nema1 := standard_cord.get_node("WallPlug") as Node3D
+	var nema1p := polarized_cord.get_node("WallPlug") as Node3D
+	var nema5 := grounded.get_node("WallPlug") as Node3D
+	_check(outlet.snap_require == "nema_5_15_plug","a bare PowerPort is a 5-15R")
+	_check(outlet.can_preview(nema1),"a plain 1-15P goes into a 5-15R")
+	_check(outlet.can_preview(nema1p),"a polarized 1-15P goes into a 5-15R")
+	_check(outlet.can_preview(nema5),"a 5-15P still goes into a 5-15R")
+	_check(not outlet.can_preview(c7),"a C7 is still refused by a 5-15R")
+	_check(not two_slot.can_preview(nema5),"a 5-15P is still refused by a two-slot outlet")
+	_check(two_slot.can_preview(nema1),"a plain 1-15P still goes into a two-slot outlet")
+	outlet.queue_free(); two_slot.queue_free()
+	grounded.queue_free()
 
 func _check_cord(cord: Node3D, wall_group: String, appliance_group: String) -> void:
 	var rope := cord.get_node("VerletRope") as VerletRope

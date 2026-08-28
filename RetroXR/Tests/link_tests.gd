@@ -1269,7 +1269,7 @@ func _test_every_socket_can_be_saved() -> void:
 	for spec in [[lead, console_seat], [chained, junction_seat]]:
 		var owner_node: Node = spec[1].get("device")
 		var pname: String = str(spec[1].get("port", ""))
-		var found: XRToolsSnapZone = (spec[0] as CompositeCable)._port_named(owner_node, pname)
+		var found: XRToolsSnapZone = CompositeCable.port_named(owner_node, pname)
 		_ok("and the saved pair finds that socket again on load", found != null,
 			"looked for '%s' under %s" % [pname, str(owner_node)])
 

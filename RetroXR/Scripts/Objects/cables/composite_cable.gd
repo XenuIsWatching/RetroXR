@@ -620,7 +620,11 @@ func _seat_of(plug: RcaPlug) -> Dictionary:
 ## Typed as a SNAP ZONE rather than an RcaPort, because a console's controller
 ## socket is one of those and nothing more. Everything done with the result here
 ## is pick_up_object, which every zone answers.
-func _port_named(device: Node, port_name: String) -> XRToolsSnapZone:
+## Static and public because PowerCord restores its two ends the same way and
+## against the same trap: a mains socket is authored into a console's model at
+## <model>/Back/PowerPort, so the direct child that a save's device/port pair
+## implies is not there either.
+static func port_named(device: Node, port_name: String) -> XRToolsSnapZone:
 	if device == null or port_name.is_empty():
 		return null
 	var port := device.get_node_or_null(port_name) as XRToolsSnapZone
@@ -673,7 +677,7 @@ func _apply_seating(seats: Array) -> void:
 		var dev: Node3D = seat.get("device")
 		var port_name: String = str(seat.get("port", ""))
 		if dev != null and is_instance_valid(dev) and not port_name.is_empty():
-			var port := _port_named(dev, port_name)
+			var port := port_named(dev, port_name)
 			if port != null:
 				port.pick_up_object(plug)
 	# The sockets fire as they take each plug, but a lead restored with nothing
@@ -686,7 +690,7 @@ func _apply_seating(seats: Array) -> void:
 func net_seat_plug(end: int, cord: int, device: Node3D, port_name: String) -> void:
 	if end < 0 or end > 1 or cord < 0 or cord >= _cords or device == null:
 		return
-	var port := _port_named(device, port_name)
+	var port := port_named(device, port_name)
 	if port != null:
 		port.pick_up_object(_plugs[end][cord])
 

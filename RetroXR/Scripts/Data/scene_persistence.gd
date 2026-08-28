@@ -333,7 +333,10 @@ func clear_scene(root: Node) -> void:
 	for node: Node in spawned:
 		# The captive A/V lead ends in three connectors, not one — the picture cord
 		# plus the audio pair beside it — and any of them can be sitting in a socket.
-		for plug_name: String in ["CablePlug", "CablePlugL", "CablePlugR", "ControllerPlug"]:
+		# A mains lead's two ends are named for which is which, and either can be in
+		# one: the wall end in an outlet, the appliance end in a machine's inlet.
+		for plug_name: String in ["CablePlug", "CablePlugL", "CablePlugR", "ControllerPlug",
+				"WallPlug", "AppliancePlug"]:
 			var plug := node.get_node_or_null(plug_name)
 			if plug and plug.has_method("drop"):
 				plug.call("drop")
@@ -899,8 +902,8 @@ func _spawn_entry(root: Node, entry: Variant, spawned: Dictionary, entries: Dict
 	# pass 2 hangs the cord in mid-air over the desk for as many frames as the
 	# restore takes to reach it. Which socket holds which is still pass 2's, because
 	# that genuinely does need every device to exist.
-	if obj is CompositeCable:
-		(obj as CompositeCable).restore_plug_poses(d.get("plugs", []))
+	if obj is CompositeCable or obj is PowerCord:
+		obj.call("restore_plug_poses", d.get("plugs", []))
 	spawned[id] = obj
 	entries[id] = d
 
@@ -1134,10 +1137,11 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		var pair := obj as SpeakerPair
 		pair.set_volume(float(d.get("volume", 0.75)))
 		pair.restore_box_poses(d.get("boxes", []))
-	elif obj is CompositeCable:
-		# Pass 2, so every deck and set the plugs point at already exists. A plug
-		# whose socket cannot be found is simply left where it was saved — a loose
-		# end on the floor beats one seated in the wrong device.
+	elif obj is CompositeCable or obj is PowerCord:
+		# Pass 2, so every deck and set the plugs point at already exists, and for
+		# a mains lead so does every wall outlet and every inlet. A plug whose
+		# socket cannot be found is simply left where it was saved: a loose end on
+		# the floor beats one seated in the wrong device.
 		var seats: Array = []
 		for rec: Dictionary in d.get("plugs", []):
 			seats.append({
@@ -1150,7 +1154,7 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 			})
 		if obj.has_method("restore_carried_body"):
 			obj.call("restore_carried_body", d.get("body", {}))
-		(obj as CompositeCable).restore_seating(seats)
+		obj.call("restore_seating", seats)
 	elif obj is SensorBar:
 		(obj as SensorBar).restore_connection(
 			_resolve_ref(root, spawned, d.get("system")) as RetroSystem)
@@ -1543,6 +1547,8 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		})
 	elif node is CompositeCable:
 		return _serialize_cable(node as CompositeCable, id, n3d, node_to_id)
+	elif node is PowerCord:
+		return _serialize_power_cord(node as PowerCord, id, n3d, node_to_id)
 	return {}
 
 
@@ -1629,19 +1635,7 @@ func _serialize_peripheral(node: Node, id: int, n3d: Node3D, node_to_id: Diction
 ## would not.
 func _serialize_cable(cable: CompositeCable, id: int, n3d: Node3D,
 		node_to_id: Dictionary) -> Dictionary:
-	var plugs: Array = []
-	for seat: Dictionary in cable.seating():
-		var plug := seat["plug"] as Node3D
-		var ppos := plug.global_position
-		var prot := plug.global_rotation_degrees
-		plugs.append({
-			"end": seat["end"],
-			"cord": seat["cord"],
-			"position": [ppos.x, ppos.y, ppos.z],
-			"rotation": [prot.x, prot.y, prot.z],
-			"port": seat["port"],
-			"device": _ref(node_to_id, seat["device"] as Node),
-		})
+	var plugs := _plug_records(cable.seating(), node_to_id)
 	var extra := {}
 	# A plain lead has no body and _base's pose — the ROOT's — is the whole object.
 	# The RF switch has a box the player carries while its root stays where it
@@ -1662,6 +1656,47 @@ func _serialize_cable(cable: CompositeCable, id: int, n3d: Node3D,
 		"kind": cable.scene_file_path.get_file().get_basename(),
 		"plugs": plugs,
 	})
+
+
+## A mains lead, filed under the same entry type as an A/V one.
+##
+## Not because a PowerCord is a CompositeCable. It is not one: it carries no
+## signal, resolves no routing, and is a fifth of the code. It is because the
+## ENTRY is identical: ends with poses, and the socket each sits in named by device
+## and node name. Sharing the type shares the validator, the spawn table, which
+## already knew all three cord scenes by kind, and both restore passes.
+##
+## Nothing wrote one of these before. _serialize only recognised `is
+## CompositeCable`, so a mains lead serialized to the empty entry and a saved room
+## came back without it, and without any record of what had been plugged in.
+func _serialize_power_cord(cord: PowerCord, id: int, n3d: Node3D,
+		node_to_id: Dictionary) -> Dictionary:
+	return _base(id, "composite_cable", n3d).merged({
+		"cords": cord.cord_count(),
+		"kind": cord.scene_file_path.get_file().get_basename(),
+		"plugs": _plug_records(cord.seating(), node_to_id),
+	})
+
+
+## One JSON record per connector, from either kind of lead's seating().
+##
+## The pose is the PLUG's own and global, because a lead has no meaningful body
+## pose of its own: where its ends are IS where it is.
+func _plug_records(seats: Array, node_to_id: Dictionary) -> Array:
+	var plugs: Array = []
+	for seat: Dictionary in seats:
+		var plug := seat["plug"] as Node3D
+		var ppos := plug.global_position
+		var prot := plug.global_rotation_degrees
+		plugs.append({
+			"end": seat["end"],
+			"cord": seat["cord"],
+			"position": [ppos.x, ppos.y, ppos.z],
+			"rotation": [prot.x, prot.y, prot.z],
+			"port": seat["port"],
+			"device": _ref(node_to_id, seat["device"] as Node),
+		})
+	return plugs
 
 
 ## The pad scene the entry names, or the generic pad when the save predates the

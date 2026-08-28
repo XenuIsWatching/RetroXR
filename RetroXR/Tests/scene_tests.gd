@@ -18,7 +18,7 @@ extends Node
 ## set_active_slot() writes user://scenes/prefs.json. Both are snapshotted at the
 ## start and put back at the end, so a red run cannot cost anyone their room.
 
-const GROUPS := ["slots", "ready", "transition", "autosave", "reload", "overlap", "fixture", "switch", "power", "vlc", "manifest", "stack"]
+const GROUPS := ["slots", "ready", "transition", "autosave", "reload", "overlap", "fixture", "switch", "power", "cords", "vlc", "manifest", "stack"]
 ## Scratch slot ids, in the arcade's real directory — slot_dir() is derived from
 ## the room id and cannot be pointed somewhere safer.
 const SLOT_A := "__scene_selftest_a"
@@ -66,6 +66,8 @@ func _ready() -> void:
 		await _test_switch()
 	if _want_group("power"):
 		await _test_power()
+	if _want_group("cords"):
+		await _test_cords()
 	if _want_group("stack"):
 		await _test_stack()
 	if _want_group("vlc"):
@@ -859,6 +861,121 @@ func _restore() -> void:
 		var mf := FileAccess.open(MANIFEST_FILE, FileAccess.WRITE)
 		if mf:
 			mf.store_string(_saved_manifest_json)
+
+
+# ── Mains leads: what fits where, and what a slot remembers ───────────────────
+
+## A two-prong lead has to reach a modern outlet, and a saved room has to bring
+## every mains lead back still plugged in.
+##
+## Both halves were missing. NEMA 1-15P answered only to its own group, so the
+## two-wire cords could not enter the bedroom's 5-15R at all, which no real wall
+## has been true of since the sixties. And ScenePersistence only ever serialized a
+## lead that `is CompositeCable`, which a PowerCord is not, so a mains lead was
+## not in the slot file at any point: it vanished on reload, taking the record of
+## what had been plugged into what with it.
+##
+## Driven through the socket's own gate rather than pick_up_object, which is the
+## RESTORE path and bypasses the filter on purpose. can_preview is what decides
+## whether a released plug seats, so it is what a fit case has to ask.
+func _test_cords() -> void:
+	var room := Node3D.new()
+	add_child(room)
+	# Named and nested the way the bedroom authors it, because the socket's node
+	# name and the fixture it hangs off are exactly what the slot writes down.
+	var wall := Node3D.new()
+	wall.name = "WallOutlet"
+	room.add_child(wall)
+	var outlet := preload("res://Scenes/Objects/cables/power_port.tscn").instantiate() as PowerPort
+	outlet.name = "TopPort"
+	wall.add_child(outlet)
+	await get_tree().process_frame
+
+	_eq(outlet.snap_require, "nema_5_15_plug", "cords/a bare wall socket is a 5-15R")
+
+	var cord := preload("res://Scenes/Objects/cables/nema_1_15_to_c7_cord.tscn") \
+		.instantiate() as PowerCord
+	room.add_child(cord)
+	cord.add_to_group("spawned")
+	var polarized := preload(
+		"res://Scenes/Objects/cables/nema_1_15_polarized_to_c7_polarized_cord.tscn") \
+		.instantiate() as PowerCord
+	room.add_child(polarized)
+	var grounded := preload("res://Scenes/Objects/cables/power_cord.tscn") \
+		.instantiate() as PowerCord
+	room.add_child(grounded)
+	await get_tree().process_frame
+
+	_ok(outlet.can_preview(cord.wall_plug), "cords/a plain 1-15P goes into a 5-15R")
+	_ok(outlet.can_preview(polarized.wall_plug), "cords/a polarized 1-15P goes into a 5-15R")
+	_ok(outlet.can_preview(grounded.wall_plug), "cords/a 5-15P still goes into a 5-15R")
+	_ok(not outlet.can_preview(cord.appliance_plug), "cords/a C7 is still refused by a 5-15R")
+	# The other direction, which is the half that makes the rule worth having: a
+	# ground pin has nowhere to go in a two-slot outlet.
+	var two_slot := preload("res://Scenes/Objects/cables/power_port.tscn").instantiate() as PowerPort
+	two_slot.name = "BottomPort"
+	two_slot.accepted_plug = "nema_1_15_plug"
+	wall.add_child(two_slot)
+	await get_tree().process_frame
+	_ok(not two_slot.can_preview(grounded.wall_plug),
+		"cords/a 5-15P is refused by a two-slot outlet")
+
+	# Fitting is only half of going in: up has to stay up. A snap zone seats via
+	# `zone * grab_point.inverse()`, so a SnapGrabPoint carrying R_x(180), which
+	# flips Y as well as Z, puts the plug in inverted, earth pin above the blades
+	# and the polarized lead's wide blade over the narrow slot. The grounded lead
+	# was fixed for exactly that; the two-wire cords kept the old transform, where
+	# it never showed because a 1-15P could not reach a wall outlet at all.
+	for lead: Array in [[cord, "a 1-15P"], [polarized, "a polarized 1-15P"],
+			[grounded, "a 5-15P"]]:
+		var seated: Transform3D = outlet.snap_pose_for((lead[0] as PowerCord).wall_plug)
+		_ok(seated.basis.y.dot(Vector3.UP) > 0.99,
+			"cords/%s seats the right way up" % lead[1])
+
+	# ── The round trip ──
+	outlet.pick_up_object(cord.wall_plug)
+	await get_tree().process_frame
+	_ok(PowerCord.socket_holding(cord.wall_plug) == outlet,
+		"cords/the socket knows which plug it is holding")
+
+	var sp := ScenePersistence.new("arcade")
+	var entry := sp._serialize_node(cord, 0, {})
+	_ok(not entry.is_empty(), "cords/a mains lead serializes to an entry at all")
+	_eq(str(entry.get("kind", "")), "nema_1_15_to_c7_cord",
+		"cords/and is named by the scene it was spawned from")
+	var plugs: Array = entry.get("plugs", [])
+	_eq(plugs.size(), 2, "cords/both ends are recorded")
+	var wall_rec: Dictionary = plugs[0]
+	_eq(str(wall_rec.get("port", "")), "TopPort", "cords/the wall end names its socket")
+	_eq(str(wall_rec.get("device", "")), str(wall.get_path()),
+		"cords/and the fixture that socket belongs to")
+	_eq(str((plugs[1] as Dictionary).get("port", "")), "",
+		"cords/the loose appliance end names no socket")
+
+	# Out of the way before the restore: one socket holds one plug, so the saved
+	# lead cannot come back into an outlet the original is still standing in.
+	outlet.drop_object()
+	room.remove_child(cord)
+	cord.queue_free()
+	await get_tree().process_frame
+	_ok(outlet.picked_up_object == null, "cords/the outlet is empty again")
+
+	var spawned := sp.instantiate_objects(room, [entry])
+	# restore_seating defers a frame so the rope is built first, and the socket
+	# takes the plug on the frame after that.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var back := spawned.get(0) as PowerCord
+	_ok(back != null, "cords/the lead is rebuilt from its entry")
+	if back != null:
+		_ok(PowerCord.socket_holding(back.wall_plug) == outlet,
+			"cords/and comes back plugged into the same outlet")
+
+	room.remove_child(polarized); polarized.queue_free()
+	room.remove_child(grounded); grounded.queue_free()
+	remove_child(room)
+	room.queue_free()
+	await get_tree().process_frame
 
 
 func _ok(cond: bool, what: String) -> void:
