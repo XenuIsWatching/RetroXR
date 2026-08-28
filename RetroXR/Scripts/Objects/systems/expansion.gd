@@ -563,20 +563,42 @@ func _deck_y(s: Vector3) -> float:
 	return -s.y * 0.16
 
 
-## The OPEN button's height: level with the tray deck on a drawer unit, so the
-## two read as one row of controls rather than a button stranded above a mouth.
-## A lidded unit has no deck, and keeps the height it always had.
+## The OPEN button's height.
+##
+## Level with the tray deck on a drawer unit, so the two read as one row of
+## controls rather than a button stranded above a mouth.
+##
+## HIGH on a unit that mounts as a cartridge. Two things are in the way down
+## below: the console's own front panel, which this unit is standing directly on
+## top of, and the unit's own nameplate, which sits in the bottom 20 mm of its
+## face (_build_body puts it at -s.y * 0.5 + 10 mm on a top-mounting unit). At
+## the old height the word OPEN ran into the lettering.
 func _eject_y(s: Vector3) -> float:
-	return _deck_y(s) if _disc_bay != null else -s.y * 0.18
+	if _disc_bay != null:
+		return _deck_y(s)
+	if ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE:
+		return s.y * 0.18
+	return -s.y * 0.18
 
 
-## And its distance out from the centre. On a drawer unit that is measured from
-## the MOUTH rather than taken as a fraction of the box: the mouth is as wide as
-## a disc plus its bezel however narrow the machine is, so a fixed fraction put
-## the button through the tray on the smaller units (the CD-ROM2 is 60 mm
-## narrower than the Mega-CD and the mouth is the same size on both).
+## And its distance out from the centre.
+##
+## CENTRED on a unit that mounts as a cartridge. It sits on the console's roof
+## with its front face flush above the console's own, so a button off to one
+## side lands directly over whatever the console keeps there -- on the machines
+## these attach to, that is START, and the console's button covered the unit's.
+## The middle of a small unit's face is the one place nothing below it competes
+## for.
+##
+## On a drawer unit it is measured from the MOUTH rather than taken as a
+## fraction of the box: the mouth is as wide as a disc plus its bezel however
+## narrow the machine is, so a fixed fraction put the button through the tray on
+## the smaller units (the CD-ROM2 is 60 mm narrower than the Mega-CD and the
+## mouth is the same size on both).
 func _eject_x(s: Vector3) -> float:
 	if _disc_bay == null:
+		if ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE:
+			return 0.0
 		return s.x * 0.30
 	var mouth_half := (MediaDimensions.disc_diameter(
 		ExpansionCatalog.media_of(expansion_id)) + 0.020) * 0.5

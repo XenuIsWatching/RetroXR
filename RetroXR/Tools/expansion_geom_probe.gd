@@ -119,6 +119,31 @@ func _ready() -> void:
 				% [id, local.y, well_top])
 		_check(disc.is_visible_in_tree(), "%s's seated disc is still drawn" % id)
 
+	# --- a top-mounting unit keeps its button off the console's own panel -----
+	# It stands on the console with its front face flush above the console's, so
+	# a button off to one side lands over whatever that machine keeps there --
+	# START, on the consoles these attach to, which covered the unit's button.
+	for id: String in ["jaguar_cd"]:
+		var u := _spawn(id)
+		await get_tree().physics_frame
+		var btn := u.get_node_or_null("EjectButton") as VRButton
+		var plate := u.get_node_or_null("NameLabel") as Label3D
+		if btn == null or plate == null:
+			_check(false, "%s has a button and a nameplate" % id)
+			continue
+		_check(absf(btn.position.x) < 0.001,
+			"%s's OPEN button is centred on its face (%.4f)" % [id, btn.position.x])
+		# And clear of its own lettering, which is 20 mm of text in the bottom of
+		# that same face -- centring alone would have put OPEN straight on it.
+		var word := btn.get_node_or_null("Label3D") as Label3D
+		var word_y: float = btn.position.y + (word.position.y if word != null else 0.0)
+		var plate_top: float = plate.position.y + plate.get_aabb().end.y
+		_check(word_y > plate_top,
+			"%s's OPEN label clears its nameplate (%.4f vs %.4f)"
+				% [id, word_y, plate_top])
+		_check(btn.position.y + 0.006 < u.size().y * 0.5,
+			"%s's OPEN button is still on the front face" % id)
+
 	# A lidded unit swings a lid instead, and must NOT grow a drawer as well.
 	var jag := _spawn("jaguar_cd")
 	await get_tree().physics_frame
