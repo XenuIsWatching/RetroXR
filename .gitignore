@@ -150,3 +150,8 @@ RetroXR/metaxr-audio/*metaxr-audio.*.so
 Tools/azahar-libretro-vr/
 
 .claude/worktrees/
+
+# Mods authored in this checkout (Tools/mods/new_mod.py). Never ours to ship:
+# an author works in RetroXR/mods/<id>/ so their scenes resolve against the real
+# classes and uids, then packs from there. Also excluded from the export presets.
+RetroXR/mods/

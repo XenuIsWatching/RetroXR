@@ -266,43 +266,56 @@ or your object is not saved), `LoadingOverlay.begin(&"my_mod", ...)` for progres
 `QualityManager.configure_light()` so your lights obey the player's quality
 settings, and `JsonStore` with `api.store()` for your own settings file.
 
-## Using RetroXR's classes
+## Authoring: work inside a checkout of RetroXR
 
-**From GDScript it just works** — `extends VRHinge`, `VRButton.new()`, and so on
-resolve against the running game's classes when your pack is mounted.
-
-**From a `.tscn` you need the SDK.** A scene records both a `uid` and a `path` for
-every script it references, and a uid minted in your own project does not exist in
-RetroXR. Generate the SDK into your mod project:
+Clone RetroXR, scaffold your mod inside it, and edit it there:
 
 ```bash
-python Tools/mods/gen_sdk.py --into /path/to/your-mod-project
+python Tools/mods/new_mod.py xenu.snes --name "Super Nintendo" --author "You"
+# creates RetroXR/mods/xenu.snes/{mod.json,mod_main.gd}
 ```
 
-It copies the public classes to their real `res://` paths **with their real `.uid`
-files**, so both resolve identically at runtime.
+This is not a convenience. It is the only arrangement in which a mod's scenes
+resolve correctly, for two reasons:
 
-**Never pack the SDK.** It lives outside `res://mods/<id>/`, so the loader refuses
-any pack containing it — which is the point, since a stale copy of `vr_hinge.gd`
-would otherwise replace the real one. The packer excludes it for you.
+- **Scenes record a `uid` as well as a `path`** for every script they reference. A
+  uid minted in a separate project does not exist in RetroXR, so the reference
+  survives only by falling back to the path — and working-by-fallback is not a
+  foundation.
+- **Copied stubs cannot resolve autoloads.** `RetroSystemModel`, the one class a
+  console mod must extend, references `AvLegend`, `ProceduralDiscBay`, `VRButton`,
+  `VRSlider` and the `NetworkManager` **autoload**. Autoloads come from
+  `project.godot`, which a mod pack cannot add — so a stub tree resolves
+  everything except the part that makes it work.
+
+Working in the real project makes both problems vanish by construction: every
+class, autoload, shader include and `.uid` is the genuine one.
+
+`RetroXR/mods/` is gitignored and excluded from the app's export presets, so a mod
+you are developing cannot end up inside a build of the game.
 
 ## Building a pack
 
 ```bash
-# code, scenes and resources only
-godot --headless --path your-mod-project --script res://pack_mod.gd -- --out xenu.snes.zip
-
-# anything with textures, meshes or audio — must go through a real export,
-# so Godot's imported artifacts are included
-godot --headless --path your-mod-project --export-pack "Mod" xenu.snes.zip
+# code, scenes and resources
+godot --headless --path RetroXR --script res://Tools/mods/pack_mod.gd -- --id=xenu.snes
 ```
 
-Match RetroXR's texture import settings (`textures/vram_compression/import_etc2_astc=true`)
-or your textures will not be usable on Quest. The template project carries them.
+That writes straight into your mods folder and then **reads the result back
+through the loader's own reader**, refusing to finish if the manifest cannot be
+found — so a pack that would silently fail to appear in the Mods list fails at
+build time instead.
 
-The packer reads its own output back through the loader's reader and refuses to
-finish if the manifest cannot be found — so a pack that would silently fail to
-appear fails at build time instead.
+**A mod carrying textures, meshes or audio must go through a real export**, because
+those load via `res://.godot/imported/*` artifacts that only an export produces.
+Add an export preset whose include filter is `mods/<id>/*` and:
+
+```bash
+godot --headless --path RetroXR --export-pack "YourModPreset" xenu.snes.zip
+```
+
+`pack_mod.gd` tells you which files it skipped for this reason rather than
+producing a pack that is quietly missing its art.
 
 ## Stability
 
