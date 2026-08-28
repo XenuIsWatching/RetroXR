@@ -175,7 +175,29 @@ func _save(path: String, a: SurfaceTool, b: SurfaceTool, ma: Material, mb: Mater
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a.commit_to_arrays()); mesh.surface_set_material(0,ma)
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, b.commit_to_arrays()); mesh.surface_set_material(1,mb)
 	var err := ResourceSaver.save(mesh,path)
-	print("[gen] %s err=%d size=%s" % [path,err,mesh.get_aabb().size])
+	print("[gen] %s err=%d size=%s %s %s"
+		% [path,err,mesh.get_aabb().size,_check_outward(mesh,0),_check_outward(mesh,1)])
+
+## Godot's front face is the clockwise one, so generate_normals() returns the
+## negative of (b-a) x (c-a) and a soup wound anticlockwise-from-outside bakes
+## inside out. Only the stored normals tell the two apart: for the vertex
+## furthest along each axis, its normal must not point back down that axis.
+## Faces exactly edge-on to an axis (open shroud rims) read 0 and are ignored.
+func _check_outward(mesh: ArrayMesh, surface: int) -> String:
+	var arrays := mesh.surface_get_arrays(surface)
+	var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var bad := PackedStringArray()
+	var axes := {"+X":Vector3.RIGHT,"-X":Vector3.LEFT,"+Y":Vector3.UP,
+		"-Y":Vector3.DOWN,"+Z":Vector3.BACK,"-Z":Vector3.FORWARD}
+	for label: String in axes:
+		var axis: Vector3 = axes[label]
+		var best := 0
+		for i in v.size():
+			if v[i].dot(axis) > v[best].dot(axis): best = i
+		if n[best].dot(axis) < -0.0001: bad.append(label)
+	if bad.is_empty(): return "surf%d outward" % surface
+	return "surf%d <-- INSIDE OUT on %s" % [surface,", ".join(bad)]
 
 ## 24-point rounded rectangle, matching the outlet generator's dry molded edges.
 func _round_ring(z: float, hx: float, hy: float, radius: float) -> PackedVector3Array:
@@ -239,8 +261,8 @@ func _loft(st: SurfaceTool, lo: PackedVector3Array, hi: PackedVector3Array, grou
 	st.set_smooth_group(group)
 	for i in lo.size():
 		var j := (i+1)%lo.size()
-		st.add_vertex(lo[i]);st.add_vertex(hi[i]);st.add_vertex(hi[j])
-		st.add_vertex(lo[i]);st.add_vertex(hi[j]);st.add_vertex(lo[j])
+		st.add_vertex(lo[i]);st.add_vertex(hi[j]);st.add_vertex(hi[i])
+		st.add_vertex(lo[i]);st.add_vertex(lo[j]);st.add_vertex(hi[j])
 
 func _cap(st: SurfaceTool, ring: PackedVector3Array, centre: Vector3, front: bool) -> void:
 	for i in ring.size():
@@ -253,7 +275,7 @@ func _cap(st: SurfaceTool, ring: PackedVector3Array, centre: Vector3, front: boo
 func _box(st: SurfaceTool, c: Vector3, s: Vector3) -> void:
 	var h := s * 0.5
 	var v := [c+Vector3(-h.x,-h.y,-h.z),c+Vector3(h.x,-h.y,-h.z),c+Vector3(h.x,h.y,-h.z),c+Vector3(-h.x,h.y,-h.z),c+Vector3(-h.x,-h.y,h.z),c+Vector3(h.x,-h.y,h.z),c+Vector3(h.x,h.y,h.z),c+Vector3(-h.x,h.y,h.z)]
-	for f in [[0,2,1],[0,3,2],[4,5,6],[4,6,7],[0,4,7],[0,7,3],[1,2,6],[1,6,5],[0,1,5],[0,5,4],[3,7,6],[3,6,2]]:
+	for f in [[0,1,2],[0,2,3],[4,6,5],[4,7,6],[0,7,4],[0,3,7],[1,6,2],[1,5,6],[0,5,1],[0,4,5],[3,6,7],[3,2,6]]:
 		st.add_vertex(v[f[0]]); st.add_vertex(v[f[1]]); st.add_vertex(v[f[2]])
 
 func _cylinder(st: SurfaceTool, c: Vector3, r: float, length: float, sides: int) -> void:

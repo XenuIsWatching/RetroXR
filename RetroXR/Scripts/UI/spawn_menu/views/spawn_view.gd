@@ -434,6 +434,7 @@ func _build() -> void:
 		["TV Remote",       "tv_remote"],
 		["Composite Cable", "composite_cable"],
 		["Mono Composite Cable", "mono_composite_cable"],
+		["NEMA 5-15P to C13 Cable", "power_cord"],
 		["NEMA 1-15P to C7 Cable", "nema_1_15_to_c7_cord"],
 		["Polarized NEMA 1-15P to C7P Cable",
 			"nema_1_15_polarized_to_c7_polarized_cord"],

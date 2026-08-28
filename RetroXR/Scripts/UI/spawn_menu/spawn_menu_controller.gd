@@ -48,6 +48,7 @@ const TV_REMOTE_SCENE       := preload("res://Scenes/Objects/appliances/tv_remot
 const DVD_PLAYER_SCENE      := preload("res://Scenes/Objects/appliances/dvd_player.tscn")
 const COMPOSITE_CABLE_SCENE := preload("res://Scenes/Objects/cables/composite_cable.tscn")
 const MONO_CABLE_SCENE      := preload("res://Scenes/Objects/cables/mono_composite_cable.tscn")
+const POWER_CORD_SCENE      := preload("res://Scenes/Objects/cables/power_cord.tscn")
 const NEMA_1_15_C7_CORD_SCENE := preload(
 	"res://Scenes/Objects/cables/nema_1_15_to_c7_cord.tscn")
 const NEMA_1_15_C7_POLARIZED_CORD_SCENE := preload(
@@ -1142,6 +1143,8 @@ func _on_spawn_requested(type: String) -> void:
 			obj = COMPOSITE_CABLE_SCENE.instantiate() as Node3D
 		"mono_composite_cable":
 			obj = MONO_CABLE_SCENE.instantiate() as Node3D
+		"power_cord":
+			obj = POWER_CORD_SCENE.instantiate() as Node3D
 		"nema_1_15_to_c7_cord":
 			obj = NEMA_1_15_C7_CORD_SCENE.instantiate() as Node3D
 		"nema_1_15_polarized_to_c7_polarized_cord":

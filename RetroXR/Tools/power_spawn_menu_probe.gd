@@ -7,12 +7,19 @@ const VIEWPORT_2D_IN_3D := preload(
 const SPAWN_MENU := preload("res://Scenes/UI/spawn_menu.tscn")
 const CASES := [
 	{
+		"label": "NEMA 5-15P to C13 Cable",
+		"scene": "res://Scenes/Objects/cables/power_cord.tscn",
+		"ribbon": 1,
+	},
+	{
 		"label": "NEMA 1-15P to C7 Cable",
 		"scene": "res://Scenes/Objects/cables/nema_1_15_to_c7_cord.tscn",
+		"ribbon": 2,
 	},
 	{
 		"label": "Polarized NEMA 1-15P to C7P Cable",
 		"scene": "res://Scenes/Objects/cables/nema_1_15_polarized_to_c7_polarized_cord.tscn",
+		"ribbon": 2,
 	},
 ]
 
@@ -60,8 +67,9 @@ func _ready() -> void:
 		_check(obj.get_node_or_null("AppliancePlug") is PowerPlug,
 			"spawned cord has an appliance plug")
 		var rope := obj.get_node_or_null("VerletRope") as VerletRope
-		_check(rope != null and rope.ribbon_count == 2,
-			"spawned cord retains its two-conductor ribbon")
+		var ribbon := int(test["ribbon"])
+		_check(rope != null and rope.ribbon_count == ribbon,
+			"spawned cord retains ribbon_count %d" % ribbon)
 		obj.queue_free()
 		await get_tree().process_frame
 	print("[power-spawn-menu-probe] %s" % ("PASS" if failures == 0 else "FAIL (%d)" % failures))

@@ -93,6 +93,11 @@ const LINK_CABLE_SCENE       := preload("res://Scenes/Objects/cables/link_cable.
 const GB_LINK_CABLE_SCENE    := preload("res://Scenes/Objects/cables/gb_link_cable.tscn")
 const GC_GBA_CABLE_SCENE     := preload("res://Scenes/Objects/cables/gc_gba_cable.tscn")
 const PSX_LINK_CABLE_SCENE   := preload("res://Scenes/Objects/cables/psx_link_cable.tscn")
+const POWER_CORD_SCENE       := preload("res://Scenes/Objects/cables/power_cord.tscn")
+const NEMA_1_15_C7_CORD_SCENE := preload(
+	"res://Scenes/Objects/cables/nema_1_15_to_c7_cord.tscn")
+const NEMA_1_15_C7P_CORD_SCENE := preload(
+	"res://Scenes/Objects/cables/nema_1_15_polarized_to_c7_polarized_cord.tscn")
 const SPEAKER_PAIR_SCENE     := preload("res://Scenes/Objects/appliances/speaker_pair.tscn")
 const STORAGE_BOX_SCENE      := preload("res://Scenes/Objects/appliances/storage_box.tscn")
 const TABLE_SCENE            := preload("res://Scenes/Objects/furniture/table.tscn")
@@ -1816,6 +1821,14 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 					lead = PSX_LINK_CABLE_SCENE
 				elif kind == "rf_switch":
 					lead = RF_SWITCH_SCENE
+				elif kind == "power_cord":
+					lead = POWER_CORD_SCENE
+				# Named before the cord-count fallback: these are two-conductor
+				# ribbon, which that test reads as a mono composite lead.
+				elif kind == "nema_1_15_to_c7_cord":
+					lead = NEMA_1_15_C7_CORD_SCENE
+				elif kind == "nema_1_15_polarized_to_c7_polarized_cord":
+					lead = NEMA_1_15_C7P_CORD_SCENE
 				elif kind == "mono_composite_cable" or int(data.get("cords", 3)) == 2:
 					lead = MONO_CABLE_SCENE
 				obj = lead.instantiate() as Node3D
