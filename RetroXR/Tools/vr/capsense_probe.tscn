@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Tools/vr/capsense_probe.gd" id="1_capsense"]
+
+[node name="CapsenseProbe" type="Node3D"]
+script = ExtResource("1_capsense")

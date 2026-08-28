@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://Tools/render_model_probe.gd" id="1_rmprobe"]
-
-[node name="RenderModelProbe" type="Node3D"]
-script = ExtResource("1_rmprobe")

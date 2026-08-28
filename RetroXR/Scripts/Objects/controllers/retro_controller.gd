@@ -33,7 +33,7 @@ var device_type: int = RETRO_DEVICE_JOYPAD
 
 ## Mesh resource for this controller's cable connector, or "" for the generic
 ## cylinder plug. Console pads point this at their real connector — see
-## Tools/extract_nes_plug.gd. The mesh must be authored in ControllerPlug's frame
+## Tools/gen/extract_nes_plug.gd. The mesh must be authored in ControllerPlug's frame
 ## (origin at the seated position, connector on +Z, cable trailing -Z), which is
 ## what lets set_plug_mesh derive cable_anchor from it. A missing resource falls
 ## back to the generic plug, so an export-excluded model never breaks a build.

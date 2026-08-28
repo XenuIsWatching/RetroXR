@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Tools/vr/plug_vr_grab.gd" id="1_vg"]
+
+[node name="PlugVrGrab" type="Node3D"]
+script = ExtResource("1_vg")

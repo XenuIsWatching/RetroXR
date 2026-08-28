@@ -241,7 +241,7 @@ func _cord_color(c: int) -> Color:
 ## Colour a plug body to its cord, so the same wire can be recognised at both ends.
 ##
 ## Surface 0 of the baked plug is the plastic and surface 1 the metal — the split
-## exists for exactly this (see Tools/gen_rca_plug.gd). The baked material is shared
+## exists for exactly this (see Tools/gen/gen_rca_plug.gd). The baked material is shared
 ## by every plug in the room, so it is duplicated before a colour goes into it.
 func _tint_plug(plug: RcaPlug, col: Color) -> void:
 	var tip := plug.get_node_or_null("PlugTip") as MeshInstance3D

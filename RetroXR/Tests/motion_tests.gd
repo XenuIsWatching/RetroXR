@@ -127,7 +127,7 @@ func _settle(nc: Nunchuk) -> void:
 ##
 ## Rest is how the thing lies on a table: spine level, stick up, buttons down.
 ## That is Rx(-90) from the model, which is also exactly the attitude
-## Tools/nunchuk_views.gd calls "the pose every reference photograph of this
+## Tools/models/nunchuk_views.gd calls "the pose every reference photograph of this
 ## thing is taken in". In it, the device's own axes line up with the world's:
 ## up is +Y, back is +Z, left is -X.
 const REST := Vector3(-PI / 2.0, 0.0, 0.0)

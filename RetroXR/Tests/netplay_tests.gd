@@ -20,7 +20,7 @@ extends Node
 ## would be for anything this suite can assert: the RPCs, the channels, the
 ## serialization and the handshake are all the real ones, and the run stays
 ## deterministic and headless. What it does NOT cover is a real core's
-## arithmetic; that needs two machines and lives in Tools/netplay_spike.gd
+## arithmetic; that needs two machines and lives in Tools/netplay/netplay_spike.gd
 ## (--spike-state-out / --spike-state-in for the cross-architecture leg).
 ##
 ## The mock core implements the C++ frame gate — it runs frame N only when

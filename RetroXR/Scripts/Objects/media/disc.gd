@@ -4,7 +4,7 @@
 ## group), save_id battery-save identity, persistence file resolution, and the
 ## cartridge options panel — with a disc-shaped body instead of a box.
 ##
-## The body is one baked lathe (Tools/gen_disc.gd) shaded by Shaders/disc.gdshader,
+## The body is one baked lathe (Tools/gen/gen_disc.gd) shaded by Shaders/disc.gdshader,
 ## which draws both faces, the per-system underside colour and the diffraction
 ## rainbow from a single surface. Scraped "support" art (the round disc-label scan)
 ## goes straight into a shader uniform: it is authored full-bleed to the rim with

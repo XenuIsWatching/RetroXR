@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Tools/models/shell_enclosure_audit.gd" id="1_a"]
+
+[node name="ShellEnclosureAudit" type="Node"]
+script = ExtResource("1_a")

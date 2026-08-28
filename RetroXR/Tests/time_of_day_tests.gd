@@ -21,7 +21,7 @@ extends Node
 ## sky in every other instance in the session.
 ##
 ## What this canNOT check is how any of it LOOKS. That is
-## `Tools/bedroom_probe.tscn --mode=timesweep`, windowed.
+## `Tools/models/bedroom_probe.tscn --mode=timesweep`, windowed.
 
 const GROUPS := ["authored", "sun", "sharing", "sweep", "night", "blinds", "lever",
 	"glyphs", "desktop", "persist"]
@@ -123,7 +123,7 @@ func _ready() -> void:
 ## BedroomScene is full of spatial emitters, so this suite hit it every other run
 ## — it passed in isolation and crashed in the full sequence, which is what a race
 ## looks like from the outside. Treat this await as load-bearing; the same
-## reasoning is why Tools/netplay_live_probe.gd awaits before ITS quit().
+## reasoning is why Tools/netplay/netplay_live_probe.gd awaits before ITS quit().
 ##
 ## THE FRAME COUNT IS MEASURED, NOT PICKED. Dropping the room is not enough on its
 ## own and neither is a token wait: at 12 frames it still died 3 runs in 6, because

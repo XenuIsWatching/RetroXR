@@ -1,7 +1,7 @@
 @tool
 ## A panel-mount RCA socket — the female half of the connector on cable.tscn's plug.
 ##
-## The mesh is baked by Tools/gen_rca_jack.gd with surface 0 the coloured
+## The mesh is baked by Tools/gen/gen_rca_jack.gd with surface 0 the coloured
 ## insulator and surface 1 the chrome shell, so a jack is recoloured by tinting
 ## surface 0 and nothing else. That is the same split gen_rca_plug.gd uses, and the
 ## same one system.gd's _decorate_channel_plug relies on at the plug end.

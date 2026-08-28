@@ -5,8 +5,8 @@
 ##
 ## Exits 0 when everything passes, 1 otherwise, so it can gate a commit.
 ##
-## The rope already has two BIT-EXACT oracles — `Tools/rope_bench.tscn --settle`
-## and `Tools/rope_stress.tscn` — and they are excellent at the one thing they do:
+## The rope already has two BIT-EXACT oracles — `Tools/rope/rope_bench.tscn --settle`
+## and `Tools/rope/rope_stress.tscn` — and they are excellent at the one thing they do:
 ## catching arithmetic drift. Neither can tell you whether a cord lying on a table
 ## corner jitters, whether one draped over a pipe falls through it, or whether a
 ## lead dropped on a shelf tunnels. Those are the failures a player sees, and

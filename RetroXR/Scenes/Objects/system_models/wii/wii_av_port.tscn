@@ -25,7 +25,7 @@ emission_energy_multiplier = 0.4
 ; 2 mm, not the RCA pair's 10 or the VGA pair's 7.5. A seated Multi Out plug's origin
 ; is its shroud face, and the 27 x 15 shroud is WIDER than the 23.5 x 12 bezel, so it
 ; cannot enter — it stops flat on the bezel's own 2 mm face. See the MATING note in
-; Tools/gen_wii_av.gd. Use another connector's number and the plug floats off the back
+; Tools/gen/gen_wii_av.gd. Use another connector's number and the plug floats off the back
 ; of the console or sinks into it.
 ; grab_distance is the zone's REACH, and it is drawn as a sphere of that radius — the
 ; green ball CollisionDebug puts on the back panel.

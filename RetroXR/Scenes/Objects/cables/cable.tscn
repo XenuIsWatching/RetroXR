@@ -35,7 +35,7 @@ script = ExtResource("1_plugscript")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CablePlug"]
 shape = SubResource("SphereShape3D_plug")
 
-; Baked RCA plug (Tools/gen_rca_plug.gd). No transform: the mesh is authored
+; Baked RCA plug (Tools/gen/gen_rca_plug.gd). No transform: the mesh is authored
 ; connector-on-+Z, unlike a CylinderMesh which is Y-up and needed rotating. No
 ; surface_material_override either — the materials are baked into the mesh, and
 ; surface 0 is deliberately the yellow plastic so system.gd's

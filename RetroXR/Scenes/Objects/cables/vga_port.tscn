@@ -24,7 +24,7 @@ emission_energy_multiplier = 0.4
 ;
 ; 3 mm, not the RCA pair's 10 mm. A seated VGA plug's origin is its hood face, and
 ; the hood face stops against the female shell's rim, which stands 3 mm proud of
-; the flange — see the MATING note in Tools/gen_vga.gd. Using 10 mm here floats the
+; the flange — see the MATING note in Tools/gen/gen_vga.gd. Using 10 mm here floats the
 ; plug 7 mm off the back panel with its shell in mid-air.
 [node name="VgaPort" instance=ExtResource("1_snapzone")]
 grab_distance = 0.06

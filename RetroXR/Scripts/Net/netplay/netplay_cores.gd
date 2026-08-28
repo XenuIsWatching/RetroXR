@@ -1,7 +1,7 @@
 ## NetplayCores — which cores may hold a netplay session, how they may hold one,
 ## and the options each is pinned to.
 ##
-## Vetted with Tools/netplay_spike.gd. `verified` is cold-start determinism:
+## Vetted with Tools/netplay/netplay_spike.gd. `verified` is cold-start determinism:
 ## two processes running the same inputs from frame 0 produce identical RAM-CRC
 ## streams, which is all a session needs while everybody starts together.
 ## `state_transfer` is savestate reload fidelity, which only a late join and a

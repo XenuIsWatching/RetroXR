@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://gc_card_probe_001"]
-
-[ext_resource type="Script" path="res://Tools/gc_card_probe.gd" id="1_gccardprobe"]
-
-[node name="GcCardProbe" type="Node"]
-script = ExtResource("1_gccardprobe")

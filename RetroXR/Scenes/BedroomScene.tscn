@@ -1127,7 +1127,7 @@ omni_range = 14.0
 [node name="Furniture" type="Node3D" parent="."]
 
 ; Two-gang toggle plate, west wall, 1.2 m up. The plate and the bats are baked by
-; Tools/gen_light_switch.gd; nothing here is downloaded.
+; Tools/gen/gen_light_switch.gd; nothing here is downloaded.
 ;
 ; The node's basis puts local +Z out of the wall and local +Y up, which is the frame
 ; both meshes are authored in — so the plate mounts with its back face ON the wall at
@@ -1146,7 +1146,7 @@ mesh = ExtResource("28_plate")
 
 ; Grounded US duplex receptacle on the open north-wall run at customary low-wall
 ; height. It uses the same ivory molded finish as the switch plate;
-; Tools/gen_wall_outlet.gd bakes both receptacles into one light mesh. Quad-style
+; Tools/gen/gen_wall_outlet.gd bakes both receptacles into one light mesh. Quad-style
 ; local +Z already points into the room here, so no fitted rotation is required.
 [node name="WallOutlet" type="MeshInstance3D" parent="Furniture"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65, 0.30, -2.125)

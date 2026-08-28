@@ -23,7 +23,7 @@ system files** (verified — it loads through the libretro Vulkan HW path).
 
 ```
 godot --path RetroXR --rendering-driver opengl3 \
-  res://Tools/azahar_probe.tscn -- "--azahar-rom=<path>/stereo_test.3dsx"
+  res://Tools/cores/azahar_probe.tscn -- "--azahar-rom=<path>/stereo_test.3dsx"
 ```
 Expected: `left-half avg = (1,0,0)`, `right-half avg = (0,0,1)`, `RESULT=PASS`.
 Requires the patched `azahar_libretro` core (see the azahar-libretro-vr

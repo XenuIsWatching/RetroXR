@@ -181,7 +181,7 @@ accepted_plug = "iec_c13_plug"
 ; PC99 colour code is baked into each mesh (purple keyboard, green mouse) and is the
 ; only thing telling the two apart.
 ;
-; Baked by Tools/gen_ps2.gd from the manufacturer's DETAIL D, so the six sockets and
+; Baked by Tools/gen/gen_ps2.gd from the manufacturer's DETAIL D, so the six sockets and
 ; the central key slot land where the male's contacts do. Replaced a flat coloured
 ; ring with a dark disc in it, which had neither.
 ;
@@ -324,7 +324,7 @@ direction = 0
 
 ; The sound card's LINE OUT, under the video socket. PC99 colour-codes this lime
 ; green and the collar is baked that colour, so nothing here sets it — see
-; Tools/gen_trs.gd. y 0.294: the VGA flange's bottom edge is at 0.3117 and this
+; Tools/gen/gen_trs.gd. y 0.294: the VGA flange's bottom edge is at 0.3117 and this
 ; jack is 10.4 mm across, so the two clear each other by 12 mm.
 ;
 ; z -0.2235: the zone sits where a seated plug's ORIGIN belongs, 2 mm proud of the

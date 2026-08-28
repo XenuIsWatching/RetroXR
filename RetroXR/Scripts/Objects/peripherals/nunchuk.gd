@@ -421,7 +421,7 @@ func _update_accel(delta: float) -> void:
 ##
 ## So the Nunchuk's up is its +Z, not its +Y. Its rest pose is the model turned
 ## Rx(-90) — stick up, buttons down, spine level — which is the pose
-## Tools/nunchuk_views.gd calls "the pose every reference photograph of this
+## Tools/models/nunchuk_views.gd calls "the pose every reference photograph of this
 ## thing is taken in", and in it this returns (0, 0, 1).
 ##
 ## It read (0, 1, 0) there until 2026-08-24, because it borrowed the remote's

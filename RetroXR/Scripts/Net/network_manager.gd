@@ -180,9 +180,9 @@ func _parse_cmdline() -> void:
 	# normal even if the run crashes mid-way. NB: ResourceLoader.exists, not
 	# FileAccess — .tscn paths are remapped inside exported pcks.
 	if FileAccess.file_exists("user://spike.cfg") \
-			and ResourceLoader.exists("res://Tools/netplay_spike.tscn"):
+			and ResourceLoader.exists("res://Tools/netplay/netplay_spike.tscn"):
 		print("[NetworkManager] spike.cfg found — launching netplay spike")
-		_swap_in_probe("res://Tools/netplay_spike.tscn")
+		_swap_in_probe("res://Tools/netplay/netplay_spike.tscn")
 		return
 	# Same hook for the hardware-render video probe (GLES2/GLES3 black-screen
 	# hunt). The probe deletes the cfg itself, like the spike.
@@ -193,9 +193,9 @@ func _parse_cmdline() -> void:
 	# build that actually ships.
 	if (FileAccess.file_exists("user://glprobe.cfg") \
 			or FileAccess.file_exists(GLPROBE_EXTERNAL_CFG)) \
-			and ResourceLoader.exists("res://Tools/gl_video_probe.tscn"):
+			and ResourceLoader.exists("res://Tools/cores/gl_video_probe.tscn"):
 		print("[NetworkManager] glprobe.cfg found — launching GL video probe")
-		get_tree().change_scene_to_file("res://Tools/gl_video_probe.tscn")
+		get_tree().change_scene_to_file("res://Tools/cores/gl_video_probe.tscn")
 		return
 	# Same hook for the rollback cost probe. Whether rollback is affordable is a
 	# property of the machine, so the answer only counts when taken here rather
@@ -204,9 +204,9 @@ func _parse_cmdline() -> void:
 	# reach its user:// at all.
 	if (FileAccess.file_exists("user://rbcost.cfg") \
 			or FileAccess.file_exists(RBCOST_EXTERNAL_CFG)) \
-			and ResourceLoader.exists("res://Tools/rollback_cost_probe.tscn"):
+			and ResourceLoader.exists("res://Tools/netplay/rollback_cost_probe.tscn"):
 		print("[NetworkManager] rbcost.cfg found — launching rollback cost probe")
-		_swap_in_probe("res://Tools/rollback_cost_probe.tscn")
+		_swap_in_probe("res://Tools/netplay/rollback_cost_probe.tscn")
 		return
 	# Same hook for the GBA link probe, which is how the multiplayer grain is
 	# vetted on the machine that actually struggles with it: four cabled cores is
@@ -214,17 +214,17 @@ func _parse_cmdline() -> void:
 	# GL and rollback probes, and the probe deletes the cfg itself.
 	if (FileAccess.file_exists("user://marioprobe.cfg") \
 			or FileAccess.file_exists(MARIOPROBE_EXTERNAL_CFG)) \
-			and ResourceLoader.exists("res://Tools/mario_link_probe.tscn"):
+			and ResourceLoader.exists("res://Tools/link/mario_link_probe.tscn"):
 		print("[NetworkManager] marioprobe.cfg found — launching GBA link probe")
-		_swap_in_probe("res://Tools/mario_link_probe.tscn")
+		_swap_in_probe("res://Tools/link/mario_link_probe.tscn")
 		return
 	# Same hook for menu timings. Deleted on sight, so a crash mid-run cannot
 	# wedge the app into the probe.
 	if FileAccess.file_exists("user://perfprobe.cfg") \
-			and ResourceLoader.exists("res://Tools/menu_perf_probe.tscn"):
+			and ResourceLoader.exists("res://Tools/perf/menu_perf_probe.tscn"):
 		print("[NetworkManager] perfprobe.cfg found — launching menu perf probe")
 		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://perfprobe.cfg"))
-		get_tree().change_scene_to_file("res://Tools/menu_perf_probe.tscn")
+		get_tree().change_scene_to_file("res://Tools/perf/menu_perf_probe.tscn")
 		return
 	var args := OS.get_cmdline_user_args()
 	var do_host := false

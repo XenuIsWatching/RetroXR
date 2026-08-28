@@ -3,7 +3,7 @@
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/cables/rca_jack.res" id="1_jackmesh"]
 [ext_resource type="Script" path="res://Scripts/Objects/cables/rca_jack.gd" id="2_jackscript"]
 
-; Socket-on-+Z with the origin on the panel face (see Tools/gen_rca_jack.gd), so
+; Socket-on-+Z with the origin on the panel face (see Tools/gen/gen_rca_jack.gd), so
 ; this drops onto a port node whose local +Z points out of the cabinet and needs no
 ; transform of its own.
 [node name="RcaJack" type="MeshInstance3D"]

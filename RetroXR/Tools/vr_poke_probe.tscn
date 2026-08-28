@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://Tools/vr_poke_probe.gd" id="1_vrpoke"]
-
-[node name="ProbeVR" type="Node"]
-script = ExtResource("1_vrpoke")

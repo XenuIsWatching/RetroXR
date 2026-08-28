@@ -23,7 +23,7 @@ emission_energy_multiplier = 0.4
 ;
 ; The 10 mm is the same figure as the phono socket's by coincidence and not by
 ; sharing — the F pair's standoff falls out of a 10 mm stub against an 8 mm nut,
-; and Tools/gen_coax.gd derives it. Do not "correct" one to match the other.
+; and Tools/gen/gen_coax.gd derives it. Do not "correct" one to match the other.
 ;
 ; grab_distance is 0.035, NOT the phono row's 0.06. The set's aerial socket sits
 ; beside four composite groups, and a zone reaching further than the gap to its

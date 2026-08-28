@@ -14,7 +14,7 @@
 ##
 ## What is NOT covered here, on purpose: that a binding reaches a running core.
 ## That needs a real system, a real controller and the CONSUMER_GROUP fan-out,
-## and it lives in Tools/binding_live_probe.tscn.
+## and it lives in Tools/input/binding_live_probe.tscn.
 ##
 ## This writes the player's own user://controller_bindings.json and
 ## user://gamepad_bindings.json — the paths are consts on the two classes and

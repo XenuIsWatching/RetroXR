@@ -95,7 +95,7 @@ attempt() {
   local core="$1" sysid="$2" nullinfo="$3"
   local log="$OUT/${core}.${sysid}.null${nullinfo}.log"
   timeout 90 "$GODOT" --path "$PROJ" --resolution 320x240 --position 20,20 \
-    res://Tools/bios_boot_probe.tscn -- \
+    res://Tools/cores/bios_boot_probe.tscn -- \
     "--core=$core" "--systemid=$sysid" "--nullinfo=$nullinfo" >"$log" 2>&1
   local rc=$?
   local line

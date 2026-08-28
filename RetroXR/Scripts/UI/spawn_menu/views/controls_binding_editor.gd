@@ -490,7 +490,7 @@ func _build_desktop_controls(vbox: VBoxContainer) -> void:
 
 	# No Save button: every capture writes on the spot, the way the XR and pad
 	# halves do. It used to need one, and a rebind that looked applied but was
-	# not is exactly what Tools/binding_live_probe.tscn exists to catch.
+	# not is exactly what Tools/input/binding_live_probe.tscn exists to catch.
 
 
 ## The InputMap action a console control binds. Control keys are RetroPad target

@@ -7,8 +7,8 @@
 ## What is here is what can be decided without a core: where the tab sits, which
 ## list the thumbstick drives, which buttons a blocker greys out, and the
 ## arm-then-confirm machine that stands between a press and a destroyed file.
-## Capturing and restoring need a real core and live in Tools/state_probe.tscn;
-## how any of this LOOKS needs a GPU and lives in Tools/cart_states_probe.tscn.
+## Capturing and restoring need a real core and live in Tools/state/state_probe.tscn;
+## how any of this LOOKS needs a GPU and lives in Tools/state/cart_states_probe.tscn.
 ##
 ## The tab-order case is the regression record for a landmine this feature
 ## tripped: _sync_active_scroll() hard-coded `current_tab == 1`, so inserting a

@@ -905,7 +905,7 @@ func _test_forced_options_merge() -> void:
 
 # ---------------------------------------------------------------------------
 # Save states: the pure half — ids, paths, the thumbnail, and the disk round
-# trip. Capture needs a live core and lives in Tools/state_probe.tscn; what is
+# trip. Capture needs a live core and lives in Tools/state/state_probe.tscn; what is
 # here is everything that decides WHERE a state goes and WHAT it looks like.
 # ---------------------------------------------------------------------------
 
@@ -1041,7 +1041,7 @@ func _test_state_disk_round_trip() -> void:
 # ---------------------------------------------------------------------------
 # BIOS boot: seeding a default, the table that decides what is offered, and the
 # power button's own verdict. What a real core does with an empty disc needs a
-# real core and a real BIOS and lives in Tools/bios_boot_probe.tscn.
+# real core and a real BIOS and lives in Tools/cores/bios_boot_probe.tscn.
 # ---------------------------------------------------------------------------
 
 func _test_bios_seed() -> void:

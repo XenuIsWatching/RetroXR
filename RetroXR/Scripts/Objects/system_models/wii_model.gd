@@ -589,7 +589,7 @@ func get_sensor_bar_port() -> XRToolsSnapZone:
 ## else. The KEY does the rest — one corner of the mouth is cut and the plug's barrel
 ## carries the matching cut on the OPPOSITE corner of its own section, because a snap
 ## zone relates the two by a reflection rather than a rotation. See
-## Tools/gen_wii_sensor.gd.
+## Tools/gen/gen_wii_sensor.gd.
 ##
 ## Under $Back like the A/V socket, and for the reason that one records: the seat is a
 ## local position in the back panel's frame, so a zone parented to the model would
@@ -619,5 +619,5 @@ func _build_sensor_bar_port() -> void:
 
 
 ## The proud offset for this connector. Its own number, like every socket on this
-## machine — see the MATING note in Tools/gen_wii_sensor.gd.
+## machine — see the MATING note in Tools/gen/gen_wii_sensor.gd.
 const SENSOR_PROUD := 0.0015

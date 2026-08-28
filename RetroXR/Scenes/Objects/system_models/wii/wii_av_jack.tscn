@@ -2,7 +2,7 @@
 
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/system_models/wii/wii_av_jack.res" id="1_jackmesh"]
 
-; Socket-on-+Z with the origin on the PANEL face (see Tools/gen_wii_av.gd), so this
+; Socket-on-+Z with the origin on the PANEL face (see Tools/gen/gen_wii_av.gd), so this
 ; drops onto a port node whose local +Z points out of the cabinet, pushed back by the
 ; proud offset. No script: unlike RcaJack there is no colour code to apply.
 [node name="WiiAvJack" type="MeshInstance3D"]

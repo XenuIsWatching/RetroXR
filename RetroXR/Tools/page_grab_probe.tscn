@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://Tools/page_grab_probe.gd" id="1_pageprobe"]
-
-[node name="PageGrabProbe" type="Node"]
-script = ExtResource("1_pageprobe")

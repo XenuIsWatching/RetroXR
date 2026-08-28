@@ -917,7 +917,7 @@ func _d_rf_tuned() -> void:
 ## what it already holds, and nothing ever cleared it: switch input, or reset a
 ## machine, and the last picture bled back in — "I pressed reset on the PS1 and saw
 ## the Wii for a moment, then the BIOS". Measured in pixels by
-## Tools/phosphor_ghost_probe.tscn (a quarter of the old picture on the first frame,
+## Tools/av/phosphor_ghost_probe.tscn (a quarter of the old picture on the first frame,
 ## gone over eight); asserted here as the thing that decides it, since a headless
 ## run has no renderer to accumulate anything.
 func _d_no_ghost() -> void:

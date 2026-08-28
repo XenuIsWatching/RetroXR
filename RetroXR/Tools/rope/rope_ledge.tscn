@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://ropeledge01"]
+
+[ext_resource type="Script" path="res://Tools/rope/rope_ledge.gd" id="1_lg"]
+
+[node name="RopeLedge" type="Node"]
+script = ExtResource("1_lg")

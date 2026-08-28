@@ -24,7 +24,7 @@ var channel_label: String = ""
 ##
 ## The bake is composite yellow, so the picture cord needs no override and the
 ## audio pair beside it says white and red. Surface 0 is the plastic and surface 1
-## the metal — the split exists for exactly this (Tools/gen_rca_plug.gd) — and the
+## the metal — the split exists for exactly this (Tools/gen/gen_rca_plug.gd) — and the
 ## plating is deliberately not tintable, since plated shells are the same on every
 ## connector.
 @export var plug_color: Color = RcaJack.COMPOSITE_YELLOW:

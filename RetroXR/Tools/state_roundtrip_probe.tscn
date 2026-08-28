@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://Tools/state_roundtrip_probe.gd" id="1"]
-
-[node name="StateRoundtripProbe" type="Node"]
-script = ExtResource("1")

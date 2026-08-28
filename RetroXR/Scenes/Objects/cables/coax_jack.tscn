@@ -2,7 +2,7 @@
 
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/cables/coax_jack.res" id="1_coaxjackmesh"]
 
-; Socket-on-+Z with the origin on the panel face (see Tools/gen_coax.gd), so this
+; Socket-on-+Z with the origin on the panel face (see Tools/gen/gen_coax.gd), so this
 ; drops onto a port node whose local +Z points out of the cabinet and needs no
 ; transform of its own.
 ;

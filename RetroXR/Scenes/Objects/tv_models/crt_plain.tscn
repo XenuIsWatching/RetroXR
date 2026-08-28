@@ -122,7 +122,7 @@ surface_material_override/0 = SubResource("Mat_beige")
 ; light: that mesh carries RADIAL normals, so its four side vertices sit on the
 ; diamond's corners with normals ninety degrees apart and every wall Gouraud-
 ; interpolates into a curve with rounded corners. Flat per-face normals need
-; unshared vertices and no primitive offers those. See Tools/gen_crt_hood.gd.
+; unshared vertices and no primitive offers those. See Tools/gen/gen_crt_hood.gd.
 ;
 ; Baked already lying along Z with the wide end at +Z, so this node needs no basis
 ; at all — which also sidesteps the two traps in writing one by hand, .tscn
@@ -265,7 +265,7 @@ transform = Transform3D(0.8, 0, 0, 0, 0.84, 0, 0, 0, 0.9, 0, 0.015, 0.19)
 ; that composes in. A zone at identity yields a plug at diag(1,-1,-1) with its
 ; hood buried in the case. Nothing extra is needed for the D-shell's keying — the
 ; DE-15 mesh is authored wide-edge-DOWN precisely so a back-panel port comes out
-; the right way up through this rotation (see Tools/gen_vga.gd).
+; the right way up through this rotation (see Tools/gen/gen_vga.gd).
 [node name="VgaPortSeat" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, -1, -8.7422784e-08, 0, 8.7422784e-08, -1, 0, -0.03, -0.1975)
 

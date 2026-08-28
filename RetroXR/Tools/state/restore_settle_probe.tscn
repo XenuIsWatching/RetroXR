@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/MainScene.tscn" id="1_main"]
+[ext_resource type="Script" path="res://Tools/state/restore_settle_probe.gd" id="2_probe"]
+
+[node name="Root" instance=ExtResource("1_main")]
+
+[node name="SettleProbe" type="Node" parent="."]
+script = ExtResource("2_probe")

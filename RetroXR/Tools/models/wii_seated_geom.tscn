@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Tools/models/wii_seated_geom.gd" id="1_ws"]
+
+[node name="WiiSeatedGeom" type="Node3D"]
+script = ExtResource("1_ws")

@@ -160,7 +160,7 @@ var audio_mode: int = 0
 # authoring values behind ones that are (see _apply_derived_crt_params and
 # _update_phosphor).
 var _crt_params := {
-	"crt_curvature": 0.0,          # geometry now — see Tools/gen_curved_screen.gd
+	"crt_curvature": 0.0,          # geometry now — see Tools/gen/gen_curved_screen.gd
 	"crt_corner_radius": 0.04,
 	"crt_mask_mode": 1,
 	"crt_mask_strength": 0.55,

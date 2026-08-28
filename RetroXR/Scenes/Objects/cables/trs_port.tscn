@@ -26,7 +26,7 @@ emission_energy_multiplier = 0.4
 ; 2 mm, not the phono pair's 10 mm and not the VGA socket's 7.5 mm. A seated TRS
 ; plug's origin is the front face of its moulded handle, and that face stops against
 ; the green collar's rim, which stands 2 mm proud of the panel — see the MATING note
-; in Tools/gen_trs.gd. Every connector has its own number here.
+; in Tools/gen/gen_trs.gd. Every connector has its own number here.
 [node name="TrsPort" instance=ExtResource("1_snapzone")]
 grab_distance = 0.05
 script = ExtResource("2_portscript")

@@ -208,7 +208,7 @@ static func _draw_once(sv: SubViewport, tree: SceneTree, id: String) -> bool:
 ##
 ## A shell's model loads its GLB with a plain load() inside _ready(), so that cost
 ## lands on whichever frame the player spawns one. Measured on a Quest 3 with
-## Tools/quest_spawn_probe.tscn: the NES shell took **6861 ms with not one frame
+## Tools/perf/quest_spawn_probe.tscn: the NES shell took **6861 ms with not one frame
 ## drawn**, against 63-78 ms per spawn once cached. That is the freeze.
 ##
 ## Two things make this work:
