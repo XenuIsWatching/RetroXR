@@ -434,10 +434,6 @@ func _build() -> void:
 		["TV Remote",       "tv_remote"],
 		["Composite Cable", "composite_cable"],
 		["Mono Composite Cable", "mono_composite_cable"],
-		["NEMA 5-15P to C13 Cable", "power_cord"],
-		["NEMA 1-15P to C7 Cable", "nema_1_15_to_c7_cord"],
-		["Polarized NEMA 1-15P to C7P Cable",
-			"nema_1_15_polarized_to_c7_polarized_cord"],
 		["VGA Cable",       "vga_cable"],
 		["3.5 mm Cable",   "trs_cable"],
 		["Link Cable",     "link_cable"],
@@ -451,6 +447,17 @@ func _build() -> void:
 		# The way a console reached a television before anything had a composite
 		# input: phono into the deck, coax into the aerial socket.
 		["RF Switch (RXR-003)", "rf_switch"],
+	])
+
+	# Mains leads, on their own tab rather than lost among the A/V ones. What
+	# picks one is the shape of the socket on the back of the machine, not what
+	# the machine is for, and a player hunting the right plug should not have to
+	# read past the record player to find it.
+	_add_spawn_tab(tabs, "Power", [
+		["NEMA 5-15P to C13 Cable", "power_cord"],
+		["NEMA 1-15P to C7 Cable", "nema_1_15_to_c7_cord"],
+		["Polarized NEMA 1-15P to C7P Cable",
+			"nema_1_15_polarized_to_c7_polarized_cord"],
 	])
 
 	# Rebuilt at runtime, unlike the other const tabs: its tail is one row per
