@@ -337,9 +337,28 @@ func _build_media_bay() -> void:
 			# the shelf, so a disc laid on the tray travels in with it -- and it has
 			# to be set before the tray enters the tree, because MediaTray measures
 			# the zone against the pivot in its _ready.
+			# Below the middle of the face, not above it. The unit wears its
+			# nameplate high on the front (_build_body puts it at s.y * 0.5 -
+			# 14 mm on a MOUNT_BELOW unit), and a deck placed like a console's
+			# ran the mouth -- and the disc riding out of it -- straight across
+			# the lettering.
 			_disc_bay = ProceduralDiscBay.build_tray(self, _bay, media, true,
-				Callable(), s)
+				Callable(), s, _deck_y(s))
 			_tray.disc_lid_pivot = _disc_bay.slide_pivot
+			# Where the disc actually LIES on that shelf, and it is not the
+			# shelf pivot's own origin. build_tray puts the snap zone 2.5 mm up
+			# from the pivot, which is what clears the 3 mm well cylinder drawn
+			# around it; seated at the pivot instead, the disc sat INSIDE that
+			# well with the well's opaque top face over it, so it snapped to the
+			# right place and then vanished into the tray.
+			#
+			# Read off the two nodes rather than written as a number, and it is
+			# the same line RetroSystem uses for its own tray -- the offset is a
+			# property of how ProceduralDiscBay lays the shelf out, so asking it
+			# cannot drift the way a copied constant would.
+			var rel := _disc_bay.slide_pivot.global_transform.affine_inverse() 				* _bay.global_transform
+			_tray.media_local_basis = rel.basis
+			_tray.seat_offset = rel.origin
 			add_child(_tray)
 			_tray.opened.connect(func() -> void: _disc_bay.slide(true))
 			_tray.closed.connect(func() -> void: _disc_bay.slide(false))
@@ -494,10 +513,38 @@ func get_socket() -> XRToolsSnapZone:
 ## the body is a measured box and everything on it is placed from ExpansionCatalog
 ## dimensions. Same widget the consoles use, so it highlights, depresses and
 ## takes a trigger press identically.
+## Where a drawer unit's tray deck sits on its front face -- below the middle,
+## clear of the nameplate the unit carries high on that face.
+func _deck_y(s: Vector3) -> float:
+	return -s.y * 0.16
+
+
+## The OPEN button's height: level with the tray deck on a drawer unit, so the
+## two read as one row of controls rather than a button stranded above a mouth.
+## A lidded unit has no deck, and keeps the height it always had.
+func _eject_y(s: Vector3) -> float:
+	return _deck_y(s) if _disc_bay != null else -s.y * 0.18
+
+
+## And its distance out from the centre. On a drawer unit that is measured from
+## the MOUTH rather than taken as a fraction of the box: the mouth is as wide as
+## a disc plus its bezel however narrow the machine is, so a fixed fraction put
+## the button through the tray on the smaller units (the CD-ROM2 is 60 mm
+## narrower than the Mega-CD and the mouth is the same size on both).
+func _eject_x(s: Vector3) -> float:
+	if _disc_bay == null:
+		return s.x * 0.30
+	var mouth_half := (MediaDimensions.disc_diameter(
+		ExpansionCatalog.media_of(expansion_id)) + 0.020) * 0.5
+	# Clamped inside the case, so a machine too narrow to fit the button beside
+	# its own tray puts it as far out as it can rather than off the edge.
+	return minf(mouth_half + 0.018, s.x * 0.5 - 0.016)
+
+
 func _build_eject_button(s: Vector3) -> void:
 	_eject = VRButton.new()
 	_eject.name = "EjectButton"
-	_eject.position = Vector3(s.x * 0.30, -s.y * 0.18, s.z * 0.5 + 0.004)
+	_eject.position = Vector3(_eject_x(s), _eject_y(s), s.z * 0.5 + 0.004)
 	# A button on the FRONT face travels into that face. The default axis is
 	# (0,-1,0), which is right for the cabinet buttons on a console's roof and
 	# wrong here: the cap sank downwards out of its own bezel instead of pressing

@@ -68,6 +68,57 @@ func _ready() -> void:
 		_check(bay.slide_pivot.position.distance_to(rest) > 0.05,
 			"%s's tray runs out when OPEN is pressed (%.3f m)"
 				% [id, bay.slide_pivot.position.distance_to(rest)])
+	# --- and it runs out BELOW the lettering, not through it -------------------
+	for id: String in ["sega_cd", "pc_engine_cd"]:
+		var u := _spawn(id)
+		await get_tree().physics_frame
+		var s := u.size()
+		var plate := u.get_node_or_null("NameLabel") as Label3D
+		var mouth := u.get_node_or_null("DiscBayMouth") as MeshInstance3D
+		if plate == null or mouth == null:
+			_check(false, "%s has both a nameplate and a bay mouth" % id)
+			continue
+		var mouth_top: float = mouth.position.y + _mesh_half_height(mouth)
+		# The nameplate's own baseline. The mouth has to finish below it, or the
+		# disc rides out across the machine's name.
+		_check(mouth_top < plate.position.y - 0.004,
+			"%s's tray clears its nameplate (mouth top %.4f, plate %.4f)"
+				% [id, mouth_top, plate.position.y])
+		# And the OPEN button must not sit in the mouth it opens.
+		var btn := u.get_node_or_null("EjectButton") as VRButton
+		if btn != null:
+			var mouth_half: float = (mouth.mesh as BoxMesh).size.x * 0.5
+			_check(absf(btn.position.x) - 0.013 > mouth_half,
+				"%s's OPEN button clears the tray mouth (%.4f vs %.4f)"
+					% [id, absf(btn.position.x) - 0.013, mouth_half])
+			_check(absf(btn.position.x) + 0.013 < s.x * 0.5,
+				"%s's OPEN button is still on the machine" % id)
+
+	# --- and a disc laid on it LIES ON the shelf rather than in it ------------
+	for id: String in ["sega_cd", "pc_engine_cd"]:
+		var u := _spawn(id)
+		await get_tree().physics_frame
+		var disc := (load("res://Scenes/Objects/media/disc.tscn") as PackedScene) 			.instantiate() as RetroDisc
+		disc.systemid = ExpansionCatalog.media_of(id)
+		disc.rom_path = "Z:/roms/%s/probe.cue" % id
+		add_child(disc)
+		disc.freeze = true
+		await get_tree().physics_frame
+		u._tray.set_open(true, false)
+		u._tray.restore(disc)
+		for i in 5:
+			await get_tree().physics_frame
+		var pivot: Node3D = u._disc_bay.slide_pivot
+		var well := pivot.get_node_or_null("DiscTrayWell") as MeshInstance3D
+		var local: Vector3 = pivot.global_transform.affine_inverse() * disc.global_position
+		var well_top: float = well.position.y + _mesh_half_height(well)
+		# The reported fault: seated at the pivot's own origin the disc sat
+		# INSIDE the well cylinder, under its opaque top face, and disappeared.
+		_check(local.y > well_top,
+			"%s's disc lies on the shelf, not inside the well (%.4f vs %.4f)"
+				% [id, local.y, well_top])
+		_check(disc.is_visible_in_tree(), "%s's seated disc is still drawn" % id)
+
 	# A lidded unit swings a lid instead, and must NOT grow a drawer as well.
 	var jag := _spawn("jaguar_cd")
 	await get_tree().physics_frame

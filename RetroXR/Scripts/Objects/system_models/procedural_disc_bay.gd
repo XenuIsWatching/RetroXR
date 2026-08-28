@@ -42,11 +42,12 @@ var _slide_tween: Tween = null
 ## sliding shelf over the hinged pod; `on_lid_swung` is told when a hand pushes
 ## the lid home.
 static func build_tray(host: Node3D, slot: Node3D, systemid: String, front: bool,
-		on_lid_swung: Callable, box: Vector3 = PLACEHOLDER_BOX) -> ProceduralDiscBay:
+		on_lid_swung: Callable, box: Vector3 = PLACEHOLDER_BOX,
+		deck_y: float = NAN) -> ProceduralDiscBay:
 	var bay := ProceduralDiscBay.new()
 	bay._host = host
 	if front:
-		bay._build_front_tray(slot, systemid, box)
+		bay._build_front_tray(slot, systemid, box, deck_y)
 	else:
 		bay._build_lid_tray(slot, systemid, on_lid_swung)
 	return bay
@@ -87,14 +88,19 @@ func slide(open: bool) -> void:
 ## The front-loading shelf: a bay mouth in the front face and a tray that carries
 ## the disc out through it. The placeholder box is 0.3 x 0.1 x 0.25, so the front
 ## face is z = 0.125 and the shelf hides inside at rest.
-func _build_front_tray(slot: Node3D, systemid: String, box: Vector3 = PLACEHOLDER_BOX) -> void:
+func _build_front_tray(slot: Node3D, systemid: String, box: Vector3 = PLACEHOLDER_BOX,
+		deck: float = NAN) -> void:
 	var d := MediaDimensions.disc_diameter(systemid)
-	# Up the front face, not centred on it: the box carries its nameplate across the
-	# middle and the shelf slid straight through the lettering. Kept as a fraction
-	# of the box's height so a shallower machine -- a Mega-CD is 80 mm where the
-	# placeholder console is 100 -- puts its tray at the same place on its face
-	# rather than off the top of it. 0.24 reproduces the console's 0.024 exactly.
-	var deck_y := box.y * 0.24
+	# Up the front face, not centred on it: the console box carries its nameplate
+	# across the middle and the shelf slid straight through the lettering. Kept as
+	# a fraction of the box's height so a shallower machine puts its tray at the
+	# same place on its face rather than off the top of it; 0.24 reproduces the
+	# console's 0.024 exactly.
+	#
+	# An expansion wears its nameplate high on the front rather than across the
+	# middle, so it hands in its own deck height and runs the tray out BELOW the
+	# lettering instead of through it.
+	var deck_y: float = box.y * 0.24 if is_nan(deck) else deck
 	var front_z := box.z * 0.5 + 0.0005
 
 	var bay_mat := StandardMaterial3D.new()
