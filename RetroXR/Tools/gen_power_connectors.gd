@@ -89,12 +89,15 @@ func _bake_c8(polarized: bool) -> void:
 	_box(plastic,Vector3(0,0,-0.0090),Vector3(0.0210,0.0125,0.0150))
 	var shroud0 := _c7_ring(0.000,polarized,1.04)
 	var shroud1 := _c7_ring(0.006,polarized,1.04)
-	_loft(plastic,shroud0,shroud1,250)
+	# _loft faces outward for rings advancing in -Z, which every moulding does.
+	# A shroud stands out of the panel in +Z, so its rings go in reversed.
+	_loft(plastic,shroud1,shroud0,250)
 	for x in [-0.004,0.004]:
 		_cylinder(metal,Vector3(x,0,0.0030),0.00115,0.0060,16)
 	var suffix := "_polarized" if polarized else ""
 	_save(DIR + "iec_c8%s_inlet.res" % suffix,plastic,metal,
-		PlugMats.matte(Color(0.035,0.035,0.040),0.82),PlugMats.metal(Color(0.68,0.69,0.66),0.38))
+		PlugMats.matte(Color(0.035,0.035,0.040),0.82),PlugMats.metal(Color(0.68,0.69,0.66),0.38),
+		true)
 
 func _bake_nema() -> void:
 	var plastic := SurfaceTool.new(); plastic.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -163,37 +166,51 @@ func _bake_c14() -> void:
 	_box(plastic, Vector3(0,0,-0.0139), Vector3(0.027,0.0196,0.0248))
 	var shroud0 := _iec_ring(0.000,0.0270,0.0196)
 	var shroud1 := _iec_ring(0.008,0.0270,0.0196)
-	_loft(plastic,shroud0,shroud1,70)
+	_loft(plastic,shroud1,shroud0,70)
 	for p in [Vector2(-0.007,0.0048), Vector2(0.007,0.0048), Vector2(0,-0.0060)]:
 		_box(metal, Vector3(p.x,p.y,0.004), Vector3(0.0020,0.0055,0.008))
 	_save(DIR + "iec_c14_inlet.res", plastic, metal,
-		PlugMats.matte(Color(0.035,0.035,0.040),0.82), PlugMats.metal(Color(0.68,0.69,0.66),0.38))
+		PlugMats.matte(Color(0.035,0.035,0.040),0.82), PlugMats.metal(Color(0.68,0.69,0.66),0.38),
+		true)
 
-func _save(path: String, a: SurfaceTool, b: SurfaceTool, ma: Material, mb: Material) -> void:
+func _save(path: String, a: SurfaceTool, b: SurfaceTool, ma: Material, mb: Material,
+		shrouded := false) -> void:
 	a.generate_normals(); b.generate_normals()
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a.commit_to_arrays()); mesh.surface_set_material(0,ma)
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, b.commit_to_arrays()); mesh.surface_set_material(1,mb)
 	var err := ResourceSaver.save(mesh,path)
-	print("[gen] %s err=%d size=%s %s %s"
-		% [path,err,mesh.get_aabb().size,_check_outward(mesh,0),_check_outward(mesh,1)])
+	var shroud := ""
+	if shrouded:
+		# On an inlet nothing but the shroud stands in front of the mating plane.
+		shroud = "  shroud %s" % _check_outward(mesh,0,0.0001)
+	print("[gen] %s err=%d size=%s %s %s%s"
+		% [path,err,mesh.get_aabb().size,_check_outward(mesh,0),_check_outward(mesh,1),shroud])
 
 ## Godot's front face is the clockwise one, so generate_normals() returns the
 ## negative of (b-a) x (c-a) and a soup wound anticlockwise-from-outside bakes
 ## inside out. Only the stored normals tell the two apart: for the vertex
 ## furthest along each axis, its normal must not point back down that axis.
 ## Faces exactly edge-on to an axis (open shroud rims) read 0 and are ignored.
-func _check_outward(mesh: ArrayMesh, surface: int) -> String:
+##
+## zmin/zmax restrict it to one part. A whole-mesh test only ever samples the
+## widest thing on each axis, so on a panel inlet the flange hides the shroud
+## behind it entirely; the inlets are checked twice, once over the shroud alone.
+func _check_outward(mesh: ArrayMesh, surface: int, zmin := -1e9, zmax := 1e9) -> String:
 	var arrays := mesh.surface_get_arrays(surface)
 	var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var pick := PackedInt32Array()
+	for i in v.size():
+		if v[i].z >= zmin and v[i].z <= zmax: pick.append(i)
+	if pick.is_empty(): return "surf%d <-- NOTHING IN RANGE" % surface
 	var bad := PackedStringArray()
 	var axes := {"+X":Vector3.RIGHT,"-X":Vector3.LEFT,"+Y":Vector3.UP,
 		"-Y":Vector3.DOWN,"+Z":Vector3.BACK,"-Z":Vector3.FORWARD}
 	for label: String in axes:
 		var axis: Vector3 = axes[label]
-		var best := 0
-		for i in v.size():
+		var best := pick[0]
+		for i in pick:
 			if v[i].dot(axis) > v[best].dot(axis): best = i
 		if n[best].dot(axis) < -0.0001: bad.append(label)
 	if bad.is_empty(): return "surf%d outward" % surface
