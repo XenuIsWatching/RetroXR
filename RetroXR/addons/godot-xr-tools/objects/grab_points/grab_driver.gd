@@ -52,6 +52,9 @@ var _preview_radius : float = -1.0
 # suppress collisions between the two while previewing, mirroring grab.gd.
 var _preview_collisions_on : bool = false
 var _preview_exc_target : Array[RID] = []
+# LOCAL PATCH (RetroXR): the holder-graph epoch this driver's physics priority
+# was computed for. -1 so the first physics frame always recomputes.
+var _priority_epoch : int = -1
 var _preview_exc_owner : Array[RID] = []
 # Whether the object is currently in snap-preview range; drives the pickable's
 # orange snap-preview outline. Notify the highlight only on transitions.
@@ -185,6 +188,19 @@ func _physics_process(delta : float) -> void:
 		elif _preview_blend <= 0.001:
 			_set_preview_collisions(false)
 			_preview_zone = null
+
+	# LOCAL PATCH (RetroXR): the stack this driver sits in can change under it --
+	# a loaded 32X is bolted into a console long after its cartridge went in, and
+	# that is the moment the cartridge's driver has to start running later than
+	# the 32X's. Rechecked only when the holder graph has actually changed, so
+	# the common case is one integer compare.
+	if primary and primary.by is XRToolsSnapZone:
+		var epoch := XRToolsSnapZone.holder_epoch()
+		if epoch != _priority_epoch:
+			_priority_epoch = epoch
+			var want := _priority_for(primary)
+			if want != process_physics_priority:
+				process_physics_priority = want
 
 	# LOCAL PATCH (RetroXR): always push once, however the driver was built.
 	#
@@ -422,8 +438,18 @@ static func create_snap(
 # leaving the snapped object visibly trailing one physics tick behind while
 # the carrier moves. Snap-zone-held drivers now run at -70 — after all
 # hand-held drivers (-80) — so they always see this tick's carrier transform.
+## LOCAL PATCH (RetroXR): a hand runs first, then each rank of sockets in turn.
+##
+## Hands at -80, sockets from -70 DOWN the stack: a socket mounted on a machine
+## that is itself snapped into something must be placed after that something, or
+## it reads a pose one physics frame old. All snap-zone drivers used to share
+## -70, so the order among them was tree order -- and a tower assembled leaf
+## first (cartridge into the 32X, then the 32X into the console) had them in
+## exactly the wrong one. See XRToolsSnapZone.stack_depth for the measurements.
 static func _priority_for(p_grab : Grab) -> int:
-	return -70 if p_grab.by is XRToolsSnapZone else -80
+	if not p_grab.by is XRToolsSnapZone:
+		return -80
+	return -70 + XRToolsSnapZone.stack_depth(p_grab.by as XRToolsSnapZone)
 
 
 # Calculate the lerp voting from a to b

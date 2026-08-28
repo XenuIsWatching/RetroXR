@@ -71,6 +71,84 @@ var _object_in_grab_area = Array()
 # a nearby compatible socket for the snap PREVIEW (see grab_driver.gd).
 static var _live_zones: Array[XRToolsSnapZone] = []
 
+## LOCAL PATCH (RetroXR): how deep in a stack of sockets each zone sits, and a
+## counter that changes whenever the answer might have.
+##
+## Every snap-zone grab driver used to be created at ONE process_physics_priority,
+## so which of them ran first each physics frame was decided by nothing but the
+## order they were added to the tree. That is fine for a single socket and wrong
+## the moment sockets are stacked: a driver that runs BEFORE the one holding its
+## own host reads its host's pose one frame late, and the error is cumulative.
+##
+## Measured on the Tower of Power (Mega-CD, Mega Drive, 32X, cartridge), built
+## the way a player builds it -- cartridge into the 32X, loaded 32X into the
+## console, console onto the base -- the 32X trailed by 25 mm and the cartridge
+## by 51 mm, exactly double, one frame per hop. Built root-first the same stack
+## measured zero, which is why this only ever showed up on some assemblies.
+##
+## `_holder_epoch` is bumped rather than recomputing eagerly: the graph changes
+## only when something is snapped or released, and a driver can then refresh its
+## own priority the next time it runs.
+static var _holder_of: Dictionary = {}
+static var _holder_epoch: int = 0
+
+
+## The zone currently holding `obj`, or null.
+static func holder_of(obj: Node3D) -> XRToolsSnapZone:
+	var z: XRToolsSnapZone = _holder_of.get(obj)
+	return z if is_instance_valid(z) else null
+
+
+## Bumped whenever the holder graph changes; a driver compares it to decide
+## whether its cached priority is still right.
+static func holder_epoch() -> int:
+	return _holder_epoch
+
+
+## How many sockets stand between this zone and something nothing else is
+## holding. Zero for a socket on a machine sitting on the floor, one for a
+## socket on a machine that is itself snapped into another, and so on.
+##
+## Walks the chain by asking, for the body this zone belongs to, which zone is
+## holding THAT -- the tree cannot answer it, because a snapped object is never
+## reparented under the zone holding it; it stays where it was and is driven.
+static func stack_depth(zone: XRToolsSnapZone) -> int:
+	var depth := 0
+	var z := zone
+	# Bounded so a cycle -- which should be impossible, but would otherwise hang
+	# the physics frame -- costs a wrong priority rather than the room.
+	while depth < 8:
+		var body := _owning_body(z)
+		if body == null:
+			break
+		var up := holder_of(body)
+		if up == null:
+			break
+		depth += 1
+		z = up
+	return depth
+
+
+## The machine a zone is mounted on: its nearest PhysicsBody3D ancestor.
+static func _owning_body(zone: Node3D) -> Node3D:
+	var n := zone.get_parent()
+	while n != null:
+		if n is PhysicsBody3D:
+			return n as Node3D
+		n = n.get_parent()
+	return null
+
+
+static func _note_held(obj: Node3D, zone: XRToolsSnapZone) -> void:
+	if obj == null:
+		return
+	if zone == null:
+		_holder_of.erase(obj)
+	else:
+		_holder_of[obj] = zone
+	_holder_epoch += 1
+
+
 ## LOCAL PATCH (RetroXR): the zone the preview ghost last lit, so releasing an
 ## object puts it where the player was shown it would go. Distance alone cannot be
 ## trusted to agree: the ghost is ranked from the HAND's desired position while the
@@ -142,6 +220,22 @@ func snap_pose_for(obj: Node3D) -> Transform3D:
 var preview_offset: Vector3 = Vector3.ZERO
 
 
+## LOCAL PATCH (RetroXR): the orientation the ghost draws in, relative to this
+## zone. Identity for every zone that seats its object as-authored.
+##
+## A bay driven by MediaSlot or MediaTray does NOT seat its media by the grab
+## point the way an ordinary snap zone does -- it reparents the media and writes
+## a slot-local pose built from `media_local_basis`. The ghost knew nothing about
+## that basis, so a 64DD disk was offered standing on end and then lay flat the
+## instant it was let go: the preview and the seat disagreed about rotation while
+## agreeing about position, which is exactly what it looked like.
+##
+## Kept out of `snap_pose_for` for the same reason `preview_offset` is: that one
+## also RANKS which of several sockets wins a release, and turning the ranking
+## pose would change which socket catches an object dropped between two.
+var preview_basis: Basis = Basis.IDENTITY
+
+
 ## LOCAL PATCH (RetroXR): the pose the ghost draws — `snap_pose_for` offset by
 ## `preview_offset`. Kept apart from snap_pose_for because that one also RANKS
 ## which of several sockets wins a release; moving the ranking pose would change
@@ -150,6 +244,10 @@ var preview_offset: Vector3 = Vector3.ZERO
 ## and the offer (1) rather than jumping the object the whole way.
 func preview_pose_for(obj: Node3D, amount: float = 1.0) -> Transform3D:
 	var t := snap_pose_for(obj)
+	# In the ZONE's frame, not the object's: the seat is written as a slot-local
+	# pose, so the ghost has to be turned the same way about the same origin.
+	if preview_basis != Basis.IDENTITY:
+		t.basis = t.basis * preview_basis
 	if preview_offset != Vector3.ZERO and amount > 0.0:
 		t.origin += global_transform.basis * (preview_offset * amount)
 	return t
@@ -278,6 +376,7 @@ func drop_object() -> void:
 		return
 
 	# let go of this object
+	_note_held(picked_up_object, null)
 	picked_up_object.let_go(self, Vector3.ZERO, Vector3.ZERO)
 	picked_up_object = null
 	has_dropped.emit()
@@ -423,6 +522,9 @@ func pick_up_object(target: Node3D) -> void:
 
 	# Pick up our target. Note, target may do instant drop_and_free
 	picked_up_object = target
+	# LOCAL PATCH (RetroXR): remember who holds what, so a driver can work out
+	# how deep it sits and run after the one above it. See stack_depth.
+	_note_held(target, self)
 	if has_node("AudioStreamPlayer3D"):
 		var player = get_node("AudioStreamPlayer3D")
 		if is_instance_valid(player):

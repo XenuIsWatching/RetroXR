@@ -15,6 +15,11 @@ const CART_SIZES: Dictionary = {
 	"game_boy":         Vector3(0.057, 0.065, 0.008),
 	"game_boy_advance": Vector3(0.058, 0.036, 0.007),
 	"mega_drive":       Vector3(0.110, 0.070, 0.017),
+	# A 32X game is a Mega Drive cartridge -- same shell, same slot, and it goes
+	# into the 32X's own slot the way a plain cart goes into the console's. Listed
+	# so it is not handed CART_SIZE_DEFAULT, which is a different shape entirely
+	# and made the 32X's slot the wrong size for what stands in it.
+	"sega_32x":         Vector3(0.110, 0.070, 0.017),
 	"atari_2600":       Vector3(0.079, 0.104, 0.021),
 	"atari_5200":       Vector3(0.108, 0.104, 0.021),   # squarer, wider shell than the 2600 cart
 	"virtual_boy":      Vector3(0.065, 0.054, 0.006),   # VB cart, measured off the model

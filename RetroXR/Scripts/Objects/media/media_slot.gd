@@ -62,6 +62,14 @@ func _ready() -> void:
 	if slot:
 		slot.add_child(_holder)
 		slot.has_picked_up.connect(_on_slot_captured)
+		# The ghost has to be offered the way the media will actually lie. This
+		# slot does not seat by the grab point -- it writes _mouth_pose(), which
+		# carries media_local_basis -- so without this the preview draws the media
+		# as authored and it turns the moment it is released. A 64DD disk was
+		# offered on its end and lay flat on let-go; a VHS tape does the same
+		# thing. One assignment here covers every bay that has one, which is why
+		# it is not in the callers.
+		slot.preview_basis = media_local_basis
 
 
 func has_media() -> bool:

@@ -51,6 +51,10 @@ var _foot: XRToolsGrabPointSnap = null
 var _bay: XRToolsSnapZone = null
 var _slot: MediaSlot = null
 var _tray: MediaTray = null
+## The drawer mechanism on a tray unit that has no lid -- the mouth in the front
+## face and the shelf that runs out of it. Null on a lidded unit and on every
+## other kind of bay.
+var _disc_bay: ProceduralDiscBay = null
 var _eject: VRButton = null
 var _media: Node3D = null
 
@@ -135,11 +139,32 @@ func _build_connector() -> void:
 	var s := size()
 	var span := Vector2(s.x, s.z)
 	if ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE:
-		# We ARE the cartridge. The console's own slot takes us, so there is no
-		# connector to build on either machine -- joining the group that slot
-		# accepts is the whole of it, and the slot's snap pose puts us where a
-		# cartridge goes.
+		# We ARE the cartridge -- the console's own slot takes us, and joining the
+		# group that slot accepts is most of it.
 		add_to_group(MEDIA_GROUP)
+		# But not all of it. A snap zone seats an object by its grab point, and
+		# with none the object's ORIGIN lands on the zone -- which for a cartridge
+		# slot is where a cartridge's MIDDLE sits, well inside the console. A
+		# cartridge is meant to be mostly swallowed; a whole machine is not, and
+		# the Jaguar CD sank into the Jaguar far enough to bury its own OPEN
+		# button.
+		#
+		# What actually goes into the slot is this unit's connector, so that is
+		# what the grab point marks: a tongue hanging below the unit whose tip
+		# reaches exactly where a cartridge's centre would be. The unit then sits
+		# with its underside at the cartridge's top edge -- on the console, not in
+		# it -- and the figure comes from the host's own cartridge size, so it is
+		# right for whatever model the slot belongs to.
+		var tongue := MediaDimensions.cart_size(
+			ExpansionCatalog.host_of(expansion_id)).y * 0.5
+		var point := XRToolsGrabPointSnap.new()
+		point.name = "CartridgeConnector"
+		point.require_group = ExpansionPort.GROUP_CART_SLOT
+		add_child(point)
+		point.position = Vector3(0.0, -(s.y * 0.5 + tongue), 0.0)
+		# By hand, for the same reason the foot is: XRToolsPickable collects its
+		# grab points in _ready, which has already run by the time we get here.
+		_grab_points.push_back(point)
 		return
 
 	if ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_BELOW:
@@ -289,14 +314,35 @@ func _build_media_bay() -> void:
 		# for the lid and the seating, and a button that opens it. Reusing them
 		# means a Mega-CD behaves like every other disc machine in the room
 		# rather than like a slot that swallows a disc whole.
-		_bay.position = Vector3(0.0, s.y * 0.5, 0.0)
-		_build_well(s)
 		_tray = MediaTray.new()
 		_tray.host = self
 		_tray.slot = _bay
-		add_child(_tray)
 		if ExpansionCatalog.lid_of(expansion_id):
+			# A LID. The disc lies in a well in the roof and the lid swings up off
+			# it, the way a PlayStation or a GameCube opens.
+			_bay.position = Vector3(0.0, s.y * 0.5, 0.0)
+			_build_well(s)
 			_tray.lid_pivot = _build_lid(s)
+			add_child(_tray)
+		else:
+			# A DRAWER, and the same one a PlayStation 2 runs: a mouth in the front
+			# face and a shelf that carries the disc out through it. Pressing OPEN
+			# used to change nothing anybody could see -- MediaTray only animates a
+			# lid pivot, and a tray unit with no lid had none, so the button
+			# toggled a state with no mechanism attached to it.
+			#
+			# ProceduralDiscBay is the console's own mechanism, handed this unit's
+			# box instead of the placeholder console's so the mouth lands on THIS
+			# machine's front face. disc_lid_pivot is what makes the snap zone ride
+			# the shelf, so a disc laid on the tray travels in with it -- and it has
+			# to be set before the tray enters the tree, because MediaTray measures
+			# the zone against the pivot in its _ready.
+			_disc_bay = ProceduralDiscBay.build_tray(self, _bay, media, true,
+				Callable(), s)
+			_tray.disc_lid_pivot = _disc_bay.slide_pivot
+			add_child(_tray)
+			_tray.opened.connect(func() -> void: _disc_bay.slide(true))
+			_tray.closed.connect(func() -> void: _disc_bay.slide(false))
 		_tray.loaded.connect(_on_media_in)
 		_tray.unloaded.connect(_on_media_out)
 		_build_eject_button(s)
@@ -329,17 +375,46 @@ func _build_slit(s: Vector3) -> void:
 	slit.position = Vector3(0.0, -s.y * 0.2, s.z * 0.5 - 0.002)
 
 
+## The mouth in the roof that media drops into.
+##
+## Cut to the MEDIA, not to a fraction of the box -- the same rule the front slit
+## already followed. A fixed 0.7 x 0.55 of the footprint gave the 32X a wide
+## rectangular pit where a cartridge slot belongs: a cart stands upright in it, so
+## the mouth it goes through is as wide as the cart and only as deep as the cart
+## is THICK, which is a 104 x 19 mm letterbox rather than a 105 x 77 mm hole.
+##
+## A tray unit is sized from the disc instead, and by its loader rather than by
+## its media systemid -- the Jaguar CD's media is "atari_jaguar", whose cart_size
+## is a Jaguar CARTRIDGE, so asking the media what shape it is would cut a
+## cartridge slot in a CD machine.
 func _build_well(s: Vector3) -> void:
 	var well := MeshInstance3D.new()
 	well.name = "WellMouth"
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(s.x * 0.7, 0.01, s.z * 0.55)
-	well.mesh = mesh
+	var media := ExpansionCatalog.media_of(expansion_id)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.03, 0.03, 0.04)
+
+	if ExpansionCatalog.loader_of(expansion_id) == MediaDimensions.LOADER_TRAY:
+		# Round, because a disc is. A box here read as a hatch rather than a well.
+		var disc := CylinderMesh.new()
+		var r: float = MediaDimensions.disc_diameter(media) * 0.5 + 0.003
+		disc.top_radius = r
+		disc.bottom_radius = r
+		disc.height = 0.01
+		well.mesh = disc
+	else:
+		var mesh := BoxMesh.new()
+		var m := MediaDimensions.cart_size(media)
+		mesh.size = Vector3(m.x + 0.004, 0.01, m.z + 0.004)
+		well.mesh = mesh
 	well.set_surface_override_material(0, mat)
 	_body.add_child(well)
-	well.position = Vector3(0.0, s.y * 0.5 - 0.005, 0.0)
+	# A millimetre BELOW the roof, not flush with it. At s.y * 0.5 - 0.005 the
+	# well's top face landed in exactly the plane of the body's top face, and two
+	# coplanar faces is the whole of the z-fighting seen on the 32X: neither
+	# surface is in front, so the depth test picks per-pixel and the roof
+	# shimmers. Sinking it clears the tie.
+	well.position = Vector3(0.0, s.y * 0.5 - 0.006, 0.0)
 
 
 ## Bay gate: is this the media this unit takes? Media with no systemid of its own
@@ -422,8 +497,12 @@ func get_socket() -> XRToolsSnapZone:
 func _build_eject_button(s: Vector3) -> void:
 	_eject = VRButton.new()
 	_eject.name = "EjectButton"
-	add_child(_eject)
 	_eject.position = Vector3(s.x * 0.30, -s.y * 0.18, s.z * 0.5 + 0.004)
+	# A button on the FRONT face travels into that face. The default axis is
+	# (0,-1,0), which is right for the cabinet buttons on a console's roof and
+	# wrong here: the cap sank downwards out of its own bezel instead of pressing
+	# in.
+	_eject.depress_axis = Vector3(0.0, 0.0, -1.0)
 
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -431,6 +510,18 @@ func _build_eject_button(s: Vector3) -> void:
 	shape.shape = box
 	_eject.add_child(shape)
 
+	# Named ButtonMesh and attached BEFORE the button enters the tree, so
+	# VRButton's own `@onready var _mesh := $ButtonMesh` finds it.
+	#
+	# This used to add the cap after add_child and then call set_button_mesh on
+	# it, which is why no OPEN button was visible on the Mega-CD or the Jaguar CD:
+	# set_button_mesh HIDES the node called "ButtonMesh" before adopting the one
+	# it is handed, because every other caller hands it a cap off an imported
+	# shell and wants the scene's placeholder gone. Here the placeholder and the
+	# cap were the same node, so it hid the mesh it was adopting. Building it the
+	# ordinary way -- the way every authored button in system.tscn is built --
+	# removes the call entirely and keeps state_tint, so the cap still lights on
+	# hover like the console's own buttons.
 	var mesh := MeshInstance3D.new()
 	mesh.name = "ButtonMesh"
 	var bm := BoxMesh.new()
@@ -441,7 +532,6 @@ func _build_eject_button(s: Vector3) -> void:
 	mat.roughness = 0.5
 	mesh.set_surface_override_material(0, mat)
 	_eject.add_child(mesh)
-	_eject.set_button_mesh(mesh)
 
 	var label := Label3D.new()
 	label.text = "OPEN"
@@ -451,6 +541,7 @@ func _build_eject_button(s: Vector3) -> void:
 	label.modulate = Color(0.85, 0.85, 0.88)
 	_eject.add_child(label)
 
+	add_child(_eject)
 	_eject.button_pressed.connect(func() -> void:
 		if _tray != null:
 			_tray.toggle_open())

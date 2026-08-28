@@ -113,7 +113,11 @@ func _populate() -> void:
 ## owns the save recovery, RomM sync and achievement lookup. Nothing is
 ## reimplemented here — this only decides whether the tab exists and who drives it.
 func _populate_cartridge_tab(ui: CoreOptions2D) -> void:
-	var cart := _system.get_snapped_cartridge() as RetroCartridge
+	# game_media, not get_snapped_cartridge: on an assembled machine the game is
+	# often in the EXPANSION's bay and the console's own slot is empty, and this
+	# tab was hidden for every one of those -- a 64DD disk, a Mega-CD disc, a 32X
+	# cartridge -- so their saves and achievements could not be reached at all.
+	var cart := _system.game_media()
 	ui.set_cartridge_tab_visible(cart != null)
 	if cart == null:
 		_cart_panel = null

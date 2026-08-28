@@ -33,12 +33,23 @@ const GROUP := "expansion_port"
 const GROUP_SYSTEM := "retro_system"
 const GROUP_EXPANSION := "retro_expansion"
 
+## The console's own cartridge slot. A unit that mounts AS a cartridge -- a 32X,
+## a Sufami Turbo, a Jaguar CD -- carries a grab point requiring this group, so
+## it seats by its connector rather than by its middle. Named here beside the
+## other two because it is the third kind of join a machine can make, even though
+## the slot itself is built by RetroSystem rather than by this file.
+const GROUP_CART_SLOT := "cartridge_slot"
+
 ## Connector plate: 60% of the narrower span, 3 mm proud. Big enough to read as
 ## a real interface from standing height, small enough that it never reaches the
 ## edges of a box it is centred on.
 const _PLATE_FRACTION := 0.6
 const _PLATE_DEPTH := 0.003
 const _PIN_COUNT := 12
+
+## Daylight between the plate and the face it sits on. Exists only to keep the
+## two out of the same plane -- see _add_plate.
+const _FACE_CLEARANCE := 0.0002
 
 const _PLATE_COLOUR := Color(0.05, 0.05, 0.06)
 const _PIN_COLOUR := Color(0.72, 0.62, 0.28)
@@ -115,9 +126,15 @@ static func _add_plate(parent: Node3D, span: Vector2, downward: bool) -> void:
 	plate.mesh = plate_mesh
 	plate.set_surface_override_material(0, plate_mat)
 	parent.add_child(plate)
-	# Half sunk into the face it sits on, so it reads as recessed rather than
-	# stuck on: the plate straddles the mating plane by design.
-	plate.position = Vector3(0.0, dir * _PLATE_DEPTH * 0.5, 0.0)
+	# Clear of the face it sits on rather than straddling it.
+	#
+	# The plate used to be centred half its own depth from the mating plane,
+	# which put its far face EXACTLY in the plane of the machine's own top (or
+	# bottom) face. Two coplanar faces have no depth order, so the renderer
+	# picked per pixel and the join shimmered -- the z-fighting seen on the
+	# Satellaview's and the Mega-CD's roofs. A fifth of a millimetre of daylight
+	# breaks the tie and is far too small to read as a gap.
+	plate.position = Vector3(0.0, dir * (_PLATE_DEPTH * 0.5 + _FACE_CLEARANCE), 0.0)
 
 	var pin_mesh := BoxMesh.new()
 	pin_mesh.size = Vector3(w / (_PIN_COUNT * 2.2), _PLATE_DEPTH * 0.9, d * 0.6)

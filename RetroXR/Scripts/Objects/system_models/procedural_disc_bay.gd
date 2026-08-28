@@ -22,6 +22,12 @@ const WELL_DEPTH := 0.006
 const SLIDE_TRAVEL := 0.19
 const SLIDE_TIME := 0.9
 
+## The placeholder console box every measurement in here was taken from. Passed
+## as `box` by default so the consoles are unchanged; an expansion unit is a
+## different size and hands its own in, which is the only reason this is a
+## parameter at all.
+const PLACEHOLDER_BOX := Vector3(0.30, 0.10, 0.25)
+
 ## The spring lid, on a hinged tray. Null on a front-loader and a slot.
 var lid_hinge: VRSpringLatchedHinge = null
 ## The moving shelf, on a front-loader. Null on a hinged tray and a slot.
@@ -36,11 +42,11 @@ var _slide_tween: Tween = null
 ## sliding shelf over the hinged pod; `on_lid_swung` is told when a hand pushes
 ## the lid home.
 static func build_tray(host: Node3D, slot: Node3D, systemid: String, front: bool,
-		on_lid_swung: Callable) -> ProceduralDiscBay:
+		on_lid_swung: Callable, box: Vector3 = PLACEHOLDER_BOX) -> ProceduralDiscBay:
 	var bay := ProceduralDiscBay.new()
 	bay._host = host
 	if front:
-		bay._build_front_tray(slot, systemid)
+		bay._build_front_tray(slot, systemid, box)
 	else:
 		bay._build_lid_tray(slot, systemid, on_lid_swung)
 	return bay
@@ -81,11 +87,15 @@ func slide(open: bool) -> void:
 ## The front-loading shelf: a bay mouth in the front face and a tray that carries
 ## the disc out through it. The placeholder box is 0.3 x 0.1 x 0.25, so the front
 ## face is z = 0.125 and the shelf hides inside at rest.
-func _build_front_tray(slot: Node3D, systemid: String) -> void:
+func _build_front_tray(slot: Node3D, systemid: String, box: Vector3 = PLACEHOLDER_BOX) -> void:
 	var d := MediaDimensions.disc_diameter(systemid)
 	# Up the front face, not centred on it: the box carries its nameplate across the
-	# middle and the shelf slid straight through the lettering.
-	var deck_y := 0.024
+	# middle and the shelf slid straight through the lettering. Kept as a fraction
+	# of the box's height so a shallower machine -- a Mega-CD is 80 mm where the
+	# placeholder console is 100 -- puts its tray at the same place on its face
+	# rather than off the top of it. 0.24 reproduces the console's 0.024 exactly.
+	var deck_y := box.y * 0.24
+	var front_z := box.z * 0.5 + 0.0005
 
 	var bay_mat := StandardMaterial3D.new()
 	bay_mat.albedo_color = Color(0.08, 0.08, 0.1)
@@ -101,7 +111,7 @@ func _build_front_tray(slot: Node3D, systemid: String) -> void:
 	bay_mesh.size = Vector3(d + 0.020, 0.010, 0.003)
 	bay.mesh = bay_mesh
 	bay.set_surface_override_material(0, bay_mat)
-	bay.position = Vector3(0, deck_y, 0.1255)
+	bay.position = Vector3(0, deck_y, front_z)
 	_host.add_child(bay)
 
 	slide_pivot = Node3D.new()

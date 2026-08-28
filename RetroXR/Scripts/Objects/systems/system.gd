@@ -660,6 +660,10 @@ func _load_system_model() -> void:
 	else:
 		video_out_enabled = true
 	_model.configure_cartridge_slot(_cartridge_slot)
+	# So a unit that mounts AS a cartridge can carry a grab point naming this
+	# slot, and seat by its connector instead of by its centre. See
+	# RetroExpansion._build_connector.
+	_cartridge_slot.add_to_group(ExpansionPort.GROUP_CART_SLOT)
 	_wire_push_tray()
 	# The serial socket, for the consoles that have one. Placed by the model for
 	# the same reason the A/V sockets are: it goes on the back panel, and only
@@ -3991,6 +3995,31 @@ func _accepts_card(obj: Node3D) -> bool:
 ## Returns the currently snapped cartridge, or null (used by save/load).
 func get_snapped_cartridge() -> Node3D:
 	return _snapped_cartridge
+
+
+## The media whose saves and achievements this machine's Game tab should show.
+##
+## The console's OWN slot first. With F-Zero X in the N64 and its Expansion Kit
+## disk in the 64DD under it, the cartridge is the identity of the session --
+## rom_path, the save file and the achievement set all key off it -- so it is the
+## one to show, and the disk is a second piece of media for the same game.
+##
+## Otherwise whatever an attached unit is holding. A bare 64DD disk, a Mega-CD
+## disc and a 32X cartridge are each the whole of the game on that machine, and
+## the tab was hidden for all three: it asked only about the console's own slot,
+## so a stack with its game one box further down looked like a console with
+## nothing in it at all. Saves and achievements exist for those games exactly as
+## they do for a cartridge, and there was no way to reach them.
+##
+## RetroDisc extends RetroCartridge, so one test covers a disc as well as a cart.
+func game_media() -> RetroCartridge:
+	if _snapped_cartridge is RetroCartridge:
+		return _snapped_cartridge as RetroCartridge
+	for unit in get_expansions():
+		var m := unit.get_media()
+		if m is RetroCartridge:
+			return m as RetroCartridge
+	return null
 
 
 ## Restore a cable→TV connection after loading from a save file.
