@@ -1,6 +1,6 @@
 extends Node3D
 
-## Scene id this room registers as in SceneManager.SCENE_PATHS. Every room sets
+## Scene id this room registers as in RoomCatalog. Every room sets
 ## its own; an empty one claims nothing and leaves whatever SceneManager already
 ## reads standing, so a room that does not set it is only ever correct by luck.
 @export var scene_id: String = ""

@@ -72,6 +72,48 @@ const _SHELL_SCENES := {
 ## One-time aliases for scene records written while the removed imported shells
 ## existed. The old television becomes the stock set; the old VGA monitor becomes
 ## the retained primitive VGA monitor so its connector and source remain valid.
+## Cabinets contributed by mods: shell_id -> {scene, label, owner}.
+##
+## Consulted BEFORE _SHELL_SCENES so a mod cabinet is reachable by the same
+## "tv:<shell>" spawn token as a shipped one, and so tv_model round-trips through
+## a save unchanged. A saved tv_model naming a mod that has gone falls through to
+## the stock body, the way an unknown model_id falls through to a platform's
+## default — nothing here needs to know the mod is missing.
+static var _mod_shells: Dictionary = {}
+
+
+## Returns "" on success.
+static func register_mod_shell(shell_id: String, scene_path: String, label: String,
+		owner_id: String) -> String:
+	if _SHELL_SCENES.has(shell_id):
+		return "'%s' is a shipped cabinet" % shell_id
+	if _mod_shells.has(shell_id):
+		return "'%s' is already registered by mod '%s'" % [shell_id,
+			_mod_shells[shell_id].get("owner", "?")]
+	if not ResourceLoader.exists(scene_path):
+		return "scene does not exist: %s" % scene_path
+	_mod_shells[shell_id] = {"scene": scene_path, "label": label, "owner": owner_id}
+	return ""
+
+
+static func _mod_shell_path(shell_id: String) -> String:
+	return str((_mod_shells.get(shell_id, {}) as Dictionary).get("scene", ""))
+
+
+## Every mod cabinet, as {id, label}, for the spawn menu.
+static func mod_shells() -> Array:
+	var out: Array = []
+	for shell_id: String in _mod_shells:
+		out.append({"id": shell_id, "label": str(_mod_shells[shell_id].get("label", shell_id))})
+	return out
+
+
+static func drop_mod_shells(owner_id: String) -> void:
+	for shell_id: String in _mod_shells.keys():
+		if _mod_shells[shell_id].get("owner", "") == owner_id:
+			_mod_shells.erase(shell_id)
+
+
 const _LEGACY_TV_MODELS := {
 	"crt_90s": "",
 	"crt_monitor": "crt_plain",
@@ -403,7 +445,9 @@ func _load_shell() -> void:
 		tv_model = _LEGACY_TV_MODELS[tv_model]
 	if tv_model.is_empty():
 		return
-	var path: String = _SHELL_SCENES.get(tv_model, "")
+	var path: String = _mod_shell_path(tv_model)
+	if path.is_empty():
+		path = _SHELL_SCENES.get(tv_model, "")
 	if path.is_empty():
 		push_warning("RetroTV: unknown tv_model '%s' — falling back to the stock body" % tv_model)
 		return
@@ -982,7 +1026,15 @@ func _show_sampled(mat: ShaderMaterial, tex: Texture2D) -> void:
 func _crt_screen_material() -> ShaderMaterial:
 	if _crt_material == null:
 		_crt_material = ShaderMaterial.new()
-		_crt_material.shader = CRT_SHADER
+		# A cabinet may paint its screen with a shader of its own. Null is the
+		# normal answer and every shipped shell gives it, so this is the stock
+		# CRT unless a mod set has genuinely different glass.
+		var custom: Shader = _shell.screen_shader() if _shell != null else null
+		_crt_material.shader = custom if custom != null else CRT_SHADER
+		# Written unconditionally: a shader that does not declare this uniform
+		# ignores it harmlessly, and one that does needs it set before first draw
+		# (the shader's own default is ON, so a set with the tube off would
+		# otherwise show one frame of it).
 		_crt_material.set_shader_parameter("crt_enabled", crt_enabled)
 	return _crt_material
 

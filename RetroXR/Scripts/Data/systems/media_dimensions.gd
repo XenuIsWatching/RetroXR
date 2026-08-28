@@ -218,17 +218,23 @@ const FRONT_TRAY_SYSTEMS: Dictionary = {
 
 ## True when this system's tray slides out of the front face rather than hinging.
 static func has_front_tray(systemid: String) -> bool:
+	if _mod_media.has(systemid):
+		return bool(_mod_media[systemid].get("front_tray", false))
 	return FRONT_TRAY_SYSTEMS.has(systemid)
 
 
 ## True when the systemid's games ship on discs (spawn a RetroDisc).
 static func is_disc_system(systemid: String) -> bool:
+	if _mod_media.has(systemid):
+		return _mod_media[systemid].has("disc_diameter")
 	return DISC_DIAMETERS.has(systemid)
 
 
 ## True when this system's media is a floppy disk (a dark shell with a sprung
 ## metal shutter) rather than a moulded cartridge.
 static func uses_floppy(systemid: String) -> bool:
+	if _mod_media.has(systemid):
+		return bool(_mod_media[systemid].get("floppy", false))
 	return FLOPPY_SYSTEMS.has(systemid)
 
 
@@ -236,6 +242,9 @@ static func uses_floppy(systemid: String) -> bool:
 ## cartridge body is worth resizing to it. Ask this rather than CART_SIZES.has():
 ## a floppy system carries its size in FLOPPY_SIZE and is in neither table.
 static func has_cart_size(systemid: String) -> bool:
+	if _mod_media.has(systemid):
+		var m: Dictionary = _mod_media[systemid]
+		return m.has("cart_size") or bool(m.get("floppy", false))
 	return CART_SIZES.has(systemid) or FLOPPY_SYSTEMS.has(systemid)
 
 
@@ -245,6 +254,12 @@ static func has_cart_size(systemid: String) -> bool:
 ## itself, which is an ordinary Super Famicom cartridge and is the file the town
 ## boots from -- sizing it off the systemid alone shrank it to pack size.
 static func cart_size(systemid: String, rom_path := "") -> Vector3:
+	if _mod_media.has(systemid):
+		var m: Dictionary = _mod_media[systemid]
+		if bool(m.get("floppy", false)):
+			return FLOPPY_SIZE
+		if m.has("cart_size"):
+			return m["cart_size"] as Vector3
 	if FLOPPY_SYSTEMS.has(systemid):
 		return FLOPPY_SIZE
 	if systemid == "satellaview" and not rom_path.is_empty():
@@ -256,6 +271,8 @@ static func cart_size(systemid: String, rom_path := "") -> Vector3:
 
 ## Disc diameter for a system, or the standard 12 cm.
 static func disc_diameter(systemid: String) -> float:
+	if _mod_media.has(systemid) and _mod_media[systemid].has("disc_diameter"):
+		return float(_mod_media[systemid]["disc_diameter"])
 	return float(DISC_DIAMETERS.get(systemid, DISC_DIAMETER_DEFAULT))
 
 
@@ -298,7 +315,11 @@ static func disc_finish(systemid: String, rom_path: String = "") -> Dictionary:
 		if _is_cd_image(rom_path):
 			return FINISH_PS2_CD
 		return FINISH_DVD9 if _is_dual_layer(rom_path) else FINISH_DVD
-	var finish: Dictionary = DISC_FINISHES.get(systemid, FINISH_CD)
+	var finish: Dictionary = FINISH_CD
+	if _mod_media.has(systemid) and _mod_media[systemid].has("disc_finish"):
+		finish = _mod_media[systemid]["disc_finish"] as Dictionary
+	else:
+		finish = DISC_FINISHES.get(systemid, FINISH_CD)
 	if float(finish["pitch"]) < 1.0 and _is_dual_layer(rom_path):
 		return FINISH_DVD9
 	return finish
@@ -347,6 +368,11 @@ static func disc_zones(systemid: String, pitch: float = PITCH_CD) -> Vector3:
 
 ## How this system loads discs: LOADER_NONE / LOADER_TRAY / LOADER_SLOT.
 static func disc_loader(systemid: String) -> int:
+	if _mod_media.has(systemid):
+		var m: Dictionary = _mod_media[systemid]
+		if not m.has("disc_diameter"):
+			return LOADER_NONE
+		return LOADER_SLOT if bool(m.get("slot_load", false)) else LOADER_TRAY
 	if not DISC_DIAMETERS.has(systemid):
 		return LOADER_NONE
 	return LOADER_SLOT if SLOT_LOAD_SYSTEMS.has(systemid) else LOADER_TRAY
@@ -376,3 +402,43 @@ static func load_label_texture(systemid: String, rom_path: String) -> Texture2D:
 				img.generate_mipmaps()
 				return ImageTexture.create_from_image(img)
 	return null
+
+
+# ── mod media ─────────────────────────────────────────────────────────────────
+
+## Media descriptors contributed by mods, one per systemid, replacing what the
+## six const tables above would say for that platform.
+##
+## One descriptor rather than six overlays because the tables are not
+## independent: disc_loader() is derived from DISC_DIAMETERS and
+## SLOT_LOAD_SYSTEMS together, and SystemInfo.media_type is documented as
+## matching LOADER_* exactly. A mod filling three of the six would produce a
+## platform whose loader and descriptor disagree, which surfaces as a disc bay
+## that will not open rather than as anything resembling its cause.
+##
+## Keys, all optional:
+##   cart_size      Vector3  cartridge body, metres
+##   floppy         bool     media is a floppy (uses FLOPPY_SIZE)
+##   disc_diameter  float    metres; PRESENCE is what makes it a disc system
+##   disc_finish    Dictionary  as DISC_FINISHES rows
+##   slot_load      bool     front slot rather than a hinged tray
+##   front_tray     bool     tray slides from the front face
+static var _mod_media: Dictionary = {}
+
+
+## Returns "" when the descriptor was accepted.
+static func register_mod_media(systemid: String, dims: Dictionary) -> String:
+	if systemid.is_empty():
+		return "no systemid"
+	if dims.has("cart_size") and not (dims["cart_size"] is Vector3):
+		return "cart_size must be a Vector3"
+	if dims.has("disc_diameter") and not (dims["disc_diameter"] is float or dims["disc_diameter"] is int):
+		return "disc_diameter must be a number"
+	if dims.has("slot_load") and not dims.has("disc_diameter"):
+		return "slot_load needs a disc_diameter, or there is no disc to load"
+	_mod_media[systemid] = dims.duplicate(true)
+	return ""
+
+
+static func is_mod_media(systemid: String) -> bool:
+	return _mod_media.has(systemid)

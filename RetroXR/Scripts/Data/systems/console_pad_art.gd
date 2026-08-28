@@ -263,7 +263,20 @@ const _ROWS: Dictionary = {
 ## True when this platform has a pad of its own to draw. The generic pad is not
 ## a platform, so it never answers true here.
 static func has(systemid: String) -> bool:
+	if _mod_rows.has(systemid):
+		return true
 	return not systemid.is_empty() and not _VARIANTS.has(systemid) and _ROWS.has(systemid)
+
+
+## Pad drawings contributed by mods. Without a row here a platform has no
+## anchors, so its Controls remap page has nothing to point its leader lines at.
+static var _mod_rows: Dictionary = {}
+
+
+static func register_mod_row(systemid: String, row_data: Dictionary) -> void:
+	if systemid.is_empty():
+		return
+	_mod_rows[systemid] = row_data
 
 
 ## The art keys to draw for one scope, in the order they should be stacked.
@@ -279,6 +292,8 @@ static func variants_for(systemid: String) -> Array:
 
 ## The row for a platform, or an empty Dictionary.
 static func row(systemid: String) -> Dictionary:
+	if _mod_rows.has(systemid):
+		return _mod_rows[systemid] as Dictionary
 	return _ROWS.get(systemid, {}) as Dictionary
 
 

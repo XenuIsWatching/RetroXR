@@ -313,7 +313,61 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 	if not handheld and not _NO_AV_SOCKETS.has(systemid) \
 			and not _OWN_AV_LEAD.has(systemid):
 		items.append(_AV_CABLE.duplicate())
+	# Mod peripherals go LAST, after the stand-ins and the shipped accessories,
+	# so a mod adds to a console's card rather than reordering it.
+	items.append_array((_mod_peripherals.get(systemid, []) as Array).duplicate(true))
 	return items
+
+
+# ── mod contributions ─────────────────────────────────────────────────────────
+
+## systemid -> extra peripheral rows contributed by mods.
+static var _mod_peripherals: Dictionary = {}
+## An owner per systemid entry, so a failed mod's rows can be withdrawn.
+static var _peripheral_owners: Dictionary = {}
+
+## Standalone spawnable props, shown on their own rather than under a console.
+## type -> {label, owner}
+static var _mod_spawnables: Dictionary = {}
+
+
+static func register_mod_peripherals(systemid: String, items: Array, owner_id: String) -> void:
+	if systemid.is_empty() or items.is_empty():
+		return
+	if not _mod_peripherals.has(systemid):
+		_mod_peripherals[systemid] = []
+	for item: Variant in items:
+		var row := (item as Dictionary).duplicate(true)
+		row["kind"] = "peripheral"
+		(_mod_peripherals[systemid] as Array).append(row)
+	if not _peripheral_owners.has(owner_id):
+		_peripheral_owners[owner_id] = []
+	(_peripheral_owners[owner_id] as Array).append(systemid)
+
+
+## A prop the spawn menu can offer directly. `menu` carries at least a label.
+static func register_mod_spawnable(type: String, menu: Dictionary, owner_id: String) -> void:
+	var row := menu.duplicate(true)
+	row["owner"] = owner_id
+	row["label"] = str(menu.get("label", type))
+	_mod_spawnables[type] = row
+
+
+## Every mod prop offered on the menu, as {type, label}.
+static func mod_spawnables() -> Array:
+	var out: Array = []
+	for type: String in _mod_spawnables:
+		out.append({"type": type, "label": str(_mod_spawnables[type].get("label", type))})
+	return out
+
+
+static func drop_mod(owner_id: String) -> void:
+	for systemid: String in (_peripheral_owners.get(owner_id, []) as Array):
+		_mod_peripherals.erase(systemid)
+	_peripheral_owners.erase(owner_id)
+	for type: String in _mod_spawnables.keys():
+		if _mod_spawnables[type].get("owner", "") == owner_id:
+			_mod_spawnables.erase(type)
 
 
 ## The single place that turns a catalog item into the string emitted on

@@ -17,32 +17,13 @@ signal scene_ready(scene_id: String)
 signal scene_content_ready(scene_id: String)
 signal active_slot_changed(slot_id: String)
 
-const SCENE_PATHS := {
-	"arcade":      "res://Scenes/MainScene.tscn",
-	"den":         "res://Scenes/DenScene.tscn",
-	"bedroom":     "res://Scenes/BedroomScene.tscn",
-	"passthrough": "res://Scenes/PassthroughScene.tscn",
-	"test":        "res://Scenes/TestScene.tscn",
-}
-## Shown on the loading screen while each scene builds.
-const SCENE_TITLES := {
-	"arcade":      "ARCADE ROOM",
-	"den":         "COZY DEN",
-	"bedroom":     "90s BEDROOM",
-	"passthrough": "PASSTHROUGH",
-	"test":        "TEST HALLWAY",
-}
-## Rooms that keep save slots — the ones you furnish yourself, where everything
-## arrived from the spawn menu and a slot is therefore the whole room. The den and
-## the test hallway are authored: their contents are in the .tscn, and a slot of
-## what was spawned on top would restore a handful of objects into a room that
-## already has its own.
+## Which rooms exist, where they live, what they are called and which keep save
+## slots all come from RoomCatalog now. They used to be three const tables here
+## plus a fourth in scene_view.gd, edited in lockstep by hand.
 ##
-## The bedroom was in that second group until it was emptied. It ships as bare
-## walls now — window, blinds, door, light switch and the day/night lever, and
-## nothing standing on the floor — so it is the home room you furnish, and the
-## objection above no longer applies to it.
-const SLOT_ROOMS := ["arcade", "passthrough", "bedroom"]
+## Ask RoomCatalog rather than this file: SCENE_PATHS, SCENE_TITLES and
+## SLOT_ROOMS are gone, not relocated behind a shim, so nothing can go on reading
+## a table that no longer knows about mod rooms.
 const PREFS_FILE := "user://scenes/prefs.json"
 const LOADING_RIG_SCENE := preload("res://Scenes/UI/loading_rig.tscn")
 ## Every room instances res://Scenes/player_rig.tscn under this name.
@@ -185,7 +166,7 @@ func active_slot(room_id: String) -> String:
 
 ## Whether a room keeps save slots at all.
 func room_has_slots(scene_id: String) -> bool:
-	return scene_id in SLOT_ROOMS
+	return RoomCatalog.has_slots(scene_id)
 
 
 ## True only when `room_id` names a live room that can safely be read or saved.
@@ -231,7 +212,7 @@ func is_passthrough_supported() -> bool:
 
 
 func change_scene(scene_id: String) -> void:
-	if not SCENE_PATHS.has(scene_id):
+	if not RoomCatalog.has(scene_id):
 		push_error("SceneManager: unknown scene_id '%s'" % scene_id)
 		return
 	if scene_id == "passthrough" and not is_passthrough_supported():
@@ -287,8 +268,8 @@ func _begin_transition(scene_id: String, net_client: bool = false) -> void:
 		persistence.save_slot(get_tree().current_scene, active_slot(leaving))
 
 	current_scene_id = scene_id
-	_run_transition.call_deferred(scene_id, SCENE_PATHS[scene_id],
-		SCENE_TITLES.get(scene_id, ""))
+	_run_transition.call_deferred(scene_id, RoomCatalog.path_of(scene_id),
+		RoomCatalog.title_of(scene_id))
 	scene_changed.emit(scene_id)
 
 

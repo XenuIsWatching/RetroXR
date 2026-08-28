@@ -101,7 +101,7 @@ const SCRATCH_SLOT := "zz_probe_scratch"
 
 func _claim_scratch_slot() -> void:
 	SceneManager.auto_save_on_switch = false
-	for room: String in SceneManager.SLOT_ROOMS:
+	for room: String in RoomCatalog.slot_rooms():
 		var dir := ScenePersistence.new(room).slot_dir()
 		var source := "%s/%s.json" % [dir, SceneManager.active_slot(room)]
 		if FileAccess.file_exists(source):
@@ -112,7 +112,7 @@ func _claim_scratch_slot() -> void:
 
 
 func _release_scratch_slot() -> void:
-	for room: String in SceneManager.SLOT_ROOMS:
+	for room: String in RoomCatalog.slot_rooms():
 		var scratch := "%s/%s.json" % [ScenePersistence.new(room).slot_dir(), SCRATCH_SLOT]
 		if FileAccess.file_exists(scratch):
 			DirAccess.remove_absolute(scratch)
@@ -355,7 +355,7 @@ func _check(where: String) -> void:
 		_fail(where, "loading rig left in the tree")
 	if SceneManager._transitioning:
 		_fail(where, "still marked _transitioning")
-	var expected_path: String = SceneManager.SCENE_PATHS.get(SceneManager.current_scene_id, "")
+	var expected_path: String = RoomCatalog.path_of(SceneManager.current_scene_id)
 	if scene.scene_file_path != expected_path:
 		_fail(where, "scene id '%s' points at '%s', but '%s' is loaded" % [
 			SceneManager.current_scene_id, expected_path, scene.scene_file_path])
@@ -377,7 +377,7 @@ func _check(where: String) -> void:
 
 func _on_scene_ready(scene_id: String) -> void:
 	var scene := get_tree().current_scene
-	var expected_path: String = SceneManager.SCENE_PATHS.get(scene_id, "")
+	var expected_path: String = RoomCatalog.path_of(scene_id)
 	if scene_id != SceneManager.current_scene_id:
 		_fail("scene_ready", "announced '%s' while current id is '%s'" % [
 			scene_id, SceneManager.current_scene_id])

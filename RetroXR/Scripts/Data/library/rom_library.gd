@@ -503,3 +503,58 @@ static func find_music_album(name: String) -> String:
 		fname = dir.get_next()
 	dir.list_dir_end()
 	return result
+
+
+## Root directory for mod packs, beside roms/ and books/ in the same files root.
+##
+## On Android this is the EXTERNAL tree on purpose, so a mod can be `adb push`ed
+## like a ROM. The app only ever reads from here — see ensure_mods_root.
+static func default_mods_root() -> String:
+	if OS.get_name() == "Android":
+		return "/sdcard/Android/data/com.xenu.retroxr/files/mods"
+	if OS.get_name() in ["Linux", "macOS"]:
+		return OS.get_environment("HOME") + "/retroxr/mods"
+	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/mods"
+
+
+## Create the mods root if it doesn't already exist, and report whether it is
+## there afterwards.
+##
+## Unlike its siblings this one TOLERATES failure rather than warning about it.
+## A directory created by `adb push` under Android/data is 0770 owned by shell,
+## with a group the app is not in, so the app cannot create anything inside one
+## and make_dir_recursive_absolute can fail on a folder that is perfectly
+## readable. Since mods are only ever read, that is not an error worth shouting
+## about — the scan below works fine either way.
+static func ensure_mods_root() -> bool:
+	var path := default_mods_root()
+	if DirAccess.dir_exists_absolute(path):
+		return true
+	var err := DirAccess.make_dir_recursive_absolute(path)
+	if err == OK:
+		print("[RomLibrary] Ensured mods root: ", path)
+		return true
+	print("[RomLibrary] mods root '%s' is absent and could not be created (err %d)"
+		% [path, err])
+	return false
+
+
+## Every mod container in the mods root, sorted by name.
+## Returns Array of {path: String, label: String}.
+static func scan_mods() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var root := default_mods_root()
+	var dir := DirAccess.open(root)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var fname := dir.get_next()
+	while fname != "":
+		if not dir.current_is_dir():
+			var ext := fname.get_extension().to_lower()
+			if ext == "zip" or ext == "pck":
+				out.append({"path": root.path_join(fname), "label": fname})
+		fname = dir.get_next()
+	dir.list_dir_end()
+	out.sort_custom(func(a, b): return str(a["label"]).naturalnocasecmp_to(str(b["label"])) < 0)
+	return out

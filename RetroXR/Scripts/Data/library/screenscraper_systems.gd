@@ -90,4 +90,20 @@ const SYSTEM_MAP := {
 
 ## Returns the screenscraper systemeid for a project systemid, or -1 if unmapped.
 static func get_systemeid(systemid: String) -> int:
+	if _mod_map.has(systemid):
+		return int(_mod_map[systemid])
 	return SYSTEM_MAP.get(systemid, -1)
+
+
+## Mappings contributed by mods.
+##
+## A platform absent from SYSTEM_MAP can never be scraped, so a mod platform
+## without one gets no box art, no wheel and no cart label -- ever. That failure
+## is invisible: the carts simply stay blank, and nothing anywhere says why.
+static var _mod_map: Dictionary = {}
+
+
+static func register_mod_system(systemid: String, systemeid: int) -> void:
+	if systemid.is_empty() or systemeid <= 0:
+		return
+	_mod_map[systemid] = systemeid

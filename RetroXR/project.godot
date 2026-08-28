@@ -29,6 +29,7 @@ driver/mix_rate=48000
 
 XRToolsUserSettings="*uid://bqgb8i74tm0t"
 XRToolsRumbleManager="*uid://by853dk86g1qw"
+Mods="*res://Scripts/Mods/mod_manager.gd"
 AppPrefs="*res://Scripts/Data/app_prefs.gd"
 QualityManager="*res://Scripts/quality_manager.gd"
 SceneManager="*res://Scripts/Data/scene_manager.gd"

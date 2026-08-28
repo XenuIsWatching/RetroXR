@@ -71,17 +71,35 @@ enum MediaType { CARTRIDGE = 0, DISC_TRAY = 1, DISC_INSERT = 2 }
 ## supported_extensions, so no extension is recorded here.
 @export var folder_content: bool = false
 
-## Custom hardware model scene for this console. Empty for now — this is the
-## slot the bespoke per-console models get dropped into later.
-@export var console_model: PackedScene = null
-
 
 static var _cache: Dictionary = {}
+
+## Descriptors contributed by mods, consulted BEFORE res://SystemInfo/.
+##
+## Checked ahead of the shipped path so a mod can describe hardware this build
+## has never heard of, and can correct a shipped descriptor without shipping a
+## replacement .tres over the top of ours.
+static var _mod_infos: Dictionary = {}
+
+
+## Add or replace a descriptor. The systemid comes off the resource itself, so a
+## mod cannot file one under a name it does not answer to.
+static func register_mod_info(info: SystemInfo) -> void:
+	if info == null or info.systemid.is_empty():
+		return
+	_mod_infos[info.systemid] = info
+	# The negative cache is why this matters: for_system() caches a MISS as null,
+	# so a systemid asked about before the mod registered would stay null for the
+	# session. Dropping the entry is cheaper than reasoning about who asked first.
+	_cache.erase(info.systemid)
+
 
 ## Load the descriptor for a systemid, or null when none exists. Cached.
 static func for_system(a_systemid: String) -> SystemInfo:
 	if a_systemid.is_empty():
 		return null
+	if _mod_infos.has(a_systemid):
+		return _mod_infos[a_systemid]
 	if _cache.has(a_systemid):
 		return _cache[a_systemid]
 	var path := "res://SystemInfo/%s.tres" % a_systemid

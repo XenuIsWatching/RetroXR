@@ -131,6 +131,122 @@ const _ROWS: Dictionary = {
 static var simulate_missing_assets: bool = false
 
 
+## Rows contributed by mods, and shipped rows a mod has replaced.
+##
+## The shipped table above stays a const: a mod cannot edit it, only layer over
+## it. Mod rows are merged AFTER the shipped ones so insertion order -- and with
+## it the rule that a platform's FIRST row is its default -- keeps a shipped
+## model as the default even when a mod adds another for the same platform.
+## Overriding that default is a deliberate act (override_mod_row), not a
+## side effect of load order.
+static var _mod_rows: Dictionary = {}
+static var _overrides: Dictionary = {}
+## model_id -> the mod that contributed it, for the Mods page and for blame.
+static var _owners: Dictionary = {}
+
+## The merged view, rebuilt only when a registration changes it.
+static var _merged: Dictionary = {}
+static var _merged_dirty: bool = true
+
+
+## Every row this build can resolve: shipped, with mod overrides applied, plus
+## mod rows. Cached because the lookups below call it inside loops.
+static func _table() -> Dictionary:
+	if _merged_dirty:
+		_merged = _ROWS.duplicate(true)
+		for model_id: String in _overrides:
+			_merged[model_id] = _overrides[model_id]
+		for model_id: String in _mod_rows:
+			_merged[model_id] = _mod_rows[model_id]
+		_merged_dirty = false
+	return _merged
+
+
+## Is `row` a usable row? Returns "" when it is, or what is wrong with it.
+##
+## Extracted from Tools/models/model_registry_probe.gd so the probe and the mod
+## loader cannot disagree about what a well-formed row is. The probe checks the
+## shipped table at build time; this rejects a bad mod row at REGISTRATION, which
+## is the only moment the mod can still be named in the complaint. Getting it
+## wrong later means a spawn failing somewhere with no clue who caused it.
+static func validate_row(model_id: String, row: Dictionary) -> String:
+	if model_id.is_empty():
+		return "no id"
+	if str(row.get("platform", "")).is_empty() and not (row.get("platform") is Array):
+		return "no platform"
+	var has_scene: bool = not str(row.get("scene", "")).is_empty()
+	var has_script: bool = not str(row.get("script", "")).is_empty()
+	if has_scene == has_script:
+		return "must have exactly one of scene/script"
+	for k: String in ["scene", "script"]:
+		var path: String = str(row.get(k, ""))
+		# ResourceLoader, not FileAccess: a res:// path inside a mounted pack is
+		# remapped, and FileAccess.file_exists reports false for every one.
+		if not path.is_empty() and not ResourceLoader.exists(path):
+			return "%s does not exist: %s" % [k, path]
+	var req: Variant = row.get("requires", [])
+	if not (req is Array):
+		return "requires must be an array"
+	return ""
+
+
+## Add a mod's row. Returns "" on success.
+static func register_mod_row(model_id: String, row: Dictionary, owner_id: String) -> String:
+	if _ROWS.has(model_id):
+		return "'%s' is a shipped model; use override_model to replace it" % model_id
+	if _mod_rows.has(model_id):
+		return "'%s' is already registered by mod '%s'" % [model_id, _owners.get(model_id, "?")]
+	var checked := row.duplicate(true)
+	checked["id"] = model_id
+	var err := validate_row(model_id, checked)
+	if not err.is_empty():
+		return err
+	_mod_rows[model_id] = checked
+	_owners[model_id] = owner_id
+	_merged_dirty = true
+	return ""
+
+
+## Replace a SHIPPED row in place, keeping its id so existing saves still resolve
+## to it. Returns "" on success.
+static func override_mod_row(model_id: String, row: Dictionary, owner_id: String) -> String:
+	if not _ROWS.has(model_id):
+		return "'%s' is not a shipped model" % model_id
+	if _overrides.has(model_id):
+		return "'%s' is already overridden by mod '%s'" % [model_id, _owners.get(model_id, "?")]
+	var checked := row.duplicate(true)
+	checked["id"] = model_id
+	var err := validate_row(model_id, checked)
+	if not err.is_empty():
+		return err
+	_overrides[model_id] = checked
+	_owners[model_id] = owner_id
+	_merged_dirty = true
+	return ""
+
+
+## Which mod contributed a model, or "" for a shipped one.
+static func owner_of(model_id: String) -> String:
+	return str(_owners.get(model_id, ""))
+
+
+## True for a row a mod brought. Used to keep mod models out of the boot warm.
+static func is_mod_row(model_id: String) -> bool:
+	return _mod_rows.has(model_id) or _overrides.has(model_id)
+
+
+## Drop everything a mod registered. Only used when a mod fails part-way through
+## register(), so a half-registered mod leaves nothing standing.
+static func drop_mod(owner_id: String) -> void:
+	for model_id: String in _owners.keys():
+		if _owners[model_id] != owner_id:
+			continue
+		_mod_rows.erase(model_id)
+		_overrides.erase(model_id)
+		_owners.erase(model_id)
+	_merged_dirty = true
+
+
 ## The row for `model_id`, or the best available stand-in. Never returns empty.
 ##
 ## Four rules, none of them special cases:
@@ -148,7 +264,7 @@ static func resolve(model_id: String, platform: String) -> Dictionary:
 	if model_id == PLACEHOLDER_ID:
 		return placeholder_row()
 	if not model_id.is_empty():
-		if _ROWS.has(model_id):
+		if _table().has(model_id):
 			if is_available(model_id):
 				return _row(model_id)
 			push_warning("[models] '%s' is not available in this build; falling back" % model_id)
@@ -219,16 +335,16 @@ static func _serves(row: Dictionary, platform: String) -> bool:
 ## Every available row for a platform, in author order. The first is its default.
 static func rows_for(platform: String) -> Array:
 	var out: Array = []
-	for id: String in _ROWS:
-		if _serves(_ROWS[id], platform) and is_available(id):
+	for id: String in _table():
+		if _serves(_table()[id], platform) and is_available(id):
 			out.append(_row(id))
 	return out
 
 
 static func is_available(model_id: String) -> bool:
-	if not _ROWS.has(model_id):
+	if not _table().has(model_id):
 		return false
-	var req: Array = _ROWS[model_id].get("requires", [])
+	var req: Array = _table()[model_id].get("requires", [])
 	if req.is_empty():
 		return true
 	if simulate_missing_assets:
@@ -248,23 +364,23 @@ static func is_available(model_id: String) -> bool:
 ## which is the only thing that knows WHICH computer was asked for. Same path the
 ## placeholder already took, and for the same reason.
 static func platform_of(model_id: String) -> String:
-	if not _ROWS.has(model_id):
+	if not _table().has(model_id):
 		return ""
-	var field: Variant = _ROWS[model_id].get("platform", "")
+	var field: Variant = _table()[model_id].get("platform", "")
 	return "" if field is Array else str(field)
 
 
 static func platform_is_handheld(platform: String) -> bool:
-	for id: String in _ROWS:
-		var r: Dictionary = _ROWS[id]
+	for id: String in _table():
+		var r: Dictionary = _table()[id]
 		if _serves(r, platform) and bool(r.get("handheld", false)):
 			return true
 	return false
 
 
 static func has_any_model(platform: String) -> bool:
-	for id: String in _ROWS:
-		if _serves(_ROWS[id], platform):
+	for id: String in _table():
+		if _serves(_table()[id], platform):
 			return true
 	return false
 
@@ -281,19 +397,30 @@ static func has_any_model(platform: String) -> bool:
 static func has_plain_alternative(platform: String) -> bool:
 	var total := 0
 	var plain := 0
-	for id: String in _ROWS:
-		if not _serves(_ROWS[id], platform):
+	for id: String in _table():
+		if not _serves(_table()[id], platform):
 			continue
 		total += 1
-		if (_ROWS[id].get("requires", []) as Array).is_empty():
+		if (_table()[id].get("requires", []) as Array).is_empty():
 			plain += 1
 	return total > 1 and plain > 0
 
 
 ## A row by id, with "id" filled in. Empty for an unknown id.
 static func row_for(model_id: String) -> Dictionary:
-	return _row(model_id) if _ROWS.has(model_id) else {}
+	return _row(model_id) if _table().has(model_id) else {}
 
+
+## NOTE the three functions below read _ROWS directly rather than _table(): they
+## are the BOOT WARM set, and mod models are deliberately excluded from it.
+## Warming the shipped thirteen stand-ins costs ~1.1 s on a Quest 3, plus ~266 ms
+## of first-draw pipeline compile per bespoke shell; letting an arbitrary number
+## of mod consoles join that would make boot time a function of how many mods the
+## player has installed. A mod model is warmed lazily instead, on first spawn --
+## which is safe because the spawn path already awaits ModelWarmer.acquire() for
+## every path in a row's `requires` (spawn_menu_controller.gd), and so does a
+## save restore (scene_persistence.gd). The cost moves to the first spawn of that
+## console rather than to every boot.
 
 ## The models that carry no external assets — the stand-ins. Every row, now.
 ##
@@ -340,10 +467,10 @@ static func shell_assets() -> Array:
 
 
 static func all_ids() -> Array:
-	return _ROWS.keys()
+	return _table().keys()
 
 
 static func _row(model_id: String) -> Dictionary:
-	var r: Dictionary = (_ROWS[model_id] as Dictionary).duplicate()
+	var r: Dictionary = (_table()[model_id] as Dictionary).duplicate()
 	r["id"] = model_id
 	return r

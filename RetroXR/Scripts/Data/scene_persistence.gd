@@ -49,6 +49,59 @@ const _REFERENCE_FIELDS := [
 	"tv", "cartridge", "memcard", "tape", "disc", "media", "system",
 	"nunchuk", "motion_plus",
 ]
+## Stamped on a mod prop when it spawns, so _serialize_node can recognise it
+## without a class to test against. The value is the registered type string.
+const MOD_TYPE_META := &"mod_object_type"
+
+## type -> {scene: String, owner: String}, contributed by mods.
+##
+## The type string is written into save slots, so it is permanent once a player
+## has used it: renaming one orphans every object of that type in every slot.
+static var _mod_objects: Dictionary = {}
+
+
+## Register a mod prop. Returns "" on success.
+static func register_mod_object(type: String, scene_path: String, owner_id: String) -> String:
+	if PLAIN_SCENES.has(type) or _SPECIALIZED_TYPES.has(type):
+		return "'%s' is a shipped object type" % type
+	if _mod_objects.has(type):
+		return "'%s' is already registered by mod '%s'" % [type, _mod_objects[type].get("owner", "?")]
+	# ResourceLoader, not FileAccess: a res:// path inside a mounted pack is
+	# remapped, and FileAccess.file_exists reports false for every one of them.
+	if not ResourceLoader.exists(scene_path):
+		return "scene does not exist: %s" % scene_path
+	_mod_objects[type] = {"scene": scene_path, "owner": owner_id}
+	return ""
+
+
+static func is_mod_object(type: String) -> bool:
+	return _mod_objects.has(type)
+
+
+static func mod_object_scene(type: String) -> String:
+	return str((_mod_objects.get(type, {}) as Dictionary).get("scene", ""))
+
+
+static func drop_mod_objects(owner_id: String) -> void:
+	for type: String in _mod_objects.keys():
+		if _mod_objects[type].get("owner", "") == owner_id:
+			_mod_objects.erase(type)
+
+
+## Build a registered mod prop and stamp it so it serializes back as itself.
+static func _instantiate_mod_object(type: String) -> Node3D:
+	var path := mod_object_scene(type)
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	var packed := ResourceLoader.load(path) as PackedScene
+	if packed == null:
+		return null
+	var obj := packed.instantiate() as Node3D
+	if obj != null:
+		obj.set_meta(MOD_TYPE_META, type)
+	return obj
+
+
 const _SPECIALIZED_TYPES := [
 	"system", "tv", "cartridge", "disc", "memory_card", "book",
 	"retro_controller", "retro_mouse", "snes_mouse", "vcr_tape", "dvd_disc",
@@ -622,11 +675,82 @@ func _read_objects(path: String) -> Variant:
 	if not objects is Array:
 		push_error("ScenePersistence: slot '%s' has no object list" % path)
 		return null
-	var error := _objects_validation_error(objects as Array)
+	# Entries naming a type this build no longer has are DROPPED, not fatal.
+	#
+	# This used to refuse the whole file on the first unknown type, which meant
+	# deleting a mod that contributed one prop made every slot containing one
+	# unreadable — the player lost the room, not the prop. That was also flatly
+	# inconsistent with the rest of the system: a console whose model_id has gone
+	# falls back through SystemModelRegistry.resolve(), and a controller whose
+	# scene has gone falls back to the generic pad. Both degrade; only this did
+	# not.
+	#
+	# Structural corruption is still all-or-nothing below. A truncated file
+	# restoring as an empty room is a deliberate guard, and nothing here weakens
+	# it: only an unrecognised `type` is survivable.
+	var pruned := _prune_unknown_types(objects as Array, path)
+	var error := _objects_validation_error(pruned)
 	if not error.is_empty():
 		push_error("ScenePersistence: invalid slot '%s': %s" % [path, error])
 		return null
-	return objects
+	return pruned
+
+
+## Is this a type this build can build? Mod props count, while their mod is
+## loaded — which is exactly why a slot must survive one of them going away.
+static func _is_known_type(obj_type: String) -> bool:
+	return PLAIN_SCENES.has(obj_type) or obj_type in _SPECIALIZED_TYPES \
+		or _mod_objects.has(obj_type)
+
+
+## Drop entries naming a type this build does not have, and scrub every
+## reference that pointed at one.
+##
+## The scrub is not optional and the ORDER is not arbitrary. Dropping an entry
+## creates dangling ids in whatever referenced it — a console's `tv`, a card's
+## `system` — and _reference_validation_error rejects a dangling id, so pruning
+## without scrubbing would turn "one missing prop" back into "the whole slot is
+## invalid", which is the bug this exists to fix.
+##
+## A reference is cleared to null rather than remapped: null is already the
+## "not connected to anything" value every restore path handles, because that is
+## what an object saved unplugged looks like.
+static func _prune_unknown_types(objects: Array, path: String) -> Array:
+	var dropped_ids: Dictionary = {}
+	var kept: Array = []
+	var dropped_types: Dictionary = {}
+	for value: Variant in objects:
+		if not (value is Dictionary):
+			kept.append(value)          # let the validator below complain
+			continue
+		var entry := value as Dictionary
+		var obj_type := str(entry.get("type", ""))
+		if not obj_type.is_empty() and not _is_known_type(obj_type):
+			if entry.get("id") != null:
+				dropped_ids[int(entry["id"])] = true
+			dropped_types[obj_type] = int(dropped_types.get(obj_type, 0)) + 1
+			continue
+		kept.append(entry)
+	if dropped_ids.is_empty():
+		return objects
+	for value: Variant in kept:
+		if not (value is Dictionary):
+			continue
+		var entry := value as Dictionary
+		for field: String in _REFERENCE_FIELDS:
+			if not entry.has(field):
+				continue
+			var ref: Variant = entry[field]
+			if _is_integer(ref) and dropped_ids.has(int(ref)):
+				entry[field] = null
+	var summary := PackedStringArray()
+	for obj_type: String in dropped_types:
+		summary.append("%d %s" % [dropped_types[obj_type], obj_type])
+	# push_warning rather than push_error: the slot loaded, and the player is
+	# about to see the room. This is a report, not a failure.
+	push_warning("ScenePersistence: slot '%s' skipped %s — the mod that provided %s is not loaded"
+		% [path, ", ".join(summary), "them" if dropped_ids.size() > 1 else "it"])
+	return kept
 
 
 static func _objects_validation_error(objects: Array) -> String:
@@ -657,7 +781,7 @@ static func _entry_validation_error(entry: Dictionary, ids: Dictionary) -> Strin
 	if not obj_type_value is String:
 		return "type is not a string"
 	var obj_type := obj_type_value as String
-	if not PLAIN_SCENES.has(obj_type) and obj_type not in _SPECIALIZED_TYPES:
+	if not _is_known_type(obj_type):
 		return "unknown type '%s'" % obj_type
 	for field: String in ["position", "rotation"]:
 		var pose_error := _vec3_validation_error(entry.get(field))
@@ -1351,6 +1475,14 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		return {}
 	var n3d := node as Node3D
 
+	# A mod prop is identified by the metadata its spawn stamped on it, not by a
+	# class test: there is no class to test for, because the whole point is that
+	# the mod supplies the scene. Checked FIRST so a mod object whose root
+	# happens to derive from a known type is still written as itself rather than
+	# as its base class, which would lose the scene it came from.
+	if node.has_meta(MOD_TYPE_META):
+		return _base(id, str(node.get_meta(MOD_TYPE_META)), n3d)
+
 	if node is RetroSystem:
 		var sys := node as RetroSystem
 		var result := _base(id, "system", n3d).merged({
@@ -1739,7 +1871,9 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 	var obj_type: String = data.get("type", "")
 	var obj: Node3D = null
 
-	if PLAIN_SCENES.has(obj_type):
+	if _mod_objects.has(obj_type):
+		obj = _instantiate_mod_object(obj_type)
+	elif PLAIN_SCENES.has(obj_type):
 		obj = (PLAIN_SCENES[obj_type] as PackedScene).instantiate() as Node3D
 	else:
 		match obj_type:

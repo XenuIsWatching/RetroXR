@@ -137,3 +137,32 @@ func _seat(marker_name: String) -> Variant:
 			xf = (p as Node3D).transform * xf
 		p = p.get_parent()
 	return xf
+
+
+# ── optional overrides ────────────────────────────────────────────────────────
+#
+# Both default to doing nothing, because the common case is a cabinet that only
+# brings geometry. A shell overriding neither behaves exactly as a shipped one.
+
+
+## The shader this cabinet's screen is painted with, or null for the stock CRT.
+##
+## NULL IS THE NORMAL ANSWER. A cabinet that just wants a different box gets the
+## same picture every other set has, with no shader knowledge at all. Returning
+## something is for a set that genuinely looks different — a monochrome portable,
+## a projection set — and a shell wanting a built-in DELIBERATELY should ask for
+## it by name (ModApi.shader("crt")) rather than loading the path, since the
+## shader tree is free to move.
+func screen_shader() -> Shader:
+	return null
+
+
+## The bezel buttons RetroTV built for this cabinet, handed over once they exist.
+##
+## RetroTV builds them, because their behaviour is the television's; this is
+## where a shell adorns them — its own meshes, its own click. Note the stock sets
+## have no button audio at all, so a cabinet adding some is not overriding
+## anything: make a PcmOneShot, hang it off the button's signal, and keep the
+## voice a child of this shell so it dies with the cabinet.
+func on_buttons_built(_buttons: Array) -> void:
+	pass

@@ -31,7 +31,7 @@ func _ready() -> void:
 
 ## Covers every exit the soak has, including the timeout and the early quits.
 func _exit_tree() -> void:
-	for room: String in SceneManager.SLOT_ROOMS:
+	for room: String in RoomCatalog.slot_rooms():
 		var scratch := "%s/%s.json" % [ScenePersistence.new(room).slot_dir(), SCRATCH_SLOT]
 		if FileAccess.file_exists(scratch):
 			DirAccess.remove_absolute(scratch)
@@ -48,7 +48,7 @@ func _drive() -> void:
 	# that keeps slots, not just the arcade — the soak leaves and re-enters more
 	# than one, and each auto-saves into its own set.
 	SceneManager.auto_save_on_switch = false
-	for room: String in SceneManager.SLOT_ROOMS:
+	for room: String in RoomCatalog.slot_rooms():
 		SceneManager.active_slots[room] = SCRATCH_SLOT
 
 	var arcade: Node = (load("res://Scenes/MainScene.tscn") as PackedScene).instantiate()
