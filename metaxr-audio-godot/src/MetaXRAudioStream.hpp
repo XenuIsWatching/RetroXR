@@ -58,6 +58,7 @@ class MetaXRAudioMixer : public godot::AudioStreamPlayer
 
 public:
     void _process(double p_delta) override;
+    void _notification(int p_what);
 
 protected:
     static void _bind_methods() {}

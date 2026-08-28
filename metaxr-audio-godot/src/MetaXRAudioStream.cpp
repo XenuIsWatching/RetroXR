@@ -59,4 +59,17 @@ void MetaXRAudioMixer::_process(double /*p_delta*/)
         server->ReleaseMixer();
 }
 
+// Retiring when the room falls silent is not enough on its own: quitting with
+// voices still playing leaves the playback alive into engine teardown, where
+// releasing it faults. The close request is the last notification that still has
+// a frame behind it, so it is where the release has to be forced.
+void MetaXRAudioMixer::_notification(int p_what)
+{
+    if (p_what != NOTIFICATION_WM_CLOSE_REQUEST)
+        return;
+
+    if (MetaXRAudioServer* server = MetaXRAudioServer::GetSingleton())
+        server->PrepareForQuit();
+}
+
 } // namespace Xenu

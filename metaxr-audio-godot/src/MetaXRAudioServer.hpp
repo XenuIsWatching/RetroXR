@@ -214,6 +214,11 @@ public:
     /// to it. Driven by MetaXRAudioMixer, which explains the timing.
     void ReleaseMixer();
 
+    /// Releases the mixer while the main loop still has a frame left to run,
+    /// which is the only window in which the playback can be handed back safely.
+    /// See the definition for the shutdown ordering this exists to beat.
+    void PrepareForQuit();
+
     /// Renders `frames` of the mix synchronously, bypassing the audio device.
     /// Godot's headless mode uses the dummy audio driver and never calls _mix,
     /// so this is the only way to test the mixer in a headless probe.
@@ -239,6 +244,7 @@ private:
     MetaXRAudio::ABI          m_abi;
     MetaXRAudio::mxra_context* m_ctx = nullptr;
     bool                      m_available = false;
+    bool                      m_quit_prepared = false;
     std::atomic<bool>         m_shutting_down{false};
     bool                      m_enabled = true;
     bool                      m_init_done = false;

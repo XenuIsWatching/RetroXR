@@ -183,6 +183,34 @@ void MetaXRAudioServer::ReleaseMixer()
     m_stream.unref();
 }
 
+// Godot runs the deferred deletion for a playback list node in
+// AudioServer::_cleanup_lists, and the last chance that happens with this
+// extension intact is the AudioServer::update() call near the end of a normal
+// main loop iteration. On the way out, main.cpp frees this extension's class
+// records in deinitialize_extensions(SCENE) and only destroys the AudioServer,
+// running that same cleanup, much later. A playback still held at that point is
+// released through freed class records, and RefCounted::unreference faults
+// reading _extension. That is the intermittent access violation on exit.
+//
+// So the release has to happen while frames are still running. Stopping the
+// player only MARKS the list node for deletion; the audio thread has to run a
+// mix cycle to actually erase it into the graveyard, and only then can
+// AudioServer::update() free it. Hence the wait: it buys those mix cycles inside
+// the same iteration that later calls update(), so the playback is gone before
+// teardown starts. A tenth of a second is many cycles at any buffer size, and it
+// is paid once, on the way out.
+void MetaXRAudioServer::PrepareForQuit()
+{
+    if (m_quit_prepared)
+        return;
+    m_quit_prepared = true;
+
+    ReleaseMixer();
+
+    if (OS* os = OS::get_singleton())
+        os->delay_msec(100);
+}
+
 void MetaXRAudioServer::Shutdown()
 {
     // Flag first, and atomically. _mix runs on the audio driver thread and is
