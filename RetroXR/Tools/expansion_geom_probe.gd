@@ -134,9 +134,14 @@ func _ready() -> void:
 		var well := u.get_node_or_null("Body/WellMouth") as MeshInstance3D
 		if well != null:
 			var top: float = well.position.y + _mesh_half_height(well)
+			# Two conditions, and the first version of this only had the second.
+			# A well SUNK a millimetre into an opaque body clears the z-fight and
+			# cannot be seen at all -- so it must stand proud, and by enough to
+			# break the depth tie.
+			_check(top > roof, "%s's well is visible above its roof (%+.4f)"
+				% [id, top - roof])
 			_check(absf(top - roof) > 0.0001,
-				"%s's well is not coplanar with its roof (%.4f below)"
-					% [id, roof - top])
+				"...and is not coplanar with it (%s)" % id)
 		var socket := u.get_node_or_null("ExpansionSocket")
 		if socket != null:
 			var plate := socket.get_node_or_null("ConnectorPlate") as MeshInstance3D
@@ -162,34 +167,54 @@ func _ready() -> void:
 			"...and so reads as a slot rather than a hole")
 
 	# --- a cartridge-mount unit sits ON the console, not IN it ----------------
-	var host := SYSTEM_SCENE.instantiate() as RetroSystem
-	host.systemid = "atari_jaguar"
-	add_child(host)
-	host.freeze = true
-	host.global_position = Vector3(3.0, 1.0, 0.0)
-	for i in 60:
-		await get_tree().physics_frame
-	var cd := _spawn("jaguar_cd")
-	cd.global_position = Vector3(3.0, 1.4, 0.0)
-	for i in 10:
-		await get_tree().physics_frame
-	var slot: XRToolsSnapZone = host._cartridge_slot
-	_check(slot != null and slot.is_in_group(ExpansionPort.GROUP_CART_SLOT),
-		"the console's cartridge slot is reachable by a unit's connector")
-	if slot != null:
-		var seated := slot.snap_pose_for(cd)
-		# Its underside must clear the height a cartridge's centre sits at --
-		# that is the plane it used to land its own middle on.
-		var underside: float = seated.origin.y - cd.size().y * 0.5
-		_check(underside > slot.global_position.y + 0.001,
-			"the Jaguar CD seats above the cartridge plane, not on it (%.3f m clear)"
-				% (underside - slot.global_position.y))
-		var btn := cd.get_node_or_null("EjectButton") as VRButton
+	# Both directions of the same fault: seated by its centre it sank into the
+	# console far enough to bury its own button, and lifted by a cartridge's
+	# height instead it hung in the air above it.
+	var pairs := [["atari_jaguar", "jaguar_cd"], ["mega_drive", "sega_32x"]]
+	for pair: Array in pairs:
+		var host_id: String = pair[0]
+		var unit_id: String = pair[1]
+		var host := SYSTEM_SCENE.instantiate() as RetroSystem
+		host.systemid = host_id
+		add_child(host)
+		host.freeze = true
+		host.global_position = Vector3(3.0 + pairs.find(pair) * 2.0, 1.0, 0.0)
+		for i in 70:
+			await get_tree().physics_frame
+		var unit := _spawn(unit_id)
+		unit.global_position = host.global_position + Vector3(0.0, 0.4, 0.0)
+		for i in 10:
+			await get_tree().physics_frame
+
+		var slot: XRToolsSnapZone = host._cartridge_slot
+		_check(slot != null and slot.is_in_group(ExpansionPort.GROUP_CART_SLOT),
+			"%s's cartridge slot is reachable by a unit's connector" % host_id)
+		if slot == null:
+			continue
+		# Signed, and it turns out to be NEGATIVE on both of these: the slot sits
+		# a few millimetres PROUD of the shell rather than buried in it, which is
+		# why seating a unit by its origin half-sank it rather than swallowing it
+		# whole. What matters is only that the figure is a real measurement --
+		# a machine whose model has not loaded answers a flat zero.
+		var lift := host.roof_above_cartridge_slot()
+		_check(absf(lift) > 0.0001 and absf(lift) < 0.05,
+			"%s measures its roof against its slot (%+.4f m)" % [host_id, lift])
+
+		var seated := slot.snap_pose_for(unit)
+		var underside: float = seated.origin.y - unit.size().y * 0.5
+		var roof_y: float = slot.global_position.y + lift
+		# One check, both directions. Buried (the original fault) puts the
+		# underside below the roof; floating (the fault the first fix caused)
+		# puts it above. Resting is the only pose that satisfies this, and it is
+		# the only one that looks like the hardware.
+		_check(absf(underside - roof_y) < 0.002,
+			"%s stands ON the %s's roof, neither in it nor above it (%+.4f m)"
+				% [unit_id, host_id, underside - roof_y])
+
+		var btn := unit.get_node_or_null("EjectButton") as VRButton
 		if btn != null:
-			# The actual complaint: the button ended up inside the console.
-			var btn_y: float = seated.origin.y + btn.position.y
-			_check(btn_y > host.global_position.y,
-				"and its OPEN button ends up outside the console")
+			_check(seated.origin.y + btn.position.y > roof_y - 0.001,
+				"%s's OPEN button ends up outside the console" % unit_id)
 
 	print("[geom] %d checks, %d failed" % [_checks, _failed])
 	print("[geom] RESULT=%s" % ("PASS" if _failed == 0 else "FAIL"))

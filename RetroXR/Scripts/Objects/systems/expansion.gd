@@ -29,6 +29,9 @@ const SNAP_ZONE_SCENE := preload("res://addons/godot-xr-tools/objects/snap_zone.
 ## of its drive as a PS2 disc does of its slot.
 const SLOT_INSET := 0.10
 
+## How thick the dark plate that marks a roof well is.
+const _WELL_THICKNESS := 0.01
+
 
 ## Which expansion this is — a key in ExpansionCatalog.ROWS. Set by the spawner
 ## before the unit enters the tree, the same way RetroSystem.systemid is.
@@ -47,6 +50,9 @@ var _host: RetroSystem = null
 var _socket: XRToolsSnapZone = null
 ## The foot, on a MOUNT_ABOVE unit.
 var _foot: XRToolsGrabPointSnap = null
+## The connector tongue, on a unit that mounts AS a cartridge. Its length is set
+## against whichever console is asking -- see _aim_connector.
+var _connector: XRToolsGrabPointSnap = null
 ## This unit's own media bay, and what is in it.
 var _bay: XRToolsSnapZone = null
 var _slot: MediaSlot = null
@@ -150,21 +156,24 @@ func _build_connector() -> void:
 		# button.
 		#
 		# What actually goes into the slot is this unit's connector, so that is
-		# what the grab point marks: a tongue hanging below the unit whose tip
-		# reaches exactly where a cartridge's centre would be. The unit then sits
-		# with its underside at the cartridge's top edge -- on the console, not in
-		# it -- and the figure comes from the host's own cartridge size, so it is
-		# right for whatever model the slot belongs to.
-		var tongue := MediaDimensions.cart_size(
-			ExpansionCatalog.host_of(expansion_id)).y * 0.5
-		var point := XRToolsGrabPointSnap.new()
-		point.name = "CartridgeConnector"
-		point.require_group = ExpansionPort.GROUP_CART_SLOT
-		add_child(point)
-		point.position = Vector3(0.0, -(s.y * 0.5 + tongue), 0.0)
+		# what the grab point marks: a tongue hanging below the unit, long enough
+		# that the unit's underside comes to rest ON the console's roof with only
+		# the connector inside it.
+		#
+		# How long that tongue is cannot be decided here. It is the distance from
+		# the console's cartridge slot up to its top face, which is a different
+		# figure on every shell -- so the point is placed when a slot actually
+		# asks for it, in _get_grab_point, against the machine asking. Derived
+		# from the CARTRIDGE's height instead, the 32X and the Jaguar CD floated
+		# well above their consoles.
+		_connector = XRToolsGrabPointSnap.new()
+		_connector.name = "CartridgeConnector"
+		_connector.require_group = ExpansionPort.GROUP_CART_SLOT
+		add_child(_connector)
+		_aim_connector(null)
 		# By hand, for the same reason the foot is: XRToolsPickable collects its
 		# grab points in _ready, which has already run by the time we get here.
-		_grab_points.push_back(point)
+		_grab_points.push_back(_connector)
 		return
 
 	if ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_BELOW:
@@ -180,6 +189,36 @@ func _build_connector() -> void:
 		# grab points in its _ready, which has already run by the time we get here.
 		_foot = ExpansionPort.build_foot(self, -s.y * 0.5, span)
 		_grab_points.push_back(_foot)
+
+
+## Aim the connector at `zone`'s machine before handing it over.
+##
+## snap_pose_for asks for the grab point every time it ranks or previews a zone,
+## and the answer decides where this unit lands, so setting it here makes the
+## ghost and the seat agree by construction -- they are the same query.
+##
+## A null zone (or one that belongs to no console) leaves the tongue at zero, so
+## the unit seats on the slot itself. That is where a preview sits for the few
+## frames before a console's model has meshes to measure, and it is never cached.
+func _get_grab_point(grabber: Node3D, current: XRToolsGrabPoint) -> XRToolsGrabPoint:
+	var point := super(grabber, current)
+	if point != null and point == _connector:
+		_aim_connector(grabber as XRToolsSnapZone)
+	return point
+
+
+func _aim_connector(zone: XRToolsSnapZone) -> void:
+	if _connector == null:
+		return
+	var lift := 0.0
+	if zone != null:
+		var n: Node = zone.get_parent()
+		while n != null:
+			if n is RetroSystem:
+				lift = (n as RetroSystem).roof_above_cartridge_slot()
+				break
+			n = n.get_parent()
+	_connector.position = Vector3(0.0, -(size().y * 0.5 + lift), 0.0)
 
 
 ## Socket gate: is this the console this unit bolts to? A Mega-CD takes a Mega
@@ -419,21 +458,26 @@ func _build_well(s: Vector3) -> void:
 		var r: float = MediaDimensions.disc_diameter(media) * 0.5 + 0.003
 		disc.top_radius = r
 		disc.bottom_radius = r
-		disc.height = 0.01
+		disc.height = _WELL_THICKNESS
 		well.mesh = disc
 	else:
 		var mesh := BoxMesh.new()
 		var m := MediaDimensions.cart_size(media)
-		mesh.size = Vector3(m.x + 0.004, 0.01, m.z + 0.004)
+		mesh.size = Vector3(m.x + 0.004, _WELL_THICKNESS, m.z + 0.004)
 		well.mesh = mesh
 	well.set_surface_override_material(0, mat)
 	_body.add_child(well)
-	# A millimetre BELOW the roof, not flush with it. At s.y * 0.5 - 0.005 the
-	# well's top face landed in exactly the plane of the body's top face, and two
-	# coplanar faces is the whole of the z-fighting seen on the 32X: neither
-	# surface is in front, so the depth test picks per-pixel and the roof
-	# shimmers. Sinking it clears the tie.
-	well.position = Vector3(0.0, s.y * 0.5 - 0.006, 0.0)
+	# A fifth of a millimetre PROUD of the roof.
+	#
+	# Flush -- which is what s.y * 0.5 - 0.005 gave -- put the well's top face in
+	# exactly the plane of the body's, and two coplanar faces have no depth
+	# order, so the renderer picks per pixel and the roof shimmers. Sinking it
+	# instead fixed the shimmer by hiding the well altogether: it is a solid dark
+	# box, and a solid dark box a millimetre inside an opaque body cannot be seen
+	# at all, which is a cartridge slot you cannot find. Standing it a hair proud
+	# breaks the tie the other way and leaves it visible, the same trick the
+	# connector plate uses.
+	well.position = Vector3(0.0, s.y * 0.5 + 0.0002 - _WELL_THICKNESS * 0.5, 0.0)
 
 
 ## Bay gate: is this the media this unit takes? Media with no systemid of its own

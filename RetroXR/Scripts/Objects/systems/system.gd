@@ -276,6 +276,10 @@ var _front_tray := false
 ## The mechanism the model drew on the placeholder box — the spring lid or the
 ## sliding shelf. Null on a bespoke shell, which brings its own.
 var _disc_bay: ProceduralDiscBay = null
+## Cached answer for roof_above_cartridge_slot(); NAN until the model is
+## measurable. The shell does not change after it loads, and the query runs on
+## every preview frame, so it is worked out once.
+var _roof_over_slot: float = NAN
 
 # --- Disk control (multi-disc games: FF7 "insert disc 2") ---
 # Mirrors the core's libretro disk-control state (disk_control_ready signal).
@@ -3088,6 +3092,37 @@ var _displaced_core := ""
 ## Only what the catalog says this console has: a machine nothing mounts above
 ## must NOT grow a socket, because an empty one still lights a snap ghost and
 ## offers a join that does not exist.
+## Where this machine's roof is relative to its own cartridge slot, in metres.
+##
+## Signed, and in practice NEGATIVE: the slot is placed a few millimetres proud
+## of the shell so a cartridge stands out of it, which is measured as -5 mm on
+## both the Mega Drive and the Jaguar. That is exactly why seating a unit by its
+## origin half-sank it into the console instead of swallowing it whole, and it is
+## why this is measured rather than assumed to be positive.
+##
+## A unit that mounts AS a cartridge -- a 32X, a Jaguar CD -- stands ON the
+## console with only its connector inside, so it has to know where the top face
+## is relative to the slot that connector goes into. Only the console can answer
+## that: the slot is placed by the model and the roof is measured off the model's
+## meshes, and the two differ by a different amount on every shell. Derived from
+## the CARTRIDGE's height instead -- 35 mm on a Mega Drive -- both units hung in
+## the air well above the consoles they were supposed to be sitting on.
+##
+## Cached once the model has meshes to measure. Answers 0.0 until then, which
+## seats a unit ON the slot -- wrong, but only for the frames before a model
+## finishes loading, and never cached.
+func roof_above_cartridge_slot() -> float:
+	if not is_nan(_roof_over_slot):
+		return _roof_over_slot
+	if _cartridge_slot == null:
+		return 0.0
+	var aabb := _body_aabb()
+	if aabb.size.x <= 0.0:
+		return 0.0
+	_roof_over_slot = aabb.end.y - _cartridge_slot.position.y
+	return _roof_over_slot
+
+
 func _build_expansion_hardware() -> void:
 	if systemid.is_empty():
 		return
