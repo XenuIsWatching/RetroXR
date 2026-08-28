@@ -372,7 +372,7 @@ func _attempt_download(args: Dictionary, entry: Dictionary, dest: String, part: 
 			if code == 404:
 				if FileAccess.file_exists(part):
 					DirAccess.remove_absolute(part)
-				return {"status": "terminal", "error": "No longer on the server"}
+				return {"status": "terminal", "error": RommHttp.ERR_GONE}
 			if code == 416:
 				# Our .part is longer than the server's file — it changed under us.
 				return {"status": "restart", "error": "File changed on the server"}

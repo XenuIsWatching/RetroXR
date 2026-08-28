@@ -76,6 +76,8 @@ func _ready() -> void:
 	await _test_rom_id_resolve()
 	_test_gamelist_one_entry_per_rom()
 	_test_gamelist_dedupe()
+	_test_ghost_rows()
+	_test_index_rewrite()
 	await _test_http_stalls()
 
 	_restore_ledger()
@@ -1802,3 +1804,133 @@ func _test_error_vocabulary() -> void:
 		"Server refused the download (400)")
 	_eq("errors/an override does not leak into the other branches",
 		D.call(HTTP, 404, upload), "No longer on the server")
+
+
+# ---------------------------------------------------------------------------
+# Ghost rows — a RomM record whose file the server has lost.
+#
+# The shipped bug: extracting archives on the server left RomM holding a row for
+# each .7z it no longer had, beside a new row for the .ndd it produced. Half a
+# 64DD platform was those. They 404 at the web server rather than at the API,
+# and neither refresh could clear them — a delta merge only adds and overwrites,
+# and a full sync re-fetched them because RomM still lists them.
+# ---------------------------------------------------------------------------
+
+func _test_ghost_rows() -> void:
+	# --- what may enter the index --------------------------------------------
+	_ok("ghost/a plain row is indexed",
+		not RommCatalog.skips_item({"fs_name": "Game.z64", "id": 1}))
+	_ok("ghost/a row the server lost is not",
+		RommCatalog.skips_item({"fs_name": "Gone.7z", "id": 2, "missing_from_fs": true}))
+	_ok("ghost/false is present, not missing",
+		not RommCatalog.skips_item({"fs_name": "Game.z64", "missing_from_fs": false}))
+	# RomM sends nulls for plenty of fields, and a null must not read as gone —
+	# that would empty the index against any server that omits the flag.
+	_ok("ghost/null is not missing",
+		not RommCatalog.skips_item({"fs_name": "Game.z64", "missing_from_fs": null}))
+	_ok("ghost/dot-directories still skipped",
+		RommCatalog.skips_item({"fs_name": ".media", "id": 3}))
+
+	# --- the query asks the server to leave them out --------------------------
+	var cat := RommCatalog.new()
+	var path := cat._page_path(143, 0, "", true, 1000)
+	_ok("ghost/the page query excludes missing rows", path.contains("&missing=false"), path)
+
+	# --- reading a page of the deletion sweep ---------------------------------
+	var good := RommCatalog.missing_ids_in_page([
+		{"id": 80159, "missing_from_fs": true},
+		{"id": 80161, "missing_from_fs": true},
+		{"id": 0, "missing_from_fs": true},     # no id to act on
+	])
+	_ok("ghost/a page of lost rows is trusted", bool(good["trusted"]))
+	_eq("ghost/and yields their ids", Array(good["ids"] as PackedInt32Array), [80159, 80161])
+
+	# The load-bearing one. A server too old for the `missing` filter ignores it
+	# and answers with the whole platform; acting on that would delete every row
+	# the player has. One unflagged row condemns the page.
+	var stale := RommCatalog.missing_ids_in_page([
+		{"id": 80159, "missing_from_fs": true},
+		{"id": 80160, "missing_from_fs": false},
+	])
+	_ok("ghost/a page holding a present row is not trusted", not bool(stale["trusted"]))
+	_eq("ghost/and yields nothing at all", (stale["ids"] as PackedInt32Array).size(), 0)
+
+	# --- who survives the sweep ----------------------------------------------
+	var lines := {80159: "a", 80160: "b", 80171: "c"}
+	# 80171 is already downloaded. Its file is still a playable game whatever the
+	# server has lost, and the browser hides cache-owned files that have no index
+	# row — so removing it would take the player's own copy out of the list.
+	var went := RommCatalog.drop_ghosts(lines, PackedInt32Array([80159, 80171]),
+		PackedInt64Array([80171]))
+	_eq("ghost/only the undownloaded ghost goes", went, 1)
+	_ok("ghost/the ghost is gone", not lines.has(80159), str(lines.keys()))
+	_ok("ghost/a downloaded ghost is kept", lines.has(80171), str(lines.keys()))
+	_ok("ghost/an untouched row is untouched", lines.has(80160), str(lines.keys()))
+
+	var none := {80159: "a"}
+	_eq("ghost/an empty sweep removes nothing",
+		RommCatalog.drop_ghosts(none, PackedInt32Array(), PackedInt64Array()), 0)
+	_eq("ghost/and leaves the index alone", none.size(), 1)
+
+	cat.free()
+
+
+# ---------------------------------------------------------------------------
+# Rewriting an index in place. The jsonl and its six sidecars are read by
+# OFFSET, so one of them left a row out of step from the others does not fail —
+# it shows the wrong game for every row after the join.
+# ---------------------------------------------------------------------------
+
+func _test_index_rewrite() -> void:
+	var dir := RommCatalog.index_dir(TEST_SYSTEM)
+	_rm_rf(dir)
+	DirAccess.make_dir_recursive_absolute(dir)
+
+	var cat := RommCatalog.new()
+	var lines := {
+		11: JSON.stringify({"id": 11, "name": "Alpha", "sort_name": "alpha",
+			"fs_name": "Alpha.z64", "regions": ["USA"]}),
+		22: JSON.stringify({"id": 22, "name": "Beta", "sort_name": "beta",
+			"fs_name": "Beta.7z", "regions": ["Japan"]}),
+		33: JSON.stringify({"id": 33, "name": "Gamma", "sort_name": "gamma",
+			"fs_name": "Gamma.ndd", "regions": []}),
+	}
+	var written := RommCatalog._write_index(dir, RommCatalog._rows_from_lines(lines))
+	_eq("rewrite/three rows written", str(written["error"]), "")
+	_eq("rewrite/total counted", int(written["total"]), 3)
+	RommCatalog._write_text(RommCatalog.meta_path(TEST_SYSTEM), JSON.stringify({
+		"total": 3, "shown": 3, "updated_after": "2026-08-26T22:43:21+00:00",
+		"group_by_meta_id": false, "platform_id": 143,
+	}, "\t"))
+
+	_eq("rewrite/removing an absent id changes nothing",
+		cat.remove_rows(TEST_SYSTEM, [999]), 0)
+
+	# The row dropped is the MIDDLE one, so a sidecar left unrewritten still has
+	# the right length and the wrong contents.
+	_eq("rewrite/one row removed", cat.remove_rows(TEST_SYSTEM, [22]), 1)
+
+	_ok("rewrite/index still loads", cat.load_index(TEST_SYSTEM))
+	_eq("rewrite/two rows left", cat.count(), 2)
+	_eq("rewrite/ids in order", [cat.rom_id_at(0), cat.rom_id_at(1)], [11, 33])
+	_eq("rewrite/names follow the ids", [cat.name_at(0), cat.name_at(1)], ["Alpha", "Gamma"])
+	_eq("rewrite/fs sidecar follows too",
+		[cat.fs_basename_at(0), cat.fs_basename_at(1)], ["alpha", "gamma"])
+	_eq("rewrite/extensions follow", [cat.fs_ext_at(0), cat.fs_ext_at(1)], ["z64", "ndd"])
+	_eq("rewrite/regions follow", Array(cat.regions_at(0)), ["USA"])
+	# The offsets sidecar is the one that silently shows the wrong game.
+	_eq("rewrite/row 1 seeks to its own line", str(cat.row(1).get("name", "")), "Gamma")
+	_eq("rewrite/the removed row is unsearchable", Array(cat.search("Beta")), [])
+	_eq("rewrite/a survivor is still searchable", Array(cat.search("Gamma")), [1])
+
+	var meta := RommCatalog.read_meta(TEST_SYSTEM)
+	_eq("rewrite/meta total follows", int(meta.get("total", -1)), 2)
+	# The watermark belongs to the sync. A rewrite that reset it would make the
+	# next delta re-fetch the whole platform.
+	_eq("rewrite/meta watermark preserved",
+		str(meta.get("updated_after", "")), "2026-08-26T22:43:21+00:00")
+	_eq("rewrite/meta platform preserved", int(meta.get("platform_id", 0)), 143)
+
+	cat.unload_index()
+	cat.free()
+	_rm_rf(dir)

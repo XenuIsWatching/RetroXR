@@ -26,6 +26,12 @@ enum Result {
 	TIMED_OUT,
 }
 
+## The one failure a caller can act on rather than only report: the server has
+## answered that this thing is gone. Named because three call sites compare
+## against it -- a state upload deciding to re-create its copy, and the ROM
+## browser dropping a catalogue row that can never be downloaded again.
+const ERR_GONE := "No longer on the server"
+
 const POLL_SLEEP_MS := 1
 ## Guard against a server that accepts the connection and then says nothing.
 const CONNECT_TIMEOUT_SEC := 15.0
@@ -437,7 +443,7 @@ static func describe_error(result: int, code: int,
 	if code == 401 or code == 403:
 		return unauthorized
 	if code == 404:
-		return "No longer on the server"
+		return ERR_GONE
 	if code >= 500:
 		return "Server error (%d)" % code
 	return refused % code

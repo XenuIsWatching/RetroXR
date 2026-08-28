@@ -60,6 +60,14 @@ const PAGE_TIMEOUT_ATTEMPTS := 2
 ## Multiplied by the attempt number, so 2 s then 4 s.
 const PAGE_RETRY_BACKOFF_MS := 2000
 
+## The deletion sweep pages smaller than a sync does: it asks for the rows the
+## server has lost, and a healthy library holds none of them.
+const MISSING_SWEEP_PAGE := 250
+## Beyond this the answer is discarded and nothing is removed. A library does not
+## lose a thousand files at once; a storage mount that dropped off reports every
+## row it has as missing, and deleting on that would empty the index.
+const MISSING_SWEEP_MAX := 1000
+
 var config: RommConfig = null
 
 # ── Loaded platform (one at a time — whichever the user is browsing) ──────────
@@ -605,11 +613,15 @@ func _sync_worker(args: Dictionary) -> void:
 	# files must never be readable — a truncated .jsonl would desync the
 	# offsets sidecar and show wrong rows.
 	var tmp_jsonl := dir.path_join("index.jsonl.part")
-	var out := FileAccess.open(tmp_jsonl, FileAccess.WRITE)
-	if out == null:
+	# Opened and closed straight away: this is a writability probe, so a folder
+	# that cannot take the index fails before half an hour of paging rather than
+	# after it. _write_index reopens it at the end.
+	var probe := FileAccess.open(tmp_jsonl, FileAccess.WRITE)
+	if probe == null:
 		http.close()
 		_finish.call_deferred(systemid, false, 0, 0, "Cannot write to %s" % dir)
 		return
+	probe.close()
 
 	# Existing rows, kept when this is a delta (id -> line).
 	var existing: Dictionary = {}
@@ -625,7 +637,6 @@ func _sync_worker(args: Dictionary) -> void:
 
 	while true:
 		if _abort:
-			out.close()
 			http.close()
 			DirAccess.remove_absolute(tmp_jsonl)
 			return
@@ -636,7 +647,6 @@ func _sync_worker(args: Dictionary) -> void:
 
 		# A cancelled sync is not a failure — leave without a toast.
 		if result == RommHttp.Result.ABORTED or _abort:
-			out.close()
 			http.close()
 			DirAccess.remove_absolute(tmp_jsonl)
 			return
@@ -666,10 +676,7 @@ func _sync_worker(args: Dictionary) -> void:
 			break
 
 		for item: Dictionary in items:
-			# RomM happily scans dot-directories (".media", ".media2") as ROMs:
-			# 600 MB entries with no name and no cover. RomLibrary.scan_roms
-			# already skips dot-prefixed files locally; do the same here.
-			if str(item.get("fs_name", "")).begins_with("."):
+			if skips_item(item):
 				continue
 			var slim := _slim_row(item)
 			var id := int(slim.get("id", 0))
@@ -686,10 +693,20 @@ func _sync_worker(args: Dictionary) -> void:
 		if offset >= total or items.size() < PAGE_LIMIT:
 			break
 
+	# Deletions, on the one connection that is already open. A delta asks for
+	# rows changed since a watermark, and a row whose file the server has lost is
+	# not a change it reports — its updated_at can be older than the watermark,
+	# so nothing ever brings it back to be corrected, and the merge below only
+	# adds and overwrites. Asking outright is the only way to learn it. A full
+	# sync needs none of this: it rebuilds from a fetch that already excludes
+	# them and never consults `existing`.
+	var ghosts := PackedInt32Array()
+	if is_delta and error.is_empty() and not _abort:
+		ghosts = _fetch_missing_ids(http, args, platform_id)
+
 	http.close()
 
 	if not error.is_empty():
-		out.close()
 		DirAccess.remove_absolute(tmp_jsonl)
 		_finish.call_deferred(systemid, false, 0, 0, error)
 		return
@@ -702,12 +719,151 @@ func _sync_worker(args: Dictionary) -> void:
 			added += 1
 		merged[id] = fetched[id]
 
-	# Sort by name so the list reads alphabetically the way the server would
-	# order it (RomM sorts on an article-stripped name_sort_key; close enough
-	# locally, and it keeps delta merges stable).
+	var removed := drop_ghosts(merged, ghosts,
+		RommCacheManifest.rom_ids_on_disk(systemid))
+
+	var rows := _rows_from_lines(merged)
+
+	var written := _write_index(dir, rows)
+	if not str(written["error"]).is_empty():
+		_finish.call_deferred(systemid, false, 0, 0, str(written["error"]))
+		return
+
+	_write_text(meta_path(systemid), JSON.stringify({
+		"total": int(written["total"]),
+		"shown": int(written["shown"]),
+		"updated_after": max_updated,
+		"synced_at": Time.get_datetime_string_from_system(true),
+		# Recorded, though nothing reads it, because it is the one way to tell an
+		# index synced while grouping still existed — and therefore missing whole
+		# regional releases — from a complete one.
+		"group_by_meta_id": false,
+		"platform_id": platform_id,
+	}, "\t"))
+
+	_finish.call_deferred(systemid, true, added, removed, "")
+
+
+## Take the ghost ids out of an id -> line map, and report how many went.
+##
+## `protected` is every rom id this system already holds a download for, and
+## they are kept. A ROM on disk is still a playable game whatever the server has
+## since lost, and the browser's local-only pass skips cache-owned files whenever
+## an index exists — so dropping the row would take the player's own game out of
+## the list along with it, which is the one outcome worse than a row that 404s.
+static func drop_ghosts(lines: Dictionary, ghosts: PackedInt32Array,
+						protected: PackedInt64Array) -> int:
+	if ghosts.is_empty():
+		return 0
+	var keep: Dictionary = {}
+	for owned_id: int in protected:
+		keep[owned_id] = true
+	var removed := 0
+	for ghost_id: int in ghosts:
+		if keep.has(ghost_id):
+			continue
+		if lines.erase(ghost_id):
+			removed += 1
+	return removed
+
+
+## A server row that must never become a browsable row. Static so the sync and
+## the tests reach the same verdict.
+##
+##  - RomM happily scans dot-directories (".media", ".media2") as ROMs: 600 MB
+##    entries with no name and no cover. RomLibrary.scan_roms already skips
+##    dot-prefixed files locally; do the same here.
+##  - A row the server has a record of but no longer holds the file for cannot
+##    be fetched: RomM hands the transfer to its web server, which 404s on a
+##    path that is not there. Same rule RommFirmware applies to a BIOS file.
+##    The query already asks for missing=false, so this second one only bites on
+##    a server too old for that filter.
+static func skips_item(item: Dictionary) -> bool:
+	if str(item.get("fs_name", "")).begins_with("."):
+		return true
+	if bool(item.get("missing_from_fs", false) == true):
+		return true
+	return false
+
+
+## The ids in one page of a missing-rows query, and whether the page can be
+## trusted at all. A page is untrustworthy the moment it holds a row that is NOT
+## flagged missing: a server too old for the `missing` filter ignores it and
+## answers with the whole platform, and believing that would delete every row.
+static func missing_ids_in_page(items: Array) -> Dictionary:
+	var ids := PackedInt32Array()
+	for item: Dictionary in items:
+		if not bool(item.get("missing_from_fs", false) == true):
+			return {"trusted": false, "ids": PackedInt32Array()}
+		var id := int(item.get("id", 0))
+		if id != 0:
+			ids.append(id)
+	return {"trusted": true, "ids": ids}
+
+
+## Ids on one platform whose file the server no longer holds — a database row
+## pointing at nothing, whose download 404s at the web server rather than at
+## RomM's API.
+##
+## Returns nothing at all rather than a partial answer whenever the result
+## cannot be trusted, because every id in it is about to be deleted from the
+## index:
+##
+##  - a failed request. The sweep is an improvement on a list that is merely
+##    stale, never a reason to fail the sync or to act on half a page.
+##  - a row that is NOT flagged missing. A server too old for the `missing`
+##    filter ignores it and answers with the whole platform; believing that
+##    would empty a perfectly good index.
+##  - more than the cap. A server whose storage is unmounted reports its entire
+##    library as missing, which is a server fault, not a library that shrank.
+func _fetch_missing_ids(http: RommHttp, args: Dictionary, platform_id: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var offset := 0
+
+	while true:
+		if _abort:
+			return PackedInt32Array()
+
+		var path := "/api/roms?limit=%d&offset=%d&order_by=name&order_dir=asc" \
+			% [MISSING_SWEEP_PAGE, offset]
+		if platform_id > 0:
+			path += "&platform_ids=%d" % platform_id
+		path += "&group_by_meta_id=false&with_char_index=false"
+		path += "&with_rom_id_index=false&with_filter_values=false&with_files=false"
+		path += "&missing=true"
+
+		var resp := _fetch_page_with_retry(http, args["base_url"], path, args["headers"])
+		if int(resp["result"]) != RommHttp.Result.OK:
+			return PackedInt32Array()
+
+		var page: Dictionary = resp["data"] if resp["data"] is Dictionary else {}
+		var items: Array = page.get("items", []) if page.get("items") is Array else []
+		if items.is_empty():
+			break
+
+		var page_ids := missing_ids_in_page(items)
+		if not bool(page_ids["trusted"]):
+			return PackedInt32Array()
+		out.append_array(page_ids["ids"] as PackedInt32Array)
+
+		if out.size() > MISSING_SWEEP_MAX:
+			return PackedInt32Array()
+
+		offset += items.size()
+		if offset >= int(page.get("total", 0)) or items.size() < MISSING_SWEEP_PAGE:
+			break
+
+	return out
+
+
+## Sort an id -> line map into the row model the index and its sidecars are
+## written from. Sorted by name so the list reads alphabetically the way the
+## server would order it (RomM sorts on an article-stripped name_sort_key; close
+## enough locally, and it keeps delta merges stable).
+static func _rows_from_lines(lines: Dictionary) -> Array:
 	var rows: Array = []
-	for id: int in merged:
-		var line: String = merged[id]
+	for id: int in lines:
+		var line: String = lines[id]
 		var parsed: Variant = JSON.parse_string(line)
 		var sort_key := ""
 		var display := ""
@@ -732,8 +888,21 @@ func _sync_worker(args: Dictionary) -> void:
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return (a["sort"] as String).naturalnocasecmp_to(b["sort"] as String) < 0
 	)
+	return rows
 
-	# Write the index plus its four sidecars in one pass.
+
+## Write index.jsonl and its six sidecars, then swap the new index in. Shared by
+## the sync and by remove_rows, so a row can never leave the index without every
+## sidecar losing it in the same pass — a jsonl one line out of step with the
+## offsets sidecar shows wrong rows rather than failing.
+##
+## Returns {error, total, shown}; `error` is empty on success.
+static func _write_index(dir: String, rows: Array) -> Dictionary:
+	var tmp_jsonl := dir.path_join("index.jsonl.part")
+	var out := FileAccess.open(tmp_jsonl, FileAccess.WRITE)
+	if out == null:
+		return {"error": "Cannot write to %s" % dir, "total": 0, "shown": 0}
+
 	var offsets := PackedInt64Array()
 	var ids := PackedInt32Array()
 	var names_text := ""
@@ -771,29 +940,50 @@ func _sync_worker(args: Dictionary) -> void:
 	_write_text(dir.path_join("index.regions"), regions_text)
 
 	# Atomic swap — readers never see a half-written index.
-	var final_path := index_path(systemid)
+	var final_path := dir.path_join("index.jsonl")
 	if FileAccess.file_exists(final_path):
 		DirAccess.remove_absolute(final_path)
 	if DirAccess.rename_absolute(tmp_jsonl, final_path) != OK:
 		DirAccess.remove_absolute(tmp_jsonl)
-		_finish.call_deferred(systemid, false, 0, 0,
-			"Could not replace the index (is it open?)")
-		return
+		return {"error": "Could not replace the index (is it open?)",
+			"total": 0, "shown": 0}
 
-	_write_text(meta_path(systemid), JSON.stringify({
-		"total": rows.size(),
-		"shown": count_shown(fs_bases, fs_exts),
-		"updated_after": max_updated,
-		"synced_at": Time.get_datetime_string_from_system(true),
-		# Recorded, though nothing reads it, because it is the one way to tell an
-		# index synced while grouping still existed — and therefore missing whole
-		# regional releases — from a complete one.
-		"group_by_meta_id": false,
-		"platform_id": platform_id,
-	}, "\t"))
+	return {"error": "", "total": rows.size(),
+		"shown": count_shown(fs_bases, fs_exts)}
 
-	var removed := 0  # deletions are reconciled separately via /api/roms/identifiers
-	_finish.call_deferred(systemid, true, added, removed, "")
+
+## Drop rows by RomM id, rewriting the index and its sidecars. Returns how many
+## rows actually went.
+##
+## Main thread. The loaded platform is unloaded first: Windows will not rename
+## over a file this process still holds open, and the failure is silent, leaving
+## new sidecars describing the old index — the same trap sync_platform documents.
+func remove_rows(systemid: String, ids: Array) -> int:
+	if ids.is_empty() or not has_index(systemid):
+		return 0
+
+	var lines := _read_existing_rows(index_path(systemid))
+	var gone := 0
+	for id: Variant in ids:
+		if lines.erase(int(id)):
+			gone += 1
+	if gone == 0:
+		return 0
+
+	if _loaded_systemid == systemid:
+		unload_index()
+
+	var written := _write_index(index_dir(systemid), _rows_from_lines(lines))
+	if not str(written["error"]).is_empty():
+		push_warning("[RommCatalog] %s" % str(written["error"]))
+		return 0
+
+	# The watermark and platform id are the sync's to own — only the counts move.
+	var meta := read_meta(systemid)
+	meta["total"] = int(written["total"])
+	meta["shown"] = int(written["shown"])
+	_write_text(meta_path(systemid), JSON.stringify(meta, "\t"))
+	return gone
 
 
 ## One page, retried on a fresh connection.
@@ -867,6 +1057,11 @@ func _page_path(platform_id: int, offset: int,
 	path += "&group_by_meta_id=false"
 	path += "&with_char_index=%s" % ("true" if first_page else "false")
 	path += "&with_rom_id_index=false&with_filter_values=false&with_files=false"
+	# Rows whose file the server has lost. Measured on a 64DD platform that had
+	# been unpacked from archives: 32 rows without this, 16 with it, and the 16
+	# it drops are exactly the ones whose download 404s. Older servers ignore an
+	# unrecognised parameter the same way they ignore with_rom_id_index.
+	path += "&missing=false"
 	if not updated_after.is_empty():
 		path += "&updated_after=" + updated_after.uri_encode()
 	return path

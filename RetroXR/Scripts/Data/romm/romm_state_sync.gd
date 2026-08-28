@@ -213,7 +213,7 @@ func _worker(job: Dictionary) -> void:
 		# The copy was deleted on the server between our two writes. Falling back
 		# to a create is right: the player asked for this state to be backed up,
 		# and a 404 on the old id does not withdraw that.
-		if not bool(out["ok"]) and str(out["error"]) == "No longer on the server":
+		if not bool(out["ok"]) and str(out["error"]) == RommHttp.ERR_GONE:
 			server_id = 0
 	if server_id <= 0:
 		out = RommStates.create(http, headers, int(job["rom_id"]), str(job["core"]),

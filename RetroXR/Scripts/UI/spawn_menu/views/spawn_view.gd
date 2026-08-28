@@ -2021,7 +2021,8 @@ func _romm_update_resync_btn() -> void:
 	else:
 		_romm_resync_btn.text = String.chr(MenuIcons.RETRY)
 		_romm_resync_btn.remove_theme_color_override("font_color")
-		_romm_resync_btn.tooltip_text = "Check RomM for changes to %s since the last sync" % label
+		_romm_resync_btn.tooltip_text = \
+			"Check RomM for changes to %s, and drop entries the server has lost" % label
 
 
 func _romm_syncing_this_platform() -> bool:
@@ -2139,6 +2140,13 @@ func _on_romm_dl_finished(rom_id: int, ok: bool, path: String, error: String) ->
 	else:
 		_romm_notify_or_queue(key, "❌", "%s — %s" % [_romm_dl_label(rom_id), error],
 			MenuToasts.DWELL_FAIL)
+		# The server answered that this row's file is gone, which is the one
+		# failure that will never come good on a retry. Take the row out now
+		# rather than leaving a button that can only fail again — the next sync
+		# would have done it, but not before the player pressed it twice.
+		if error == RommHttp.ERR_GONE and romm_catalog != null \
+				and not _romm_detail_systemid.is_empty():
+			romm_catalog.remove_rows(_romm_detail_systemid, [rom_id])
 	_romm_dl_labels.erase(rom_id)
 	_romm_dl_attempt.erase(rom_id)
 	# The final message names the same failure, so leaving the retry note up
