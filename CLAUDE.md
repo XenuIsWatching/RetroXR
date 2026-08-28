@@ -87,8 +87,10 @@ scons platform=macos arch=arm64 target=template_debug macos_deployment_target=13
 scons platform=macos arch=x86_64 target=template_release macos_deployment_target=13.0
 ```
 
-The `SConstruct` is at the workspace root; `Temp/SConscript` does the actual build logic.
-Output libraries go to `RetroXR/libretro-godot/`.
+The `SConstruct` is at the workspace root; `libretro-godot/Temp/SConscript` does the
+actual build logic. (`Temp` is the `VariantDir` the root `SConstruct` declares over
+`libretro-godot/`; there is no `Temp/` at the workspace root, so a bare `Temp/SConscript`
+path is wrong.) Output libraries go to `RetroXR/libretro-godot/`.
 
 The Linux build links `libvulkan.so.1`, `libSDL3.so.0`, and `libGL.so.1` by soname (no
 `-dev`/`-devel` packages needed). All three render paths work on Linux: software, Vulkan
@@ -120,9 +122,14 @@ JIT entitlement.
 ### Sibling GDExtensions (archive-godot, verlet-rope, vlc-godot, godot-pdfium, metaxr-audio)
 
 Five other C++ GDExtensions live beside libretro-godot, each with the same layout (repo-root
-`<name>/` with `SConstruct` + `src/`, reusing `../libretro-godot/godot-cpp`, deploying to
-`RetroXR/<name>/`). Build each **from its own directory** (each has its own `VariantDir('Temp')`),
-or all at once with `Tools/build.py`:
+`<name>/` with `SConstruct` + `SConscript` + `src/`, reusing `../libretro-godot/godot-cpp`,
+deploying to `RetroXR/<name>/`). Build each **from its own directory** (each has its own
+`VariantDir('Temp')`), or all at once with `Tools/build.py`.
+
+**The one name that does not follow the pattern is metaxr-audio**: its source directory is
+`metaxr-audio-godot/` while its output directory is `RetroXR/metaxr-audio/`. `Tools/build.py`
+knows this (the source dir is the second field of its `EXTENSIONS` table); a hand-written
+`cd metaxr-audio` does not.
 
 - **archive-godot** — `RommArchiveExtractor`, a bounded-memory ZIP reader used by RomM
   downloads. It streams archive members directly to temporary files, validates their sizes
@@ -181,22 +188,84 @@ or all at once with `Tools/build.py`:
 
 ## Headless Testing & Validation
 
-There is no formal test framework. The project is validated by running the Godot editor
-**headless** for compile/scene checks, plus small throwaway "probe" scenes for functional
-tests. This works without a VR headset (desktop fallback) and without a display.
+There is no unit-test framework in the xUnit sense, but there **is** a runner and it
+gates CI. `Tools/run_tests.py` runs every `RetroXR/Tests/*.tscn` that has a `.gd` beside
+it, in a stable order, and `.github/workflows/tests.yml` builds the six extensions and
+runs it on every push. Beyond that the project is validated by running the Godot editor
+**headless** for compile/scene checks, plus small "probe" scenes for functional tests.
+All of it works without a VR headset (desktop fallback) and without a display.
 
-**`RetroXR/Tests/` is the exception, and the bar for living there is exact:** a scene
-that checks itself, runs unattended with no ROM, core, headset or device, and **exits
-non-zero on failure**, so it can gate a commit. Among them — the A/V suite in §2c, the
-RomM and scene-management ones below, `system_tests` over the machine controller's
-port, pad, save and disc rules, `rope_tests` over what a cable does when it meets
-furniture, `binding_tests` over which control map a platform resolves to, and
-`netplay_tests` (§2f) over the whole lockstep stack, two NetworkManagers deep.
-Everything else is a probe and stays in `RetroXR/Tools/`, including
-the ones that assert: they want real cores and ROMs (`azahar_probe`, `sram_probe`,
-`vb_probe`, `nds_probe`, `handheld_probe`, `gl_video_probe`), a headset or a Quest
-(`netplay_spike`), or they are reproductions of open bugs and report failures BY DESIGN
-(`three_plug_probe`). Moving one of those into `Tests/` would make a red run meaningless.
+```bash
+python Tools/run_tests.py            # every suite
+python Tools/run_tests.py --list     # name them and exit
+```
+
+Because the runner globs `Tests/*.tscn` **non-recursively**, `Tests/` stays flat. Do not
+nest it into subfolders — a suite in a subdirectory is silently never run, which is the
+one failure mode a green CI cannot show you. (`RetroXR/Tools/` is the opposite: it is
+foldered by topic, see below.)
+
+**The bar for living in `RetroXR/Tests/` is exact:** a scene that checks itself, runs
+unattended with no ROM, core, headset or device, and **exits non-zero on failure**, so it
+can gate a commit. The 21 suites, with their measured case counts and runtimes (Windows,
+debug build, 2026-08-27 — all passing):
+
+| suite | cases | time | covers |
+|---|---|---|---|
+| `netplay_tests` | 685 | 32 s | the whole lockstep stack, two NetworkManagers deep (§2f) |
+| `romm_tests` | 312 | 17 s | the pure-logic half of the RomM stack |
+| `binding_tests` | 176 | 12 s | which control map a platform resolves to |
+| `object_sync_tests` | 127 | 8 s | the shared-room network layer, 2–3 real ENet peers |
+| `scene_tests` | 120 | 10 s | SceneManager and the save gates around it |
+| `poster_tests` | 112 | 11 s | the posters feature, stick/peel/conform |
+| `rope_tests` | 82 | 69 s | what a cable does when it meets furniture |
+| `av_suite` | 41 | 35 s | what reaches a television's inputs (§2c) |
+| `system_tests` | — | — | the machine controller's port, pad, save and disc rules |
+| `link_tests` | — | — | which socket each end of a link lead belongs in |
+| `state_tests` | — | — | savestate capture/restore rules |
+| `expansion_tests` | — | — | the expansion units and their catalog |
+| `bay_tests` | — | — | cartridge bays |
+| `card_tests` / `deck_tests` | — | — | memory cards; the video decks |
+| `motion_tests` | — | — | accel/gyro/IR device frames |
+| `screen_cast_light_tests` | — | — | light the screen throws into the room |
+| `time_of_day_tests` | — | — | the day/night cycle |
+| `tv_resize_tests` | — | — | the TV's own geometry |
+| `web_server_tests` | — | — | the built-in file server |
+
+Counts are what the suite printed, not a target — they drift upward as cases are added,
+so re-measure rather than trusting this table, and treat an unexplained DROP as a signal.
+
+**Everything else is a probe and lives under `RetroXR/Tools/<topic>/`**, including the
+ones that assert: they want real cores and ROMs (`cores/azahar_probe`, `cores/sram_probe`,
+`cores/vb_probe`, `cores/nds_probe`, `cores/handheld_probe`, `cores/gl_video_probe`), a
+headset or a Quest (`netplay/netplay_spike`), or they are reproductions of open bugs and
+report failures BY DESIGN (`rope/three_plug_probe`). Moving one of those into `Tests/`
+would make a red run meaningless.
+
+### Where the probes live
+
+`RetroXR/Tools/` is foldered by topic. A probe's scene, script and `.uid` sit together,
+and a scene refers to its script by literal path, so a probe moved between folders needs
+its `.tscn` rewritten too.
+
+| folder | what it holds |
+|---|---|
+| `av/` | TVs, tuners, phosphor, decks, spatial audio |
+| `cores/` | core behaviour, BIOS boot, options, dual-screen, GL video |
+| `gen/` | mesh/material generators run with `--script` (no scene); `gen/plug_materials.gd` is the shared one |
+| `input/` | controllers, bindings, mice, lightguns, memory cards |
+| `link/` | link cables and two-core buses (§2e, §2g) |
+| `models/` | geometry authoring, shell audits, model registry, room renders |
+| `netplay/` | sessions, rollback, determinism, state transfer (§2f) |
+| `perf/` | Quest device probes, spawn/menu cost, VRAM census |
+| `room/` | tables, spawn menus, furniture placement |
+| `rope/` | cables — the bit-exact oracles `rope/rope_bench` and `rope/rope_stress` |
+| `state/` | save/restore, persistence, scene soak |
+| `vr/` | grabs, pokes, pointers, sliders, capsense |
+
+Three data directories sit beside them and are deliberately not foldered by topic:
+`gblink/` (the ROMs `Tools/gen_gblink_rom.py` writes), `scan/` and
+`azahar_stereo_homebrew/`.
 
 `RetroXR/Tests/rope_tests.tscn` is the behaviour half of the rope's cover. Two kinds of
 case: where a cord LIES (contact/ — table, over a corner to a floor socket, round a pipe,
@@ -204,8 +273,8 @@ on a ledge, heaped, bridging a gap; loose/ — a whole lead dropped flat, across
 from height) and what a player DOES to one (handling/ — a real lead's plug yanked at
 5 m/s, towed 2.5 m across the floor, pulled out through a 100 mm slot, carried over a
 partition, a cord wrapped round a post and hauled tight), plus inextensibility,
-determinism, anchor pinning, teleport re-lay, `set_rope_length` and sleep/wake. 58 cases,
-~2 min, no GPU. It complements rather than replaces the two BIT-EXACT oracles in `Tools/`
+determinism, anchor pinning, teleport re-lay, `set_rope_length` and sleep/wake. 82 cases,
+~70 s, no GPU. It complements rather than replaces the two BIT-EXACT oracles in `Tools/`
 (`rope_bench --settle` prints `still_awake=12`, `rope_stress` diffs a 22-row table): those
 catch arithmetic drift, this catches a cord that jitters, tunnels or will not settle.
 (The bench printed 15 until 2026-08-17: DepenetrateLay freed wedged lays and three more
@@ -216,7 +285,7 @@ uncapped rotation steps about the cable anchor, a per-tick transform teleport th
 a dropped lead's plug through a 100 mm floor (now capped at MAX_ALIGN_STEP); and a cord
 laid straight through furniture — every restore/teleport re-lay can do this — left
 particles wedged inside it for ever (now freed by `DepenetrateLay` on the first tick after
-a lay). `Tools/rope_video_probe.tscn` renders the same cases to PNG frames (windowed, not
+a lay). `Tools/rope/rope_video_probe.tscn` renders the same cases to PNG frames (windowed, not
 `--headless`) for when a case has to be WATCHED — most of the traps below were caught on
 its footage, not by an assertion.
 ```bash
@@ -243,7 +312,7 @@ Everything else measures 0.0003–0.07 mm/tick held awake, heaps included.
 
 `RetroXR/Tests/romm_tests.tscn` asserts the pure-logic half of the RomM stack — pair-QR
 parsing, slug mapping and systemid collision, the sync fingerprint, cache path safety,
-and the `scan_roms` disk walk. No server, no headset, no network, ~2 s.
+and the `scan_roms` disk walk. 312 cases, ~17 s, no server, no headset, no network.
 ```bash
 "$godot" --headless --path RetroXR res://Tests/romm_tests.tscn 2>&1 | grep -a "\[test\]"
 ```
@@ -258,7 +327,7 @@ single-room key), the `is_room_ready` / `is_scene_content_ready` boundaries, the
 state machine's coalescing, the periodic autosave, clearing and reloading the room you are
 standing in, two restores racing into one room, a machine's core outliving its machine, the room's own
 movable furniture, the video decks' teardown contract, and slot-manifest CRUD.
-99 cases, ~30 s.
+120 cases, ~10 s.
 ```bash
 "$godot" --headless --path RetroXR res://Tests/scene_tests.tscn
 "$godot" --headless --path RetroXR res://Tests/scene_tests.tscn -- --only=autosave
@@ -283,7 +352,7 @@ turns its version int into `1.0`.
 `RetroXR/Tests/poster_tests.tscn` covers the posters feature — the image load and the
 sheet it sizes (alpha scissor vs opaque, mipmaps, aspect, per-instance sub-resources),
 sticking to a surface on release, riding the object it stuck to, peeling, conforming to
-a curved shell, the options-menu contract, and the save/restore round trip. 57 cases, ~20 s.
+a curved shell, the options-menu contract, and the save/restore round trip. 112 cases, ~11 s.
 ```bash
 "$godot" --headless --path RetroXR res://Tests/poster_tests.tscn
 "$godot" --headless --path RetroXR res://Tests/poster_tests.tscn -- --only=conform
@@ -314,7 +383,7 @@ wipe every desktop player's key map on first launch. It also covers ConsolePadAr
 table a platform's own controller is drawn from — that a control key's index in
 GamepadBindings.TARGET_ORDER really is its RetroPad bit (the trick that lets one
 table serve both the XR and the physical-pad sections), and that every control
-has an anchor and a row. 73 cases, ~2 s.
+has an anchor and a row. 176 cases, ~12 s.
 ```bash
 "$godot" --headless --path RetroXR res://Tests/binding_tests.tscn
 ```
@@ -345,7 +414,7 @@ Each group is independently runnable.
 
 That a binding reaches a RUNNING core is deliberately not here: it needs a real system,
 a real controller and the `binding_consumers` fan-out, and lives in
-`Tools/binding_live_probe.tscn`. Drive that probe through the view's OWN
+`Tools/input/binding_live_probe.tscn`. Drive that probe through the view's OWN
 `_global_editor` rather than a fresh `ControlsBindingEditor` — a detached editor writes
 to disk and reaches nobody, so every "applies immediately" case fails for a reason the
 player never sees.
@@ -451,13 +520,13 @@ by rebuilding (above) and loading in the headless editor.
 
 ### 2b. The bedroom's saved visual probe
 
-`RetroXR/Tools/bedroom_probe.tscn` — do NOT hand-roll another one. It carries the
+`RetroXR/Tools/models/bedroom_probe.tscn` — do NOT hand-roll another one. It carries the
 still framings for that room (overview, bed, desk, window, TV corner, bookcases,
 wardrobe, light switch) plus a flythrough: 360 deg in place at the room centre,
 then a lap walking forward round a circle sized to clear the furniture.
 
 ```bash
-"$godot" --path RetroXR --resolution 320x240 --position 20,20     res://Tools/bedroom_probe.tscn -- --mode=stills      # or flythrough, both
+"$godot" --path RetroXR --resolution 320x240 --position 20,20     res://Tools/models/bedroom_probe.tscn -- --mode=stills      # or flythrough, both
 ```
 
 Windowed, not `--headless` — the dummy renderer returns a blank image. PNGs land
@@ -475,8 +544,8 @@ nothing at all. Run `--editor --quit` between the overwrite and the render.
 
 ### 2c. The A/V suite — the one thing here that is an actual test suite
 
-`RetroXR/Tests/av_suite.tscn` — 23 cases over what reaches a television's inputs and
-what it shows. Headless, ~90 s, **exits non-zero on failure**, so it is the one probe
+`RetroXR/Tests/av_suite.tscn` — 41 cases over what reaches a television's inputs and
+what it shows. Headless, ~35 s, **exits non-zero on failure**, so it is the one probe
 that can be run as a gate rather than read.
 
 ```bash
@@ -510,7 +579,7 @@ red before believing a new one.
 
 ### 2d. The BIOS-boot survey — a probe that must stay one core per process
 
-`RetroXR/Tools/bios_boot_probe.tscn` + `Tools/bios_boot_survey.sh` are the provenance
+`RetroXR/Tools/cores/bios_boot_probe.tscn` + `Tools/bios_boot_survey.sh` are the provenance
 of the `BiosBoot` table, and the only way to refresh it when a core is updated. The
 probe reports one core's firmware status, its boot-ROM-ish option keys, and whether it
 will start with no content; the survey drives every candidate and prints a table.
@@ -544,15 +613,15 @@ survey afterwards.
 
 ### 2e. The Game Boy link probes — three layers, two cores, two clocks
 
-`RetroXR/Tools/gb_link_probe.tscn` drives the bus directly, `gb_link_room_probe.tscn`
+`RetroXR/Tools/link/gb_link_probe.tscn` drives the bus directly, `gb_link_room_probe.tscn`
 drives the path a player uses (pick a lead up, push a plug into a socket), and
 `gb_tetris_link_probe.tscn` runs a commercial two-player game over the result.
 Probes rather than tests: they want a real core and, for Tetris, a real ROM.
 
 ```bash
-"$godot" --headless --path RetroXR res://Tools/gb_link_probe.tscn -- --core=mgba
-"$godot" --headless --path RetroXR res://Tools/gb_link_room_probe.tscn
-"$godot" --headless --path RetroXR res://Tools/gb_tetris_link_probe.tscn -- --roms=Z:/roms --core=gambatte --core2=mgba
+"$godot" --headless --path RetroXR res://Tools/link/gb_link_probe.tscn -- --core=mgba
+"$godot" --headless --path RetroXR res://Tools/link/gb_link_room_probe.tscn
+"$godot" --headless --path RetroXR res://Tools/link/gb_tetris_link_probe.tscn -- --roms=Z:/roms --core=gambatte --core2=mgba
 ```
 
 **Both cores, and between them.** gambatte and mGBA each carry a Game Boy, both
@@ -587,8 +656,8 @@ path is covered by the `_fast` ROMs instead.
 
 ### 2f. Netplay — a suite, and the one thing it cannot cover
 
-`RetroXR/Tests/netplay_tests.tscn` is 274 cases over the whole lockstep stack,
-headless, ~60 s, exits non-zero. Groups: `cores/` (the determinism allowlist),
+`RetroXR/Tests/netplay_tests.tscn` is 685 cases over the whole lockstep stack,
+headless, ~32 s, exits non-zero. Groups: `cores/` (the determinism allowlist),
 `identity/` (which core builds may play each other), `wire/` (every packed
 block's round trip, including per-port accelerometer, gyro, IR/touch and
 lightgun state), `owners/` (who supplies which port on which frame),
@@ -619,13 +688,13 @@ dangling autoload singleton and eventually crashes the full suite, so do not
 hide it that way. The passing case count and exit status remain the gate.
 
 What no suite here can cover is a real core's arithmetic. That is
-`Tools/netplay_spike.gd`, and it now has a **cross-machine leg**, which is the
+`Tools/netplay/netplay_spike.gd`, and it now has a **cross-machine leg**, which is the
 only thing that tests the one payload lockstep actually puts on the wire — a
 savestate, shipped for a late join or a desync resync:
 
 ```bash
-machine 1:  ... res://Tools/netplay_spike.tscn -- --spike-state-out=Z:/np.bin
-machine 2:  ... res://Tools/netplay_spike.tscn -- --spike-state-in=Z:/np.bin
+machine 1:  ... res://Tools/netplay/netplay_spike.tscn -- --spike-state-out=Z:/np.bin
+machine 2:  ... res://Tools/netplay/netplay_spike.tscn -- --spike-state-in=Z:/np.bin
 ```
 
 Machine 1 writes its state, the frame, its core identity and its whole phase-A
@@ -683,13 +752,13 @@ identity never arrived in 2888 ticks — and the symptom is a 10 s timeout sayin
 "not measured yet" rather than as a difference; at cold start both peers are
 usually 0 and the version comparison carries the weight.
 
-`RetroXR/Tools/core_identity_probe.tscn` is the guard for all of that, and it
+`RetroXR/Tools/netplay/core_identity_probe.tscn` is the guard for all of that, and it
 needs a real core so it stays a probe. It runs the same core twice, gated (a
 netplay cold start: identity must arrive with ZERO frames run) and ungated (the
 size must really get measured), and exits non-zero.
 
 ```bash
-"$godot" --headless --path RetroXR res://Tools/core_identity_probe.tscn -- \
+"$godot" --headless --path RetroXR res://Tools/netplay/core_identity_probe.tscn -- \
   --ident-core=fceumm "--ident-rom=$HOME/retroxr/roms/nes/rom.nes"
 ```
 
@@ -724,10 +793,12 @@ program, RAM, registers and link state just like a cartridge-backed machine.
 Empty-disc BIOS menus use `empty_media` instead and regenerate the zero-byte
 image locally; BIOS files themselves are never transferred. Every peer must
 already have matching firmware. The no-ROM tests cover this launch/state
-plumbing with mock cores, but mGBA is not yet in `NetplayCores`: a real
-single-pak netplay run still needs a payload-carrying game ROM and determinism
-vetting, which the user does not plan to obtain, so leave that validation noted
-as outstanding rather than enabling the core on inference.
+plumbing with mock cores. mGBA IS now in `NetplayCores` (verified, with
+ROLLBACK/LOCKSTEP/DETERMINISM), so the core is no longer the blocker it once
+was — but a real single-pak netplay run still needs a payload-carrying game ROM,
+which the user does not plan to obtain. Leave THAT validation noted as
+outstanding; do not read mGBA's presence in the table as proof single-pak play
+was exercised end to end.
 
 Late-join state is a bounded stream, not one RPC: 64 KiB reliable chunks, eight
 in flight, cumulative acknowledgements, SHA-256 per payload, and a 256 MiB total
@@ -767,12 +838,12 @@ Two things this had to get right, and both are the same rule:
   that frame to any core. `link_cable._resolve` hands the decision to the host
   instead of joining on the spot whenever a hand moves.
 
-`RetroXR/Tools/netplay_link_probe.tscn` is the real-core half — two gambatte
+`RetroXR/Tools/netplay/netplay_link_probe.tscn` is the real-core half — two gambatte
 Game Boys, the real bus, ROMs from `Tools/gen_gblink_rom.py`:
 
 ```bash
 python Tools/gen_gblink_rom.py     # once, into RetroXR/Tools/gblink/
-"$godot" --headless --path RetroXR res://Tools/netplay_link_probe.tscn
+"$godot" --headless --path RetroXR res://Tools/netplay/netplay_link_probe.tscn
 ```
 
 Its two legs pull opposite ways and both must hold. Fed on both machines, the
@@ -782,7 +853,7 @@ stops dead.** That second leg is the reproduction, and a green there would mean
 the bus had stopped waiting, which is worse than the hang: a cabled netplay pair
 would desync instead of stalling.
 
-`RetroXR/Tools/gc_gba_link_probe.tscn` is the same thing for the ASYMMETRIC
+`RetroXR/Tools/link/gc_gba_link_probe.tscn` is the same thing for the ASYMMETRIC
 lead, which had been reasoned about and unit-tested and never once run with the
 cores that actually speak the JOY bus. It wants Dolphin, mGBA and two commercial
 ROMs, so it is a probe. It reproduces what `GcGbaCable` does on seating, in
@@ -790,8 +861,8 @@ order: `SetControllerPortDevice(port, (7 << 8) | 0)` then
 `LinkConnect(gba, console_port, GBA_JOY_PORT)`.
 
 ```bash
-"$godot" --headless --path RetroXR res://Tools/gc_gba_link_probe.tscn
-"$godot" --headless --path RetroXR res://Tools/gc_gba_link_probe.tscn -- --gba-empty
+"$godot" --headless --path RetroXR res://Tools/link/gc_gba_link_probe.tscn
+"$godot" --headless --path RetroXR res://Tools/link/gc_gba_link_probe.tscn -- --gba-empty
 ```
 
 First run, 2026-08-21, Four Swords Adventures against Super Mario Advance:
@@ -821,8 +892,13 @@ whole run. It lands during the program upload and does not recur. On a desktop
 that is a hitch; in a headset it would be felt once, and it is the one number
 worth watching if this ever reaches a Quest.
 
-Neither core is in `NetplayCores`, so none of this can start a netplay session
-yet — this exercises the BUS, not a session over it.
+Both cores are now in `NetplayCores` (they were not when this section was first
+written): `mgba` is `verified` with ROLLBACK/LOCKSTEP/DETERMINISM, `dolphin` is
+`verified: false`, `state_transfer: false`, DETERMINISM only. So a session over
+this pair can now be started — but note what the probes above do and do not
+prove: they exercise the BUS with real cores, not a netplay session over it.
+Dolphin having no transferable state is why it is DETERMINISM-only, which in
+turn means no late join and no desync repair.
 
 ### 3. Capturing a real screenshot on Linux (for visual validation)
 `--headless` uses the dummy renderer — it **cannot** produce a screenshot (a probe that awaits
@@ -918,7 +994,7 @@ adb shell monkey -p com.xenu.retroxr 1                           # GodotApp isn'
   `buildbot.libretro.com/nightly/android/latest/arm64-v8a/<core>_libretro_android.so.zip`.
 
 ### Running the netplay determinism spike on-device
-NetworkManager boots `Tools/netplay_spike.tscn` at startup when `user://spike.cfg`
+NetworkManager boots `Tools/netplay/netplay_spike.tscn` at startup when `user://spike.cfg`
 exists (the spike deletes the cfg immediately, so a crash can't wedge the app):
 ```bash
 printf -- '--spike-core=fceumm\n--spike-rom=/sdcard/Android/data/com.xenu.retroxr/files/roms/nes/ROM.nes\n--spike-root=/data/user/0/com.xenu.retroxr/files/libretro\n' > spike.cfg
@@ -933,6 +1009,28 @@ loses boot output. Stream from before the launch instead:
 ```bash
 adb logcat -c && adb logcat -s godot:* > quest.log &
 ```
+
+## CI
+
+Three workflows in `.github/workflows/`:
+
+- **`tests.yml`** — the gate. Builds the six GDExtensions for windows x86_64 debug via
+  `python Tools/build.py windows --target debug`, installs Godot, imports the project,
+  fails on any script or shader error, then runs `python Tools/run_tests.py`.
+- **`release.yml`** — `preflight` → `quest` + `windows` → `release`, on a tag push or
+  `workflow_dispatch`.
+- **`sidequest.yml`** — the SideQuest listing.
+
+Because `tests.yml` runs `Tools/run_tests.py`, which globs `Tests/*.tscn` non-recursively,
+a suite added to `Tests/` is picked up with no CI edit — and a suite nested in a
+subdirectory is silently skipped. See the testing section above.
+
+## Android plugin
+
+`qr-scanner-android/` is a Gradle/Kotlin Godot Android plugin (not a GDExtension, not
+built by `Tools/build.py`). Its Godot-side half is `RetroXR/addons/retroxr_qr`. The other
+in-repo addon that is ours rather than vendored is `RetroXR/addons/retroxr_build_stamp`,
+which writes the `res://build_info.json` that `Scripts/Data/build_info.gd` reads.
 
 ## Architecture
 
@@ -963,13 +1061,26 @@ ThreadCommands that execute on the main thread carry an explicit `Wrapper*` and 
 
 ### Handler Subsystems
 Each handler is owned by a `Wrapper` instance and manages one libretro subsystem:
-- **VideoHandler** — Texture creation/updates, hardware rendering, rotation
+- **VideoHandler** — Texture creation/updates, hardware rendering, rotation. It owns the
+  HW-render contexts, and there are more than the software/Vulkan/OpenGL trio named
+  elsewhere in this file: `VulkanContext` (with a `VulkanContextStub` for platforms
+  without it), `D3D11Context` and `D3D12Context` on Windows, and `MacMetalLayer.mm` on
+  macOS. `PixelSwizzle.hpp` handles the format conversions between them.
 - **AudioHandler** — Audio stream generation and playback
-- **InputHandler** — Input polling, joypad/mouse/keyboard mapping (Godot keycodes ↔ libretro keycodes). Currently reads the global Godot `Input` singleton — all active instances see the same controller state.
+- **InputHandler** — Per-port input state and joypad/mouse/keyboard mapping (Godot keycodes ↔ libretro keycodes). It does **not** read the global Godot `Input` singleton — there is not one reference to it in `InputHandler.cpp`. State is PUSHED in from GDScript, per port: `Libretro.SetJoypadState(port, buttons, alx, aly, arx, ary)` plus `SetMousePosition`/`SetMouseButtons`, `SetKeyState`, `SetLightgunPosition`/`SetLightgunButtons`, `SetPointerIndexState` (multi-touch/IR), `SetAnalogLeft`/`Right`, `SetSensorAccel`/`SetSensorGyro` and `SetPortDevice`. So two `Libretro` nodes in one scene have entirely independent controller state, which is what lets one room hold several machines — and what lets netplay replay a remote peer's port without touching local hardware. The callers are `retro_controller.gd`, `pad_receiver.gd`, `wiimote.gd`, `handheld_input.gd` and `netplay_session.gd`.
 - **EnvironmentHandler** — Libretro environment callbacks (system dirs, VFS, disk control)
 - **OptionsHandler** — Core option parsing (v1/v2 formats), categorization, persistence
 - **MessageHandler** — Notification/message interface
 - **LogHandler** — Log callback forwarding
+- **RetroAchievements** — `RetroAchievements.cpp/.hpp`, backed by the `external/rcheevos`
+  submodule, whose `src/`, `src/rcheevos/`, `src/rapi/` and `src/rhash/` trees are
+  compiled straight into the extension (no external dependency). It hashes content by
+  RetroAchievements' own console-specific rules rather than by plain file digest. The
+  GDScript half lives in `RetroXR/Scripts/Data/ra/` (`ra_config`, `ra_consoles`,
+  `ra_session`) and `RetroXR/Scripts/Net/ra/ra_http_bridge.gd`.
+- **LinkCoordinator** — `LinkCoordinator.cpp/.hpp` + `LinkInterface.hpp`. A process-wide
+  singleton joining two cores on one emulated wire; see §2g. Not per-`Wrapper`, unlike
+  everything else in this list.
 
 ### Data Flow
 ```
@@ -981,7 +1092,7 @@ GDScript UI → Libretro Node (instance) → Wrapper (per-node) → Core + Handl
 ### GDScript Side
 - `RetroXR/Scripts/libretro.gd` — Main controller script. Uses `@export var libretro_node: Libretro` to reference the `Libretro` node; falls back to `find_child("Libretro")` if unset.
 - `RetroXR/Scripts/Objects/systems/system.gd` — Per-arcade-cabinet controller. Has `@onready var _libretro: Libretro = $Libretro` wired to a child `Libretro` node in the scene tree.
-- `RetroXR/Scenes/Objects/system.tscn` — Cabinet scene. Contains a `Libretro` child node (unique_id `4000000010`).
+- `RetroXR/Scenes/Objects/system.tscn` — Cabinet scene. Contains a `Libretro` child node. Its `unique_id` is the value 4000000010, but Godot writes it SIGNED, so the file reads `unique_id=-294967286` — grep for that, not for the decimal above.
 - GDExtension registration at `MODULE_INITIALIZATION_LEVEL_SCENE`.
 
 ## Dependencies
@@ -989,6 +1100,8 @@ GDScript UI → Libretro Node (instance) → Wrapper (per-node) → Core + Handl
 - **godot-cpp** (submodule, 4.5 branch) — Godot C++ bindings
 - **SDL3** — On Windows: core DLL loading (`DynLib.hpp`) + the OpenGL HW-render window. On Linux: the OpenGL HW-render window only (core loading uses `dlopen`); linked against the system `libSDL3.so.0` by soname, headers from `libretro-godot/external/SDL3/`. Not used on Android (`dlopen` + EGL via `DynLib.hpp`).
 - **libretro-common** — Reference implementations for VFS, audio conversion, etc. (`libretro-godot/external/libretro-common/`)
+- **rcheevos** (submodule, `libretro-godot/external/rcheevos/`) — RetroAchievements support, compiled into the extension. Carries no external dependency of its own.
+- **Vulkan-Headers** (submodule, `libretro-godot/external/vulkan-headers/`) — headers for the Vulkan HW-render path.
 - **moodycamel::ReaderWriterQueue** — Lock-free SPSC queue for cross-thread communication
 - **godot-xr-tools v4.5.1** — VR locomotion, interactions, finger poses (`RetroXR/addons/godot-xr-tools/`)
 - **vlc-godot** (libVLC) — the `VlcPlayer` GDExtension; single video backend for both the DVD
@@ -1020,8 +1133,9 @@ carried alongside it.
 - **`Tools/download_pdfium.sh`** — fetches prebuilt PDFium from bblanchon/pdfium-binaries into
   `godot-pdfium/external/pdfium/`. All five packages by default (`-p
   linux|win|mac|mac-x64|android` for one, `-r <tag>` to pin a release, `-n` to dry-run).
-  Bash, so it runs on Linux, WSL, macOS and Git Bash; it replaced
-  `download_pdfium.ps1`, which had no Linux or macOS platform at all. The
+  Bash, so it runs on Linux, WSL, macOS and Git Bash; it superseded
+  `Tools/download_pdfium.ps1`, which had no Linux or macOS platform at all. The `.ps1` is
+  still in the tree but is NOT maintained — use the `.sh`. The
   `include/` headers are shared by all packages, so a **partial** run leaves them alone by
   default (`--headers` to force) — new declarations against an unrefreshed binary is how you
   get a link error on the platform you weren't building. Each `lib/<plat>/` carries a `VERSION`
