@@ -53,11 +53,6 @@
 [ext_resource type="Script" path="res://Scripts/Objects/widgets/vr_lever.gd" id="51_vrlever"]
 [ext_resource type="FontFile" uid="uid://bv8kh41jwy8bc" path="res://fonts/SymbolsNerdFont-Regular.ttf" id="52_nerdfont"]
 [ext_resource type="Script" uid="uid://d3iq3gmwxpvjl" path="res://Scripts/Objects/widgets/vr_button.gd" id="31_vrbutton"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_memphis.png" id="33_poster_a"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_grid.png" id="34_poster_b"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_testcard.png" id="44_p_test"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_burst.png" id="45_p_burst"]
-[ext_resource type="Texture2D" path="res://imported-assets/bedroom/generated/poster_halftone.png" id="46_p_half"]
 
 ; Late evening: warm ambient, dark warm background, filmic tonemap and the den's
 ; glow settings so the CRT and the lamps bloom the same way across both rooms.
@@ -437,9 +432,8 @@ size = Vector3(5.2, 2.6, 0.15)
 ; South wall is split around the CLOSET opening: 1.0 wide x 2.1 high, centred
 ; x = -1.5. Same opening size as the room door, because it takes the same door
 ; kit — the assembly measures 0.956 x 2.065, so it seats in a 1.0 x 2.1 hole with
-; the jamb taking up the slack, exactly as it does on the west wall. The left
-; stretch of this wall was the only clear one: the two posters sit at x 0.95 and
-; 1.88, and the west corner is at -2.525.
+; the jamb taking up the slack, exactly as it does on the west wall. The west
+; corner is at -2.525.
 [sub_resource type="BoxMesh" id="Mesh_wall_s_w"]
 size = Vector3(0.622, 2.6, 0.15)
 
@@ -582,36 +576,6 @@ size = Vector3(0.018, 0.11, 1)
 [sub_resource type="BoxMesh" id="Mesh_cap_ew"]
 size = Vector3(0.026, 0.022, 1)
 
-[sub_resource type="BoxMesh" id="Mesh_poster_frame"]
-size = Vector3(0.66, 0.88, 0.03)
-
-[sub_resource type="StandardMaterial3D" id="Mat_poster_frame"]
-albedo_color = Color(0.13, 0.08, 0.05, 1)
-roughness = 0.6
-
-[sub_resource type="QuadMesh" id="Quad_poster"]
-size = Vector2(0.6, 0.8)
-
-; A trace of emission on both posters — 0.10, down from 0.30. Print has no light
-; of its own, and at 0.30 the glow was adding apparent contrast to art that was
-; already four times the room's saturation and eight times its luminance spread.
-; Tools/gen_bedroom_art.py now runs both through print_look(), which lifts the
-; blacks, caps the whites and desaturates, so they no longer need the glow to read
-; at the distance they are actually seen from.
-[sub_resource type="StandardMaterial3D" id="Mat_poster_a"]
-albedo_texture = ExtResource("33_poster_a")
-roughness = 0.9
-emission_enabled = true
-emission_energy_multiplier = 0.1
-emission_texture = ExtResource("33_poster_a")
-
-[sub_resource type="StandardMaterial3D" id="Mat_poster_b"]
-albedo_texture = ExtResource("34_poster_b")
-roughness = 0.9
-emission_enabled = true
-emission_energy_multiplier = 0.1
-emission_texture = ExtResource("34_poster_b")
-
 [sub_resource type="Animation" id="Anim_fan_spin"]
 resource_name = "spin"
 length = 2.0
@@ -644,45 +608,6 @@ tracks/0/keys = {
 _data = {
 &"spin": SubResource("Anim_fan_spin")
 }
-
-[sub_resource type="BoxMesh" id="Mesh_frame_land"]
-size = Vector3(0.6, 0.46, 0.03)
-
-[sub_resource type="QuadMesh" id="Quad_land"]
-size = Vector2(0.54, 0.4)
-
-[sub_resource type="BoxMesh" id="Mesh_frame_tall"]
-size = Vector3(0.46, 0.605, 0.03)
-
-[sub_resource type="QuadMesh" id="Quad_tall"]
-size = Vector2(0.4, 0.545)
-
-[sub_resource type="BoxMesh" id="Mesh_frame_sq"]
-size = Vector3(0.4, 0.4, 0.03)
-
-[sub_resource type="QuadMesh" id="Quad_sq"]
-size = Vector2(0.34, 0.34)
-
-[sub_resource type="StandardMaterial3D" id="Mat_poster_test"]
-albedo_texture = ExtResource("44_p_test")
-roughness = 0.9
-emission_enabled = true
-emission_energy_multiplier = 0.1
-emission_texture = ExtResource("44_p_test")
-
-[sub_resource type="StandardMaterial3D" id="Mat_poster_burst"]
-albedo_texture = ExtResource("45_p_burst")
-roughness = 0.9
-emission_enabled = true
-emission_energy_multiplier = 0.1
-emission_texture = ExtResource("45_p_burst")
-
-[sub_resource type="StandardMaterial3D" id="Mat_poster_half"]
-albedo_texture = ExtResource("46_p_half")
-roughness = 0.9
-emission_enabled = true
-emission_energy_multiplier = 0.1
-emission_texture = ExtResource("46_p_half")
 
 [node name="Root" type="Node3D"]
 script = ExtResource("1_xrinit")
@@ -1441,29 +1366,6 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.805, -2.018, 2.2)
 [node name="Door Jamb_001_Trim_0" parent="Furniture/ClosetDoor" index="0"]
 surface_material_override/4 = SubResource("Mat_door_wood")
 
-[node name="PosterMemphis" type="Node3D" parent="."]
-
-[node name="Frame" type="MeshInstance3D" parent="PosterMemphis"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 1.55, 2.11)
-mesh = SubResource("Mesh_poster_frame")
-surface_material_override/0 = SubResource("Mat_poster_frame")
-
-[node name="Face" type="MeshInstance3D" parent="PosterMemphis"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.95, 1.55, 2.093)
-mesh = SubResource("Quad_poster")
-surface_material_override/0 = SubResource("Mat_poster_a")
-
-[node name="PosterGrid" type="Node3D" parent="."]
-
-[node name="Frame" type="MeshInstance3D" parent="PosterGrid"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.51, 1.6, -1.1)
-mesh = SubResource("Mesh_poster_frame")
-surface_material_override/0 = SubResource("Mat_poster_frame")
-
-[node name="Face" type="MeshInstance3D" parent="PosterGrid"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.493, 1.6, -1.1)
-mesh = SubResource("Quad_poster")
-surface_material_override/0 = SubResource("Mat_poster_b")
 [node name="WindowLights" type="Node3D" parent="." groups=["string_light"]]
 script = ExtResource("36_strlights")
 path = PackedVector3Array(-1.79, 2.16, -2.1, -0.01, 2.16, -2.1, -0.01, 0.8, -2.1, -1.79, 0.8, -2.1)
@@ -1489,45 +1391,6 @@ bulb_color = Color(1, 0.8, 0.5, 1)
 emission_energy = 1.7
 wash_energy = 0.26
 wash_range = 1.8
-[node name="PosterTestcard" type="Node3D" parent="."]
-
-[node name="Frame" type="MeshInstance3D" parent="PosterTestcard"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.51, 1.6, 1.66)
-mesh = SubResource("Mesh_frame_land")
-surface_material_override/0 = SubResource("Mat_poster_frame")
-
-[node name="Face" type="MeshInstance3D" parent="PosterTestcard"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.493, 1.6, 1.66)
-mesh = SubResource("Quad_land")
-surface_material_override/0 = SubResource("Mat_poster_test")
-
-; Ray burst on the same wall but north of the corner, clear of PosterGrid, which
-; ends at z -0.72.
-[node name="PosterBurst" type="Node3D" parent="."]
-
-[node name="Frame" type="MeshInstance3D" parent="PosterBurst"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.51, 1.5, 1.02)
-mesh = SubResource("Mesh_frame_tall")
-surface_material_override/0 = SubResource("Mat_poster_frame")
-
-[node name="Face" type="MeshInstance3D" parent="PosterBurst"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.493, 1.5, 1.02)
-mesh = SubResource("Quad_tall")
-surface_material_override/0 = SubResource("Mat_poster_burst")
-
-; Halftone round the corner onto the south wall, east of PosterMemphis, which
-; ends at x 1.28.
-[node name="PosterHalftone" type="Node3D" parent="."]
-
-[node name="Frame" type="MeshInstance3D" parent="PosterHalftone"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.88, 1.68, 2.11)
-mesh = SubResource("Mesh_frame_sq")
-surface_material_override/0 = SubResource("Mat_poster_frame")
-
-[node name="Face" type="MeshInstance3D" parent="PosterHalftone"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.88, 1.68, 2.093)
-mesh = SubResource("Quad_sq")
-surface_material_override/0 = SubResource("Mat_poster_half")
 
 ; Baseboard. Runs are unit meshes scaled along the wall direction; the cap sits
 ; 4 mm prouder than the base.
