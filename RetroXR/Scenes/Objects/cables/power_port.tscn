@@ -1,0 +1,27 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" uid="uid://ce7vysyvondf8" path="res://addons/godot-xr-tools/objects/snap_zone.tscn" id="1_snap"]
+[ext_resource type="Script" path="res://Scripts/Objects/cables/power_port.gd" id="2_script"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/snap_highlight.gd" id="3_highlight"]
+
+[sub_resource type="BoxMesh" id="Mesh_ghost"]
+size = Vector3(0.026, 0.032, 0.032)
+
+[sub_resource type="StandardMaterial3D" id="Mat_ghost"]
+transparency = 1
+albedo_color = Color(0.35, 0.65, 1, 0.32)
+emission_enabled = true
+emission = Color(0.05, 0.2, 0.5, 1)
+emission_energy_multiplier = 0.35
+
+[node name="PowerPort" instance=ExtResource("1_snap")]
+grab_distance = 0.065
+script = ExtResource("2_script")
+
+[node name="SnapHighlight" type="Node3D" parent="."]
+script = ExtResource("3_highlight")
+
+[node name="HighlightMesh" type="MeshInstance3D" parent="SnapHighlight"]
+transform = Transform3D(1,0,0,0,1,0,0,0,1,0,0,-0.015)
+mesh = SubResource("Mesh_ghost")
+surface_material_override/0 = SubResource("Mat_ghost")

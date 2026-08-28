@@ -1,4 +1,4 @@
-[gd_scene load_steps=99 format=3]
+[gd_scene load_steps=101 format=3]
 
 [ext_resource type="Script" uid="uid://btn0gji8qtw2l" path="res://Scripts/XR/xr_init.gd" id="1_xrinit"]
 [ext_resource type="PackedScene" path="res://Scenes/player_rig.tscn" id="2_playerrig"]
@@ -42,6 +42,8 @@
 [ext_resource type="PackedScene" path="res://imported-assets/bedroom/furniture/door.glb" id="19_door"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/switch_plate_2gang.res" id="28_plate"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/wall_outlet_duplex.res" id="28_outlet"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/cables/power_port.tscn" id="85_powerport"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/cables/power_cord.tscn" id="86_powercord"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/room/switch_toggle.res" id="28_toggle"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/light_switch.gd" id="29_switchscript"]
 [ext_resource type="Script" path="res://Scripts/Objects/highlights/glow_mesh.gd" id="35_glow"]
@@ -1150,6 +1152,18 @@ mesh = ExtResource("28_plate")
 [node name="WallOutlet" type="MeshInstance3D" parent="Furniture"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65, 0.30, -2.125)
 mesh = ExtResource("28_outlet")
+
+; Both halves are usable snap targets. Their origins are the plug mating planes,
+; 8.6 mm in front of the wall where the generated receptacle faces end.
+[node name="TopPort" parent="Furniture/WallOutlet" instance=ExtResource("85_powerport")]
+transform = Transform3D(1,0,0,0,1,0,0,0,1,0,0.022,0.0086)
+[node name="BottomPort" parent="Furniture/WallOutlet" instance=ExtResource("85_powerport")]
+transform = Transform3D(1,0,0,0,1,0,0,0,1,0,-0.022,0.0086)
+
+; A loose 1.8 m grounded computer lead laid near the outlet, ready to run to the
+; PC tower's new C14 inlet. Both molded ends remain independently grabbable.
+[node name="BedroomPowerCord" parent="Furniture" instance=ExtResource("86_powercord")]
+transform = Transform3D(1,0,0,0,1,0,0,0,1,1.55,0.16,-1.72)
 
 ; Left gang: the ceiling fan globe.
 [node name="Ceiling" type="Node3D" parent="Furniture/SwitchPlate"]

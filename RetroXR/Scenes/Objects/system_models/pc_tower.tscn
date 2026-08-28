@@ -1,10 +1,12 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://Scripts/Objects/system_models/pc_tower_model.gd" id="1_pctower"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/vga_port.tscn" id="2_vgaport"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/cables/trs_port.tscn" id="3_trsport"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/cables/ps2_jack_keyboard.res" id="4_ps2jackkb"]
 [ext_resource type="ArrayMesh" path="res://Scenes/Objects/cables/ps2_jack_mouse.res" id="5_ps2jackms"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/cables/power_port.tscn" id="6_powerport"]
+[ext_resource type="ArrayMesh" path="res://Scenes/Objects/cables/iec_c14_inlet.res" id="7_c14"]
 
 ; A 90s beige mini-tower: 0.19 W x 0.42 H x 0.44 D, which is a real ATX mini-tower
 ; footprint. Origin at the base centre, so the system sits on the floor at y 0.
@@ -164,6 +166,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.006, 0)
 
 [node name="AvAnchor" type="Marker3D" parent="Back"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.05, 0.13, -0.222)
+
+; Grounded IEC C14 mains inlet at the lower rear, clear of the signal I/O.
+[node name="PowerInletVisual" type="MeshInstance3D" parent="Back"]
+transform = Transform3D(-1,0,0,0,1,0,0,0,-1,0.055,0.075,-0.222)
+mesh = ExtResource("7_c14")
+
+[node name="PowerInlet" parent="Back" instance=ExtResource("6_powerport")]
+transform = Transform3D(1,0,0,0,-1,0,0,0,-1,0.055,0.075,-0.226)
+accepted_plug = "iec_c13_plug"
 
 ; PS/2 keyboard + mouse receptacles, on the I/O panel near the top of the back —
 ; where an AT/ATX tower puts them. Stacked vertically, mouse above keyboard. The
