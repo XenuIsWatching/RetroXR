@@ -923,10 +923,10 @@ libraries/ = SubResource("AnimLib_fan")
 autoplay = &"spin"
 
 [node name="Door" parent="Furniture" unique_id=1239216271 instance=ExtResource("19_door")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.6, -2.018, 0.89)
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.6, 0, 1.2)
 
 [node name="ClosetDoor" parent="Furniture" unique_id=1493846376 instance=ExtResource("19_door")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.805, -2.018, 2.2)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.5, 0, 2.2)
 
 [node name="FurnitureCollision" type="StaticBody3D" parent="." unique_id=1254809059]
 collision_mask = 0
