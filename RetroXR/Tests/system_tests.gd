@@ -242,12 +242,17 @@ func _test_core_device_id() -> void:
 ## still pass if the row were appended to every card.
 func _test_light_gun_cards() -> void:
 	var with_gun: Array = ["nes", "super_nes", "master_system", "mega_drive",
-		"sega_cd", "sega_saturn", "dreamcast", "playstation", "playstation2",
+		"sega_saturn", "dreamcast", "playstation", "playstation2",
 		"atari_2600", "atari_7800", "atari_8bit", "commodore_c64", "zx_spectrum",
 		"cpc", "3do", "cdi"]
+	# sega_cd moved across deliberately: light-gun games were sold for it, but
+	# its card spawns the Mega-CD UNIT and a gun goes into the Mega Drive
+	# standing on it. mega_drive is in the list above and still offers the row,
+	# so the hardware is still reachable -- from the machine it plugs into.
 	var without_gun: Array = ["nintendo_64", "gamecube", "wii", "virtual_boy",
 		"game_boy", "game_boy_advance", "neogeo", "atari_5200", "colecovision",
-		"intellivision", "vectrex", "pc_engine", "sg1000", "nds", "dos"]
+		"intellivision", "vectrex", "pc_engine", "sg1000", "nds", "dos",
+		"sega_cd"]
 
 	for sysid: String in with_gun:
 		_ok("gun/%s offers one" % sysid, not _gun_row(sysid).is_empty())

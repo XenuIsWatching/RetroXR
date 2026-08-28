@@ -205,7 +205,11 @@ const _LINK_LEADS: Dictionary = {
 const _LIGHT_GUN: Dictionary = {"kind": "peripheral", "label": "Light Gun",
 	"spawn": "light_gun"}
 const _LIGHT_GUN_PLATFORMS: Array = [
-	"nes", "super_nes", "master_system", "mega_drive", "sega_cd", "sega_saturn",
+	# No sega_cd: its card is the Mega-CD UNIT now, not a console, and the
+	# Menacer and the Justifier plug into the Mega Drive underneath it -- whose
+	# card is listed here and still offers the row. A gun on a card that spawns a
+	# drive would describe a socket the drive does not have.
+	"nes", "super_nes", "master_system", "mega_drive", "sega_saturn",
 	"dreamcast", "playstation", "playstation2", "atari_2600", "atari_7800",
 	"atari_8bit", "commodore_c64", "zx_spectrum", "cpc", "3do", "cdi",
 ]
@@ -228,6 +232,28 @@ const _TRS_KIT: Array = [
 ## rather than by the system's name, so a platform with two models says which is
 ## which. Kept in the signature because the menu passes it.
 static func items_for(systemid: String, _system_name: String = "") -> Array:
+	# An expansion with a card of its own IS this card, and is the whole of it.
+	#
+	# Almost every unit is also a systemid -- a 64DD's disks are "nintendo_64dd",
+	# a Mega-CD's discs are "sega_cd" -- so each already had a tile in the systems
+	# list, sitting beside the console it bolts to. That tile opened on "Primitive
+	# System", because no model registry row serves those ids and the generic box
+	# is the fallback. Pressing it spawned a whole imaginary console: a "Nintendo
+	# 64DD system" that never existed, which is the exact fiction ExpansionCatalog
+	# was written to replace. The tile was always the right home for the unit; it
+	# was spawning the wrong thing.
+	#
+	# Nothing else belongs on this card. An expansion has no controller ports and
+	# no sockets for a television -- it borrows both from the console standing on
+	# it, and that console's own card still offers them. Offering a pad "for your
+	# 64DD" would describe hardware that has nowhere to plug it in. The Mega-CD
+	# loses its light-gun row the same way and for the same reason: the Menacer
+	# goes into the Mega Drive, whose card already lists it.
+	if ExpansionCatalog.has(systemid) and ExpansionCatalog.has_own_card(systemid):
+		return [{"kind": "peripheral",
+			"label": ExpansionCatalog.label_of(systemid),
+			"spawn": "expansion:%s" % systemid}]
+
 	var primitive: Array = []
 	var imported: Array = []
 	for row: Dictionary in SystemModelRegistry.rows_for(systemid):
@@ -255,11 +281,17 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 			"model_id": SystemModelRegistry.PLACEHOLDER_ID})
 	items.append_array(imported)
 	items.append_array((_PERIPHERALS.get(systemid, []) as Array).duplicate(true))
-	# The machines that bolt onto this one. Listed with the peripherals because
-	# that is what they are to a player looking for one -- a thing you get out
-	# and attach -- and read from ExpansionCatalog so a new unit needs no entry
-	# here. Without these rows the units existed and could not be reached.
+	# The machines that bolt onto this one -- but ONLY those with no card of
+	# their own, or the unit would be offered from two places at once and the
+	# console's card would grow a row that duplicates a whole tile.
+	#
+	# In practice that is the Jaguar CD alone: it runs the Jaguar's own media, so
+	# it names no systemid, so it has no tile, so this card is the only place it
+	# can be reached from. Read from ExpansionCatalog rather than listed, so a new
+	# unit lands in the right place by having a row rather than an entry here.
 	for expansion_id: String in ExpansionCatalog.ids_for_host(systemid):
+		if ExpansionCatalog.has_own_card(expansion_id):
+			continue
 		items.append({"kind": "peripheral",
 			"label": ExpansionCatalog.label_of(expansion_id),
 			"spawn": "expansion:%s" % expansion_id})

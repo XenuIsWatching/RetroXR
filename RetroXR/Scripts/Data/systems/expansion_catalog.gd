@@ -335,6 +335,25 @@ static func loader_of(id: String) -> int:
 	return int(row(id).get("loader", MediaDimensions.LOADER_NONE))
 
 
+## True when this unit has a system tile of its own in the spawn menu.
+##
+## The test is whether the unit's media is a systemid of its OWN. A 64DD's disks
+## are "nintendo_64dd" and a Mega-CD's discs are "sega_cd", so both are systems
+## the core info knows, both appear in the systems list, and both therefore get a
+## card that is the right place to spawn the unit from. A Jaguar CD runs the
+## Jaguar's own media -- "atari_jaguar" -- names no systemid of its own and
+## appears in no core's systemid list, so it has no card and can only be offered
+## from the console's.
+##
+## Checked against libretro-core-info: media == id holds for exactly the seven
+## ids that appear as a systemid in at least one .info file, and fails for the
+## one that appears in none. The rule is not a coincidence of spelling -- a unit
+## whose media is its own systemid IS a system as far as the rest of RetroXR is
+## concerned, which is precisely what having a card means.
+static func has_own_card(id: String) -> bool:
+	return media_of(id) == id
+
+
 ## Every expansion that belongs to a console, in ROWS order.
 static func ids_for_host(host: String) -> Array[String]:
 	var out: Array[String] = []
