@@ -112,6 +112,7 @@ func _bake_nema() -> void:
 	]
 	_loft_chain(plastic,body,10); _cap(plastic,body[0],Vector3(0,0,0),true)
 	var boot := [
+		body[-1],
 		_round_ring(-0.033,0.0105,0.0115,0.0040),
 		_round_ring(-0.037,0.0093,0.0102,0.0038),
 		_round_ring(-0.040,0.0100,0.0109,0.0040), # molded flex rib
