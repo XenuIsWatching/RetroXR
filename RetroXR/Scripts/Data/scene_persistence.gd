@@ -28,6 +28,8 @@ const _STRING_FIELDS := [
 	"cart_systemid", "card_id", "card_label", "pdf_path", "scene", "video_path",
 	"video_label", "dvd_path", "dvd_label", "album_path", "album_label", "kind",
 	"pad_guid", "pad_name", "image_path",
+	# Which expansion a unit is -- a key in ExpansionCatalog.ROWS.
+	"expansion_id",
 ]
 const _NUMBER_FIELDS := [
 	"lid_angle", "scale_factor", "stereo_mode", "size_scale", "page_state",
@@ -46,6 +48,10 @@ const _SPECIALIZED_TYPES := [
 	"retro_controller", "retro_mouse", "snes_mouse", "vcr_tape", "dvd_disc",
 	"composite_cable", "audio_disc", "audio_cassette", "vinyl_record",
 	"pad_receiver", "keyboard_receiver", "mouse_receiver", "poster",
+	# The machines that bolt onto a console. A unit's own entry says which unit
+	# it is and what is in its bay; which console it is attached to is restored
+	# from the CONSOLE's entry, the way a memory card's slot is.
+	"expansion",
 ]
 
 ## Bumped by every async restore as it starts. Because those yield frames, a
@@ -56,6 +62,7 @@ const _SPECIALIZED_TYPES := [
 static var _restore_generation := 0
 
 const SYSTEM_SCENE           := preload("res://Scenes/Objects/system.tscn")
+const EXPANSION_SCENE        := preload("res://Scenes/Objects/expansion.tscn")
 const TV_SCENE               := preload("res://Scenes/Objects/tv.tscn")
 const CART_SCENE             := preload("res://Scenes/Objects/media/cartridge.tscn")
 const DISC_SCENE             := preload("res://Scenes/Objects/media/disc.tscn")
@@ -657,6 +664,13 @@ static func _entry_validation_error(entry: Dictionary, ids: Dictionary) -> Strin
 			if not ref_error.is_empty():
 				return "%s %s" % [field, ref_error]
 
+	if entry.has("expansions"):
+		if not entry["expansions"] is Array:
+			return "expansions is not an array"
+		for ref: Variant in entry["expansions"]:
+			var ref_error := _reference_validation_error(ref, ids)
+			if not ref_error.is_empty():
+				return "expansions member %s" % ref_error
 	if entry.has("extra_tvs"):
 		if not entry["extra_tvs"] is Array:
 			return "extra_tvs is not an array"
@@ -1067,6 +1081,14 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		var cart := _resolve_ref(root, spawned, d.get("cartridge")) as RetroCartridge
 		if cart:
 			sys.restore_cartridge(cart)
+		# Bolt the tower back together. Each unit seats through the same call a
+		# hand's release ends in, so a restored stack is the same object graph as
+		# a built one: the console knows its units, each unit knows its host, and
+		# the launch recipe reads exactly as it would have.
+		for ref: Variant in (d.get("expansions", []) as Array):
+			var unit := _resolve_ref(root, spawned, ref) as RetroExpansion
+			if unit:
+				sys.restore_expansion(unit)
 		var memcard := _resolve_ref(root, spawned, d.get("memcard")) as MemoryCard
 		if memcard:
 			sys.restore_memory_card(memcard, 0)
@@ -1081,6 +1103,14 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		var lid_angle := float(d.get("lid_angle", -1.0))
 		if lid_angle >= 0.0:
 			sys.set_lid_angle_deg.call_deferred(lid_angle)
+	elif obj is RetroExpansion:
+		# The disk, disc or cartridge in this unit's own bay. Independent of the
+		# order the stack is rebuilt in: a bay seats its media as a pose relative
+		# to the unit, so it comes out right whether or not the unit has been
+		# bolted to its console yet.
+		var own := _resolve_ref(root, spawned, d.get("media")) as Node3D
+		if own:
+			(obj as RetroExpansion).restore_media(own)
 	elif obj is RetroTV:
 		(obj as RetroTV).restore_control_state(d.get("controls", {}))
 	elif obj is VCRPlayer:
@@ -1310,6 +1340,17 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 			"video_out": sys.video_out_enabled,
 			"ignore_gravity": sys.ignore_gravity,
 		})
+		# What is bolted to this machine. Written from the CONSOLE rather than
+		# from each unit because that is the side which seats them -- one
+		# restore_expansion call per unit, whichever way round a given pair
+		# stacks -- and because it keeps a whole tower in one entry, in the order
+		# it was built. Omitted when nothing is attached, so no room file that
+		# has no stack in it changes at all.
+		var units: Array = []
+		for unit in sys.get_expansions():
+			units.append(_ref(node_to_id, unit))
+		if not units.is_empty():
+			result["expansions"] = units
 		# Which physical gamepad drives it, for handhelds — they have no port to
 		# take a PadReceiver, so the choice lives on the machine. Written only
 		# when one is set, so nothing changes for the rooms that never touch it.
@@ -1379,6 +1420,16 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		# read when LOADING, so without this branch a table is never written and
 		# there is nothing to load back.
 		return _base(id, "table", n3d)
+	elif node is RetroExpansion:
+		# The unit, and whatever is in its OWN bay. Which console it is bolted
+		# to is deliberately not written here -- it is in that console's entry,
+		# so a stack is described once instead of from both ends, where the two
+		# could disagree about what is attached to what.
+		var unit := node as RetroExpansion
+		return _base(id, "expansion", n3d).merged({
+			"expansion_id": unit.expansion_id,
+			"media": _ref(node_to_id, unit.get_media()),
+		})
 	elif node is RetroDisc:
 		# MUST precede the RetroCartridge branch — RetroDisc extends it.
 		return _base(id, "disc", n3d).merged(_media_fields(node as RetroCartridge))
@@ -1658,6 +1709,13 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				tv.scale_factor = data.get("scale_factor", 1.0)
 				tv.stereo_mode = int(data.get("stereo_mode", 0))
 				obj = tv
+			"expansion":
+				var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
+				# Before it enters the tree: RetroExpansion measures its box, its
+				# connector and its bay from this id in _ready, and a unit that
+				# arrives without one builds none of them.
+				unit.expansion_id = str(data.get("expansion_id", ""))
+				obj = unit
 			"cartridge":
 				var cart := CART_SCENE.instantiate() as RetroCartridge
 				_apply_media_fields(cart, data)

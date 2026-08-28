@@ -18,7 +18,7 @@ extends Node
 ## set_active_slot() writes user://scenes/prefs.json. Both are snapshotted at the
 ## start and put back at the end, so a red run cannot cost anyone their room.
 
-const GROUPS := ["slots", "ready", "transition", "autosave", "reload", "overlap", "fixture", "switch", "power", "vlc", "manifest"]
+const GROUPS := ["slots", "ready", "transition", "autosave", "reload", "overlap", "fixture", "switch", "power", "vlc", "manifest", "stack"]
 ## Scratch slot ids, in the arcade's real directory — slot_dir() is derived from
 ## the room id and cannot be pointed somewhere safer.
 const SLOT_A := "__scene_selftest_a"
@@ -66,6 +66,8 @@ func _ready() -> void:
 		await _test_switch()
 	if _want_group("power"):
 		await _test_power()
+	if _want_group("stack"):
+		await _test_stack()
 	if _want_group("vlc"):
 		_test_vlc()
 	if _want_group("manifest"):
@@ -650,6 +652,89 @@ func _test_power() -> void:
 ## The decks call _vlc.shutdown() from _exit_tree, which is a GDExtension method:
 ## if it ever stops being exported, every room change starts logging an invalid
 ## call and silently goes back to the unbounded destructor teardown.
+## A room saved with a machine assembled must come back assembled.
+##
+## The whole point of ExpansionCatalog is that a stack is real hardware rather
+## than a made-up systemid, and a stack that evaporates on reload is worse than
+## one that was never buildable: the player loses work. Nothing wrote or read an
+## expansion at all until this, so a Mega Drive standing on a Mega-CD with a disc
+## in the drive came back as a bare console on the floor.
+##
+## Built through the same restore_* calls a hand's release ends in, then saved,
+## cleared and loaded, so what is asserted is the real round trip and not a
+## hand-written entry list agreeing with itself.
+func _test_stack() -> void:
+	var sp := ScenePersistence.new("arcade")
+	sp.clear_scene(self)
+	for i in range(10):
+		await get_tree().physics_frame
+
+	var unit := (load("res://Scenes/Objects/expansion.tscn") as PackedScene) 		.instantiate() as RetroExpansion
+	unit.expansion_id = "sega_cd"
+	unit.add_to_group("spawned")
+	add_child(unit)
+	unit.freeze = true
+	unit.global_position = Vector3(0.0, 1.0, 0.0)
+
+	var console := (load("res://Scenes/Objects/system.tscn") as PackedScene) 		.instantiate() as RetroSystem
+	console.systemid = "mega_drive"
+	console.add_to_group("spawned")
+	add_child(console)
+	console.freeze = true
+	console.global_position = Vector3(0.4, 1.0, 0.0)
+
+	var disc := (load("res://Scenes/Objects/media/disc.tscn") as PackedScene) 		.instantiate() as RetroDisc
+	disc.systemid = "sega_cd"
+	disc.rom_path = "Z:/roms/sega_cd/selftest.cue"
+	disc.add_to_group("spawned")
+	add_child(disc)
+	disc.freeze = true
+	for i in range(60):
+		await get_tree().physics_frame
+
+	console.restore_expansion(unit)
+	unit.restore_media(disc)
+	for i in range(20):
+		await get_tree().physics_frame
+	_eq(console.expansion_ids().size(), 1, "stack/built: the console carries its unit")
+	_eq(unit.get_media_path(), "Z:/roms/sega_cd/selftest.cue",
+		"stack/built: the drive holds its disc")
+
+	_ok(sp.save_slot(self, SLOT_A), "stack/saved the assembled room")
+	sp.clear_scene(self)
+	for i in range(20):
+		await get_tree().physics_frame
+	_eq(get_tree().get_nodes_in_group("spawned").size(), 0, "stack/cleared")
+
+	var loaded: bool = await sp.load_slot_async(self, SLOT_A)
+	_ok(loaded, "stack/loaded it back")
+	for i in range(40):
+		await get_tree().physics_frame
+
+	var back_console: RetroSystem = null
+	var back_unit: RetroExpansion = null
+	for n in get_tree().get_nodes_in_group("spawned"):
+		if n is RetroSystem:
+			back_console = n as RetroSystem
+		elif n is RetroExpansion:
+			back_unit = n as RetroExpansion
+	_ok(back_console != null, "stack/the console came back")
+	_ok(back_unit != null, "stack/the unit came back at all")
+	if back_unit != null:
+		_eq(back_unit.expansion_id, "sega_cd", "stack/and it is the same unit")
+	if back_console != null and back_unit != null:
+		_eq(back_console.expansion_ids().size(), 1,
+			"stack/still bolted together after the reload")
+		_ok(back_unit.get_host() == back_console,
+			"stack/and the unit knows which console it is under")
+		_eq(back_unit.get_media_path(), "Z:/roms/sega_cd/selftest.cue",
+			"stack/the disc is still in the drive")
+
+	sp.clear_scene(self)
+	for i in range(20):
+		await get_tree().physics_frame
+
+
 func _test_vlc() -> void:
 	if not ClassDB.class_exists("VlcPlayer"):
 		print("[test] skip vlc/ — VlcPlayer extension not loaded")
