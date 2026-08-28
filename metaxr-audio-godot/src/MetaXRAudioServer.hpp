@@ -144,6 +144,11 @@ public:
     /// so unlike IsAvailable it does not trigger any.
     bool IsRunning() const { return m_available; }
 
+    /// Set before Shutdown() touches anything, so the audio thread can bail out
+    /// of _mix while the context is still alive. m_available is a plain bool
+    /// written on the main thread and is not safe to race on.
+    bool IsShuttingDown() const { return m_shutting_down.load(std::memory_order_acquire); }
+
     godot::String GetVersion();
     godot::String GetLastError();
 
@@ -234,6 +239,7 @@ private:
     MetaXRAudio::ABI          m_abi;
     MetaXRAudio::mxra_context* m_ctx = nullptr;
     bool                      m_available = false;
+    std::atomic<bool>         m_shutting_down{false};
     bool                      m_enabled = true;
     bool                      m_init_done = false;
     godot::String             m_version;

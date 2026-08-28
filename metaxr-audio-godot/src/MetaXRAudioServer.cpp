@@ -185,6 +185,13 @@ void MetaXRAudioServer::ReleaseMixer()
 
 void MetaXRAudioServer::Shutdown()
 {
+    // Flag first, and atomically. _mix runs on the audio driver thread and is
+    // still being called while this runs: without the flag it can enter MixInto
+    // between ReleaseMixer() below and context_destroy(), i.e. mix into a context
+    // that is in the middle of being torn down. m_available is a plain bool set at
+    // the end of this function, which is both too late and not safe to race on.
+    m_shutting_down.store(true, std::memory_order_release);
+
     ReleaseMixer();
 
     if (m_ctx)

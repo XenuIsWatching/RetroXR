@@ -16,7 +16,11 @@ int32_t MetaXRAudioPlayback::_mix(AudioFrame* p_buffer, float /*p_rate_scale*/, 
         return 0;
 
     MetaXRAudioServer* server = MetaXRAudioServer::GetSingleton();
-    if (server == nullptr || !server->IsRunning())
+    // IsShuttingDown comes first and is atomic: Shutdown() destroys the Meta
+    // context a few lines after it sets the flag, and this runs on the audio
+    // thread, so mixing into a context that is being torn down has to stop before
+    // the teardown starts rather than after it finishes.
+    if (server == nullptr || server->IsShuttingDown() || !server->IsRunning())
     {
         std::memset(p_buffer, 0, sizeof(AudioFrame) * static_cast<size_t>(p_frames));
         return p_frames;
