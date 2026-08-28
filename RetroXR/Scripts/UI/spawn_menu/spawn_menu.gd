@@ -7,8 +7,8 @@ extends Control
 
 ## Scale factor applied to the entire UI.  Increase this when viewport_size
 ## is higher than the logical design resolution so content stays the same
-## apparent physical size in VR.  Default 2.0 matches viewport_size 2200×1500
-## against the 1100×750 design resolution.
+## apparent physical size in VR.  Default 2.0 matches viewport_size 2200×1800
+## against the 1100×900 design resolution.
 @export var ui_scale: float = 2.0
 
 signal spawn_requested(type: String)

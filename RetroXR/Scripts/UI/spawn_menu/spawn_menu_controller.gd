@@ -103,8 +103,8 @@ const _DEPTH_SPEED    := 0.8    # m/s at full stick
 const _DEPTH_MIN      := 0.3    # min distance from camera
 const _DEPTH_MAX      := 2.5    # max distance from camera
 const _RESIZE_SPEED   := 0.4    # screen_size m/s at full stick
-const _SIZE_MIN       := Vector2(0.55, 0.375)  # half the shipped 1.1 x 0.75
-const _SIZE_MAX       := Vector2(2.2, 1.5)     # double it
+const _SIZE_MIN       := Vector2(0.55, 0.45)   # half the shipped 1.1 x 0.9
+const _SIZE_MAX       := Vector2(2.2, 1.8)     # double it
 
 # Grab state
 var _grab_active: bool = false
