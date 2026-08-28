@@ -1133,6 +1133,17 @@ func _on_spawn_requested(type: String) -> void:
 		shelled.tv_model = type.substr("tv:".length())
 		_place_spawned(shelled, "tv")
 		return
+	# A mod prop. The token IS the registered persistence type, so the thing that
+	# spawns and the thing that is saved cannot drift apart — the scene and the
+	# metadata stamp both come from ScenePersistence's own registry.
+	if type.begins_with("mod:"):
+		var mod_type := type.substr("mod:".length())
+		var prop := ScenePersistence._instantiate_mod_object(mod_type)
+		if prop == null:
+			push_warning("[mods] cannot spawn '%s' — no such registered object" % mod_type)
+			return
+		_place_spawned(prop, type)
+		return
 	match type:
 		"tv":
 			obj = TV_SCENE.instantiate() as Node3D

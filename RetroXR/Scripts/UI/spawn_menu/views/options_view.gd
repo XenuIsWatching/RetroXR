@@ -157,6 +157,7 @@ func _build() -> void:
 	_build_romm_options(_page("RomM", MenuIcons.romm_mark()))
 	_build_scraper_options(_page("Scraper"))
 	_build_retroachievements_options(_page("RetroAchievements"))
+	_build_mods_options(_page("Mods"))
 	_build_debug_options(_page("Debug"))
 
 	_tabs.tab_changed.connect(func(_i: int) -> void: scroll_changed.emit(active_scroll()))
@@ -585,6 +586,157 @@ func _build_general_options(vbox: VBoxContainer) -> void:
 		AppPrefs.save_prefs()
 		controller_hands_changed.emit(on)
 	))
+
+
+## The MODS sub-tab: what is installed, what each one adds, and what went wrong
+## with the ones that did not load.
+##
+## The last of those is most of the reason this page exists. A mod that silently
+## fails to appear is this system's worst failure mode, so refused and failed
+## mods are listed as loudly as working ones, each with the check that rejected
+## it — an escaped namespace, an unsupported api_version, a corrupt container.
+##
+## What a mod "adds" is OBSERVED, not declared: ModApi records each registration
+## as it happens, so this reports what the mod actually did rather than what its
+## manifest claimed. For a feature whose entire security story is the player's
+## informed consent, that difference is the point.
+func _build_mods_options(vbox: VBoxContainer) -> void:
+	vbox.add_child(MenuStyle.spacer(10))
+	vbox.add_child(MenuStyle.header("Mods"))
+	vbox.add_child(MenuStyle.hint(
+		"Mods are not made, reviewed or endorsed by RetroXR. One runs with the "
+		+ "app's full access to your ROMs, saves and network, so nothing loads "
+		+ "until you enable it here."))
+	vbox.add_child(MenuStyle.hint("Folder: " + RomLibrary.default_mods_root()))
+
+	if Mods.restart_pending():
+		var pending := MenuStyle.label(
+			"Restart RetroXR to apply your changes.", 18, MenuStyle.COLOR_RECOMMENDED)
+		pending.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vbox.add_child(pending)
+
+	var mods: Array = Mods.all_mods()
+	var unreadable: Array = Mods.unreadable()
+	if mods.is_empty() and unreadable.is_empty():
+		vbox.add_child(MenuStyle.spacer(10))
+		vbox.add_child(MenuStyle.hint(
+			"No mods installed. Drop a .zip or .pck in the folder above and "
+			+ "restart."))
+		return
+
+	for rec: Dictionary in mods:
+		_build_mod_card(vbox, rec)
+	for u: Dictionary in unreadable:
+		_build_unreadable_card(vbox, u)
+
+
+func _build_mod_card(vbox: VBoxContainer, rec: Dictionary) -> void:
+	var manifest: ModManifest = rec["manifest"]
+	var status := int(rec["status"])
+	vbox.add_child(MenuStyle.spacer(14))
+
+	var head := MenuStyle.hbox(10)
+	vbox.add_child(head)
+	var thumb: Texture2D = rec["thumbnail"]
+	if thumb != null:
+		var art := TextureRect.new()
+		art.texture = thumb
+		art.custom_minimum_size = Vector2(56, 56)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		head.add_child(art)
+	var titles := MenuStyle.vbox(2)
+	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(titles)
+	titles.add_child(MenuStyle.label("%s  %s" % [manifest.name, manifest.version],
+		20, MenuStyle.COLOR_TITLE))
+	var by := manifest.author if not manifest.author.is_empty() else "unknown author"
+	titles.add_child(MenuStyle.label("%s — %s" % [manifest.id, by], 15,
+		MenuStyle.COLOR_DESC))
+	titles.add_child(MenuStyle.label(Mods.status_text(status), 15,
+		_status_color(status)))
+
+	if not manifest.description.is_empty():
+		var desc := MenuStyle.label(manifest.description, 16, MenuStyle.COLOR_LICENSE)
+		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vbox.add_child(desc)
+
+	# What it actually registered, taken from ModApi rather than the manifest.
+	var api: ModApi = rec["api"]
+	if api != null:
+		vbox.add_child(MenuStyle.label("Adds: " + api.summary(), 16,
+			MenuStyle.COLOR_LICENSE))
+		var contributions: Dictionary = api.contributions()
+		for kind: String in ModApi.KINDS:
+			for label: String in (contributions.get(kind, []) as Array):
+				vbox.add_child(MenuStyle.hint("    • " + label))
+		for problem: String in api.problems():
+			vbox.add_child(MenuStyle.label("    ! " + problem, 15,
+				MenuStyle.COLOR_BTN_UPD))
+
+	if not str(rec["reason"]).is_empty():
+		var reason := MenuStyle.label(str(rec["reason"]), 16,
+			MenuStyle.COLOR_BTN_UPD if status == Mods.Status.REFUSED
+			or status == Mods.Status.FAILED else MenuStyle.COLOR_DESC)
+		reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vbox.add_child(reason)
+
+	# Paths outside its own folder. The shadowing list is the one that matters:
+	# those replace files the game ships.
+	for path: String in manifest.shadowing_claims():
+		vbox.add_child(MenuStyle.label("    Replaces " + path, 15,
+			MenuStyle.COLOR_BTN_UPD))
+	for path: String in manifest.adding_claims():
+		vbox.add_child(MenuStyle.hint("    Adds file " + path))
+
+	vbox.add_child(MenuStyle.hint("%s  ·  %s  ·  %d files" % [
+		str(rec["path"]).get_file(), MenuStyle.human_bytes(int(rec["size"])),
+		int(rec["files"])]))
+
+	# A refused mod gets no switch: enabling it would change nothing, and a
+	# toggle that does nothing is worse than none.
+	if status == Mods.Status.REFUSED:
+		return
+	var id := str(rec["id"])
+	var sw := MenuStyle.switch_row(vbox, "Enabled", Mods.is_enabled(id))
+	sw.toggled.connect(func(on: bool) -> void:
+		Mods.set_enabled(id, on)
+		_refresh_mods_page())
+
+
+func _build_unreadable_card(vbox: VBoxContainer, u: Dictionary) -> void:
+	vbox.add_child(MenuStyle.spacer(14))
+	vbox.add_child(MenuStyle.label(str(u["path"]).get_file(), 20,
+		MenuStyle.COLOR_TITLE))
+	vbox.add_child(MenuStyle.label("Not loadable", 15, MenuStyle.COLOR_BTN_UPD))
+	var why := MenuStyle.label(str(u["reason"]), 16, MenuStyle.COLOR_DESC)
+	why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(why)
+
+
+static func _status_color(status: int) -> Color:
+	match status:
+		Mods.Status.LOADED:  return MenuStyle.COLOR_RECOMMENDED
+		Mods.Status.PENDING: return MenuStyle.COLOR_BTN_UPD
+		Mods.Status.REFUSED: return MenuStyle.COLOR_BTN_UPD
+		Mods.Status.FAILED:  return MenuStyle.COLOR_BTN_UPD
+	return MenuStyle.COLOR_DESC
+
+
+## Rebuild the page in place after a toggle, so the "restart to apply" line
+## appears without the player having to leave the tab and come back.
+func _refresh_mods_page() -> void:
+	for page: ScrollContainer in _pages:
+		if page.name != "Mods":
+			continue
+		var box := page.get_child(0) as VBoxContainer
+		if box == null:
+			return
+		for child in box.get_children():
+			child.queue_free()
+			box.remove_child(child)
+		_build_mods_options(box)
+		return
 
 
 ## The DEBUG sub-tab: which build this is, the overlays that draw over the room,

@@ -9,8 +9,18 @@
 class_name SystemInfo
 extends Resource
 
-## Games load from a cartridge, a lidded disc tray (PS1/GameCube), or a front
-## disc slot (PS2/PSP UMD). Values match MediaDimensions.LOADER_NONE/TRAY/SLOT.
+## Games load from a cartridge, a lidded or sliding disc tray, or a true front
+## slot that draws the disc in. Values match MediaDimensions.LOADER_NONE/TRAY/SLOT,
+## and MediaDimensions is the side that decides — it is what the cabinet actually
+## reads, while nothing reads this field yet.
+##
+## DISC_INSERT is narrower than it sounds and the Wii is the only hardware here
+## that earns it. A front-SLIDING tray is still DISC_TRAY: MediaTray owns the
+## gating, seating, spin and collision either way, and only the geometry and the
+## button's word change (see MediaDimensions.FRONT_TRAY_SYSTEMS). The PS2 and the
+## PSP were both marked DISC_INSERT against that rule — the PS2 slides a tray out
+## and the PSP has a hinged UMD door — so both disagreed with the loader they
+## were actually given. mod_tests' consistency/ group now checks this pair.
 enum MediaType { CARTRIDGE = 0, DISC_TRAY = 1, DISC_INSERT = 2 }
 
 ## Project systemid (e.g. "nes"); the filename stem of this resource.

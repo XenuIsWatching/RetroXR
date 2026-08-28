@@ -7,6 +7,6 @@ script = ExtResource("1")
 systemid = "playstation_portable"
 display_name = "Sony PSP"
 native_ports = 1
-media_type = 2
+media_type = 1
 supports_multitap = false
 multitap_ports = 0

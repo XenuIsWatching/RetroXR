@@ -7,6 +7,6 @@ script = ExtResource("1")
 systemid = "playstation2"
 display_name = "Sony PlayStation 2"
 native_ports = 2
-media_type = 2
+media_type = 1
 supports_multitap = true
 multitap_ports = 8

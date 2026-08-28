@@ -856,7 +856,15 @@ func _wire_signals() -> void:
 
 func _on_connected_to_server() -> void:
 	print("[NetworkManager] ENet connected as peer %d; registering" % multiplayer.get_unique_id())
-	_register.rpc_id(1, {"name": player_name, "is_vr": get_viewport().use_xr}, PROTOCOL_VERSION)
+	# The mod list rides in the info dict, not the packs themselves. A peer with
+	# a different set is told so and refused; it is never sent the mod. A mod is
+	# a file the player chose to install, and this app is not a channel for
+	# distributing one.
+	_register.rpc_id(1, {
+		"name": player_name,
+		"is_vr": get_viewport().use_xr,
+		"mods": Mods.fingerprint(),
+	}, PROTOCOL_VERSION)
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -903,6 +911,16 @@ func _register(info: Dictionary, version: int) -> void:
 		return
 	if peers.size() >= MAX_PLAYERS:
 		_reject.rpc_id(sender, "server full")
+		return
+	# Mods change what objects exist and what a console looks like, so a room
+	# shared between mismatched peers is one where the two see different rooms —
+	# and under netplay, one where a mod console desyncs the emulation. Refused
+	# with the difference named, so the player knows what to install or remove.
+	var their_mods: PackedStringArray = info.get("mods", PackedStringArray())
+	var our_mods := Mods.fingerprint()
+	if their_mods != our_mods:
+		_reject.rpc_id(sender, "mods do not match: %s"
+			% Mods.fingerprint_mismatch(our_mods, their_mods))
 		return
 	var entry := {
 		"name": str(info.get("name", "Player")).left(24),
