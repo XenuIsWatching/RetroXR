@@ -114,14 +114,14 @@ func _delete_with_dependents(pickable: XRToolsPickable) -> void:
 		Vanish.free_node(pickable)
 
 
-## Free the whole composite lead one of its plugs belongs to.
+## Free the whole lead one of its plugs belongs to.
 ##
 ## A lead is a free-standing object joining two devices rather than a tail either
-## of them owns, and it has no body of its own — six plugs and a rope — so a plug
-## is the only handle the can ever sees. Binning one end therefore bins the lead,
-## as does binning a device it is patched into. drop_and_free unseats every other
-## end first, so the deck or television at the far side hears the unplug and drops
-## the feed rather than being left holding a dead plug.
+## of them owns, and it has no body of its own — plugs and a rope — so a plug is
+## the only handle the can ever sees. Binning one end therefore bins the lead, as
+## does binning a device it is patched into. drop_and_free unseats every other end
+## first, so the deck or television at the far side hears the unplug and drops the
+## feed rather than being left holding a dead plug.
 ##
 ## The plug is never freed on its own: its lead would go on running the tether in
 ## CompositeCable._physics_process over a freed end.
@@ -131,12 +131,16 @@ func _free_lead(plug: RcaPlug) -> void:
 	var owner_cable: Variant = plug.cable
 	if not is_instance_valid(owner_cable):
 		return
-	var lead := owner_cable as CompositeCable
+	# Node, not CompositeCable: a mains lead is a PowerCord, which is neither one
+	# nor a subclass of one. Both answer drop_and_free.
+	var lead := owner_cable as Node
 	# A console wears two sockets and so hands the same lead over twice.
 	if lead == null or lead.is_queued_for_deletion():
 		return
+	if not lead.has_method("drop_and_free"):
+		return
 	print("[StorageBox] deleting lead '%s'" % lead.name)
-	lead.drop_and_free()
+	lead.call("drop_and_free")
 
 
 func _set_trash_highlight(pickable: XRToolsPickable, in_trash: bool) -> void:

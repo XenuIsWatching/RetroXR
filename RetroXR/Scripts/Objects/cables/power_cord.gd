@@ -28,6 +28,22 @@ func on_plug_seating_changed() -> void:
 	pass
 
 
+## Unseat both connectors, then free the lead.
+##
+## Looked up by name by ScenePersistence.clear_scene and by StorageBox. Without it
+## a socket is left holding a freed pickable and XRToolsPickable._exit_tree walks a
+## dangling grab driver.
+func drop_and_free() -> void:
+	for e: int in [End.WALL, End.APPLIANCE]:
+		var plug := plug_at(e)
+		if plug == null:
+			continue
+		var port := socket_holding(plug)
+		if port != null:
+			port.drop_object()
+	queue_free()
+
+
 # ── Persistence ────────────────────────────────────────────────────────────────
 #
 # Deliberately the same record shape a CompositeCable writes: an "end" and a
