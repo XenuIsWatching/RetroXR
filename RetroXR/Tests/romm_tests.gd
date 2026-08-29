@@ -57,7 +57,9 @@ func _ready() -> void:
 	_test_verify_transfer()
 	_test_error_vocabulary()
 	_test_cache_paths()
+	_test_launch_path()
 	_test_scan_roms()
+	_test_index_by_basename()
 	_test_gamelist_removal()
 	_test_media_and_cleanup()
 	_test_cleanup_gate()
@@ -555,6 +557,74 @@ func _test_scan_roms() -> void:
 
 	_rm_rf(dir_path)
 	_ok("scan/cleaned up", not DirAccess.dir_exists_absolute(dir_path))
+
+
+## The stem index behind every local row. Pure, so it needs no directory.
+##
+## The tier-1 case shipped: a Satellaview shell sat in its folder as BS-X.sfc
+## with a BS-X.srm battery save beside it, the save took the shared stem, and
+## because .srm is not a ROM extension the row was then dropped — the game was
+## absent from the library with nothing to say why. An imported library arrives
+## exactly like that, saves alongside games.
+func _test_index_by_basename() -> void:
+	var exts: Array[String] = ["sfc", "bs", "z64", "cue", "bin"]
+
+	# Order reversed against the fix: the save comes last, so last-one-wins would
+	# hand it the key.
+	var rows: Array[Dictionary] = [
+		{"path": "/roms/satellaview/BS-X.sfc", "label": "BS-X"},
+		{"path": "/roms/satellaview/BS-X.srm", "label": "BS-X"},
+	]
+	var idx := RomLibrary.index_by_basename(rows, exts)
+	_eq("stem/a save does not shadow its game",
+		str((idx.get("bs-x", {}) as Dictionary).get("path", "")), "/roms/satellaview/BS-X.sfc")
+
+	# ...and the same when the game is scanned second.
+	rows = [
+		{"path": "/roms/satellaview/BS-X.srm", "label": "BS-X"},
+		{"path": "/roms/satellaview/BS-X.sfc", "label": "BS-X"},
+	]
+	idx = RomLibrary.index_by_basename(rows, exts)
+	_eq("stem/order does not decide it",
+		str((idx.get("bs-x", {}) as Dictionary).get("path", "")), "/roms/satellaview/BS-X.sfc")
+
+	# A savestate is the other sidecar that lands beside a game.
+	rows = [
+		{"path": "/roms/n64/Game.state", "label": "Game"},
+		{"path": "/roms/n64/Game.z64", "label": "Game"},
+	]
+	idx = RomLibrary.index_by_basename(rows, exts)
+	_eq("stem/a savestate does not shadow its game",
+		str((idx.get("game", {}) as Dictionary).get("path", "")), "/roms/n64/Game.z64")
+
+	# The rule that was already there and must survive: the descriptor wins over
+	# the raw track, whichever order they arrive in.
+	rows = [
+		{"path": "/roms/psx/Disc.cue", "label": "Disc"},
+		{"path": "/roms/psx/Disc.bin", "label": "Disc"},
+	]
+	idx = RomLibrary.index_by_basename(rows, exts)
+	_eq("stem/manifest still beats its track",
+		str((idx.get("disc", {}) as Dictionary).get("path", "")), "/roms/psx/Disc.cue")
+
+	# A downloaded .zip is not in any core's list, and until it is unpacked it is
+	# still the only thing standing for that game — it must keep the key.
+	rows = [{"path": "/roms/n64/Zipped.zip", "label": "Zipped"}]
+	idx = RomLibrary.index_by_basename(rows, exts)
+	_eq("stem/an unpacked-yet .zip still holds its key",
+		str((idx.get("zipped", {}) as Dictionary).get("path", "")), "/roms/n64/Zipped.zip")
+
+	# Two files that are both real games: either may win, but one must, and the
+	# key must not be lost.
+	rows = [
+		{"path": "/roms/snes/Twin.sfc", "label": "Twin"},
+		{"path": "/roms/snes/Twin.bs", "label": "Twin"},
+	]
+	idx = RomLibrary.index_by_basename(rows, exts)
+	_ok("stem/two real games still yield a row",
+		not str((idx.get("twin", {}) as Dictionary).get("path", "")).is_empty())
+
+	_eq("stem/a shared stem collapses to one row", idx.size(), 1)
 
 
 # ---------------------------------------------------------------------------
@@ -1934,3 +2004,55 @@ func _test_index_rewrite() -> void:
 	cat.unload_index()
 	cat.free()
 	_rm_rf(dir)
+
+
+## Which file a downloaded group is actually launched from.
+##
+## The stale-archive case is the one that shipped: a title fetched from RomM as a
+## .zip is unpacked and the archive deleted, but the group still NAMES the .zip
+## through fs_name. Handing that to a core hands it a path with no file behind
+## it, and the machine refuses to start with nothing on screen to explain why --
+## the row it came from looks entirely normal. A BS-X pack downloaded from the
+## server did exactly this.
+func _test_launch_path() -> void:
+	var systemid := "__romm_selftest"
+	var dir := RomLibrary.rom_dir_for_system(systemid)
+	DirAccess.make_dir_recursive_absolute(dir)
+	var real := "Game.bs"
+	var f := FileAccess.open(dir.path_join(real), FileAccess.WRITE)
+	if f != null:
+		f.store_buffer(PackedByteArray([0, 1, 2, 3]))
+		f.close()
+
+	var one_member := {"systemid": systemid, "members": [{"path": real}]}
+
+	# The archive it arrived in is gone, so naming it must not win.
+	var stale := one_member.duplicate(true)
+	stale["fs_name"] = "Game.zip"
+	_eq("launch/ a deleted archive falls through to the member",
+		RommCacheManifest.launch_path(systemid, stale), dir.path_join(real))
+
+	# A launch that IS on disk is still preferred -- that is the whole point of
+	# recording one for a multi-file set.
+	var good := one_member.duplicate(true)
+	good["launch"] = real
+	_eq("launch/ a launch that exists is used as-is",
+		RommCacheManifest.launch_path(systemid, good), dir.path_join(real))
+
+	# Ambiguous: several members and no usable launch. Answering with a guess
+	# would pick a track out of a multi-disc set, so it answers with nothing and
+	# lets the caller resolve by basename instead.
+	var many := {"systemid": systemid, "fs_name": "Game.zip",
+		"members": [{"path": real}, {"path": "Other.bs"}]}
+	_eq("launch/ an ambiguous group names nothing rather than guessing",
+		RommCacheManifest.launch_path(systemid, many), "")
+
+	# Nothing on disk at all.
+	var missing := {"systemid": systemid, "fs_name": "Gone.zip",
+		"members": [{"path": "Gone.bs"}]}
+	_eq("launch/ a group whose file is gone names nothing",
+		RommCacheManifest.launch_path(systemid, missing), "")
+
+	DirAccess.remove_absolute(dir.path_join(real))
+	DirAccess.remove_absolute(dir)
+

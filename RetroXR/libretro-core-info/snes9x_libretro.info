@@ -12,7 +12,7 @@ display_version = "1.61"
 manufacturer = "Nintendo"
 systemname = "Super Nintendo Entertainment System"
 systemid = "super_nes"
-secondary_systemids = "satellaview:bs|sufami_turbo:st"
+secondary_systemids = "satellaview:sfc,bs|sufami_turbo:st"
 
 # Firmware / BIOS
 firmware_count = 2

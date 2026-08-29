@@ -105,6 +105,45 @@ static func scan_roms(systemid: String, extensions: Array[String]) -> Array[Dict
 	return results
 
 
+## Index scan results by lowercase basename, resolving same-stem collisions.
+##
+## The library keys on the stem rather than the filename so a row survives its
+## file changing extension underneath it — a RomM .zip unpacking into .3ds, a
+## .cue standing in for the .bin beside it. The cost is that every file sharing a
+## stem competes for one key, and the loser is not shown at all.
+##
+## Highest score wins:
+##   2  a manifest (cue/gdi/m3u/ccd) — the descriptor a core is handed, never a
+##      raw track sitting beside it
+##   1  an extension some core declares for this system: an actual game
+##   0  everything else — a battery save, a savestate, a screenshot
+##
+## Tier 1 over 0 is the load-bearing one. Emulator front ends routinely keep
+## `Game.srm` next to `Game.sfc`, and an imported library arrives that way; with
+## last-one-wins whichever the directory happened to yield second took the key,
+## and if that was the save then the GAME vanished from the library entirely.
+## Nothing said so — the row was simply absent.
+static func index_by_basename(roms: Array[Dictionary], rom_exts: Array[String]) -> Dictionary:
+	var by_name: Dictionary = {}
+	var score: Dictionary = {}
+	for rom: Dictionary in roms:
+		var path := str(rom["path"])
+		var key := path.get_file().get_basename().to_lower()
+		var ext := path.get_extension().to_lower()
+		var rank := 0
+		if ext in RommCatalog.MANIFEST_EXTS:
+			rank = 2
+		elif ext in rom_exts:
+			rank = 1
+		# Strictly greater, so the first of an equal pair keeps the key and the
+		# scan's own ordering decides — not the directory's.
+		if by_name.has(key) and rank <= int(score[key]):
+			continue
+		by_name[key] = rom
+		score[key] = rank
+	return by_name
+
+
 ## One game per subfolder: find the marker file the core is handed inside each.
 ##
 ## The folder name is the label, not the marker's basename — markers are named by

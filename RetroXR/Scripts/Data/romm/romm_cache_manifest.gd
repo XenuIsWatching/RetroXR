@@ -201,8 +201,36 @@ func cached_paths_for_system(systemid: String) -> Dictionary:
 		var rom_id := int(group.get("rom_id", 0))
 		if rom_id == 0 or not _group_exists(group):
 			continue
-		out[rom_id] = local_path(systemid, str(group.get("launch", group.get("fs_name", ""))))
+		var launch := launch_path(systemid, group)
+		if not launch.is_empty():
+			out[rom_id] = launch
 	return out
+
+
+## The file this group is actually launched from, or "" when it cannot be named.
+##
+## `launch` is right whenever the download recorded one. The fallback, `fs_name`,
+## is the SERVER's filename -- and for anything that arrived as an archive that is
+## the .zip, which was unpacked and deleted. Handing that to a core is handing it
+## a path with no file behind it: the machine refuses to start and says nothing a
+## player could act on, while the row it came from looks completely normal.
+##
+## An unambiguous group answers with its own member instead. An ambiguous one
+## answers with nothing, which is not a failure -- the caller then resolves the
+## title by basename, where a multi-disc set's tracks are already scored against
+## each other properly.
+static func launch_path(systemid: String, group: Dictionary) -> String:
+	var named := str(group.get("launch", group.get("fs_name", "")))
+	if not named.is_empty():
+		var path := _owned_local_path(systemid, named)
+		if not path.is_empty() and FileAccess.file_exists(path):
+			return path
+	var members: Array = group.get("members", [])
+	if members.size() == 1:
+		var only := _owned_local_path(systemid, str((members[0] as Dictionary).get("path", "")))
+		if not only.is_empty() and FileAccess.file_exists(only):
+			return only
+	return ""
 
 
 func lru_keys() -> Array[String]:
