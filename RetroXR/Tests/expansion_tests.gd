@@ -444,24 +444,28 @@ func _group_media() -> void:
 	# MACHINE: POWER follows the console, ACCESS is $2194 bit 2 as the core
 	# reports it. The broadcast client deliberately drives neither.
 	var lamp := await _unit("satellaview")
-	_check(lamp.get_node_or_null("LedPower") != null, "led/ the unit wears a POWER lamp")
-	_check(lamp.get_node_or_null("LedAccess") != null, "led/ and an ACCESS lamp")
+	# The lamps are a panel of their own, hung on the unit -- the expansion builds
+	# a box out of the catalog and knows nothing about what is printed on it.
+	var panel := lamp.get_node_or_null("SatellaviewPanel") as SatellaviewPanel
+	_check(panel != null, "led/ the unit wears a front panel")
+	_check(panel.get_node_or_null("LedPower") != null, "led/ the unit wears a POWER lamp")
+	_check(panel.get_node_or_null("LedAccess") != null, "led/ and an ACCESS lamp")
 
 	# Named on the case, and far enough apart to be read. At the spacing the two
 	# lamps started at, POWER and ACCESS overlapped into one word.
-	var pl := lamp.get_node_or_null("LabelPower") as Label3D
-	var al := lamp.get_node_or_null("LabelAccess") as Label3D
+	var pl := panel.get_node_or_null("LabelPower") as Label3D
+	var al := panel.get_node_or_null("LabelAccess") as Label3D
 	_check(pl != null and pl.text == "POWER", "led/ POWER is named under its lamp")
 	_check(al != null and al.text == "ACCESS", "led/ and ACCESS under its own")
 	if pl != null and al != null:
 		var gap: float = absf(al.position.x - pl.position.x)
 		_check(gap > 0.03, "led/ the two names are far enough apart not to run together")
-		_check(pl.position.y < (lamp.get_node("LedPower") as Node3D).position.y,
+		_check(pl.position.y < (panel.get_node("LedPower") as Node3D).position.y,
 			"led/ and they sit UNDER the lamps they name")
 
-	var power_mat: StandardMaterial3D = lamp.get("_led_power_mat")
-	var access_mat: StandardMaterial3D = lamp.get("_led_access_mat")
-	lamp.call("_update_lamps")
+	var power_mat: StandardMaterial3D = panel.get("_led_power_mat")
+	var access_mat: StandardMaterial3D = panel.get("_led_access_mat")
+	panel.call("_update_lamps")
 	_check(power_mat.emission_energy_multiplier == 0.0,
 		"led/ POWER is dark with no console under it")
 	_check(access_mat.emission_energy_multiplier == 0.0, "led/ and so is ACCESS")
@@ -469,32 +473,36 @@ func _group_media() -> void:
 	var lamp_sfc := await _console("super_nes")
 	await _bolt(lamp_sfc, lamp)
 	lamp_sfc.is_powered_on = true
-	lamp.call("_update_lamps")
+	panel.call("_update_lamps")
 	_check(power_mat.emission_energy_multiplier > 0.0,
 		"led/ POWER follows the console it is under")
 	lamp_sfc.is_powered_on = false
-	lamp.call("_update_lamps")
+	panel.call("_update_lamps")
 	_check(power_mat.emission_energy_multiplier == 0.0, "led/ and goes out with it")
 
 	# ACCESS answers the core and nothing else.
-	lamp.call("_on_core_led", 0, true)
+	panel.call("_on_core_led", 0, true)
 	_check(access_mat.emission_energy_multiplier > 0.0,
 		"led/ ACCESS lights when the core reports the register")
-	lamp.call("_on_core_led", 0, false)
+	panel.call("_on_core_led", 0, false)
 	_check(access_mat.emission_energy_multiplier == 0.0, "led/ and clears when it drops")
-	lamp.call("_on_core_led", 3, true)
+	panel.call("_on_core_led", 3, true)
 	_check(access_mat.emission_energy_multiplier == 0.0,
 		"led/ an index that is not ACCESS is ignored")
 
 	# The client's state must not reach a lamp: that was invented signalling the
-	# hardware never had, and removing it is the point of this group.
-	lamp.call("_on_client_state", "error")
-	_check(access_mat.emission_energy_multiplier == 0.0,
+	# hardware never had, and removing it is the point of this group. Asserted by
+	# ABSENCE -- this used to call the handler and check the lamp afterwards, but
+	# calling a method that is gone aborts the group instead of failing a check,
+	# so this and the two media checks below it had stopped running at all.
+	_check(not panel.has_method("_on_client_state"),
 		"led/ and the broadcast client drives neither lamp")
-	await _clear()
+	_check(access_mat.emission_energy_multiplier == 0.0,
+		"led/ and ACCESS is dark with nothing but the core to light it")
 
 	# Empty both zones before the objects go: a snap zone that is still holding one
 	# walks it on the body_exited a queue_free fires, and reads a freed instance.
+	# Which is why the clear comes after: it frees the unit this reaches through.
 	await _unbolt(nest_bsx.get_node("MediaBay") as XRToolsSnapZone, nest_pack)
 	await _clear()
 
