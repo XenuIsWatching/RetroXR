@@ -40,6 +40,18 @@ static func cart_save_path(core_name: String, rom_path: String, save_id: String)
 	return cart_save_dir(core_name, rom_path).path_join(save_id + ".srm")
 
 
+## save/<core>/<expansion_id>/<expansion_id>.srm — the battery inside an
+## EXPANSION UNIT rather than in whatever medium is loaded with it.
+##
+## The BS-X cartridge is the case: its 32 KB holds the player's name and town,
+## and that belongs to the CART. Keyed off the medium instead, every memory pack
+## looked like a different BS-X and the shell asked for a new name each time one
+## was swapped in. Deliberately independent of rom_path for the same reason --
+## the pack IS the rom_path here.
+static func unit_save_path(core_name: String, expansion_id: String) -> String:
+	return core_save_dir(core_name).path_join(expansion_id) 		.path_join(expansion_id + ".srm")
+
+
 ## save/memcards/<family> — every card belonging to one console family.
 static func cards_dir(family: String) -> String:
 	return CoreDownloadManager.default_core_root().path_join("save") \

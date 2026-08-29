@@ -359,6 +359,12 @@ func _sram_slot() -> String:
 		if card and "card_id" in card:
 			return "card:%s" % str(card.get("card_id"))
 		return ""
+	# Stable across a pack swap, for the same reason the path below is: the
+	# battery is in the CART, so changing what is in its bay is not a change of
+	# save source.
+	var slot_battery := _expansion_holding_battery()
+	if slot_battery != null:
+		return "unit:%s" % slot_battery.expansion_id
 	if _host._snapped_cartridge and "save_id" in _host._snapped_cartridge:
 		return str(_host._snapped_cartridge.get("save_id"))
 	return ""
@@ -414,10 +420,55 @@ func _compose_sram_path(resolved_core: String, slot := 0) -> String:
 			return SramPaths.card_save_path(_card_family(),
 				str(card.get("card_id")))
 		return ""
+	# A unit with its own battery answers before anything in its bay, and before
+	# the console's slot: the BS-X cartridge IS what sits in that slot, and the
+	# pack loaded with it is the rom_path, so both of the routes below would key
+	# the cart's own 32 KB to whichever medium happened to be in it. Then every
+	# new pack read as a different BS-X and the shell asked for a name again.
+	var battery := _expansion_holding_battery()
+	if battery != null:
+		return SramPaths.unit_save_path(resolved_core, battery.expansion_id)
 	if _host._snapped_cartridge and "save_id" in _host._snapped_cartridge:
 		return SramPaths.cart_save_path(resolved_core, _host.rom_path,
 			str(_host._snapped_cartridge.get("save_id")))
+	# Nothing in the console's own slot, but the machine may still be running
+	# something: a 64DD disk or a Mega-CD disc sits in the EXPANSION's bay, and
+	# that stack is what _apply_expansion_launch booted from. Read the medium from
+	# there rather than returning "", which gave those machines no save file at
+	# all -- a battery-backed disk that silently never saved.
+	var seated := _expansion_media()
+	if seated != null and "save_id" in seated:
+		return SramPaths.cart_save_path(resolved_core, _host.rom_path,
+			str(seated.get("save_id")))
 	return ""
+
+
+## An attached unit that owns its own save, or null. Independent of whether a
+## medium is loaded: an empty BS-X cartridge still has the town on it.
+func _expansion_holding_battery() -> RetroExpansion:
+	if _host == null or not _host.has_method("get_expansions"):
+		return null
+	for unit: RetroExpansion in _host.get_expansions():
+		if unit == null or not is_instance_valid(unit):
+			continue
+		if ExpansionCatalog.save_owner_of(unit.expansion_id) 				== ExpansionCatalog.SAVE_OWNER_UNIT:
+			return unit
+	return null
+
+
+## The medium in an attached expansion's own bay, or null. First one wins: a
+## console carries at most one loaded stack, and a unit with no bay of its own
+## (the Satellaview, whose cartridge goes into the console slot) reports none.
+func _expansion_media() -> Node3D:
+	if _host == null or not _host.has_method("get_expansions"):
+		return null
+	for unit: RetroExpansion in _host.get_expansions():
+		if unit == null or not is_instance_valid(unit):
+			continue
+		var m: Node3D = unit.get_media()
+		if m != null:
+			return m
+	return null
 
 
 ## The image backing one card slot for a run that is about to start, formatting a

@@ -1451,6 +1451,10 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		var unit := node as RetroExpansion
 		return _base(id, "expansion", n3d).merged({
 			"expansion_id": unit.expansion_id,
+			# The ROM a unit carries in itself -- the BS-X shell. Without this a
+			# restored BS-X cartridge came back as an empty enclosure that booted
+			# nothing, and the room looked right while the machine was dead.
+			"rom_path": unit.rom_path,
 			"media": _ref(node_to_id, unit.get_media()),
 		})
 	elif node is RetroDisc:
@@ -1769,6 +1773,7 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				# connector and its bay from this id in _ready, and a unit that
 				# arrives without one builds none of them.
 				unit.expansion_id = str(data.get("expansion_id", ""))
+				unit.rom_path = str(data.get("rom_path", ""))
 				obj = unit
 			"cartridge":
 				var cart := CART_SCENE.instantiate() as RetroCartridge
