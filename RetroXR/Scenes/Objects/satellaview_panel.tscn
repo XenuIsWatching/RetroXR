@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/systems/satellaview_panel.gd" id="1_svpanel"]
+
+; The face of a Satellaview: two lamps and their names, built in code from the
+; unit's own catalog dimensions. Named in ExpansionCatalog's `panel` field rather
+; than branched on by id, so the machine that wears it says so itself.
+
+[node name="SatellaviewPanel" type="Node3D"]
+script = ExtResource("1_svpanel")

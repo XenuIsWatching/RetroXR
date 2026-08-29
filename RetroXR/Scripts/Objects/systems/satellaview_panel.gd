@@ -8,9 +8,11 @@
 ##
 ## It sits on its own node rather than inside RetroExpansion because it is the one
 ## thing on that unit true of a single expansion and no other. The expansion builds
-## a box, a connector and a bay out of the catalog; this builds a face. It finds
-## its console through the unit's `host_changed` signal, so the expansion carries
-## no lamp wiring at all.
+## a box, a connector and a bay out of the catalog; this builds a face, and the
+## catalog names it -- `ExpansionCatalog.panel_of`, beside the row for the machine
+## that wears it, rather than an id test in the expansion. It finds its console
+## through the unit's `host_changed` signal, so the expansion carries no lamp
+## wiring at all.
 ##
 ## Emissive meshes, not lights: a tiny near-surface omni dies on the Quest mobile
 ## backend (see the note on lamp glows elsewhere in this project).
@@ -38,26 +40,24 @@ var _access_on := false
 var _lamp_powered := false
 
 
-## Build the panel onto `unit` and return it. The unit is the panel's parent, so
-## the lamps ride the box wherever it is carried.
-static func attach(unit: RetroExpansion) -> SatellaviewPanel:
-	var panel := SatellaviewPanel.new()
-	panel.name = "SatellaviewPanel"
-	panel._unit = unit
-	unit.add_child(panel)
-	return panel
-
-
+## The unit is this panel's parent -- ExpansionCatalog names the scene and
+## RetroExpansion adds it -- so the lamps ride the box wherever it is carried.
 func _ready() -> void:
-	_led_power_mat = _make_led(-0.126, 0.024, "LedPower")
-	_led_access_mat = _make_led(-0.080, 0.024, "LedAccess")
+	_unit = get_parent() as RetroExpansion
+	if _unit == null:
+		# Opened on its own rather than hung on a unit: nothing to measure a
+		# face against, and no console to report.
+		set_process(false)
+		return
+	# One measurement for all four fixtures. size() is a catalog lookup, and the
+	# face they sit on is the same face for every one of them.
+	var face_z := _unit.size().z * 0.5
+	_led_power_mat = _make_led(-0.126, 0.024, face_z, "LedPower")
+	_led_access_mat = _make_led(-0.080, 0.024, face_z, "LedAccess")
 	# Named on the case, as they are on the real unit -- raised lettering there,
 	# a plate here. A lamp nobody can read is decoration.
-	_make_led_label(-0.126, "POWER", "LabelPower")
-	_make_led_label(-0.080, "ACCESS", "LabelAccess")
-	if _unit == null:
-		_update_lamps()
-		return
+	_make_led_label(-0.126, face_z, "POWER", "LabelPower")
+	_make_led_label(-0.080, face_z, "ACCESS", "LabelAccess")
 	_unit.host_changed.connect(_on_host_changed)
 	# A console can already be bolted on: a restore binds the host through the
 	# same calls a hand does, and it need not wait for this node to exist.
@@ -70,6 +70,9 @@ func _on_host_changed(sys: RetroSystem) -> void:
 	_unwatch_access_lamp(_host)
 	_host = sys
 	_watch_access_lamp(sys)
+	# Nothing to poll with no machine under us -- the same thing RetroSystem
+	# does with its own idle process.
+	set_process(sys != null)
 	_update_lamps()
 
 
@@ -105,8 +108,7 @@ func _on_core_led(led: int, on: bool) -> void:
 
 ## The name under a lamp. Small, unlit and slightly proud of the case, so it
 ## reads as printing on the shell rather than as another light.
-func _make_led_label(x: float, text: String, tag: String) -> void:
-	var s := _unit_size()
+func _make_led_label(x: float, face_z: float, text: String, tag: String) -> void:
 	var lbl := Label3D.new()
 	lbl.name = tag
 	lbl.text = text
@@ -115,13 +117,12 @@ func _make_led_label(x: float, text: String, tag: String) -> void:
 	lbl.outline_size = 0
 	lbl.modulate = Color(0.82, 0.82, 0.86)
 	lbl.no_depth_test = false
-	lbl.position = Vector3(x, LED_LABEL_Y, s.z * 0.5 + 0.0012)
+	lbl.position = Vector3(x, LED_LABEL_Y, face_z + 0.0012)
 	add_child(lbl)
 
 
 ## A small domed LED on the front face (+Z). Emissive so it glows without a light.
-func _make_led(x: float, y: float, tag: String) -> StandardMaterial3D:
-	var s := _unit_size()
+func _make_led(x: float, y: float, face_z: float, tag: String) -> StandardMaterial3D:
 	var led := MeshInstance3D.new()
 	led.name = tag
 	var sph := SphereMesh.new()
@@ -130,7 +131,7 @@ func _make_led(x: float, y: float, tag: String) -> StandardMaterial3D:
 	sph.radial_segments = 12
 	sph.rings = 6
 	led.mesh = sph
-	led.position = Vector3(x, y, s.z * 0.5 + 0.001)
+	led.position = Vector3(x, y, face_z + 0.001)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.05, 0.05, 0.05)
 	mat.roughness = 0.35
@@ -138,20 +139,23 @@ func _make_led(x: float, y: float, tag: String) -> StandardMaterial3D:
 	mat.emission = Color(0, 0, 0)
 	mat.emission_energy_multiplier = 0.0
 	led.set_surface_override_material(0, mat)
+	# A 4 mm dome earns nothing from a grab outline, and PickableHighlight builds
+	# one overlay mesh per MeshInstance3D it finds -- on a unit whose only other
+	# mesh is the body, the two lamps would be two thirds of that work.
+	led.add_to_group("outline_exclude")
 	add_child(led)
 	return mat
-
-
-func _unit_size() -> Vector3:
-	return _unit.size() if _unit != null else Vector3.ZERO
 
 
 ## The console has no power signal, so the lamp watches. One bool compare a
 ## frame, and only on the unit that has lamps at all.
 func _process(_delta: float) -> void:
-	var powered := _host != null and is_instance_valid(_host) and _host.is_powered_on
-	if powered != _lamp_powered:
+	if _is_powered() != _lamp_powered:
 		_update_lamps()
+
+
+func _is_powered() -> bool:
+	return is_instance_valid(_host) and _host.is_powered_on
 
 
 ## Paint both lamps from the machine's own state.
@@ -160,7 +164,7 @@ func _process(_delta: float) -> void:
 ## have no photometric reference for them, so POWER is the green every other
 ## powered thing in this room uses and ACCESS is the amber of an activity light.
 func _update_lamps() -> void:
-	_lamp_powered = _host != null and is_instance_valid(_host) and _host.is_powered_on
+	_lamp_powered = _is_powered()
 	_set_led(_led_power_mat, Color(0.10, 1.0, 0.20), 2.5 if _lamp_powered else 0.0)
 	_set_led(_led_access_mat, Color(1.0, 0.72, 0.12), 3.0 if _access_on else 0.0)
 

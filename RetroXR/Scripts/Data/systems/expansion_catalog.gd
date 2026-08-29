@@ -100,6 +100,7 @@ const ROWS: Dictionary = {
 		"size": Vector3(0.29, 0.07, 0.24),
 		"loader": MediaDimensions.LOADER_NONE,
 		"media_in_host": true,
+		"panel": "res://Scenes/Objects/satellaview_panel.tscn",
 	},
 	# The BS-X cartridge: the thing the 8M Memory Pack actually goes into.
 	#
@@ -422,6 +423,12 @@ static func loader_of(id: String) -> int:
 ## CONSOLE's cartridge slot instead.
 static func media_in_host(id: String) -> bool:
 	return bool(row(id).get("media_in_host", false))
+
+
+## The front panel this unit wears, if it wears one -- a scene, so what is on a
+## machine's face is named beside the machine instead of branched on elsewhere.
+static func panel_of(id: String) -> String:
+	return str(row(id).get("panel", ""))
 
 
 ## Media systemids a console's OWN cartridge slot must take on top of its own,
