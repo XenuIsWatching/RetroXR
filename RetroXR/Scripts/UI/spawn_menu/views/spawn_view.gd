@@ -1208,7 +1208,9 @@ func _build_blank_rom_row() -> Control:
 	var cover := TextureRect.new()
 	cover.name = "Cover"
 	cover.custom_minimum_size = Vector2(72, 96)
-	cover.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+	# IGNORE_SIZE: FIT_HEIGHT_PROPORTIONAL reports a minimum height of
+	# width * aspect, which pushes a portrait cover's row past row_height.
+	cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	row.add_child(cover)
 
