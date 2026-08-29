@@ -37,6 +37,15 @@ const _WELL_THICKNESS := 0.01
 ## before the unit enters the tree, the same way RetroSystem.systemid is.
 @export var expansion_id: String = ""
 
+## The ROM this unit carries in itself, for a cartridge-shaped unit that contains
+## one. Empty on every unit that is only an enclosure.
+##
+## The BS-X cartridge is the case that needs it: the shell lives on the cartridge,
+## and a pack in its bay is the CONTENT that shell loads. So the machine boots the
+## pack when there is one and this ROM when the bay is empty, which is what the
+## hardware does -- an empty BS-X cart still boots the town.
+@export var rom_path: String = ""
+
 ## Emitted when a console is bolted on or taken off, with the console (or null).
 ## The room's persistence and any future cable art listen to these rather than
 ## polling the socket.
@@ -74,7 +83,26 @@ var _pointer_shape: CollisionShape3D = null
 ## noise on those events has to be able to tell the two apart.
 var _restoring: bool = false
 
-
+## The two lamps the real unit wears on its front, and only those: POWER and
+## ACCESS. Both report the MACHINE.
+##
+## POWER follows the console the unit is under. ACCESS is the hardware's own --
+## the BS-X switches it through $2194 bit 2 while the tuner is moving data, and
+## the core reports that edge over libretro's LED interface, so it lights because
+## the emulated machine said so.
+##
+## Emissive meshes, not lights: a tiny near-surface omni dies on the Quest mobile
+## backend (see the note on lamp glows elsewhere in this project).
+var _led_power_mat: StandardMaterial3D = null
+var _led_access_mat: StandardMaterial3D = null
+## True while the core says the tuner is moving data.
+var _access_on := false
+## Last POWER state painted, so the lamp is only repainted when it changes.
+var _lamp_powered := false
+## Where the lamp names sit: under the domes, on the empty left of the face. The
+## two are spaced to fit their own names -- at the 17 mm they started at, POWER
+## and ACCESS ran into each other and read as one word.
+const LED_LABEL_Y := 0.0155
 func _ready() -> void:
 	super._ready()
 	add_to_group(ExpansionPort.GROUP_EXPANSION)
@@ -85,6 +113,8 @@ func _ready() -> void:
 	_build_connector()
 	_build_media_bay()
 	_update_label()
+	if expansion_id == "satellaview":
+		_setup_panel()
 
 
 # ── the box ───────────────────────────────────────────────────────────────────
@@ -248,6 +278,7 @@ func _bind_host(sys: RetroSystem) -> void:
 		return
 	_unbind_host()
 	_host = sys
+	_watch_access_lamp(sys)
 	# The seated machine is frozen and rides us through the scene graph; without
 	# this the two boxes fight at the face they are pressed together at.
 	add_collision_exception_with(sys)
@@ -261,6 +292,7 @@ func _unbind_host() -> void:
 		return
 	var was := _host
 	_host = null
+	_unwatch_access_lamp(was)
 	if is_instance_valid(was):
 		remove_collision_exception_with(was)
 		was.detach_expansion(self)
@@ -292,6 +324,13 @@ func unbind_from_host() -> void:
 func _build_media_bay() -> void:
 	var media := ExpansionCatalog.media_of(expansion_id)
 	if media.is_empty():
+		return
+	# Some units have no mouth. The Satellaview is a tuner and a modem that clips
+	# under the console; the cartridge goes into the SUPER FAMICOM's slot, on top,
+	# and this unit builds nothing for it. Without this the bay landed on the
+	# unit's roof -- which is the face the console is standing on -- and the
+	# cartridge vanished into the join between the two machines.
+	if ExpansionCatalog.media_in_host(expansion_id):
 		return
 	var s := size()
 	# A slit in the front is for media that SLIDES IN: a 64DD disk, an FDS disk.
@@ -687,3 +726,122 @@ func _build_lid(s: Vector3) -> Node3D:
 	# Half its own depth forward of the hinge, so the panel covers the well.
 	lid.position = Vector3(0.0, 0.004, mesh.size.z * 0.5)
 	return pivot
+
+
+# ── Satellaview front-panel lamps ─────────────────────────────────────────────
+
+## The front panel: two lamps and their names. Belongs to the MACHINE, so every
+## Satellaview unit is built with them.
+func _setup_panel() -> void:
+	_led_power_mat = _make_led(-0.126, 0.024, "LedPower")
+	_led_access_mat = _make_led(-0.080, 0.024, "LedAccess")
+	# Named on the case, as they are on the real unit -- raised lettering there,
+	# a plate here. A lamp nobody can read is decoration.
+	_make_led_label(-0.126, "POWER", "LabelPower")
+	_make_led_label(-0.080, "ACCESS", "LabelAccess")
+	_update_lamps()
+
+
+## Follow the console's core so the ACCESS lamp is driven by the emulated
+## machine. Only the Satellaview has that lamp, so nothing else subscribes.
+func _watch_access_lamp(sys: RetroSystem) -> void:
+	if _led_access_mat == null or sys == null or not sys.has_method("get_libretro_node"):
+		return
+	var node: Libretro = sys.get_libretro_node()
+	if node == null or not node.has_signal("led_state"):
+		return
+	if not node.led_state.is_connected(_on_core_led):
+		node.led_state.connect(_on_core_led)
+
+
+func _unwatch_access_lamp(sys: RetroSystem) -> void:
+	if sys == null or not is_instance_valid(sys) or not sys.has_method("get_libretro_node"):
+		return
+	var node: Libretro = sys.get_libretro_node()
+	if node == null or not node.has_signal("led_state"):
+		return
+	if node.led_state.is_connected(_on_core_led):
+		node.led_state.disconnect(_on_core_led)
+	# The machine is gone; the lamp cannot still be reporting traffic.
+	_access_on = false
+	_update_lamps()
+
+
+## snes9x reports index 0 as the Satellaview's ACCESS lamp. Other indices belong
+## to other machines and are ignored rather than lighting this one.
+const CORE_LED_ACCESS := 0
+
+func _on_core_led(led: int, on: bool) -> void:
+	if led != CORE_LED_ACCESS or _access_on == on:
+		return
+	_access_on = on
+	_update_lamps()
+
+
+## A small domed LED on the front face (+Z). Emissive so it glows without a light.
+## The name under a lamp. Small, unlit and slightly proud of the case, so it
+## reads as printing on the shell rather than as another light.
+func _make_led_label(x: float, text: String, tag: String) -> void:
+	var s := size()
+	var lbl := Label3D.new()
+	lbl.name = tag
+	lbl.text = text
+	lbl.pixel_size = 0.00016
+	lbl.font_size = 28
+	lbl.outline_size = 0
+	lbl.modulate = Color(0.82, 0.82, 0.86)
+	lbl.no_depth_test = false
+	lbl.position = Vector3(x, LED_LABEL_Y, s.z * 0.5 + 0.0012)
+	add_child(lbl)
+
+
+func _make_led(x: float, y: float, tag: String) -> StandardMaterial3D:
+	var s := size()
+	var led := MeshInstance3D.new()
+	led.name = tag
+	var sph := SphereMesh.new()
+	sph.radius = 0.004
+	sph.height = 0.008
+	sph.radial_segments = 12
+	sph.rings = 6
+	led.mesh = sph
+	led.position = Vector3(x, y, s.z * 0.5 + 0.001)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.05, 0.05, 0.05)
+	mat.roughness = 0.35
+	mat.emission_enabled = true
+	mat.emission = Color(0, 0, 0)
+	mat.emission_energy_multiplier = 0.0
+	led.set_surface_override_material(0, mat)
+	add_child(led)
+	return mat
+
+
+## The console has no power signal, so the lamp watches. One bool compare a
+## frame, and only on the unit that has lamps at all.
+func _process(_delta: float) -> void:
+	if _led_power_mat == null:
+		return
+	var powered := _host != null and is_instance_valid(_host) and _host.is_powered_on
+	if powered != _lamp_powered:
+		_update_lamps()
+
+
+## Paint both lamps from the machine's own state.
+##
+## Colours are a choice: the labels are documented on the real front panel but I
+## have no photometric reference for them, so POWER is the green every other
+## powered thing in this room uses and ACCESS is the amber of an activity light.
+func _update_lamps() -> void:
+	_lamp_powered = _host != null and is_instance_valid(_host) and _host.is_powered_on
+	_set_led(_led_power_mat, Color(0.10, 1.0, 0.20), 2.5 if _lamp_powered else 0.0)
+	_set_led(_led_access_mat, Color(1.0, 0.72, 0.12), 3.0 if _access_on else 0.0)
+
+
+func _set_led(mat: StandardMaterial3D, color: Color, energy: float) -> void:
+	if mat == null:
+		return
+	mat.emission = color
+	mat.emission_energy_multiplier = energy
+	# A lit LED's body reads as its own colour; a dark one as near-black plastic.
+	mat.albedo_color = color.darkened(0.6) if energy > 0.01 else Color(0.05, 0.05, 0.05)
