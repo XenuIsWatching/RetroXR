@@ -1238,6 +1238,19 @@ func _on_spawn_requested(type: String) -> void:
 
 
 func _on_spawn_cartridge_requested(rom_path: String, game_label: String, systemid := "") -> void:
+	# The BS-X shell is not a bare cartridge, it is THE BS-X cartridge -- a shell
+	# with a well in its roof that a memory pack goes into. Spawning it as a plain
+	# cart gave a slab with nowhere to put a pack, so the one object the whole
+	# Satellaview stack is built around could not be assembled from the library.
+	#
+	# Keyed on the extension, the same rule MediaDimensions.cart_size uses: under
+	# this systemid a .bs is a pack and a .sfc is the shell.
+	if systemid == "satellaview" and rom_path.get_extension().to_lower() in ["sfc", "smc"]:
+		var bsx := EXPANSION_SCENE.instantiate() as RetroExpansion
+		bsx.expansion_id = "bsx_cart"
+		bsx.rom_path = rom_path
+		_place_spawned(bsx, "expansion:bsx_cart")
+		return
 	# Disc-based systems get a RetroDisc (same contract, disc-shaped body).
 	# The PSP UMD is the one non-round disc — its own RetroUMD subclass/scene.
 	var is_disc := MediaDimensions.is_disc_system(systemid)

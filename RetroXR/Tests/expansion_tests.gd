@@ -281,6 +281,174 @@ func _group_media() -> void:
 	n64._apply_expansion_launch()
 	var again: Array = n64._expansion_roms(n64.expansion_boot())
 	_check(again == roms, "media/ and asking again after a launch gives the same two")
+
+	# A machine booted from the STACK still gets a save file. The path is composed
+	# from the console's own cartridge, and with the slot empty that returned "" --
+	# so a 64DD disk or a Mega-CD disc, both battery-backed, ran with nowhere to
+	# write and silently never saved. The bay's medium is the fallback.
+	n64._snapped_cartridge = null
+	var stack_save := n64._memcards._compose_sram_path("mupen64plus_next")
+	_check(not stack_save.is_empty(),
+		"save/ media in an expansion bay still resolves a save path")
+	_check(stack_save.contains(str(dd.get_media().get("save_id"))),
+		"save/ and it is keyed by that medium's own save_id")
+
+	# The console's own slot still wins when both are loaded: the cartridge is the
+	# game, the disk is its expansion. Set back the way it was cleared, since
+	# restore_cartridge is a no-op on a cart already seated in the slot.
+	n64._snapped_cartridge = cart
+	_check(n64._memcards._compose_sram_path("mupen64plus_next")
+			.contains(str(cart.get("save_id"))),
+		"save/ a cartridge in the console still takes precedence")
+	await _clear()
+
+	# The Satellaview is the exception: a base station with NO mouth on it. Its
+	# cartridge goes into the Super Famicom standing on top of it, so the unit must
+	# build no bay at all -- one on its roof is under the console, and the pack
+	# disappeared into the join between the two machines.
+	var bs := await _unit("satellaview")
+	var sfc := await _console("super_nes")
+	await _bolt(sfc, bs)
+	_check(bs.get_node_or_null("MediaBay") == null,
+		"media/ a Satellaview has no bay of its own")
+	_check(bs.get_media() == null, "media/ and reports nothing in one")
+
+	var pack := await _cart("satellaview", "/roms/satellaview/BS-X.bs")
+	var not_ours := await _cart("nes", "/roms/nes/other.nes")
+	var slot := sfc._cartridge_slot as XRToolsSnapZone
+	_check(slot != null and slot.snap_filter.call(pack),
+		"media/ the console's own slot takes the pack instead")
+	_check(slot != null and slot.snap_filter.call(await _cart("super_nes", "/roms/snes/g.sfc")),
+		"media/ without losing its own cartridges")
+	_check(slot != null and not slot.snap_filter.call(not_ours),
+		"media/ and still refuses an NES cart")
+
+	sfc.restore_cartridge(pack)
+	await _wait(5)
+	var bs_spec := sfc.expansion_boot()
+	_check(str(bs_spec.get("core", "")) == "snes9x", "media/ the stack pins snes9x")
+	_check(sfc._expansion_roms(bs_spec) == ["/roms/satellaview/BS-X.bs"],
+		"media/ and boots the pack from the console's slot, not the unit's")
+	await _clear()
+
+	# The BS-X CARTRIDGE: the middle layer of the real three, and the only object
+	# here that a player puts a cartridge into and then puts into a console. The
+	# pack goes in its slot, it goes in the Super Famicom's.
+	var nest_bsx := await _unit("bsx_cart")
+	var nest_sfc := await _console("super_nes")
+	_check(nest_bsx.is_in_group("cartridge"),
+		"nest/ the BS-X cart is itself a cartridge")
+	var nest_slot := nest_sfc._cartridge_slot as XRToolsSnapZone
+	_check(nest_slot != null and nest_slot.snap_filter.call(nest_bsx),
+		"nest/ and the console's slot takes it")
+	_check(nest_bsx.get_node_or_null("MediaBay") != null,
+		"nest/ unlike the base station it HAS a slot of its own")
+
+	var nest_pack := await _cart("satellaview", "/roms/satellaview/PACK.bs")
+	_check(nest_bsx._accepts_media(nest_pack), "nest/ that slot takes an 8M pack")
+	_check(not nest_bsx._accepts_media(await _cart("nes", "/roms/nes/x.nes")),
+		"nest/ and refuses what is not one")
+
+	nest_sfc.restore_cartridge(nest_bsx)
+	nest_bsx.restore_media(nest_pack)
+	await _wait(5)
+	var nest_boot := nest_sfc.expansion_boot()
+	_check(str(nest_boot.get("core", "")) == "snes9x", "nest/ the stack pins snes9x")
+	# The PACK is the content. The BS-X cartridge is never handed over: snes9x
+	# sources BS-X.bin from the system directory itself.
+	_check(nest_sfc._expansion_roms(nest_boot) == ["/roms/satellaview/PACK.bs"],
+		"nest/ and the core is handed the pack, not the cartridge carrying it")
+
+	# It must also run with no base station bolted on, as the hardware does.
+	_check(not ExpansionCatalog.boot_for("super_nes", ["bsx_cart"]).is_empty(),
+		"nest/ the cartridge alone is a bootable machine")
+	_check(not ExpansionCatalog.boot_for("super_nes", ["bsx_cart", "satellaview"]).is_empty(),
+		"nest/ and so is the full stack")
+
+	# A BS-X cartridge spawned from the shell ROM carries that ROM itself, and an
+	# empty one is still a bootable machine -- the hardware boots the town with no
+	# pack in it. The bay outranks it: put a pack in and the pack is the content.
+	nest_bsx.rom_path = "/roms/satellaview/BS-X.sfc"
+
+	# Shell + pack as a PAIR, in the core's declared order. This is the only way
+	# the shell in the cartridge is the one that runs: handed a pack alone, the
+	# core takes its shell from BS-X.bin in the system directory instead, so a
+	# translated BS-X was silently dropped the moment a pack went in.
+	var nest_sub: Dictionary = nest_sfc.expansion_boot().get("subsystem", {})
+	_check(str(nest_sub.get("ident", "")) == "bsx", "nest/ the stack declares the bsx pairing")
+	_check(nest_sfc._expansion_roms(nest_sub)
+			== ["/roms/satellaview/BS-X.sfc", "/roms/satellaview/PACK.bs"],
+		"nest/ which is the shell first, then the pack")
+
+	# An empty bay must NOT complete the pair. The plain token falls back to the
+	# shell, so a pairing that fell back too would hand the core the same ROM
+	# twice and look perfectly valid doing it.
+	await _unbolt(nest_bsx.get_node("MediaBay") as XRToolsSnapZone, nest_pack)
+	_check(nest_sfc._expansion_roms(nest_sub).size() == 1,
+		"nest/ an empty bay leaves the pair incomplete, so the plain load runs")
+	_check(nest_sfc._expansion_roms(nest_sfc.expansion_boot())
+			== ["/roms/satellaview/BS-X.sfc"],
+		"nest/ an empty BS-X cart boots the shell it carries")
+	nest_bsx.restore_media(nest_pack)
+	await _wait(5)
+	_check(nest_sfc._expansion_roms(nest_sfc.expansion_boot())
+			== ["/roms/satellaview/PACK.bs"],
+		"nest/ and a pack in the bay outranks it")
+
+	# Which half of the pair is the writable MEDIUM, not a read-only ROM. The
+	# bridge writes a download back over that file, so an index naming the shell
+	# would flush the pack's contents over the BS-X cartridge itself.
+	_check(int(nest_sub.get("writable", -1)) == 1,
+		"nest/ the pack is the writable half of the pair")
+	_check(nest_sfc._expansion_roms(nest_sub)[int(nest_sub["writable"])]
+			== "/roms/satellaview/PACK.bs",
+		"nest/ and that index really lands on the pack")
+
+	# The BS-X cartridge holds its OWN battery: the 32 KB is the player's name and
+	# town, and it belongs to the cart, not to whatever pack is in its bay. Keyed
+	# to the medium, every new pack read as a different BS-X and the shell asked
+	# for a name again.
+	_check(ExpansionCatalog.save_owner_of("bsx_cart") == ExpansionCatalog.SAVE_OWNER_UNIT,
+		"nest/ the BS-X cartridge owns its own save")
+	_check(ExpansionCatalog.save_owner_of("nintendo_64dd") == ExpansionCatalog.SAVE_OWNER_MEDIA,
+		"nest/ while a 64DD disk saves onto itself")
+	# A save path only exists for a machine that has content loaded -- the guard
+	# at the top of _compose_sram_path says so -- and a launched BS-X stack has
+	# the pack as its rom_path.
+	nest_sfc.rom_path = "/roms/satellaview/PACK.bs"
+	var save_a := nest_sfc._memcards._compose_sram_path("snes9x")
+	var slot_a := nest_sfc._memcards._sram_slot()
+	_check(save_a.contains("bsx_cart"),
+		"nest/ so the save is filed under the cartridge, not the pack")
+	_check(not save_a.contains("PACK"),
+		"nest/ and carries nothing of the pack's name")
+
+	# Swap the pack. The town must not move with it.
+	await _unbolt(nest_bsx.get_node("MediaBay") as XRToolsSnapZone, nest_pack)
+	var other := await _cart("satellaview", "/roms/satellaview/OTHER.bs")
+	nest_bsx.restore_media(other)
+	await _wait(5)
+	_check(nest_sfc._memcards._compose_sram_path("snes9x") == save_a,
+		"nest/ a different pack keeps the same save")
+	_check(nest_sfc._memcards._sram_slot() == slot_a,
+		"nest/ and is not treated as a different save source")
+	await _unbolt(nest_bsx.get_node("MediaBay") as XRToolsSnapZone, other)
+	_check(nest_sfc._memcards._compose_sram_path("snes9x") == save_a,
+		"nest/ and an empty cart still has the town on it")
+	nest_bsx.restore_media(nest_pack)
+	await _wait(5)
+
+	# Empty both zones before the objects go: a snap zone that is still holding one
+	# walks it on the body_exited a queue_free fires, and reads a freed instance.
+	await _unbolt(nest_bsx.get_node("MediaBay") as XRToolsSnapZone, nest_pack)
+	await _clear()
+
+	# Unbolted, the same cartridge still fits: a BS-X cart boots its menu in a bare
+	# Super Famicom, and a silent refusal is the worst way to say otherwise.
+	var lone := await _console("super_nes")
+	var lone_pack := await _cart("satellaview", "/roms/satellaview/BS-X.bs")
+	_check(lone._cartridge_slot.snap_filter.call(lone_pack),
+		"media/ and fits a Super Famicom with no base station under it")
 	await _clear()
 
 

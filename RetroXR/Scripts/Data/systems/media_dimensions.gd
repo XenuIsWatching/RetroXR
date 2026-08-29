@@ -30,6 +30,12 @@ const CART_SIZES: Dictionary = {
 	"wonderswan":       Vector3(0.048, 0.052, 0.008),
 	"neo_geo_pocket":   Vector3(0.048, 0.052, 0.008),
 	"nintendo_64dd":    Vector3(0.098, 0.079, 0.017),   # 64DD magnetic disk
+	# The 8M Memory Pack, which is NOT a Super Famicom cartridge -- it is a small
+	# pack that goes into a well in the top of the BS-X cart and stands proud of
+	# it. Approximate: proportioned from photographs against the SFC shell it
+	# slots into, not measured off one. Without an entry it took CART_SIZE_DEFAULT
+	# and arrived nearly as big as the cartridge carrying it.
+	"satellaview":      Vector3(0.062, 0.042, 0.011),
 	"pokemon_mini":     Vector3(0.022, 0.033, 0.007),
 	"supervision":      Vector3(0.066, 0.070, 0.009),
 	# UMD caddy — square footprint, thin. RetroUMD builds its shell straight off
@@ -234,9 +240,17 @@ static func has_cart_size(systemid: String) -> bool:
 
 
 ## Cartridge body size for a system, or the generic default.
-static func cart_size(systemid: String) -> Vector3:
+## `rom_path` is consulted for the one system whose media is two different
+## objects. Everything under "satellaview" is an 8M pack EXCEPT the BS-X shell
+## itself, which is an ordinary Super Famicom cartridge and is the file the town
+## boots from -- sizing it off the systemid alone shrank it to pack size.
+static func cart_size(systemid: String, rom_path := "") -> Vector3:
 	if FLOPPY_SYSTEMS.has(systemid):
 		return FLOPPY_SIZE
+	if systemid == "satellaview" and not rom_path.is_empty():
+		var ext := rom_path.get_extension().to_lower()
+		if ext == "sfc" or ext == "smc":
+			return CART_SIZES["super_nes"]
 	return CART_SIZES.get(systemid, CART_SIZE_DEFAULT)
 
 

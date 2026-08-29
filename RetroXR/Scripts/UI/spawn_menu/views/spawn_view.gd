@@ -880,6 +880,20 @@ func _populate_cartridges_detail(systemid: String, vbox: VBoxContainer) -> void:
 	_romm_resync_btn = resync
 	_romm_update_resync_btn()
 
+	# A blank 8M Memory Pack is a thing you BUY, not a thing that exists: the
+	# Satellaview downloads onto a pack and there is nowhere to put a programme
+	# without one. Every other platform's media arrives as a dump, so this is the
+	# one shelf that has to be able to mint a new medium — the way the memory-card
+	# shelf does.
+	if systemid == "satellaview":
+		var new_pack := Button.new()
+		new_pack.text = "  + New Memory Pack  "
+		new_pack.add_theme_font_size_override("font_size", 18)
+		new_pack.custom_minimum_size = Vector2(0, 52)
+		new_pack.size_flags_horizontal = Control.SIZE_SHRINK_END
+		new_pack.pressed.connect(_on_new_pack_pressed.bind(systemid))
+		toolbar.add_child(new_pack)
+
 	_romm_empty_label = Label.new()
 	_romm_empty_label.add_theme_font_size_override("font_size", 18)
 	_romm_empty_label.add_theme_color_override("font_color", MenuStyle.COLOR_DESC)
@@ -1088,20 +1102,29 @@ func _prewarm_top_platforms(systems: Array) -> void:
 func _local_by_name(systemid: String) -> Dictionary:
 	if _local_scan_cache.has(systemid):
 		return _local_scan_cache[systemid]
-	var by_name: Dictionary = {}
-	for rom: Dictionary in RomLibrary.scan_roms(systemid, [] as Array[String]):
-		var path := str(rom["path"])
-		var key := path.get_file().get_basename().to_lower()
-		# A cue and its bin share a basename, so one shadows the other and the
-		# row can end up pointing at a raw track. The manifest is what a core
-		# should be handed, so it always wins the key.
-		var held: Dictionary = by_name.get(key, {})
-		if not held.is_empty() \
-				and str(held["path"]).get_extension().to_lower() in RommCatalog.MANIFEST_EXTS:
-			continue
-		by_name[key] = rom
+	# Same-stem collisions are resolved by RomLibrary: a manifest beats its tracks,
+	# and a real game beats a save or savestate that happens to sit beside it.
+	var by_name := RomLibrary.index_by_basename(
+		RomLibrary.scan_roms(systemid, [] as Array[String]),
+		CoreInfoDatabase.extensions_for_systemid(systemid))
 	_local_scan_cache[systemid] = by_name
 	return by_name
+
+
+## Mint a blank pack into the broadcast folder and show it straight away.
+##
+## It lands beside the channel packets on purpose: snes9x reads its broadcast
+## directory from the loaded ROM's own folder, so a pack kept anywhere else boots
+## perfectly and receives nothing.
+func _on_new_pack_pressed(systemid: String) -> void:
+	var path := BsxPack.create_blank(RomLibrary.rom_dir_for_system(systemid))
+	if path.is_empty():
+		push_warning("[spawn] could not create a memory pack in %s" % systemid)
+		return
+	print("[spawn] new memory pack: %s" % path)
+	_invalidate_local_scan(systemid)
+	if _cartridges_browser:
+		_cartridges_browser.refresh_detail()
 
 
 ## Drop the cached listing after anything that writes to a ROM directory —
@@ -1370,6 +1393,15 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	if not local_path.is_empty():
 		saves.pressed.connect(
 			_show_game_saves_panel.bind(systemid, local_path, label))
+
+	# ── Memory packs ────────────────────────────────────────────────────────
+	# A pack is called by what is WRITTEN ON IT, read out of its own header, not
+	# by its filename. The two are unrelated: a pack downloaded from the server
+	# arrives named for the broadcast that filled it, and one minted here is named
+	# whatever kept it unique on disk. An unused pack says so rather than showing
+	# the placeholder title a blank carries.
+	if systemid == "satellaview" and not local_path.is_empty() 			and BsxPack.is_pack_path(local_path):
+		main.set_marquee_text("  " + BsxPack.display_name(local_path))
 
 	var has_manual: bool = meta["has_manual"]
 	var manual_path: String = meta["manual_path"]
@@ -2539,6 +2571,7 @@ func _show_rom_variants_panel(game: Dictionary, systemid: String) -> void:
 
 		var abs_path := GamelistManager.to_absolute_path(systemid, rom.get("path", ""))
 		rom_btn.pressed.connect(spawn_cartridge_requested.emit.bind(abs_path, romname.get_basename(), systemid))
+
 		row.add_child(rom_btn)
 
 		# Region label

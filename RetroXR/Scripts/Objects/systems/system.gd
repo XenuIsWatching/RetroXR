@@ -3284,11 +3284,37 @@ func _expansion_roms(spec: Dictionary) -> Array[String]:
 		if token == "host":
 			path = _host_media_path()
 		else:
-			var id := token.substr("expansion:".length())
-			for unit in get_expansions():
-				if unit.expansion_id == id:
-					path = unit.get_media_path()
+			# Three ways to name a unit's content, because the BS-X cartridge has
+			# two of them: the shell moulded into the cartridge and the pack in
+			# its bay. The plain form prefers the bay and falls back to the shell,
+			# which is what makes an empty BS-X cart still bootable. The two
+			# explicit forms do NOT fall back -- a subsystem pairing needs the
+			# halves kept apart, and a fallback there would hand the core the
+			# shell twice whenever the bay stood empty.
+			var kind := "expansion"
+			var id := ""
+			for prefix in ["expansion_rom:", "expansion_media:", "expansion:"]:
+				if token.begins_with(prefix):
+					kind = prefix.trim_suffix(":")
+					id = token.substr(prefix.length())
 					break
+			for unit in get_expansions():
+				if unit.expansion_id != id:
+					continue
+				match kind:
+					"expansion_rom":
+						path = unit.rom_path
+					"expansion_media":
+						path = unit.get_media_path()
+					_:
+						path = unit.get_media_path()
+						if path.is_empty():
+							path = unit.rom_path
+				# A broadcast that cannot start from its dump alone is handed to
+				# the core as a PATCHED COPY, never as the player's file. With no
+				# patch beside it this is the same path back again.
+				path = BsPatch.resolved_path(path)
+				break
 		if not path.is_empty():
 			out.append(path)
 	return out
@@ -3381,6 +3407,13 @@ func _start_subsystem_content(dir: String, core: String, spec: Dictionary) -> bo
 	var paths := _expansion_roms(sub)
 	if paths.size() != wanted.size():
 		return false
+	# One of the pair can be a WRITABLE medium rather than a read-only ROM: a
+	# BS-X memory pack is flash, and the .bs handed over IS the flash, so what the
+	# core writes has to go back to that same file. Named by index because only
+	# the recipe knows which half of a pairing is the medium.
+	var writable := int(sub.get("writable", -1))
+	if writable >= 0 and writable < paths.size() and _libretro.has_method("SetPackPath"):
+		_libretro.SetPackPath(paths[writable])
 	print("[RetroSystem] subsystem load: %s %s <- %s" % [core, ident, str(paths)])
 	_libretro.StartSubsystemContent(dir, core, rom_path, ident, PackedStringArray(paths))
 	return true
@@ -4008,7 +4041,16 @@ func _accepts_media(obj: Node3D) -> bool:
 	var unit := obj as RetroExpansion
 	if unit != null:
 		return ExpansionCatalog.host_of(unit.expansion_id) == systemid 			and ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE
-	return _belongs_here(obj, _MEDIA_COMPAT)
+	if _belongs_here(obj, _MEDIA_COMPAT):
+		return true
+	# An expansion with no bay of its own loads through THIS slot. A Satellaview
+	# pack is a cartridge you push into the Super Famicom on top of it, so the
+	# console has to take a systemid that is not its own -- see
+	# ExpansionCatalog.host_slot_media for why it takes one whether or not the
+	# base station is actually bolted on.
+	if not ("systemid" in obj):
+		return false
+	return ExpansionCatalog.host_slot_media(systemid).has(str(obj.get("systemid")))
 
 
 ## Port gate: does this plug's controller belong to this system? Reads the

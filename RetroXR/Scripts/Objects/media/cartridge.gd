@@ -135,7 +135,7 @@ func _apply_cart_model() -> void:
 	# One uniform factor off width and height leaves depth to whatever proportions
 	# the asset happens to have — the NES cart drew 12.2 mm against a real 17 — and
 	# depth is the axis a bay's clearances are built on.
-	var s := MediaDimensions.cart_size(systemid)
+	var s := MediaDimensions.cart_size(systemid, rom_path)
 	var k := Vector3(
 		s.x / maxf(ab.size.x, 0.0001),
 		s.y / maxf(ab.size.y, 0.0001),
@@ -226,7 +226,7 @@ func _update_label() -> void:
 func _apply_system_size() -> void:
 	if not MediaDimensions.has_cart_size(systemid):
 		return
-	var s := MediaDimensions.cart_size(systemid)
+	var s := MediaDimensions.cart_size(systemid, rom_path)
 
 	var body := get_node_or_null("CartridgeMesh") as MeshInstance3D
 	if body and body.mesh is BoxMesh:
@@ -292,7 +292,7 @@ func _apply_system_size() -> void:
 func _apply_floppy_shell() -> void:
 	if not MediaDimensions.uses_floppy(systemid):
 		return
-	var s := MediaDimensions.cart_size(systemid)
+	var s := MediaDimensions.cart_size(systemid, rom_path)
 
 	# The shell and its shutter are built once; the Shutter node's absence is what
 	# says this cartridge has not been through here yet.
@@ -397,7 +397,7 @@ func _tighten_pointer_box() -> void:
 	var pcol := get_node_or_null("PointerArea/CollisionShape3D") as CollisionShape3D
 	if pcol == null or not (pcol.shape is BoxShape3D):
 		return
-	var s := MediaDimensions.cart_size(systemid)
+	var s := MediaDimensions.cart_size(systemid, rom_path)
 	var shape := pcol.shape.duplicate() as BoxShape3D
 	shape.size = s + Vector3(0.004, 0.004, 0.004)
 	pcol.shape = shape
@@ -413,7 +413,7 @@ func set_seated_grab_stub(depth: float) -> void:
 	if not MediaDimensions.has_cart_size(systemid):
 		return
 	_stub_seated = true
-	var s := MediaDimensions.cart_size(systemid)
+	var s := MediaDimensions.cart_size(systemid, rom_path)
 	var stub_center := Vector3(0, s.y / 2.0 - depth / 2.0, 0)
 	var col := get_node_or_null("CollisionShape3D") as CollisionShape3D
 	if col and col.shape is BoxShape3D:

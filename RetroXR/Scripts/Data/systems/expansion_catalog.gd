@@ -22,6 +22,9 @@
 ##               MOUNT_ABOVE — this unit stands on the CONSOLE (32X, Jaguar CD)
 ##   size        the primitive box, in metres
 ##   loader      MediaDimensions.LOADER_* for its own bay
+##   media_in_host
+##               this unit has NO bay: its media goes into the CONSOLE's own
+##               cartridge slot. See the Satellaview row.
 ##
 ## Which way a unit mounts is the whole of the geometry: the LOWER object always
 ## wears the socket (a snap zone on its top face) and the UPPER object always
@@ -76,12 +79,55 @@ const ROWS: Dictionary = {
 	# The BS-X unit clips under the Super Famicom. Its "media" is the 8M memory
 	# pack; the broadcast that filled it is gone, so what a player has is the
 	# dumps of it — which is exactly what the satellaview systemid already holds.
+	#
+	# And that media does NOT go into this unit. The base station is a tuner and a
+	# modem, with no mouth of any kind on it: what a player pushes in is the BS-X
+	# cartridge, and it goes into the SUPER FAMICOM's slot, on top. media_in_host
+	# says so, and it is the only row here that needs to — every other expansion
+	# really does have a bay of its own.
+	#
+	# Modelled with a bay it produced the one arrangement that cannot work. A unit
+	# the console stands ON puts its bay on its ROOF, and its roof is underneath
+	# the Super Famicom, so the pack went into a well sandwiched between the two
+	# machines and disappeared. It was invisible even unstacked: a plain snap zone
+	# seats an object by its ORIGIN, so the cartridge's middle landed on the roof
+	# plane with half of it inside a 70 mm box.
 	"satellaview": {
 		"label": "Satellaview",
 		"host": "super_nes",
 		"media": "satellaview",
 		"mount": MOUNT_BELOW,
 		"size": Vector3(0.29, 0.07, 0.24),
+		"loader": MediaDimensions.LOADER_NONE,
+		"media_in_host": true,
+	},
+	# The BS-X cartridge: the thing the 8M Memory Pack actually goes into.
+	#
+	# Real hardware is three layers, and this is the middle one. The base station
+	# above is a tuner with no mouth on it; what a player holds is this cartridge,
+	# which goes into the Super Famicom's own slot and carries the pack in a slot
+	# of its own — the same nesting the 32X and the Sufami Turbo already model.
+	#
+	# It runs in a bare Super Famicom, without the base station bolted on, exactly
+	# as the hardware does: the shell boots and the town is there, only nothing is
+	# being broadcast at it. So the boot recipes below cover the cartridge alone as
+	# well as the full stack, rather than refusing a machine a player can build.
+	#
+	# What the core is handed is the PACK, never this cartridge: snes9x takes the
+	# .bs as content and sources BS-X.bin itself from the system directory.
+	#
+	# Sized as a Super Famicom cartridge, because that is what it is -- the same
+	# footprint CART_SIZES gives super_nes, thickened to 24 mm so the pack's well
+	# has a wall either side of it. A cartridge-mounting unit stands upright in
+	# the slot (Y is the insert axis), so a flat slab here read as a low box lying
+	# on the console rather than a cart standing in it.
+	"bsx_cart": {
+		"label": "BS-X",
+		"host": "super_nes",
+		"media": "satellaview",
+		"mount": MOUNT_CARTRIDGE,
+		"save_owner": SAVE_OWNER_UNIT,
+		"size": Vector3(0.137, 0.088, 0.024),
 		"loader": MediaDimensions.LOADER_NONE,
 	},
 	# Sufami Turbo is the other thing that goes in a Super Famicom slot — on TOP,
@@ -251,9 +297,46 @@ const BOOT: Dictionary = {
 	# A BS-SLOTTED cartridge (Itoi Bass Fishing) plus a pack is the one case that
 	# genuinely wants snes9x's "multicart_addon" subsystem, host cart first. It is
 	# not written here because no subsystem path exists to carry it.
+	#
+	# "host", not "expansion:satellaview": the Satellaview has no bay (see
+	# media_in_host on its ROWS entry), so the .bs is in the Super Famicom's own
+	# slot. Same file either way — this row exists to pin the core, not to find it.
 	"super_nes|satellaview": {
 		"core": "snes9x",
-		"roms": ["expansion:satellaview"],
+		"roms": ["host"],
+	},
+	# The BS-X cartridge, with or without the base station under the console. Both
+	# boot from the pack in the CARTRIDGE's own slot, because that is the medium:
+	# snes9x is handed the .bs and finds BS-X.bin in the system directory itself.
+	"super_nes|bsx_cart": {
+		"core": "snes9x",
+		"roms": ["expansion:bsx_cart"],
+		# Shell + pack as a PAIR. Without it the core sources the shell from
+		# BS-X.bin in the system directory, so a translated BS-X in the cartridge
+		# was ignored the moment a pack went into it -- the same machine booted
+		# in two different languages depending on whether its bay was full.
+		# Order is the core's: bsx_roms[] is { "BS-X Shell", "Memory Pack" }.
+		"subsystem": {"ident": "bsx",
+			"roms": ["expansion_rom:bsx_cart", "expansion_media:bsx_cart"],
+			# The pack is flash, and the .bs IS that flash -- a download is
+			# written back over the medium the player inserted, not to a save
+			# file beside it.
+			"writable": 1},
+	},
+	"super_nes|satellaview|bsx_cart": {
+		"core": "snes9x",
+		"roms": ["expansion:bsx_cart"],
+		# Shell + pack as a PAIR. Without it the core sources the shell from
+		# BS-X.bin in the system directory, so a translated BS-X in the cartridge
+		# was ignored the moment a pack went into it -- the same machine booted
+		# in two different languages depending on whether its bay was full.
+		# Order is the core's: bsx_roms[] is { "BS-X Shell", "Memory Pack" }.
+		"subsystem": {"ident": "bsx",
+			"roms": ["expansion_rom:bsx_cart", "expansion_media:bsx_cart"],
+			# The pack is flash, and the .bs IS that flash -- a download is
+			# written back over the medium the player inserted, not to a save
+			# file beside it.
+			"writable": 1},
 	},
 	# UNVERIFIED. snes9x is named because it is the platform default, not because
 	# anyone has confirmed it takes a Sufami Turbo cart as plain content.
@@ -335,6 +418,31 @@ static func loader_of(id: String) -> int:
 	return int(row(id).get("loader", MediaDimensions.LOADER_NONE))
 
 
+## True when this unit has no bay of its own and its media goes into the
+## CONSOLE's cartridge slot instead.
+static func media_in_host(id: String) -> bool:
+	return bool(row(id).get("media_in_host", false))
+
+
+## Media systemids a console's OWN cartridge slot must take on top of its own,
+## because the expansion that uses them has no mouth to put them in.
+##
+## Not gated on the unit being attached, deliberately. A BS-X cartridge works in
+## a bare Super Famicom -- it boots its menu, it just has no broadcast to tune --
+## and snes9x loads a .bs the same way with or without the base station. Gating
+## it would mean a player holding the right cartridge for the machine in front of
+## them gets a silent refusal, which is the failure mode this codebase least
+## wants: a snap zone that declines an object simply does nothing.
+static func host_slot_media(host: String) -> Array[String]:
+	var out: Array[String] = []
+	for id in ids_for_host(host):
+		if media_in_host(id):
+			var m := media_of(id)
+			if not m.is_empty():
+				out.append(m)
+	return out
+
+
 ## True when this unit has a system tile of its own in the spawn menu.
 ##
 ## The test is whether the unit's media is a systemid of its OWN. A 64DD's disks
@@ -400,6 +508,22 @@ static func sorted_ids(ids: Array) -> Array[String]:
 
 ## The launch recipe for a console with these expansions attached, or an empty
 ## Dictionary when the combination has none. `ids` need not be sorted.
+## Which object holds the battery for a stack: the medium that was loaded, or
+## the UNIT itself.
+##
+## Nearly always the medium -- a 64DD disk is magnetic and saves onto itself. The
+## exception is a unit with its own battery behind the slot, where the save
+## survives every medium passing through it. The BS-X cartridge is that: its
+## 32 KB is the player's name and town, and keying it to the memory pack made a
+## new pack look like a new BS-X.
+const SAVE_OWNER_MEDIA := "media"
+const SAVE_OWNER_UNIT := "unit"
+
+static func save_owner_of(id: String) -> String:
+	var row: Dictionary = ROWS.get(id, {})
+	return str(row.get("save_owner", SAVE_OWNER_MEDIA))
+
+
 static func boot_for(host: String, ids: Array) -> Dictionary:
 	var key := host
 	for id in sorted_ids(ids):
