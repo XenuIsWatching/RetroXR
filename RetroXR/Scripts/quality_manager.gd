@@ -9,6 +9,7 @@
 extends Node
 
 const PREFS_PATH := "user://graphics_prefs.json"
+const VRS_PROBE_EXTERNAL_CFG := "/sdcard/Android/data/com.xenu.retroxr/files/vrsprobe.cfg"
 
 
 ## Shadow tiers offered in the GRAPHICS tab. OFF is the original look: no light
@@ -81,6 +82,11 @@ const VRS_TIERS := {
 	Foveation.MEDIUM: {"min_radius": 30.0, "strength": 1.0},
 	Foveation.HIGH:   {"min_radius": 20.0, "strength": 2.0},
 }
+
+## How long the VRS copy is held open after a change, in frames. Covers the
+## eye-buffer case, where the swapchain is rebuilt on the rendering thread a
+## frame or more after the resize is requested.
+const VRS_REFRESH_FRAMES := 12
 
 ## Render scale and the eye buffer are deliberately absent: both are a taste call
 ## about how much resolution to buy, not a quality tier, so a preset never moves
@@ -216,9 +222,8 @@ var foveation_level: Foveation = Foveation.OFF
 ##
 ## Tracked rather than read back, because nothing on this stack reports it.
 ## `Viewport.vrs_mode` is the obvious candidate and is a trap: it goes on
-## answering VRS_XR after an eye-buffer resize has taken the attachment away,
-## so it describes what was requested, never what is attached. The one event
-## that destroys foveation is that resize, so that is what is recorded here.
+## answering VRS_XR while the map the VRS buffer holds is stale, so it describes
+## what was requested, never what is being shaded with.
 var _foveation_live: bool = false
 ## Engine glow. The rooms author it; this is the switch that can take it away,
 ## because it is the only full-frame post-process the mobile backend still runs
@@ -252,6 +257,44 @@ func _ready() -> void:
 	# they enter the tree rather than swept for.
 	get_tree().node_added.connect(_on_node_added)
 	_log_state()
+	_run_vrs_probe()
+
+
+## On-device QA hook, in the shape of spike.cfg and glprobe.cfg: a
+## `vrsprobe.cfg` applies a Foveation level and/or Eye Buffer scale part way
+## into a session, so the mid-session path can be exercised over adb with
+## nobody in the headset to work the graphics menu.
+##
+## `{"after": 400, "foveation": 3, "eye_buffer": 2.0}` — `after` in frames,
+## the other two optional. Taken from the external files dir as well as
+## user://, because a release build cannot be reached by `adb run-as`. The cfg
+## is deleted as it is read, so a crashed run cannot wedge the next launch.
+func _run_vrs_probe() -> void:
+	var path := "user://vrsprobe.cfg"
+	if not FileAccess.file_exists(path):
+		path = VRS_PROBE_EXTERNAL_CFG
+		if not FileAccess.file_exists(path):
+			return
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return
+	var cfg: Dictionary = parsed
+	var after: int = int(cfg.get("after", 400))
+	print("[VRSProbe] armed: %s, in %d frames" % [JSON.stringify(cfg), after])
+	for i in after:
+		await get_tree().process_frame
+	if cfg.has("eye_buffer"):
+		print("[VRSProbe] eye_buffer -> %.2f" % float(cfg["eye_buffer"]))
+		set_eye_buffer_scale(float(cfg["eye_buffer"]))
+	if cfg.has("foveation"):
+		print("[VRSProbe] foveation -> %d" % int(cfg["foveation"]))
+		set_foveation_level(int(cfg["foveation"]))
+	print("[VRSProbe] applied, foveation_live=%s" % foveation_live())
 
 
 ## Report what the settings actually resolved to, so a wrong renderer string or a
@@ -381,13 +424,12 @@ func apply_eye_buffer_scale() -> void:
 		return
 	var xr := XRServer.find_interface("OpenXR")
 	xr.set("render_target_size_multiplier", eye_buffer_scale)
-	# On a live session the resize frees and rebuilds both swapchains, and the VRS
-	# attachment does not survive it. Nothing brings it back short of a restart,
-	# so record the loss rather than leaving the HUD to report a level that is no
-	# longer being applied. At startup `use_xr` is still false and apply_foveation
-	# runs after this, so a launch is unaffected.
+	# On a live session the resize frees and rebuilds both swapchains, and the map
+	# the VRS buffer holds is still the one generated for the OLD size. Re-arm the
+	# copy so it is regenerated against the new one. At startup `use_xr` is still
+	# false and apply_foveation runs after this, so a launch is unaffected.
 	if get_tree().root.use_xr:
-		_foveation_live = false
+		_refresh_vrs()
 
 
 ## The rates this runtime will accept, straight from xrEnumerateDisplayRefreshRatesFB.
@@ -510,23 +552,15 @@ func stencil_safe() -> bool:
 	return foveation_level == Foveation.OFF
 
 
-## Saved now, applied at the next launch — NOT to the session you are in.
+## Takes effect on the session you are in, including over an Eye Buffer change.
 ##
-## Measured: VRS is latched when the XR swapchain is created, and re-assigning
-## `vrs_mode` on a live session drops the attachment without building a new one.
-## So a mid-session change cannot raise or lower foveation, it can only lose it.
-## At 120 Hz on a x1.4 eye buffer, one call to this function while foveated took
-## the room from ~85 fps to ~59 — a bigger fall than HIGH-to-MEDIUM could ever
-## cost, because what actually happened is that foveation stopped.
-##
-## The same latch is why an Eye Buffer change turns foveation off until restart:
-## that row resizes the swapchain, and the attachment does not survive it.
+## What used to make this launch-only was reading `vrs_mode` as the state: it
+## goes on answering VRS_XR after the map has stopped being refreshed, so a
+## mid-session call looked like it dropped the attachment. The map is what
+## actually goes stale, and `_refresh_vrs` re-arms the copy that rebuilds it.
 func set_foveation_level(level: int) -> void:
 	foveation_level = clampi(level, Foveation.OFF, Foveation.HIGH) as Foveation
-	# Only safe before the session exists. xr_init calls apply_foveation() itself
-	# at startup, ahead of `use_xr = true`, which is the one moment it takes.
-	if not get_tree().root.use_xr:
-		apply_foveation()
+	apply_foveation()
 	save_prefs()
 
 
@@ -562,10 +596,40 @@ func apply_foveation() -> void:
 		return
 	xr.set("vrs_min_radius", tier["min_radius"])
 	xr.set("vrs_strength", tier["strength"])
-	get_tree().root.vrs_mode = Viewport.VRS_XR
-	# Every caller reaches this before `use_xr` is true (xr_init) or refuses to
-	# run once it is (set_foveation_level), so the attachment really is live here.
+	# Only when it is actually changing. Assigning VRS_XR over VRS_XR is not the
+	# no-op it reads as: measured on a Quest 3 at eye buffer 1.5 / 120 Hz, one
+	# such assignment took a foveated room from 88 fps to 65 — 62 is what that
+	# room runs UNFOVEATED, so the attachment is dropped rather than reused, and
+	# the re-arm below only partly rebuilt it (80).
+	var root := get_tree().root
+	if root.vrs_mode != Viewport.VRS_XR:
+		root.vrs_mode = Viewport.VRS_XR
+	_refresh_vrs()
 	_foveation_live = true
+
+
+## Re-arm the copy that puts the interface's radial map into the render target's
+## VRS buffer.
+##
+## `Viewport.vrs_update_mode` defaults to ONCE, and the engine sets it to
+## DISABLED again as soon as that one copy is made (VRS::update_vrs_texture).
+## So the map is generated once, at the size and strength in force at startup,
+## and NOTHING refreshes it afterwards — which is the whole reason a foveation
+## or Eye Buffer change used to be a launch-only setting.
+##
+## Held open across several frames rather than armed once: an Eye Buffer change
+## reaches the rendering thread later than this call, and the map has to be
+## regenerated at the size the rebuilt swapchain settles on, so a single copy
+## fired now would capture the size on the way out.
+func _refresh_vrs() -> void:
+	var root := get_tree().root
+	if root.vrs_mode == Viewport.VRS_DISABLED:
+		return
+	root.vrs_update_mode = Viewport.VRS_UPDATE_ALWAYS
+	for i in VRS_REFRESH_FRAMES:
+		await get_tree().process_frame
+	# Back to the engine default, so the copy is not paid for every frame.
+	root.vrs_update_mode = Viewport.VRS_UPDATE_ONCE
 
 
 ## Whether foveation is actually shading the eye buffer right now, as opposed to

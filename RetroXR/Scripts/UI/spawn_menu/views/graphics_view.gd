@@ -198,8 +198,7 @@ func _build(vr_mode: bool) -> void:
 			+ "the centre of view; 123% matches the panel and is sharper where you look, for "
 			+ "real frame time. Past that keeps paying off on things seen across the room, a "
 			+ "game screen most of all, and is what Foveation buys you. The picture blinks as "
-			+ "it resizes — and that resize turns Foveation off until you restart, so set this "
-			+ "one first."))
+			+ "it resizes."))
 
 	# Built from what the runtime enumerates, never a fixed list — a rate outside
 	# it is refused, and 120 Hz appears only once the headset's own display setting
@@ -236,10 +235,9 @@ func _build(vr_mode: bool) -> void:
 
 		vbox.add_child(MenuStyle.hint("Spends fewer pixels at the edges of each eye, where the "
 			+ "lens throws detail away anyway, and hands the saving to the centre — worth about "
-			+ "a third of the frame, which is what pays for a bigger Eye Buffer. TAKES EFFECT "
-			+ "NEXT TIME YOU START RetroXR: the headset fixes this when the session begins and "
-			+ "will not change it afterwards. While it is on, the hover outline around an object "
-			+ "is hidden by anything in front of it instead of showing through."))
+			+ "a third of the frame, which is what pays for a bigger Eye Buffer. While it is on, "
+			+ "the hover outline around an object is hidden by anything in front of it instead "
+			+ "of showing through."))
 
 	# Requests to the runtime, not clock speeds — and nothing reads back, since
 	# Godot binds the setters and no getter. The rows show what was asked for.
