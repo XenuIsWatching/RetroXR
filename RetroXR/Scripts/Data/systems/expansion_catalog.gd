@@ -25,6 +25,10 @@
 ##   media_in_host
 ##               this unit has NO bay: its media goes into the CONSOLE's own
 ##               cartridge slot. See the Satellaview row.
+##   firmware    files the CORE must already have for this unit to do anything,
+##               named as its .info names them. A unit that has not got them is
+##               not offered in the spawn menu at all. Only the BS-X cartridge
+##               names any; see its row.
 ##
 ## Which way a unit mounts is the whole of the geometry: the LOWER object always
 ## wears the socket (a snap zone on its top face) and the UPPER object always
@@ -122,6 +126,12 @@ const ROWS: Dictionary = {
 	# has a wall either side of it. A cartridge-mounting unit stands upright in
 	# the slot (Y is the insert axis), so a flat slab here read as a low box lying
 	# on the console rather than a cart standing in it.
+	#
+	# The only row that names `firmware`. The shell this cartridge runs is not
+	# ours and is not in the pack: it is BS-X.bin in the core's system directory,
+	# which snes9x sources itself. Without that file the unit is a prop -- it goes
+	# into the slot, the machine starts, and there is no town on the other side --
+	# so the menu does not offer it until the file is installed.
 	"bsx_cart": {
 		"label": "BS-X",
 		"host": "super_nes",
@@ -130,6 +140,7 @@ const ROWS: Dictionary = {
 		"save_owner": SAVE_OWNER_UNIT,
 		"size": Vector3(0.137, 0.088, 0.024),
 		"loader": MediaDimensions.LOADER_NONE,
+		"firmware": ["BS-X.bin"],
 	},
 	# Sufami Turbo is the other thing that goes in a Super Famicom slot — on TOP,
 	# like the 32X, and it takes its own small carts.
@@ -467,6 +478,91 @@ static func host_slot_media(host: String) -> Array[String]:
 ## concerned, which is precisely what having a card means.
 static func has_own_card(id: String) -> bool:
 	return media_of(id) == id
+
+
+## The systemid whose card this unit is offered from.
+##
+## A unit with a tile of its own is offered from that tile. A unit WITHOUT one
+## belongs on the card of the media it runs, because that is the card a player
+## reaching for it is already on. The BS-X cartridge is the case that made this
+## a rule: it runs Satellaview downloads, so it belongs on the Satellaview card
+## and not on the Super Famicom's, where it sat beside a console it is only one
+## third of and where a player who had never heard of the base station met it
+## first. The Jaguar CD runs the Jaguar's own media, so its media card and its
+## host card are the same card and nothing about it moves.
+static func card_systemid(id: String) -> String:
+	if has_own_card(id):
+		return id
+	var m := media_of(id)
+	return m if not m.is_empty() else host_of(id)
+
+
+## The units offered from `systemid`'s card -- those with no tile of their own
+## that are filed here. In ROWS order.
+##
+## Firmware is NOT filtered here: this answers where a unit belongs, and
+## firmware_present answers whether it can be offered at all. Keeping them apart
+## means a unit does not silently change cards when a file appears on disk.
+static func ids_carded_on(systemid: String) -> Array[String]:
+	var out: Array[String] = []
+	for id: String in ROWS:
+		if not has_own_card(id) and card_systemid(id) == systemid:
+			out.append(id)
+	return out
+
+
+## Firmware this unit cannot work without, named exactly as the core's .info
+## names it. Empty for every unit whose hardware is entirely ours to draw.
+static func firmware_of(id: String) -> Array:
+	return (row(id).get("firmware", []) as Array).duplicate()
+
+
+## Is this unit's firmware actually installed?
+##
+## True for a unit that names none, which is all of them but one. Otherwise ANY
+## of the group being on disk satisfies it -- alternatives, not a checklist.
+##
+## ON DISK, not verified, and this is where it parts company with BiosBoot. That
+## one refuses a MISMATCH because a PS1 BIOS from the wrong region really does
+## boot to a black screen, so offering the boot is worse than withholding it.
+## BS-X.bin is the opposite case: snes9x runs whatever is under that name, and
+## the dumps a player legitimately has -- Rev 0, or one of the fan translations
+## the Satellaview scene actually uses -- are none of them the Rev 1 whose md5
+## snes9x's .info publishes. Verifying here would hide the cartridge from the
+## players most likely to want it, over a file that works.
+##
+## The core comes from the unit's own BOOT recipe rather than being named twice:
+## a firmware path is a fact about the core that runs the combination, and that
+## core is already written down above. A unit with no recipe cannot say whose
+## system directory to look in, so it is not gated at all.
+static func firmware_present(id: String) -> bool:
+	var wanted := firmware_of(id)
+	if wanted.is_empty():
+		return true
+	var core := str(boot_for(host_of(id), [id]).get("core", ""))
+	if core.is_empty():
+		return true
+
+	var declared := false
+	for status_row: Dictionary in FirmwareState.shared().evaluate(
+			core, FirmwareRequirements.for_core(core)):
+		if not wanted.has(str(status_row.get("path", ""))):
+			continue
+		declared = true
+		var status := int(status_row.get("status", -1))
+		if status == FirmwareState.Status.PRESENT \
+				or status == FirmwareState.Status.MISMATCH:
+			return true
+	if declared:
+		return false
+
+	# The core's .info does not declare the file. Its location is still fixed --
+	# the core looks in its own system directory and nowhere else -- so look
+	# there rather than hiding hardware over a missing line of metadata.
+	for name: Variant in wanted:
+		if FileAccess.file_exists(FirmwareRequirements.destination(core, str(name))):
+			return true
+	return false
 
 
 ## Every expansion that belongs to a console, in ROWS order.

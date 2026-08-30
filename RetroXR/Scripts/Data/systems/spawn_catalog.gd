@@ -249,10 +249,17 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 	# 64DD" would describe hardware that has nowhere to plug it in. The Mega-CD
 	# loses its light-gun row the same way and for the same reason: the Menacer
 	# goes into the Mega Drive, whose card already lists it.
+	#
+	# Not quite the whole of it: a unit with no card of its own that runs THIS
+	# card's media belongs here too. The BS-X cartridge is one -- the Satellaview
+	# card is the base station, the cartridge and the pack that goes in it, which
+	# is the machine as a player has to build it.
 	if ExpansionCatalog.has(systemid) and ExpansionCatalog.has_own_card(systemid):
-		return [{"kind": "peripheral",
+		var own: Array = [{"kind": "peripheral",
 			"label": ExpansionCatalog.label_of(systemid),
 			"spawn": "expansion:%s" % systemid}]
+		own.append_array(_units_carded_here(systemid))
+		return own
 
 	var primitive: Array = []
 	var imported: Array = []
@@ -281,20 +288,17 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 			"model_id": SystemModelRegistry.PLACEHOLDER_ID})
 	items.append_array(imported)
 	items.append_array((_PERIPHERALS.get(systemid, []) as Array).duplicate(true))
-	# The machines that bolt onto this one -- but ONLY those with no card of
-	# their own, or the unit would be offered from two places at once and the
-	# console's card would grow a row that duplicates a whole tile.
+	# The machines that bolt onto this one -- but ONLY those actually filed under
+	# this card, or a unit would be offered from two places at once and this card
+	# would grow a row that duplicates a whole tile.
 	#
 	# In practice that is the Jaguar CD alone: it runs the Jaguar's own media, so
 	# it names no systemid, so it has no tile, so this card is the only place it
-	# can be reached from. Read from ExpansionCatalog rather than listed, so a new
-	# unit lands in the right place by having a row rather than an entry here.
-	for expansion_id: String in ExpansionCatalog.ids_for_host(systemid):
-		if ExpansionCatalog.has_own_card(expansion_id):
-			continue
-		items.append({"kind": "peripheral",
-			"label": ExpansionCatalog.label_of(expansion_id),
-			"spawn": "expansion:%s" % expansion_id})
+	# can be reached from. The BS-X cartridge also has no tile and used to land
+	# here for that reason, which put it on the Super Famicom card among the pads
+	# and the leads -- hardware from a different machine entirely. It is filed on
+	# the Satellaview card now; ExpansionCatalog.card_systemid is what decides.
+	items.append_array(_units_carded_here(systemid))
 	# With the peripherals rather than the leads below: it is something you hold.
 	if _LIGHT_GUN_PLATFORMS.has(systemid):
 		items.append(_LIGHT_GUN.duplicate())
@@ -317,6 +321,25 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 	# so a mod adds to a console's card rather than reordering it.
 	items.append_array((_mod_peripherals.get(systemid, []) as Array).duplicate(true))
 	return items
+
+
+## The expansion units this card offers as rows of its own: the ones with no
+## tile, filed here, and whose firmware is actually installed.
+##
+## The firmware gate is the reason this is a function rather than a loop written
+## twice. A unit that names firmware and has not got it is not offered at all --
+## it is not a machine yet, it is a box that goes into a slot and does nothing,
+## and a spawn row for one is a promise the room cannot keep. The BS-X cartridge
+## is the only unit that names any: without BS-X.bin in snes9x's system
+## directory there is no shell for it to run.
+static func _units_carded_here(systemid: String) -> Array:
+	var out: Array = []
+	for id: String in ExpansionCatalog.ids_carded_on(systemid):
+		if not ExpansionCatalog.firmware_present(id):
+			continue
+		out.append({"kind": "peripheral", "label": ExpansionCatalog.label_of(id),
+			"spawn": "expansion:%s" % id})
+	return out
 
 
 # ── mod contributions ─────────────────────────────────────────────────────────

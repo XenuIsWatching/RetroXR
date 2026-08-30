@@ -96,6 +96,7 @@ func _ready() -> void:
 	_test_reads_as_lightgun()
 	_test_core_device_id()
 	_test_light_gun_cards()
+	_test_bsx_card()
 	_test_pad_type_choice()
 	await _test_analog_mode_switch()
 	await _test_playstation_hardware()
@@ -275,6 +276,49 @@ func _test_light_gun_cards() -> void:
 	_ok("gun/the token's scene loads a LightGun",
 		(load("res://Scenes/Objects/peripherals/light_gun.tscn") as PackedScene)
 			.can_instantiate())
+
+
+## Where the BS-X cartridge is offered from, and when.
+##
+## It used to sit on the Super Famicom's card, because it has no tile of its own
+## and the host card was the only fallback. That put a Satellaview part among the
+## SNES pads and leads, where a player who has never heard of the base station
+## meets it first and where the two halves of one machine are on different cards.
+##
+## The second half is the firmware. What this cartridge runs is BS-X.bin in
+## snes9x's system directory, which is not ours and not in the pack, so without
+## it the row spawns a box that goes into a slot and does nothing. The check is
+## written against the real filesystem rather than a fixture: it asserts that the
+## row's presence AGREES with firmware_present either way, so it passes on a
+## machine with the file and on one without, and fails if the gate is dropped.
+func _test_bsx_card() -> void:
+	_eq("bsx/filed on the Satellaview card",
+		ExpansionCatalog.card_systemid("bsx_cart"), "satellaview")
+	_ok("bsx/and listed there",
+		ExpansionCatalog.ids_carded_on("satellaview").has("bsx_cart"))
+	_ok("bsx/not on the Super Famicom's",
+		not ExpansionCatalog.ids_carded_on("super_nes").has("bsx_cart"))
+	# The Jaguar CD is the case this rule must NOT move: its media is the
+	# Jaguar's own, so host and media are one card and it stays where it was.
+	_ok("bsx/the Jaguar CD stays on its console's card",
+		ExpansionCatalog.ids_carded_on("atari_jaguar").has("jaguar_cd"))
+
+	_ok("bsx/never on the SNES spawn list", _spawn_row("super_nes", "expansion:bsx_cart").is_empty())
+	var installed := ExpansionCatalog.firmware_present("bsx_cart")
+	var offered := not _spawn_row("satellaview", "expansion:bsx_cart").is_empty()
+	_eq("bsx/offered exactly when BS-X.bin is installed", offered, installed)
+	# The base station is the card either way -- gating the cartridge must never
+	# take the tile's own hardware down with it.
+	_ok("bsx/the base station is offered regardless",
+		not _spawn_row("satellaview", "expansion:satellaview").is_empty())
+
+
+## A card's row carrying `token`, or {} when it offers none.
+func _spawn_row(sysid: String, token: String) -> Dictionary:
+	for item: Dictionary in SpawnCatalog.items_for(sysid):
+		if String(item.get("spawn", "")) == token:
+			return item
+	return {}
 
 
 ## The gun's row on a platform's card, or {} if that card offers none.
