@@ -259,6 +259,31 @@ static func is_pack_path(path: String) -> bool:
 	return path.get_extension().to_lower() == "bs"
 
 
+## True when this is a pack the room MINTED, rather than a programme image that
+## arrived some other way.
+##
+## The test is the filename, and it is a convention rather than proof. Nothing
+## inside the file can answer this: a blank we wrote is recognisable while it is
+## still blank -- erased flash with our exact header, 19 non-0xFF bytes in the
+## whole megabyte -- but the first download overwrites the header with the
+## programme's own, and from then on it is shaped like any other image. Measured:
+## a written pack and a ripped one both came to 1 MB, both with a Shift-JIS title
+## and real type/size fields, and nothing left to tell them apart.
+##
+## Nor can provenance be borrowed from the RomM index. A `.bs` that is not listed
+## there is not thereby ours -- anyone can copy a programme image into the folder
+## by hand, and it would be indistinguishable from a minted pack under that test.
+##
+## So: `create_blank` names its files MEMORY PACK, MEMORY PACK 2… through
+## unique_name, and this reads that name back. A player who renames one is
+## telling us it is no longer that, which is the right answer for a label whose
+## only job is to say "this one is yours to write to".
+static func is_own_pack_path(path: String) -> bool:
+	if not is_pack_path(path):
+		return false
+	return path.get_file().get_basename().to_upper().contains(BLANK_TITLE)
+
+
 ## What a pack is CALLED on a shelf: the programme written on it, or that it is
 ## empty. Never the filename -- a pack is identified by what is on it, and a name
 ## typed over that would be a second label free to disagree with the medium.

@@ -52,6 +52,7 @@ const BACKSPACE := 0xF006E   # md-backspace       — on-menu keypad
 const LOCK      := 0xF033E   # md-lock            — pinned where it stands
 const LOCK_OPEN := 0xF033F   # md-lock_open       — free to be picked up
 const NETPLAY   := 0xF06F3   # md-network         — this core can hold a session
+const BSX_MEMORY_PACK := 0xEF5F  # fa-satellite   — a Satellaview pack we minted
 
 const TINT_DOWNLOAD := Color(0.45, 0.70, 1.00)
 const TINT_BUSY     := Color(1.00, 0.75, 0.25)

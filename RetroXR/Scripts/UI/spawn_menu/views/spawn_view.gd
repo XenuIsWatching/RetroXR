@@ -887,7 +887,10 @@ func _populate_cartridges_detail(systemid: String, vbox: VBoxContainer) -> void:
 	# shelf does.
 	if systemid == "satellaview":
 		var new_pack := Button.new()
-		new_pack.text = "  + New Memory Pack  "
+		new_pack.text = "  +  %s  New Memory Pack  " % String.chr(MenuIcons.BSX_MEMORY_PACK)
+		# symbols() is the theme font with the glyph table BEHIND it, so the Latin
+		# half of this label still renders; the Nerd Font on its own has no letters.
+		new_pack.add_theme_font_override("font", MenuIcons.symbols())
 		new_pack.add_theme_font_size_override("font_size", 18)
 		new_pack.custom_minimum_size = Vector2(0, 52)
 		new_pack.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -1237,6 +1240,20 @@ func _build_blank_rom_row() -> Control:
 	cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	row.add_child(cover)
 
+	# A pack this room minted, marked before the title. Its own Label rather than
+	# a prefix on the title: MarqueeButton draws through an internal label and
+	# clips to its own width, so a glyph put in the text scrolls away with it.
+	var pack_mark := Label.new()
+	pack_mark.name = "PackMark"
+	pack_mark.add_theme_font_override("font", MenuIcons.symbols())
+	pack_mark.add_theme_font_size_override("font_size", 26)
+	pack_mark.add_theme_color_override("font_color", MenuIcons.TINT_OK)
+	pack_mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	pack_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pack_mark.text = String.chr(MenuIcons.BSX_MEMORY_PACK)
+	pack_mark.visible = false
+	row.add_child(pack_mark)
+
 	var main := MarqueeButton.create("", 22)
 	main.name = "Main"
 	main.custom_minimum_size = Vector2(0, 100)
@@ -1292,6 +1309,12 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	row.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	state.disabled = false
 	main.disabled = false
+
+	# Rows are pooled, so this is set on EVERY bind and not only when true --
+	# otherwise one pack leaves its mark on every title it later recycles into.
+	var pack_mark := row.get_node("PackMark") as Label
+	pack_mark.visible = BsxPack.is_own_pack_path(local_path)
+	pack_mark.tooltip_text = "A memory pack made here — the Satellaview writes downloads to this one"
 
 	# A scraped wheel logo replaces the title text entirely; otherwise the title
 	# scrolls. MarqueeButton extends Button, so it carries the icon itself.
