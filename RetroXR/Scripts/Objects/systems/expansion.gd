@@ -368,6 +368,10 @@ func _build_slot_bay(s: Vector3, media: String) -> void:
 	add_child(_slot)
 	_slot.inserted.connect(_on_media_in)
 	_slot.removed.connect(_on_media_out)
+	# A slot bay swallows its media and MediaSlot makes it neither grabbable nor
+	# pointable while it is in there, so without this button a 64DD disk went in
+	# and could not come back out.
+	_build_eject_button(s, media)
 
 
 ## A CD unit -- a lid in the roof, or a drawer out of the front.
@@ -503,7 +507,8 @@ func get_socket() -> XRToolsSnapZone:
 	return _socket
 
 
-## The OPEN button, placed against this unit's own box and wired to its tray.
+## The EJECT/OPEN button, placed against this unit's own box and wired to
+## whichever bay this unit built.
 func _build_eject_button(s: Vector3, media: String) -> void:
 	var drawer := _disc_bay != null
 	var mount := ExpansionCatalog.mount_of(expansion_id)
@@ -513,4 +518,7 @@ func _build_eject_button(s: Vector3, media: String) -> void:
 		s.z * 0.5 + 0.004)
 	ExpansionShell.build_eject_button(self, pos, func() -> void:
 		if _tray != null:
-			_tray.toggle_open())
+			_tray.toggle_open()
+		elif _slot != null:
+			_slot.toggle_eject(),
+		"OPEN" if _tray != null else "EJECT")

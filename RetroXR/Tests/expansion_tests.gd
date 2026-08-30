@@ -263,6 +263,22 @@ func _group_media() -> void:
 	await _wait(5)
 	_check(dd.get_media_path() == "/roms/n64dd/disk.ndd", "media/ the bay reports its disk")
 
+	# A slot bay swallows its media and makes it neither grabbable nor pointable
+	# while it is in there, so the button is the only way a disk comes back out.
+	var eject := dd.get_node_or_null("EjectButton") as VRButton
+	_check(eject != null, "media/ a slot unit has an eject button")
+	_check(disk.enabled == false, "media/ a seated disk cannot be grabbed")
+	if eject != null:
+		eject.button_pressed.emit()
+		await _wait(2)
+	_check(disk.enabled == true, "media/ pressing eject hands the disk back")
+	# And takes it back rather than leaving it parked for a hand that is not
+	# coming, which is what the rest of this group goes on to read.
+	if eject != null:
+		eject.button_pressed.emit()
+		await _wait(2)
+	_check(dd.get_media_path() == "/roms/n64dd/disk.ndd", "media/ and pressed again draws it in")
+
 	# The cartridge in the CONSOLE and the disk in the DRIVE are two different
 	# pieces of media on one machine, which is the fact this whole feature exists
 	# to represent.

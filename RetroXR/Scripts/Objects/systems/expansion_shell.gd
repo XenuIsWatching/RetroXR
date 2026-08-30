@@ -142,7 +142,7 @@ static func eject_x(s: Vector3, mount: int, drawer: bool, media: String) -> floa
 ## the body is a measured box and everything on it is placed from ExpansionCatalog
 ## dimensions. Same widget the consoles use, so it highlights, depresses and
 ## takes a trigger press identically.
-static func build_eject_button(parent: Node3D, pos: Vector3, on_press: Callable) -> void:
+static func build_eject_button(parent: Node3D, pos: Vector3, on_press: Callable, text: String = "OPEN") -> void:
 	var eject := VRButton.new()
 	eject.name = "EjectButton"
 	eject.position = pos
@@ -182,7 +182,7 @@ static func build_eject_button(parent: Node3D, pos: Vector3, on_press: Callable)
 	eject.add_child(mesh)
 
 	var label := Label3D.new()
-	label.text = "OPEN"
+	label.text = text
 	label.font_size = 48
 	label.pixel_size = 0.00016
 	label.position = Vector3(0.0, -0.012, 0.006)
