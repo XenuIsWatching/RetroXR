@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Tools/cores/bsx_signal_probe.gd" id="1_bsxsig"]
+
+[node name="BsxSignalProbe" type="Node3D"]
+script = ExtResource("1_bsxsig")
