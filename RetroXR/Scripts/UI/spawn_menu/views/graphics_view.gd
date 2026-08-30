@@ -15,6 +15,11 @@ var _msaa_opt:    VRDropdown = null
 var _post_aa_opt: VRDropdown = null
 var _shadow_opt:  VRDropdown = null
 var _ao_opt:      VRDropdown = null
+var _glow_tog:    VRToggle = null
+## A VRToggle's knob follows its own `toggled` signal, so _sync_rows has to move
+## it loudly and the handler has to ignore the echo. set_pressed_no_signal would
+## leave the switch and its state disagreeing.
+var _syncing_glow: bool = false
 
 
 ## `vr_mode` is passed in rather than queried, so the caller decides once and
@@ -321,6 +326,33 @@ func _build(vr_mode: bool) -> void:
 			+ "cabinets sit in the room instead of floating. Low draws it at half "
 			+ "resolution."))
 
+	# The rooms are authored with glow on, so this is a row that changes the look
+	# rather than only the cost — but it is the single most expensive thing in a
+	# frame here, so the choice belongs to the player.
+	var glow_row := HBoxContainer.new()
+	glow_row.add_theme_constant_override("separation", 10)
+	glow_row.custom_minimum_size = Vector2(0, 68)
+	vbox.add_child(glow_row)
+
+	var glow_lbl := Label.new()
+	glow_lbl.text = "Glow"
+	glow_lbl.add_theme_font_size_override("font_size", 22)
+	glow_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_TITLE)
+	glow_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	glow_row.add_child(glow_lbl)
+
+	_glow_tog = VRToggle.create(QualityManager.glow_enabled, func(on: bool) -> void:
+		if _syncing_glow:
+			return
+		QualityManager.set_glow_enabled(on)
+		_sync_rows())
+	glow_row.add_child(_glow_tog)
+
+	vbox.add_child(MenuStyle.hint("Bleeds light out of bright things — neon, lamps, a game "
+		+ "screen in a dark room. It is the one full-frame pass this renderer still "
+		+ "runs, and on a Quest it measured about a seventh of the frame, so turning "
+		+ "it off is the biggest single saving in the list."))
+
 	vbox.add_child(HSeparator.new())
 
 
@@ -347,3 +379,7 @@ func _sync_rows() -> void:
 		_shadow_opt.select_id(int(QualityManager.shadow_quality))
 	if _ao_opt:
 		_ao_opt.select_id(int(QualityManager.ao_quality))
+	if _glow_tog:
+		_syncing_glow = true
+		_glow_tog.button_pressed = QualityManager.glow_enabled
+		_syncing_glow = false
