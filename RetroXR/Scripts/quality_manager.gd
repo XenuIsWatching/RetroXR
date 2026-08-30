@@ -284,10 +284,18 @@ func _run_vrs_probe() -> void:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return
 	var cfg: Dictionary = parsed
-	var after: int = int(cfg.get("after", 400))
-	print("[VRSProbe] armed: %s, in %d frames" % [JSON.stringify(cfg), after])
-	for i in after:
-		await get_tree().process_frame
+	# Seconds rather than frames when asked for: under RenderDoc injection the
+	# warm runs at a fraction of a frame a second, so a frame count fires long
+	# after the capture it was meant to precede.
+	if cfg.has("after_sec"):
+		var secs := float(cfg["after_sec"])
+		print("[VRSProbe] armed: %s, in %.1f s" % [JSON.stringify(cfg), secs])
+		await get_tree().create_timer(secs).timeout
+	else:
+		var after: int = int(cfg.get("after", 400))
+		print("[VRSProbe] armed: %s, in %d frames" % [JSON.stringify(cfg), after])
+		for i in after:
+			await get_tree().process_frame
 	if cfg.has("eye_buffer"):
 		print("[VRSProbe] eye_buffer -> %.2f" % float(cfg["eye_buffer"]))
 		set_eye_buffer_scale(float(cfg["eye_buffer"]))
