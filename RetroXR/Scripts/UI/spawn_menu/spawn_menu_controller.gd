@@ -939,6 +939,10 @@ func _place_spawned(obj: Node3D, _type: String) -> void:
 	# Face the player. Nothing set the basis before this, so every object came
 	# out on its scene-default heading wherever it was spawned. Yaw only: the
 	# turn is about UP, so a console can never spawn pitched or rolled.
+	#
+	# The bare atan2 puts the object's +Z along `away`, which points its -Z at
+	# the player — backwards, because these models front on +Z like the menu
+	# panel does, not on Godot's -Z. The extra PI turns them round.
 	if not get_viewport().use_xr:
 		var eye := global_position
 		if is_instance_valid(_camera):
@@ -947,7 +951,7 @@ func _place_spawned(obj: Node3D, _type: String) -> void:
 		away.y = 0.0
 		if away.length_squared() < 0.001:
 			away = fwd
-		obj.global_rotation = Vector3(0.0, atan2(away.x, away.z), 0.0)
+		obj.global_rotation = Vector3(0.0, atan2(away.x, away.z) + PI, 0.0)
 	# In a multiplayer session the host registers + broadcasts; a client's
 	# local copy is converted into a spawn request the host executes (the copy
 	# is freed, so a client can't receive it in hand — it spawns placed).
