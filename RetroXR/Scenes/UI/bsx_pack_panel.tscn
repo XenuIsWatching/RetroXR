@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3 uid="uid://bsxpack_pnl_0001"]
+
+[ext_resource type="Script" path="res://Scripts/UI/panels/bsx_pack_panel.gd" id="1_panelscript"]
+[ext_resource type="PackedScene" uid="uid://clujaf3u776a3" path="res://addons/godot-xr-tools/objects/viewport_2d_in_3d.tscn" id="2_viewport2d3d"]
+[ext_resource type="PackedScene" uid="uid://bsxpack_2d_0001" path="res://Scenes/UI/bsx_pack_contents_2d.tscn" id="3_bsxpack2d"]
+
+; screen_size must match viewport_size's aspect (420:480) or pointer clicks land
+; off-target, and it is authored here rather than set at runtime because the
+; XRToolsViewport2DIn3D setter throws before it assigns.
+[node name="BsxPackPanel" type="Node3D"]
+script = ExtResource("1_panelscript")
+
+[node name="BsxPackViewport" parent="." instance=ExtResource("2_viewport2d3d")]
+screen_size = Vector2(0.28, 0.32)
+scene = ExtResource("3_bsxpack2d")
+viewport_size = Vector2(420, 480)
+transparent = 1

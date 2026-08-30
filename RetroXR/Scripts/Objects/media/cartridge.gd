@@ -11,6 +11,9 @@ extends XRToolsPickable
 
 
 const OPTIONS_PANEL_SCENE := preload("res://Scenes/UI/cartridge_options_panel.tscn")
+## A Satellaview memory pack spawns as a cartridge but is a medium, not a game,
+## so it gets its own panel rather than one offering saves it cannot have.
+const PACK_PANEL_SCENE := preload("res://Scenes/UI/bsx_pack_panel.tscn")
 
 ## The full path to the ROM file this cartridge represents
 @export_global_file var rom_path: String = ""
@@ -31,6 +34,7 @@ const OPTIONS_PANEL_SCENE := preload("res://Scenes/UI/cartridge_options_panel.ts
 @export var systemid: String = ""
 
 var _options_panel: Node3D = null
+var _pack_panel: BsxPackPanel = null
 
 ## Real per-system cartridge models. A system with no entry — or with its asset
 ## stripped from the build — silently keeps the procedural box.
@@ -550,11 +554,33 @@ func get_rom_path() -> String:
 ## Called by SpawnMenuController when the menu button is pressed while
 ## pointing at this cartridge.
 func toggle_options_ui(camera: Node3D) -> void:
+	# A Satellaview memory pack arrives here as an ordinary cartridge — the spawn
+	# path builds one for any satellaview file that is not the BS-X shell — but it
+	# is a MEDIUM, not a game. Saves, states and achievements are all meaningless
+	# for it; what it holds is programmes across eight blocks of flash. Send it to
+	# the panel that can say so.
+	if BsxPack.is_pack_path(rom_path):
+		var pack_panel := ensure_pack_panel()
+		if pack_panel.visible:
+			pack_panel.hide_panel()
+		else:
+			pack_panel.show_for(self, camera)
+		return
 	var panel := ensure_options_panel()
 	if panel.visible:
 		panel.hide_panel()
 	else:
 		panel.show_for(self, camera)
+
+
+## The pack-contents panel, created on first use and parented here so it dies
+## with the pack. Separate from _options_panel: a cartridge is one or the other
+## for its whole life, so the unused one is never built.
+func ensure_pack_panel() -> BsxPackPanel:
+	if _pack_panel == null:
+		_pack_panel = PACK_PANEL_SCENE.instantiate()
+		add_child(_pack_panel)
+	return _pack_panel
 
 
 ## The cartridge's options panel, created on first use.

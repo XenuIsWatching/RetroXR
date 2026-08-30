@@ -148,6 +148,7 @@ var _rom_variants_panel: PanelContainer = null
 ## driving it — both live only as long as the page is open.
 var _game_saves_panel: PanelContainer = null
 var _game_saves_driver: CartridgeOptionsPanel = null
+var _pack_contents_panel: PanelContainer = null
 ## Connected to scraper_client.media_download_completed so the tab refreshes
 ## when a wheel image or manual PDF finishes downloading.
 var _media_dl_refresh_cb: Callable = Callable()
@@ -1260,7 +1261,9 @@ func _build_blank_rom_row() -> Control:
 	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(main)
 
-	for n: String in ["Detail", "Saves", "Manual", "Scrape"]:
+	# "Pack" is last and shows only for a .bs: what is written on a Satellaview
+	# memory pack, which the row itself can only summarise.
+	for n: String in ["Detail", "Saves", "Manual", "Scrape", "Pack"]:
 		var b := Button.new()
 		b.name = n
 		b.custom_minimum_size = Vector2(66, 100)
@@ -1295,6 +1298,7 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	var saves := row.get_node("Saves") as Button
 	var manual := row.get_node("Manual") as Button
 	var scrape := row.get_node("Scrape") as Button
+	var pack := row.get_node("Pack") as Button
 
 	_disconnect_all(state.pressed)
 	_disconnect_all(main.pressed)
@@ -1302,6 +1306,7 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	_disconnect_all(saves.pressed)
 	_disconnect_all(manual.pressed)
 	_disconnect_all(scrape.pressed)
+	_disconnect_all(pack.pressed)
 
 	# Rows are pooled, so anything a branch below only sets conditionally has to
 	# be cleared here — otherwise one dead-server row leaves every title it later
@@ -1423,8 +1428,19 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	# arrives named for the broadcast that filled it, and one minted here is named
 	# whatever kept it unique on disk. An unused pack says so rather than showing
 	# the placeholder title a blank carries.
-	if systemid == "satellaview" and not local_path.is_empty() 			and BsxPack.is_pack_path(local_path):
+	# A pack is named by EVERY programme written on it, not by the first: several
+	# live on one medium, and naming it after block 0 leaves the rest invisible.
+	var is_pack: bool = systemid == "satellaview" and not local_path.is_empty() \
+			and BsxPack.is_pack_path(local_path)
+	if is_pack:
 		main.set_marquee_text("  " + BsxPack.display_name(local_path))
+	# Set on every bind, not only when true: rows are pooled, and a pack's button
+	# left visible would offer a pack's contents for whatever title recycles here.
+	pack.text = String.chr(MenuIcons.BSX_PACK_CONTENTS)
+	pack.visible = is_pack
+	pack.tooltip_text = "What is written on this pack"
+	if is_pack:
+		pack.pressed.connect(_show_pack_contents_panel.bind(local_path))
 
 	var has_manual: bool = meta["has_manual"]
 	var manual_path: String = meta["manual_path"]
@@ -2517,6 +2533,53 @@ func _close_game_saves_panel() -> void:
 		_game_saves_panel.queue_free()
 	_game_saves_panel = null
 	_game_saves_driver = null
+
+
+## What is written on a memory pack, without spawning it first.
+##
+## The same BsxPackContents2D the in-world panel floats beside the pack, embedded
+## here — one list, two ways of reaching it. No driver object: unlike the saves
+## page, which needs a CartridgeOptionsPanel to act on a real cartridge, a pack
+## listing is read straight out of the file and acts on nothing.
+func _show_pack_contents_panel(pack_path: String) -> void:
+	_close_pack_contents_panel()
+
+	_pack_contents_panel = PanelContainer.new()
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.1, 0.1, 0.2)
+	_pack_contents_panel.add_theme_stylebox_override("panel", bg)
+	_pack_contents_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var margin := MarginContainer.new()
+	for side: String in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 14)
+	_pack_contents_panel.add_child(margin)
+
+	var col := MenuStyle.vbox(10)
+	margin.add_child(col)
+
+	var ui := BsxPackContents2D.create_embedded()
+	ui.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(ui)
+
+	var close := MenuStyle.row_button("  CLOSE  ", 22, 0, 56, false)
+	close.pressed.connect(_close_pack_contents_panel)
+	col.add_child(close)
+
+	get_parent().add_child(_pack_contents_panel)
+
+	# After the tree add: populate() walks the node it built in _ready().
+	var data := FileAccess.get_file_as_bytes(pack_path)
+	ui.populate(pack_path.get_file().get_basename(),
+		BsxPack.programmes_of(data),
+		BsxPack.free_blocks(data),
+		BsxPack.BLOCK_COUNT)
+
+
+func _close_pack_contents_panel() -> void:
+	if _pack_contents_panel and is_instance_valid(_pack_contents_panel):
+		_pack_contents_panel.queue_free()
+	_pack_contents_panel = null
 
 
 func _show_rom_variants_panel(game: Dictionary, systemid: String) -> void:

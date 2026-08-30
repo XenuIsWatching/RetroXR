@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Tools/cores/bsx_pack_contents_probe.gd" id="1_bsxpc"]
+
+[node name="BsxPackContentsProbe" type="Node"]
+script = ExtResource("1_bsxpc")

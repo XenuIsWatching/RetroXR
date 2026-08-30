@@ -28,6 +28,11 @@ extends RefCounted
 
 ## 8 Mbit. FLASH_SIZE in bsx.cpp.
 const SIZE := 0x100000
+## The pack is allotted in eight blocks of 1 Mbit -- which is what "8M Memory
+## Pack" counts. The eight is read off the format rather than guessed:
+## OFF_BLOCK_ALLOC is one byte of allocation bitmap, one bit per block.
+const BLOCK_COUNT := 8
+const BLOCK_SIZE := SIZE / BLOCK_COUNT
 ## Where the header lives, and how long its title field is.
 ##
 ## TWO positions are possible and both occur. A pack formatted empty carries its
@@ -200,6 +205,108 @@ static func title_of_file(path: String) -> String:
 	return best
 
 
+## Every programme written on a pack, one entry each.
+##
+## A pack is a MEDIUM, not a game: the BS-X allots it in eight blocks and a
+## download takes as many as it needs, so several programmes live on one pack at
+## once. title_of answers for block 0 alone -- the pack's headline header -- and
+## this is how to see the rest.
+##
+## Each entry:
+##   title   String      the programme's own title, decoded
+##   block   int         the block its header sits in; the handle every other
+##                        call takes, in the sense CardFormat means one
+##   blocks  Array[int]  every block it occupies, out of the allocation bitmap
+##   offset  int         where in the image its header is
+##   lorom   bool        which of the two header positions it used
+##
+## MEASURED on a pack with two programmes on it, not reasoned about:
+##
+##   blk0 Hi @0x00FFC0  alloc=0x0F  blocks 0-3  "BS SUPERCOOKED"
+##   blk4 Hi @0x08FFC0  alloc=0xF0  blocks 4-7  "12/21虎ﾏｶﾞ大作戦"
+##
+## Two things that scan has to get right and would be easy to get wrong. The
+## header position is per PROGRAMME and not per pack -- a blank minted here sits
+## at the LoROM offset and both programmes above sit at the HiROM one -- so both
+## are probed at every block. And OFF_BLOCK_ALLOC is a BITMAP rather than a count:
+## 0x0F and 0xF0 above are exact complements, which is what settles the reading,
+## and snes9x says the same from the other side when it shifts that field down for
+## a programme "taken seperately from the upper memory of the Memory Pack"
+## (bsx.cpp, Fix Block Allocation Flags).
+static func programmes_of(data: PackedByteArray) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for blk in BLOCK_COUNT:
+		for sub: int in HEADER_OFFSETS:
+			var off: int = blk * BLOCK_SIZE + sub
+			if data.size() < off + 32 or not _header_is_bsx(data, off):
+				continue
+			out.append(_programme_at(data.slice(off, off + 32), blk, off, sub == HEADER))
+	return out
+
+
+## The same, without opening the whole megabyte. A shelf redraws per row and a
+## pack is 1 MB, so this reads 32 bytes per candidate position -- sixteen short
+## seeks -- exactly as title_of_file does for one.
+static func programmes_of_file(path: String) -> Array[Dictionary]:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return [] as Array[Dictionary]
+	var out: Array[Dictionary] = []
+	var length := f.get_length()
+	for blk in BLOCK_COUNT:
+		for sub: int in HEADER_OFFSETS:
+			var off: int = blk * BLOCK_SIZE + sub
+			if length < off + 32:
+				continue
+			f.seek(off)
+			var head := f.get_buffer(32)
+			if head.size() == 32 and _header_is_bsx(head, 0):
+				out.append(_programme_at(head, blk, off, sub == HEADER))
+	f.close()
+	return out
+
+
+## One entry, from a 32-byte header already known to be a BS header.
+static func _programme_at(head: PackedByteArray, blk: int, off: int, lorom: bool) -> Dictionary:
+	var alloc := head[OFF_BLOCK_ALLOC]
+	var blocks: Array[int] = []
+	for b in BLOCK_COUNT:
+		if alloc & (1 << b):
+			blocks.append(b)
+	return {
+		"title": _clean_title(head.slice(0, TITLE_LEN)),
+		"block": blk,
+		"blocks": blocks,
+		"offset": off,
+		"lorom": lorom,
+	}
+
+
+## How many of the pack's blocks nothing has claimed.
+##
+## The union of every programme's bitmap rather than a sum: two entries claiming
+## one block would otherwise report more of the pack spent than it holds.
+##
+## The placeholder header does not count. A blank is minted with
+## BLANK_BLOCK_ALLOC = 0xFF, every bit set, so counting it read an untouched pack
+## as completely full -- the panel said "8 of 8 blocks used · 0 free" directly
+## above "Nothing written on this pack yet". A header naming no programme reserves
+## nothing.
+static func free_blocks(data: PackedByteArray) -> int:
+	var used := 0
+	for p: Dictionary in programmes_of(data):
+		var t := str(p["title"])
+		if t.is_empty() or t == BLANK_TITLE:
+			continue
+		for b: int in p["blocks"]:
+			used |= 1 << b
+	var n := 0
+	for b in BLOCK_COUNT:
+		if not (used & (1 << b)):
+			n += 1
+	return n
+
+
 ## A title is Shift-JIS, and there IS a decoder for it.
 ##
 ## This used to keep every byte that landed in printable ASCII and drop the rest,
@@ -284,14 +391,35 @@ static func is_own_pack_path(path: String) -> bool:
 	return path.get_file().get_basename().to_upper().contains(BLANK_TITLE)
 
 
-## What a pack is CALLED on a shelf: the programme written on it, or that it is
+## What a pack is CALLED on a shelf: every programme written on it, or that it is
 ## empty. Never the filename -- a pack is identified by what is on it, and a name
 ## typed over that would be a second label free to disagree with the medium.
 const EMPTY_LABEL := "Empty Memory Pak"
+## Between two programmes on one pack. A middot rather than a comma because a
+## broadcast title is free to contain one.
+const LABEL_JOIN := " · "
 
+## All of them, not just the first. A pack is a medium and several programmes live
+## on one, so naming it after block 0 alone is not a shorter answer but a wrong
+## one -- the programmes it leaves out are invisible everywhere in the room. A row
+## that outgrows its width marquees, which is what MarqueeButton is for.
 static func display_name(path: String) -> String:
-	var title := title_of_file(path)
-	if title.is_empty() or title == BLANK_TITLE:
+	var titles := programme_titles(path)
+	if titles.is_empty():
 		return EMPTY_LABEL
-	return title
+	return LABEL_JOIN.join(titles)
+
+
+## The titles of the programmes on a pack, in block order, placeholder excluded.
+##
+## A blank carries BLANK_TITLE in its header because we minted it that way; that
+## names no programme, so an untouched pack answers with nothing here and reads as
+## empty rather than as holding something called "MEMORY PACK".
+static func programme_titles(path: String) -> Array[String]:
+	var out: Array[String] = []
+	for p: Dictionary in programmes_of_file(path):
+		var t := str(p["title"])
+		if not t.is_empty() and t != BLANK_TITLE:
+			out.append(t)
+	return out
 
