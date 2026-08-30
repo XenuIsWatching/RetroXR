@@ -146,7 +146,7 @@ func _ready() -> void:
 		ICON_CAPTURE, ICON_SIZE)
 	_hint = HeldHint.attach(self, true, HINT_HEIGHT)
 	_hint.add_row(&"capture", HeldHint.PLATFORM_DESKTOP,
-		["keyboard_scroll_lock_outline"], "Send keys here")
+		["keyboard_scroll_lock_outline"], "or F3 — send keys here")
 	call_deferred("_find_vr_nodes")
 
 

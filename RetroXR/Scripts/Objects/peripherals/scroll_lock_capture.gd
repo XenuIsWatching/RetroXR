@@ -3,9 +3,16 @@
 ## Several held devices consume keyboard input that would otherwise move the
 ## player: the RetroKeyboard's keys, and the buttons a virtual pad or handheld
 ## binds to RETRO_JOYPAD_* actions. Holding one used to hijack those keys
-## silently. Capture makes it opt-in instead — press Scroll Lock while holding the
-## device to take the keyboard, shown by a glyph floating off its near edge, with WASD
-## locomotion suspended for as long as it lasts.
+## silently. Capture makes it opt-in instead — press Scroll Lock or F3 while
+## holding the device to take the keyboard, shown by a glyph floating off its near
+## edge, with WASD locomotion suspended for as long as it lasts.
+##
+## Two keys, because Scroll Lock is the better NAME for this — it reads as a lock,
+## and nothing else wants it — but whole classes of keyboard have no such key:
+## laptops, TKLs, 60% boards, and most of the Bluetooth boards you would pair with
+## a Quest. Those players could not reach capture at all. F3 is on every keyboard,
+## is not a modifier (so it needs no gesture beyond a press, the way a bare Alt
+## would have), and was otherwise unbound here.
 ##
 ## Capture is always a subset of "eligible" (held, and plugged into a system), so
 ## it can never outlive the grip and strand the player with movement blocked. The
@@ -22,6 +29,11 @@ extends RefCounted
 const SYMBOL_FONT_PATH := "res://fonts/SymbolsNerdFont-Regular.ttf"
 ## Clear air between the device's +Z face and the near edge of the glyph, in metres.
 const ICON_GAP := 0.02
+## The keys that toggle capture. Either one does the whole job on its own, and
+## both are swallowed while this host is eligible, so neither reaches the core —
+## a captured RetroKeyboard sends a literal one from its own SCR or F3 keycap.
+## Plain ints rather than Array[Key]: GDScript has no enum-typed arrays.
+const TOGGLE_KEYS: Array[int] = [KEY_SCROLLLOCK, KEY_F3]
 
 var _host: Node3D = null
 ## Callable() -> bool: may this host capture right now (held and plugged)?
@@ -71,13 +83,13 @@ func _can_capture() -> bool:
 
 
 ## Handle one key event. Returns true only when this host was eligible and so
-## actually consumed it — an ineligible device must let Scroll Lock through, or
+## actually consumed it — an ineligible device must let a toggle key through, or
 ## whichever device happens to be first in the tree would swallow it and the one
 ## actually in your hand would never toggle.
 func handle_key(event: InputEventKey) -> bool:
-	# Not while typing: Scroll Lock pressed inside a text field should neither
+	# Not while typing: a toggle key pressed inside a text field should neither
 	# toggle capture nor be swallowed here.
-	if event.keycode != KEY_SCROLLLOCK or _suspended or not _can_capture():
+	if not TOGGLE_KEYS.has(event.keycode) or _suspended or not _can_capture():
 		return false
 	if event.is_pressed():
 		set_active(not _active)

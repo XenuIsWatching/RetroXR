@@ -12,11 +12,11 @@
 ## per-frame work in the RefCounted-owning-a-Label3D shape.
 ##
 ## ScrollLockCapture's own glyph stays. That one means "capture is ON right now";
-## a row here means "you may press Scroll Lock". Status versus teaching.
+## a row here means "you may press Scroll Lock or F3". Status versus teaching.
 ##
 ##   var hint := HeldHint.attach(self, true)
 ##   hint.add_row(&"capture", HeldHint.PLATFORM_DESKTOP,
-##       ["keyboard_scroll_lock_outline"], "Send keys here")
+##       ["keyboard_scroll_lock_outline"], "or F3 — send keys here")
 class_name HeldHint
 extends Node3D
 

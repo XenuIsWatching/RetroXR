@@ -92,7 +92,7 @@ func setup(host: Node3D) -> void:
 		ICON_CAPTURE, ICON_SIZE)
 	_hint = HeldHint.attach(host, true, HINT_HEIGHT)
 	_hint.add_row(&"capture", HeldHint.PLATFORM_DESKTOP,
-		["keyboard_scroll_lock_outline"], "Send keys here")
+		["keyboard_scroll_lock_outline"], "or F3 — send keys here")
 
 
 func _ready() -> void:

@@ -5,13 +5,15 @@
 ##
 ## VR typing: the key grid is built procedurally; each hand presses at most the
 ## single nearest key under its controller tip (so a palm can't mash a row).
-## Real-keyboard passthrough is OPT-IN: hold the board and press Scroll Lock to
-## capture, which floats a keyboard glyph off its near edge and suspends WASD locomotion so
-## the keys reach the core instead of the player. Scroll Lock again — or simply
-## dropping the board — releases it. Keys route from here, offline straight to the
-## core and in netplay through the deterministic schedule, sinking the matching
-## virtual keycap on the way. This is the only OS-keyboard path; the extension no
-## longer feeds keys on its own.
+## Real-keyboard passthrough is OPT-IN: hold the board and press Scroll Lock — or
+## F3, for the many boards that have no Scroll Lock key — to capture, which
+## floats a keyboard glyph off its near edge and suspends WASD locomotion so
+## the keys reach the core instead of the player. Either key again — or simply
+## dropping the board — releases it. Neither reaches the core while capture is on,
+## so a literal F3 or Scroll Lock is typed on this board's own F3 and SCR caps.
+## Keys route from here, offline straight to the core and in netplay through the
+## deterministic schedule, sinking the matching virtual keycap on the way. This is
+## the only OS-keyboard path; the extension no longer feeds keys on its own.
 class_name RetroKeyboard
 extends XRToolsPickable
 
@@ -156,7 +158,7 @@ func _ready() -> void:
 	# No drop row: the board lets go on a plain release on both platforms.
 	_hint = HeldHint.attach(self, false, HINT_HEIGHT)
 	_hint.add_row(&"capture", HeldHint.PLATFORM_DESKTOP,
-		["keyboard_scroll_lock_outline"], "Send keys here")
+		["keyboard_scroll_lock_outline"], "or F3 — send keys here")
 	call_deferred("_find_controllers")
 
 
@@ -392,7 +394,7 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 	if _hint:
 		_hint.on_dropped()
 	# Capture never outlives the grip — otherwise WASD stays blocked with no way
-	# to walk back to the board and press Scroll Lock again.
+	# to walk back to the board and press Scroll Lock (or F3) again.
 	_set_capture(false)
 	if _capture:
 		_capture.refresh()
@@ -615,8 +617,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key == null or key.is_echo():
 		return
 
-	# Scroll Lock toggles capture. Tested BEFORE the capture gate below —
-	# behind it, the toggle could only ever switch capture off, never on.
+	# Scroll Lock and F3 both toggle capture. Tested BEFORE the capture
+	# gate below — behind it, the toggle could only ever switch capture off.
 	if _capture != null and _capture.handle_key(key):
 		get_viewport().set_input_as_handled()
 		return

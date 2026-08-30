@@ -345,7 +345,7 @@ func _ready() -> void:
 	_capture = ScrollLockCapture.attach(self, _can_capture,
 		ICON_CAPTURE, ICON_SIZE)
 	_hint.add_row(&"capture", HeldHint.PLATFORM_DESKTOP,
-		["keyboard_scroll_lock_outline"], "Send keys here")
+		["keyboard_scroll_lock_outline"], "or F3 — send keys here")
 	# One VR hand carries five usable inputs against this remote's seven buttons
 	# and a d-pad, so the hand binding alone can never reach all of them. The
 	# answer is the one the hardware itself suggests — hold it in one hand, poke
