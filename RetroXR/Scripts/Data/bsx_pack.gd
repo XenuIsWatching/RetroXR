@@ -48,6 +48,9 @@ const HEADER_OFFSETS: Array[int] = [HEADER, HEADER_HI]
 const TITLE_LEN := 16
 ## Flash erases to 0xFF; snes9x's own block-erase writes exactly this.
 const ERASED := 0xFF
+## What a title field is written in. Godot accepts only this spelling of the
+## name -- "sjis", "cp932" and "windows-31j" all decode to nothing.
+const SHIFT_JIS := "shift_jis"
 
 const OFF_BLOCK_ALLOC := 0x10
 const OFF_MAP := 0x15
@@ -197,18 +200,57 @@ static func title_of_file(path: String) -> String:
 	return best
 
 
-## A title is only sometimes text we can read. A Japanese broadcast writes its
-## own in Shift-JIS, which has no decoder here and comes back as mojibake, so
-## anything that is not plain printable ASCII is dropped and a title that
-## survives as mostly nothing is reported as no title at all -- better a pack
-## labelled only by its filename than one labelled with rubbish.
+## A title is Shift-JIS, and there IS a decoder for it.
+##
+## This used to keep every byte that landed in printable ASCII and drop the rest,
+## on the belief that nothing here could read Shift-JIS. That does not merely
+## fail on a Japanese title, it fails DECEPTIVELY: every character is a two-byte
+## pair, the lead byte is dropped, and a trail byte that happens to land in ASCII
+## range is kept as though it were a letter. クオンパＢＳ版 came out as "NIpar" --
+## not empty, not obviously wrong, just a plausible-looking word that is not the
+## name of anything. A wrong label is worse than no label.
+##
+## get_string_from_multibyte_char("shift_jis") is the decoder. Measured against
+## the real bytes out of a written pack it returns クオンパＢＳ版, and it
+## round-trips a plain ASCII title ("BS Cu-On-Pa") unchanged -- so this is ONE
+## path for both kinds of title rather than a guess about which kind is in hand.
+##
+## What it does NOT do is tell a real Japanese title from random bytes that
+## happen to form valid Shift-JIS; nothing short of knowing the language can.
+## Noise decodes to visible CJK rubbish rather than to a word, which is the
+## honest failure and the one improvement that matters here -- the old reading
+## turned noise into "N[f" and a real title into "NIpar", both of which read as
+## English. Rejecting noise is the job of _header_is_bsx upstream, which is what
+## decides these bytes are a title at all.
 static func _clean_title(raw: PackedByteArray) -> String:
-	var out := ""
-	for b: int in raw:
-		if b >= 0x20 and b < 0x7F:
-			out += char(b)
-	out = out.strip_edges()
-	return out if out.length() >= 3 else ""
+	# Padding first. The field is padded with spaces or NULs, and on a freshly
+	# erased pack with 0xFF; handed those trailing bytes the decoder answers with
+	# rubbish.
+	var end := raw.size()
+	while end > 0 and (raw[end - 1] == 0x20 or raw[end - 1] == 0x00 or raw[end - 1] == ERASED):
+		end -= 1
+	if end == 0:
+		return ""
+	var body := raw.slice(0, end)
+
+	var out: String = body.get_string_from_multibyte_char(SHIFT_JIS)
+	if out.is_empty():
+		# The decoder can decline: bytes that are not valid Shift-JIS, or a build
+		# without the encoding. Fall back to ASCII ONLY when every byte is already
+		# single-byte ASCII -- scavenging printable bytes out of multi-byte text is
+		# the exact mistake above, and it must not come back through the fallback.
+		for b: int in body:
+			if b < 0x20 or b >= 0x7F:
+				return ""
+		out = body.get_string_from_ascii()
+
+	# Decoded text can still carry control characters.
+	var clean := ""
+	for c: String in out:
+		if c.unicode_at(0) >= 0x20:
+			clean += c
+	clean = clean.strip_edges()
+	return clean if clean.length() >= 3 else ""
 
 ## True when `path` is a pack rather than the BS-X shell that reads one. Both live
 ## in the satellaview folder and only the extension separates them, which is the
