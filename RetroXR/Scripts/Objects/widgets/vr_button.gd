@@ -60,6 +60,10 @@ const TRIGGER_OFF := 0.4
 ## the model's Finger Button empty's -Z axis via set_depress_axis_from_node().
 @export var depress_axis: Vector3 = Vector3(0, -1, 0)
 
+## Optional veto, called with a fingertip's WORLD position; false rejects the poke.
+## Left empty by every button that has no side to it. See _gate_allows.
+var press_gate: Callable = Callable()
+
 # Cached original local position of the active mesh (in its parent's space)
 var _mesh_local_origin: Vector3
 # Parent node of the active mesh — used for direction-space conversion
@@ -193,7 +197,24 @@ func _nearest_touching() -> XRController3D:
 
 
 func _qualified(ctrl: XRController3D) -> bool:
-	return is_instance_valid(ctrl) and ctrl.get_is_active() and PokeTip.is_poking(ctrl)
+	if not (is_instance_valid(ctrl) and ctrl.get_is_active() and PokeTip.is_poking(ctrl)):
+		return false
+	return _gate_allows(PokeTip.tip_of(ctrl))
+
+
+## Ask the owner whether a fingertip at this world position may work this button.
+##
+## A toggle bat is the case that needs it: which half of the lever the finger is on
+## decides whether the press is legal, and that answer changes every time the button
+## fires. Gating in `_qualified` rather than at `_activate` is what makes it hold
+## as well as fire — a held press whose gate has just flipped is released on the
+## next frame, so a finger left resting on the bat cannot toggle it back.
+##
+## The pointer paths are deliberately not gated: a laser has no side.
+func _gate_allows(tip: Vector3) -> bool:
+	if not press_gate.is_valid():
+		return true
+	return bool(press_gate.call(tip))
 
 
 func _release_touch() -> void:
@@ -277,7 +298,8 @@ func _hovering_ctrl() -> XRController3D:
 		# Skip a hand that's holding something, same as TOUCH mode.
 		if ctrl == null or not ctrl.get_is_active() or not PokeTip.is_poking(ctrl):
 			continue
-		if _tip_in_box(PokeTip.tip_of(ctrl)):
+		var tip: Vector3 = PokeTip.tip_of(ctrl)
+		if _tip_in_box(tip) and _gate_allows(tip):
 			return ctrl
 	return null
 

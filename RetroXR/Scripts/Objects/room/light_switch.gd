@@ -44,6 +44,11 @@ const STRING_GROUP := &"string_light"
 ## tip is higher when on rather than trusting this comment.
 const LEVER_TILT := 0.42
 
+## Dead band about the bat's pivot, in metres of the button's local Y. A fingertip
+## inside it is on neither half and works the switch in neither direction, so the
+## two halves cannot fight over a tip resting on the pivot.
+const POKE_DEAD_BAND := 0.0015
+
 var _button: VRButton = null
 var _lever: Node3D = null
 
@@ -53,8 +58,24 @@ func _ready() -> void:
 	if _button == null:
 		return
 	_button.button_pressed.connect(_on_pressed)
+	_button.press_gate = _poke_allowed
 	_lever = _button.get_node_or_null("ButtonMesh") as Node3D
 	_apply()
+
+
+## Which half of the bat a poke has to land on, and it is the half the bat is
+## currently STICKING OUT of: a lever thrown up is pushed down by a finger on its
+## top, and one thrown down is flicked back up from underneath. Without the gate a
+## fingertip approaching straight through the plate works the switch either way,
+## which reads as a doorbell rather than a toggle.
+##
+## Local Y of the Button node is the plate's own up (the plate is only ever turned
+## about the room's Y to face its wall), so no basis work is needed here.
+func _poke_allowed(tip: Vector3) -> bool:
+	if _button == null:
+		return true
+	var y: float = _button.to_local(tip).y
+	return y >= POKE_DEAD_BAND if lights_on else y <= -POKE_DEAD_BAND
 
 
 func _on_pressed() -> void:
