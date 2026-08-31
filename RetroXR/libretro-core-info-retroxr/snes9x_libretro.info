@@ -1,0 +1,66 @@
+# Nintendo - SNES / SFC (Snes9x), retroXR override.
+#
+# Overrides the vendored libretro-core-info entry of the same name. It lives in
+# its own directory because res://libretro-core-info is vendored wholesale from
+# libretro's repository and is refreshed wholesale too — an edit there would be
+# lost the next time, silently.
+#
+# ONE field differs from the vendored file: secondary_systemids gains `sfc` for
+# sufami_turbo. Every Sufami Turbo dump in the wild is named .sfc rather than
+# .st, so with the vendored list the library filed them under super_nes — where
+# .sfc is also claimed — and spawned a plain Super Famicom cartridge that the
+# adapter's bay then refused. The whole machine was unreachable with the files a
+# player actually has. Two systems claiming one extension is already how this
+# field works: satellaview claims `sfc` too, for the BS-X shell, and the FOLDER
+# a file sits in is what decides.
+#
+# The rest of this file is a VERBATIM copy, and has to be. The overlay REPLACES
+# an entry rather than merging into it, so a file carrying only the line that
+# changed would delete snes9x's firmware declarations along with everything else
+# — taking out the BIOS/Extras rows for BS-X.bin and STBIOS.bin, the Satellaview
+# cartridge's spawn gate and the Sufami Turbo's. Re-copy from the vendored file
+# and re-apply this one line whenever that file is refreshed.
+
+# Software Information
+display_name = "Nintendo - SNES / SFC (Snes9x)"
+categories = "Emulator"
+authors = "Snes9x Team"
+corename = "Snes9x"
+supported_extensions = "smc|sfc|swc|fig|bs|st"
+license = "Non-commercial"
+permissions = ""
+display_version = "1.61"
+
+# Hardware Information
+manufacturer = "Nintendo"
+systemname = "Super Nintendo Entertainment System"
+systemid = "super_nes"
+secondary_systemids = "satellaview:sfc,bs|sufami_turbo:st,sfc"
+
+# Firmware / BIOS
+firmware_count = 2
+firmware0_desc = "BS-X.bin (BS-X - Sore wa Namae o Nusumareta Machi no Monogatari (Japan) (Rev 1))"
+firmware0_path = "BS-X.bin"
+firmware0_opt = "true"
+firmware1_desc = "STBIOS.bin (Sufami Turbo (Japan))"
+firmware1_path = "STBIOS.bin"
+firmware1_opt = "true"
+notes = "(!) BS-X.bin (md5): fed4d8242cfbed61343d53d48432aced|(!) STBIOS.bin (md5): d3a44ba7d42a74d3ac58cb9c14c6a5ca|(!) To start BS-X games from the RPG-like interface, go back into the house and select the 1st option."
+
+# Libretro Features
+savestate = "true"
+savestate_features = "deterministic"
+cheats = "true"
+input_descriptors = "true"
+memory_descriptors = "true"
+libretro_saves = "true"
+core_options = "true"
+core_options_version = "1.3"
+load_subsystem = "true"
+supports_no_game = "false"
+database = "Nintendo - Super Nintendo Entertainment System|Nintendo - Sufami Turbo|Nintendo - Satellaview"
+hw_render = "false"
+needs_fullpath = "false"
+disk_control = "false"
+
+description = "Snes9x is a classic and popular SNES emulator that is very fast while still maintaining solid accuracy and high compatibility. It is perfect for use on desktop and laptop PCs of all ages, as well as many reasonably powerful mobile devices. This core is based on the latest up-to-date Snes9x sources and is the one most users should try first, only falling back to the year-marked snapshots if this one can't maintain full speed on their device."

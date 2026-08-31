@@ -1005,6 +1005,68 @@ because the SNES draws the whole field whether or not the border has arrived —
 the border lands when the game sends its SGB packets, which for Donkey Kong is
 somewhere past ten seconds. `--at=8,16,26` rather than one fixed moment.
 
+### 2i. The Sufami Turbo — two cartridges in one adapter
+
+The Bandai adapter that goes in a Super Famicom slot and takes **two** small
+cartridges, nine of whose thirteen games link the one in slot B into the game in
+slot A. It is the only unit in `ExpansionCatalog` with more than one bay, and the
+reason a bay is addressed by index at all.
+
+**snes9x has the same dead constant here that it has for the Super Game Boy.**
+`RETRO_GAME_TYPE_SUFAMI_TURBO` is `#define`d *and* has a working `case` in
+`retro_load_game_special`, and is registered in no subsystem — so no frontend can
+reach it. Do not be fooled by the grep hit; that is twice now in one core.
+
+What IS advertised, confirmed at runtime, is:
+
+```
+Subsystem 'multicart_addon' (Multi-Cart Link): 2 rom(s), id=4357
+Subsystem 'bsx' (BS-X): 2 rom(s), id=4353
+```
+
+The Multi-Cart Link case sniffs the FIRST cartridge with `is_SufamiTurbo_Cart`
+(size in `0x80000..0x100000`, `"BANDAI SFC-ADX"` at 0, and *not* `"SFC-ADX BACKUP"`
+at 0x10 — that marker is what makes STBIOS.bin the BIOS rather than a cartridge),
+loads `STBIOS.bin`, and calls `LoadMultiCartMem(A, B, bios)`. One cartridge is a
+first-class configuration, not half a pair: `retro_load_game` sniffs the same
+header and maps slot B empty.
+
+**A missing STBIOS.bin does not silently degrade** — measured, because the obvious
+guess was wrong. `rom_loaded` stays false and the load is refused outright: zero
+frames, `content_load_failed`. Note `Cart is Sufami Turbo...` prints in that case
+too, so that line alone is not a pass. The line that means it really mapped is
+`Map_SufamiTurboLoROMMap`.
+
+**Measured 2026-08-30** with the No-Intro set: SD Ultra Battle Ultraman Densetsu
+in slot A and Seven Densetsu in slot B, 767 frames at 256×224, and the game
+itself reporting the B cassette's backup state — which is the proof the link is
+live, since a game that could not see slot B would not mention it. Poi Poi Ninja
+World runs the single-cartridge path.
+
+**KNOWN LIMIT: the second cartridge's save is not kept.** `retro_get_memory_size`
+answers `RETRO_MEMORY_SAVE_RAM` and `RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM` from
+the same case — slot A alone — while slot B sits under `_B_RAM`, a region this
+bridge never reads. A real flush gives 16384 bytes with one cartridge in or two.
+Fixing it means teaching the extension a second region and a second file, as
+`SetPackPath` already does for the BS-X pack.
+
+**Every dump is named `.sfc`, not `.st`.** `libretro-core-info-retroxr/snes9x_libretro.info`
+overrides `sufami_turbo:st,sfc` for that reason — otherwise the library files them
+under `super_nes` and the adapter's bay refuses them. That override is a WHOLE
+copy of the vendored file: the overlay replaces an entry rather than merging, so
+a one-line file would delete snes9x's firmware declarations with it.
+
+```bash
+"$godot" --path RetroXR --resolution 320x240 --position 20,20 \
+  res://Tools/cores/sufami_probe.tscn -- \
+  "--a=$HOME/retroxr/roms/sufami_turbo/<A>.sfc" \
+  "--b=$HOME/retroxr/roms/sufami_turbo/<B>.sfc" --sram=/tmp/t.srm
+```
+
+The probe cannot read its own log — `Libretro` publishes no log signal — so the
+branch is asserted by the CALLER grepping the run. `--sram` reports the flushed
+size, which is how the save limit above was measured.
+
 ### 3. Capturing a real screenshot on Linux (for visual validation)
 `--headless` uses the dummy renderer — it **cannot** produce a screenshot (a probe that awaits
 `RenderingServer.frame_post_draw` just hangs; `get_image()` is blank). To actually render a

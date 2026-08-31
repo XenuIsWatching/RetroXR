@@ -3320,7 +3320,14 @@ func _expansion_roms(spec: Dictionary) -> Array[String]:
 			# shell twice whenever the bay stood empty.
 			var kind := "expansion"
 			var id := ""
-			for prefix in ["expansion_rom:", "expansion_media:", "expansion:"]:
+			# No prefix here may be a literal prefix of another, or the order of
+			# this list silently starts deciding which one matches.
+			# "expansion_media_b:" and "expansion_media:" diverge at the
+			# sixteenth character -- "_" against ":" -- so neither contains the
+			# other. The longer is listed first regardless, as the house rule for
+			# whoever adds the next one.
+			for prefix in ["expansion_media_b:", "expansion_rom:",
+					"expansion_media:", "expansion:"]:
 				if token.begins_with(prefix):
 					kind = prefix.trim_suffix(":")
 					id = token.substr(prefix.length())
@@ -3335,6 +3342,12 @@ func _expansion_roms(spec: Dictionary) -> Array[String]:
 							path = ExpansionCatalog.firmware_rom_path(id)
 					"expansion_media":
 						path = unit.get_media_path()
+					# The second cartridge of a unit that takes two. No fallback,
+					# for the same reason the first has none: a pairing needs its
+					# halves kept apart, and a unit with only one bay filled must
+					# come up SHORT so the count check sends it to the plain load.
+					"expansion_media_b":
+						path = unit.get_media_path(1)
 					_:
 						path = unit.get_media_path()
 						if path.is_empty():
@@ -4124,9 +4137,13 @@ func game_media() -> RetroCartridge:
 	if _snapped_cartridge is RetroCartridge:
 		return _snapped_cartridge as RetroCartridge
 	for unit in get_expansions():
-		var m := unit.get_media()
-		if m is RetroCartridge:
-			return m as RetroCartridge
+		# Every bay, not the first: a Sufami Turbo with its second slot filled and
+		# its first empty would otherwise report no game at all, and the machine
+		# would offer neither saves nor achievements for something plainly in it.
+		for s in unit.get_bay_count():
+			var m := unit.get_media(s)
+			if m is RetroCartridge:
+				return m as RetroCartridge
 	return null
 
 

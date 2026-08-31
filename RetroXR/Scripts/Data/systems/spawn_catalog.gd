@@ -255,9 +255,18 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 	# card is the base station, the cartridge and the pack that goes in it, which
 	# is the machine as a player has to build it.
 	if ExpansionCatalog.has(systemid) and ExpansionCatalog.has_own_card(systemid):
-		var own: Array = [{"kind": "peripheral",
-			"label": ExpansionCatalog.label_of(systemid),
-			"spawn": "expansion:%s" % systemid}]
+		var own: Array = []
+		# Gated exactly as a unit filed on somebody else's card is. This branch
+		# used to add the unit unconditionally, so the firmware rule -- "a unit
+		# that has not got them is not offered at all" -- held only for units
+		# WITHOUT a tile of their own. It went unnoticed because the BS-X
+		# cartridge was the only row naming firmware and it is filed under
+		# satellaview; the Sufami Turbo is the first to name firmware AND own its
+		# card, and it was offered without its shell.
+		if ExpansionCatalog.firmware_present(systemid):
+			own.append({"kind": "peripheral",
+				"label": ExpansionCatalog.label_of(systemid),
+				"spawn": "expansion:%s" % systemid})
 		own.append_array(_units_carded_here(systemid))
 		return own
 

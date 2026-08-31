@@ -18,6 +18,8 @@
 ##   launch/  which core the combination resolves to, and its pinned options
 ##   sgb/     the Super Game Boy adapters: the pairing they hand bsnes, the two
 ##            cartridges that make them different machines, and the BIOS gate
+##   sufami/  the Sufami Turbo: two bays that do not alias, wells that line up
+##            with the holes cut for them, and the Multi-Cart Link pairing
 extends Node
 
 const SYSTEM_SCENE := preload("res://Scenes/Objects/system.tscn")
@@ -761,6 +763,145 @@ func _spawn_card_has(systemid: String, expansion_id: String) -> bool:
 	return false
 
 
+# ── sufami ────────────────────────────────────────────────────────────────────
+
+
+## The Sufami Turbo: the only unit here that takes TWO cartridges, and the reason
+## a bay is addressed by index at all.
+func _group_sufami() -> void:
+	var unit := await _unit("sufami_turbo")
+	var sfc := await _console("super_nes")
+
+	_check(unit.get_bay_count() == 2, "sufami/ the adapter has two bays")
+	var a := unit.get_node_or_null("MediaBay") as XRToolsSnapZone
+	var b := unit.get_node_or_null("MediaBay2") as XRToolsSnapZone
+	_check(a != null and b != null and a != b,
+		"sufami/ which are two distinct snap zones")
+
+	# The geometry, computed rather than eyeballed, so it keeps holding if either
+	# the box or the cartridge is retuned later.
+	var cart := MediaDimensions.cart_size("sufami_turbo")
+	var box := ExpansionCatalog.size_of("sufami_turbo")
+	_check(a != null and b != null and absf(a.position.x - b.position.x) >= cart.x,
+		"sufami/ far enough apart that two cartridges do not overlap")
+	_check(a != null and b != null
+			and absf(a.position.x) + cart.x * 0.5 <= box.x * 0.5
+			and absf(b.position.x) + cart.x * 0.5 <= box.x * 0.5,
+		"sufami/ and near enough in that neither hangs off the shell")
+
+	# The mouths are placed independently of the zones, so a unit can catch a
+	# cartridge where no hole is drawn. Match them up by X.
+	var mouths: Array[float] = []
+	for child in unit._body.get_children():
+		if str(child.name).begins_with("WellMouth"):
+			mouths.append((child as Node3D).position.x)
+	mouths.sort()
+	_check(mouths.size() == 2, "sufami/ with a visible mouth cut for each")
+	_check(mouths.size() == 2 and a != null and b != null
+			and is_equal_approx(mouths[0], minf(a.position.x, b.position.x))
+			and is_equal_approx(mouths[1], maxf(a.position.x, b.position.x)),
+		"sufami/ and each mouth over the bay it belongs to")
+
+	# The case that catches a missing bind: two zones both writing slot 0 look
+	# perfectly healthy until you ask which cartridge is in which.
+	var cart_a := await _cart("sufami_turbo", "/roms/sufami_turbo/A.sfc")
+	var cart_b := await _cart("sufami_turbo", "/roms/sufami_turbo/B.sfc")
+	_check(unit._accepts_media(cart_a), "sufami/ a bay takes a Sufami Turbo cart")
+	_check(not unit._accepts_media(await _cart("nes", "/roms/nes/x.nes")),
+		"sufami/ and refuses what is not one")
+	unit.restore_media(cart_a, 0)
+	unit.restore_media(cart_b, 1)
+	await _wait(5)
+	_check(unit.get_media(0) == cart_a and unit.get_media(1) == cart_b,
+		"sufami/ the two slots hold two different cartridges")
+	_check(unit.get_media_path(0) == "/roms/sufami_turbo/A.sfc"
+			and unit.get_media_path(1) == "/roms/sufami_turbo/B.sfc",
+		"sufami/ and report them apart")
+
+	sfc.restore_cartridge(unit)
+	await _wait(5)
+	var boot := sfc.expansion_boot()
+	_check(str(boot.get("core", "")) == "snes9x", "sufami/ the stack pins snes9x")
+
+	# snes9x defines RETRO_GAME_TYPE_SUFAMI_TURBO and advertises no subsystem for
+	# it, so the reachable path is the Multi-Cart Link, cart A first.
+	var sub: Dictionary = boot.get("subsystem", {})
+	_check(str(sub.get("ident", "")) == "multicart_addon",
+		"sufami/ and pairs the carts through the Multi-Cart Link")
+	var pair := sfc._expansion_roms(sub)
+	_check(pair == ["/roms/sufami_turbo/A.sfc", "/roms/sufami_turbo/B.sfc"],
+		"sufami/ handing over slot A first, then slot B")
+	_check(not sub.has("writable"),
+		"sufami/ with neither cartridge marked writable")
+
+	# One cartridge is a machine in its own right: the core sniffs a lone cart's
+	# header and maps slot B empty. The pair must come up SHORT rather than
+	# doubling the one cartridge it has.
+	await _unbolt(b, cart_b)
+	_check(sfc._expansion_roms(sub).size() == 1,
+		"sufami/ one empty slot leaves the pair incomplete, so the plain load runs")
+	_check(sfc._expansion_roms(sfc.expansion_boot()) == ["/roms/sufami_turbo/A.sfc"],
+		"sufami/ and a single cartridge boots on its own")
+	await _clear()
+
+	# The regression guard for every OTHER unit: slot 1 must answer "nothing",
+	# not crash and not quietly hand back slot 0's cartridge.
+	var one_bay := await _unit("sega_32x")
+	_check(one_bay.get_bay_count() == 1, "sufami/ a 32X still has one bay")
+	_check(one_bay.get_media(1) == null and one_bay.get_media_path(1) == "",
+		"sufami/ whose second slot is empty rather than an alias of its first")
+	await _clear()
+
+	await _sufami_gate()
+
+
+## The BIOS gate, driven both ways. Same bargain as the Super Game Boy's: the
+## path is derived from the core name and cannot be pointed elsewhere, so a real
+## dump is moved aside and put straight back.
+func _sufami_gate() -> void:
+	var dest := FirmwareRequirements.destination("snes9x", "STBIOS.bin")
+	var aside := dest + ".expansion_tests_backup"
+	if FileAccess.file_exists(aside) and not FileAccess.file_exists(dest):
+		DirAccess.rename_absolute(aside, dest)
+		print("[exp] sufami/ restored an STBIOS.bin left aside by an earlier run")
+
+	if FileAccess.file_exists(dest):
+		DirAccess.rename_absolute(dest, aside)
+		_refresh_snes9x_firmware()
+		_check(not ExpansionCatalog.firmware_present("sufami_turbo"),
+			"sufami/ with the shell moved away the adapter is withdrawn")
+		_check(not _spawn_card_has("sufami_turbo", "sufami_turbo"),
+			"sufami/ and its card stops offering it")
+		DirAccess.rename_absolute(aside, dest)
+		_refresh_snes9x_firmware()
+		_check(FileAccess.file_exists(dest), "sufami/ and the player's dump is put back")
+		_check(ExpansionCatalog.firmware_present("sufami_turbo"),
+			"sufami/ which brings the adapter back with it")
+		return
+
+	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
+	var f := FileAccess.open(dest, FileAccess.WRITE)
+	if f == null:
+		_check(false, "sufami/ can write to the BIOS folder to drive the gate")
+		return
+	f.store_string("retroxr expansion_tests scratch, safe to delete")
+	f.close()
+	_refresh_snes9x_firmware()
+	_check(ExpansionCatalog.firmware_present("sufami_turbo"),
+		"sufami/ a shell on disk makes the adapter available")
+	_check(_spawn_card_has("sufami_turbo", "sufami_turbo"),
+		"sufami/ and its card offers it")
+	DirAccess.remove_absolute(dest)
+	_refresh_snes9x_firmware()
+	_check(not FileAccess.file_exists(dest), "sufami/ and the scratch shell is cleaned up")
+	_check(not ExpansionCatalog.firmware_present("sufami_turbo"),
+		"sufami/ which withdraws the adapter again")
+
+
+func _refresh_snes9x_firmware() -> void:
+	FirmwareState.shared().evaluate("snes9x", FirmwareRequirements.for_core("snes9x"))
+
+
 func _run() -> void:
 	if _want("fit"):
 		await _group_fit()
@@ -774,3 +915,5 @@ func _run() -> void:
 		await _group_launch()
 	if _want("sgb"):
 		await _group_sgb()
+	if _want("sufami"):
+		await _group_sufami()

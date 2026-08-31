@@ -52,9 +52,16 @@ static func build_slit(body: Node3D, s: Vector3, media: String) -> void:
 ## its media systemid -- the Jaguar CD's media is "atari_jaguar", whose cart_size
 ## is a Jaguar CARTRIDGE, so asking the media what shape it is would cut a
 ## cartridge slot in a CD machine.
-static func build_well(body: Node3D, s: Vector3, media: String, loader: int) -> void:
+## `x_offset` moves the mouth off centre, for a unit with more than one well. It
+## defaults to the centre, so every single-bay caller is unchanged -- and it has
+## to exist at all because the snap zone and this mesh are placed INDEPENDENTLY.
+## Moving the zone alone gives a unit that catches a cartridge where there is no
+## visible hole, and draws a hole where nothing can be put.
+static func build_well(body: Node3D, s: Vector3, media: String, loader: int,
+		x_offset := 0.0) -> void:
 	var well := MeshInstance3D.new()
-	well.name = "WellMouth"
+	well.name = "WellMouth" if is_zero_approx(x_offset) \
+		else "WellMouth%s" % ("L" if x_offset < 0.0 else "R")
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = MOUTH_COLOUR
 
@@ -83,7 +90,7 @@ static func build_well(body: Node3D, s: Vector3, media: String, loader: int) -> 
 	# at all, which is a cartridge slot you cannot find. Standing it a hair proud
 	# breaks the tie the other way and leaves it visible, the same trick the
 	# connector plate uses.
-	well.position = Vector3(0.0, s.y * 0.5 + 0.0002 - WELL_THICKNESS * 0.5, 0.0)
+	well.position = Vector3(x_offset, s.y * 0.5 + 0.0002 - WELL_THICKNESS * 0.5, 0.0)
 
 
 ## Where a drawer unit's tray deck sits on its front face -- below the middle,

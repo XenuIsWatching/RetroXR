@@ -465,9 +465,15 @@ func _expansion_media() -> Node3D:
 	for unit: RetroExpansion in _host.get_expansions():
 		if unit == null or not is_instance_valid(unit):
 			continue
-		var m: Node3D = unit.get_media()
-		if m != null:
-			return m
+		# Every bay of the unit, not just its first. A Sufami Turbo holds two
+		# cartridges, and the save this composes is keyed off whichever one is
+		# found -- so a pair whose first slot is empty must not report nothing.
+		# Which of a LINKED pair should own the save is a separate question, and
+		# an open one: see the note on the sufami_turbo BOOT row.
+		for s in unit.get_bay_count():
+			var m: Node3D = unit.get_media(s)
+			if m != null:
+				return m
 	return null
 
 

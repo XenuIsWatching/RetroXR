@@ -25,6 +25,11 @@
 ##   media_in_host
 ##               this unit has NO bay: its media goes into the CONSOLE's own
 ##               cartridge slot. See the Satellaview row.
+##   bays        how many cartridges this unit takes at once. One unless it says
+##               otherwise, which is every unit but the Sufami Turbo. A second
+##               bay is addressed by INDEX everywhere it is read -- get_media(1),
+##               the expansion_media_b: token -- so a row that does not name it
+##               keeps exactly the behaviour it had.
 ##   firmware    files the CORE must already have for this unit to do anything,
 ##               named as its .info names them. A unit that has not got them is
 ##               not offered in the spawn menu at all. The BS-X cartridge and the
@@ -152,14 +157,37 @@ const ROWS: Dictionary = {
 		"firmware": ["BS-X.bin"],
 	},
 	# Sufami Turbo is the other thing that goes in a Super Famicom slot — on TOP,
-	# like the 32X, and it takes its own small carts.
+	# like the 32X — and it is the only unit here that takes TWO cartridges.
+	#
+	# That is not decoration. Nine of its thirteen games link the cartridge in the
+	# second slot into the game in the first: the six SD Gundam Generation titles
+	# lend each other their fighters, and SD Ultra Battle lends its characters
+	# across the pair. A one-slot Sufami Turbo would be the wrong machine, not a
+	# simplified one.
+	#
+	# 140 mm wide rather than the 120 it carried while it had one implicit well.
+	# Two wells cut for a 55 mm cartridge are 59 mm each, so two of them plus a
+	# wall between and a wall either side do not fit in 120 -- the box was sized
+	# for the bay it had, and it grows for the bay it should always have had.
+	#
+	# The firmware is the adapter's own shell program, which snes9x loads itself
+	# from its system directory. Without it the unit is a prop, so the menu does
+	# not offer it -- the same contract the BS-X cartridge has, and NOT
+	# rom_from_firmware: STBIOS.bin is deliberately built to FAIL the core's
+	# is_SufamiTurbo_Cart test (it carries the "SFC-ADX BACKUP" marker that a
+	# cartridge must not have), which is how the core tells its BIOS from a game.
+	# Handed over as content it would load as a plain Super Famicom ROM.
+	#
+	# No save_owner: a Sufami Turbo has no battery. The cartridges do.
 	"sufami_turbo": {
 		"label": "Sufami Turbo",
 		"host": "super_nes",
 		"media": "sufami_turbo",
 		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.12, 0.05, 0.10),
+		"size": Vector3(0.14, 0.05, 0.10),
 		"loader": MediaDimensions.LOADER_NONE,
+		"bays": 2,
+		"firmware": ["STBIOS.bin"],
 	},
 	# The Super Game Boy: a Super Famicom cartridge with a Game Boy slot in its
 	# roof, which runs the handheld's game on a television inside a border.
@@ -414,11 +442,56 @@ const BOOT: Dictionary = {
 			# file beside it.
 			"writable": 1},
 	},
-	# UNVERIFIED. snes9x is named because it is the platform default, not because
-	# anyone has confirmed it takes a Sufami Turbo cart as plain content.
+	# VERIFIED against snes9x source, and it is the second row here whose core has
+	# a dead constant for the machine it is meant to run.
+	# RETRO_GAME_TYPE_SUFAMI_TURBO is #defined AND has a working case in
+	# retro_load_game_special -- and is registered in no subsystem, so no
+	# frontend can reach it. Do not be fooled by the grep hit; the same trap sits
+	# in this core for the Super Game Boy.
+	#
+	# What IS reachable is the Multi-Cart Link, which is the Sufami Turbo path in
+	# all but name. Its case sniffs the FIRST cartridge --
+	# is_SufamiTurbo_Cart(romptr[0]) -- and on a hit loads STBIOS.bin and calls
+	# LoadMultiCartMem(A, B, bios). A cartridge that is NOT one takes a generic
+	# no-BIOS multi-cart branch instead.
+	#
+	# Measured, because the obvious guess is wrong: a Sufami cartridge with no
+	# STBIOS.bin installed does not fall through to that generic branch. The load
+	# is simply refused -- rom_loaded stays false, no frames, and the machine
+	# says so. Which is why `firmware` above is a gate on offering the unit at
+	# all rather than a hope.
+	#
+	# One cartridge is a first-class configuration rather than a tolerated one:
+	# retro_load_game auto-detects a lone cart from its "BANDAI SFC-ADX" header
+	# and maps slot B empty. So the ordinary preference list below IS the
+	# single-cart machine, and the pairing completes only when both wells are
+	# full -- _start_subsystem_content falls back to the plain load on a count
+	# mismatch, so the split needs no branch of its own.
+	#
+	# expansion_media: rather than the plain expansion: form, because the plain
+	# one falls back to the unit's own ROM and there is none. An empty Sufami
+	# Turbo must say its slots are empty, not try to boot its BIOS as a game.
+	#
+	# KNOWN LIMIT, measured rather than feared: THE SECOND CARTRIDGE'S SAVE IS
+	# NOT KEPT. snes9x lays slot A's SRAM at the start of one block and slot B's
+	# 0x10000 into it, and retro_get_memory_size answers RETRO_MEMORY_SAVE_RAM and
+	# RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM from the SAME case -- slot A alone.
+	# Slot B is a separate region under _B_RAM, which this bridge does not read.
+	# Flushing a real linked pair gives 16384 bytes, exactly slot A's, with one
+	# cartridge in or two.
+	#
+	# What a player sees: SD Ultra Battle boots and reports that the B cassette's
+	# backup is not initialised, and initialising it does not stick. Slot A keeps
+	# its progress; slot B starts fresh every time.
+	#
+	# Not fixed here because it is not a data change -- it wants the extension to
+	# flush a second region to a second file, the way SetPackPath already does for
+	# the BS-X pack, and a rebuild with it.
 	"super_nes|sufami_turbo": {
 		"core": "snes9x",
-		"roms": ["expansion:sufami_turbo"],
+		"roms": ["expansion_media:sufami_turbo", "expansion_media_b:sufami_turbo"],
+		"subsystem": {"ident": "multicart_addon",
+			"roms": ["expansion_media:sufami_turbo", "expansion_media_b:sufami_turbo"]},
 	},
 	# VERIFIED against bsnes-libretro, bsnes/target-libretro/libretro.cpp:
 	#
@@ -621,6 +694,15 @@ static func ids_carded_on(systemid: String) -> Array[String]:
 		if not has_own_card(id) and card_systemid(id) == systemid:
 			out.append(id)
 	return out
+
+
+## How many cartridges this unit holds at once. One unless the row says more.
+##
+## Clamped at the bottom rather than trusted: a row typo of 0 would build a unit
+## with no bay at all, which reads as a solid box a player cannot load and gives
+## no clue why.
+static func bays_of(id: String) -> int:
+	return maxi(1, int(row(id).get("bays", 1)))
 
 
 ## Firmware this unit cannot work without, named exactly as the core's .info

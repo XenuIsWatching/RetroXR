@@ -36,6 +36,12 @@ const CART_SIZES: Dictionary = {
 	# slots into, not measured off one. Without an entry it took CART_SIZE_DEFAULT
 	# and arrived nearly as big as the cartridge carrying it.
 	"satellaview":      Vector3(0.062, 0.042, 0.011),
+	# A Sufami Turbo cartridge is a small one -- nearer the 8M pack above than the
+	# Super Famicom cart it plugs in behind. Without an entry it took
+	# CART_SIZE_DEFAULT, a 100 mm slab, and the adapter has to hold TWO side by
+	# side: at that size they do not fit in the unit at all, so the fallback was
+	# not merely untuned here, it was load-bearing geometry.
+	"sufami_turbo":     Vector3(0.055, 0.045, 0.012),
 	"pokemon_mini":     Vector3(0.022, 0.033, 0.007),
 	"supervision":      Vector3(0.066, 0.070, 0.009),
 	# UMD caddy — square footprint, thin. RetroUMD builds its shell straight off

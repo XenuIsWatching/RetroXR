@@ -1257,6 +1257,11 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		var own := _resolve_ref(root, spawned, d.get("media")) as Node3D
 		if own:
 			(obj as RetroExpansion).restore_media(own)
+		# Absent from every room saved before a unit had two slots, which is why
+		# it is read with a default rather than assumed present.
+		var own_b := _resolve_ref(root, spawned, d.get("media_b")) as Node3D
+		if own_b:
+			(obj as RetroExpansion).restore_media(own_b, 1)
 	elif obj is RetroTV:
 		(obj as RetroTV).restore_control_state(d.get("controls", {}))
 	elif obj is VCRPlayer:
@@ -1588,6 +1593,10 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 			# nothing, and the room looked right while the machine was dead.
 			"rom_path": unit.rom_path,
 			"media": _ref(node_to_id, unit.get_media()),
+			# Slot B is its own key rather than the pair becoming an array, for
+			# the same reason the second memory card is: an array would not load
+			# in any room file saved before there was a second slot.
+			"media_b": _ref(node_to_id, unit.get_media(1)),
 		})
 	elif node is RetroDisc:
 		# MUST precede the RetroCartridge branch — RetroDisc extends it.

@@ -53,15 +53,18 @@ var _foot: XRToolsGrabPointSnap = null
 ## The connector tongue, on a unit that mounts AS a cartridge. Its length is set
 ## against whichever console is asking -- see _aim_connector.
 var _connector: XRToolsGrabPointSnap = null
-## This unit's own media bay, and what is in it.
-var _bay: XRToolsSnapZone = null
+## This unit's own media bays, and what is in each. Almost always one; a Sufami
+## Turbo has two. Indexed rather than given a second named field, so every
+## accessor is `slot := 0` and the ~10 existing callers keep working untouched --
+## the same shape RetroSystem uses for its two memory-card sockets.
+var _bays: Array[XRToolsSnapZone] = []
 var _slot: MediaSlot = null
 var _tray: MediaTray = null
 ## The drawer mechanism on a tray unit that has no lid -- the mouth in the front
 ## face and the shelf that runs out of it. Null on a lidded unit and on every
 ## other kind of bay.
 var _disc_bay: ProceduralDiscBay = null
-var _media: Node3D = null
+var _media: Array[Node3D] = []
 
 var _body: MeshInstance3D = null
 var _label: Label3D = null
@@ -316,12 +319,23 @@ func _build_media_bay() -> void:
 	var loader := ExpansionCatalog.loader_of(expansion_id)
 	var front_loading := loader == MediaDimensions.LOADER_SLOT
 
-	_bay = SNAP_ZONE_SCENE.instantiate() as XRToolsSnapZone
-	_bay.name = "MediaBay"
-	_bay.snap_require = MEDIA_GROUP
-	_bay.snap_filter = _accepts_media
-	_bay.grab_distance = 0.07
-	add_child(_bay)
+	var count := ExpansionCatalog.bays_of(expansion_id)
+	_media.resize(count)
+
+	for i in count:
+		var bay := SNAP_ZONE_SCENE.instantiate() as XRToolsSnapZone
+		# "MediaBay", then "MediaBay2" -- the numbering RetroSystem's memory-card
+		# sockets already use, so the first bay's node name is unchanged and every
+		# scene, test and save file that names it keeps resolving.
+		bay.name = "MediaBay" if i == 0 else "MediaBay%d" % (i + 1)
+		bay.snap_require = MEDIA_GROUP
+		bay.snap_filter = _accepts_media
+		# 70 mm of capture radius is right for a unit with one mouth and far too
+		# much for a unit whose mouths are 65 mm apart: two spheres that size
+		# overlap almost completely, and every reach lights up both previews.
+		bay.grab_distance = 0.07 if count == 1 else 0.03
+		add_child(bay)
+		_bays.append(bay)
 
 	if front_loading:
 		_build_slot_bay(s, media)
@@ -335,7 +349,7 @@ func _build_media_bay() -> void:
 ## disk. MediaSlot runs the ride in and out.
 func _build_slot_bay(s: Vector3, media: String) -> void:
 	# At the mouth of the slit, a third of the way up the front face.
-	_bay.position = Vector3(0.0, -s.y * 0.2, s.z * 0.5)
+	_bays[0].position = Vector3(0.0, -s.y * 0.2, s.z * 0.5)
 	ExpansionShell.build_slit(_body, s, media)
 	# The ride in and out, the grab hand-off and the collision exception, all
 	# from the same component the slot-loading consoles use. Its `host` is
@@ -343,7 +357,7 @@ func _build_slot_bay(s: Vector3, media: String) -> void:
 	# of machine can own one.
 	_slot = MediaSlot.new()
 	_slot.host = self
-	_slot.slot = _bay
+	_slot.slot = _bays[0]
 	# How far it rides in. The consoles' slot inset is a disc figure and a
 	# 64DD disk is shorter, so taken flat it would vanish inside the drive;
 	# measured from the media itself, roughly two thirds swallowed, the head
@@ -384,11 +398,11 @@ func _build_slot_bay(s: Vector3, media: String) -> void:
 func _build_tray_bay(s: Vector3, media: String, loader: int) -> void:
 	_tray = MediaTray.new()
 	_tray.host = self
-	_tray.slot = _bay
+	_tray.slot = _bays[0]
 	if ExpansionCatalog.lid_of(expansion_id):
 		# A LID. The disc lies in a well in the roof and the lid swings up off
 		# it, the way a PlayStation or a GameCube opens.
-		_bay.position = Vector3(0.0, s.y * 0.5, 0.0)
+		_bays[0].position = Vector3(0.0, s.y * 0.5, 0.0)
 		ExpansionShell.build_well(_body, s, media, loader)
 		_tray.lid_pivot = ExpansionShell.build_lid(self, s)
 		add_child(_tray)
@@ -410,7 +424,7 @@ func _build_tray_bay(s: Vector3, media: String, loader: int) -> void:
 		# 14 mm on a MOUNT_BELOW unit), and a deck placed like a console's
 		# ran the mouth -- and the disc riding out of it -- straight across
 		# the lettering.
-		_disc_bay = ProceduralDiscBay.build_tray(self, _bay, media, true,
+		_disc_bay = ProceduralDiscBay.build_tray(self, _bays[0], media, true,
 			Callable(), s, ExpansionShell.deck_y(s))
 		_tray.disc_lid_pivot = _disc_bay.slide_pivot
 		# Where the disc actually LIES on that shelf, and it is not the
@@ -425,7 +439,7 @@ func _build_tray_bay(s: Vector3, media: String, loader: int) -> void:
 		# property of how ProceduralDiscBay lays the shelf out, so asking it
 		# cannot drift the way a copied constant would.
 		var pivot_inv := _disc_bay.slide_pivot.global_transform.affine_inverse()
-		var rel := pivot_inv * _bay.global_transform
+		var rel := pivot_inv * _bays[0].global_transform
 		_tray.media_local_basis = rel.basis
 		_tray.seat_offset = rel.origin
 		add_child(_tray)
@@ -438,11 +452,26 @@ func _build_tray_bay(s: Vector3, media: String, loader: int) -> void:
 
 ## A well in the roof. The cart stands proud of it, which is what a 32X
 ## cartridge does and what makes it obvious the unit is loaded.
+## Several wells are spread along X, evenly about the centre, so a two-bay unit
+## reads as a pair of mouths side by side rather than one mouth off to a side.
+## The offsets are computed rather than written down: the catalog owns both the
+## box and the cartridge, and a hand-placed constant would go stale the moment
+## either is tuned.
+##
+## The mesh takes the SAME offset as the zone. They are placed independently, and
+## moving only the zone gives a unit that catches a cartridge where no hole is
+## drawn -- see ExpansionShell.build_well.
 func _build_well_bay(s: Vector3, media: String, loader: int) -> void:
-	_bay.position = Vector3(0.0, s.y * 0.5, 0.0)
-	ExpansionShell.build_well(_body, s, media, loader)
-	_bay.has_picked_up.connect(_on_media_in)
-	_bay.has_dropped.connect(_on_media_out)
+	var n := _bays.size()
+	var pitch := MediaDimensions.cart_size(media).x + 0.010
+	for i in n:
+		var x: float = (float(i) - float(n - 1) * 0.5) * pitch
+		_bays[i].position = Vector3(x, s.y * 0.5, 0.0)
+		ExpansionShell.build_well(_body, s, media, loader, x)
+		# Bound, so each zone reports the slot it IS. Without the bind both bays
+		# write the same entry and the second cartridge is invisible.
+		_bays[i].has_picked_up.connect(_on_media_in.bind(i))
+		_bays[i].has_dropped.connect(_on_media_out.bind(i))
 
 
 ## Bay gate: is this the media this unit takes? Media with no systemid of its own
@@ -455,8 +484,10 @@ func _accepts_media(obj: Node3D) -> bool:
 	return mid.is_empty() or mid == ExpansionCatalog.media_of(expansion_id)
 
 
-func _on_media_in(media: Node3D) -> void:
-	_media = media
+func _on_media_in(media: Node3D, slot := 0) -> void:
+	if slot >= _media.size():
+		return
+	_media[slot] = media
 	if _slot == null:
 		add_collision_exception_with(media)
 	# Back-fill, exactly as a console does: a disk put into a 64DD is a 64DD disk.
@@ -465,10 +496,13 @@ func _on_media_in(media: Node3D) -> void:
 	_notify_host_media()
 
 
-func _on_media_out() -> void:
-	if _media != null and is_instance_valid(_media) and _slot == null:
-		remove_collision_exception_with(_media)
-	_media = null
+func _on_media_out(slot := 0) -> void:
+	if slot >= _media.size():
+		return
+	var was: Node3D = _media[slot]
+	if was != null and is_instance_valid(was) and _slot == null:
+		remove_collision_exception_with(was)
+	_media[slot] = null
 	_notify_host_media()
 
 
@@ -479,27 +513,41 @@ func _notify_host_media() -> void:
 		h.on_expansion_media_changed(self)
 
 
-## What is in this unit's bay, or null.
-func get_media() -> Node3D:
-	return _media if is_instance_valid(_media) else null
+## How many cartridges this unit holds at once.
+func get_bay_count() -> int:
+	return _media.size()
 
 
-## The path of the disk/disc/cart in this unit's bay. Empty when the bay is empty
-## or the media carries no ROM — which is the state a stack powers on in when the
-## player has only put a game in the console.
-func get_media_path() -> String:
-	var m := get_media()
+## What is in one of this unit's bays, or null.
+##
+## Range-checked rather than indexed, because slot 1 is asked of every unit by
+## code that does not know how many bays this one has -- and a single-bay unit
+## answering "nothing in my second bay" is the correct answer, where a crash or a
+## silent alias to bay 0 are both wrong. The alias is the more dangerous of the
+## two: it reads as a cartridge that is not there.
+func get_media(slot := 0) -> Node3D:
+	if slot < 0 or slot >= _media.size():
+		return null
+	var m: Node3D = _media[slot]
+	return m if is_instance_valid(m) else null
+
+
+## The path of the disk/disc/cart in one of this unit's bays. Empty when the bay
+## is empty or the media carries no ROM — which is the state a stack powers on in
+## when the player has only put a game in the console.
+func get_media_path(slot := 0) -> String:
+	var m := get_media(slot)
 	if m == null or not m.has_method("get_rom_path"):
 		return ""
 	return str(m.call("get_rom_path"))
 
 
 ## Seat media after a save restore, bypassing the insert ride and its noise.
-func restore_media(media: Node3D) -> void:
+func restore_media(media: Node3D, slot := 0) -> void:
 	if _slot != null:
 		_slot.restore(media)
-	elif _bay != null:
-		_bay.pick_up_object(media)
+	elif slot >= 0 and slot < _bays.size():
+		_bays[slot].pick_up_object(media)
 
 
 ## The socket, for the console to release when it is pulled off from the far side.
