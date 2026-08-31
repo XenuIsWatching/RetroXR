@@ -94,8 +94,9 @@ const SLUG_MAP := {
 	"lynx": "atari_lynx",
 	"atarijaguar": "atari_jaguar",
 	"jaguar": "atari_jaguar",
-	"atarijaguarcd": "atari_jaguar",
-	"jaguarcd": "atari_jaguar",
+	"atarijaguarcd": "jaguar_cd",
+	"jaguarcd": "jaguar_cd",
+	"atari-jaguar-cd": "jaguar_cd",
 	"atarist": "atari_st",
 
 	# NEC

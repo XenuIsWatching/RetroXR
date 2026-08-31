@@ -46,6 +46,10 @@ const RECOMMENDED := {
 		"core": "virtualjaguar",
 		"why":  "The only Jaguar core here",
 	},
+	"jaguar_cd": {
+		"core": "virtualjaguar",
+		"why":  "Same core as the Jaguar — one download covers cartridge and CD games",
+	},
 	"atari_st": {
 		"core": "hatari",
 		"why":  "The only ST core here",

@@ -292,12 +292,13 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 	# this card, or a unit would be offered from two places at once and this card
 	# would grow a row that duplicates a whole tile.
 	#
-	# In practice that is the Jaguar CD alone: it runs the Jaguar's own media, so
-	# it names no systemid, so it has no tile, so this card is the only place it
-	# can be reached from. The BS-X cartridge also has no tile and used to land
-	# here for that reason, which put it on the Super Famicom card among the pads
-	# and the leads -- hardware from a different machine entirely. It is filed on
-	# the Satellaview card now; ExpansionCatalog.card_systemid is what decides.
+	# In practice that is the BS-X cartridge alone: it runs Satellaview downloads
+	# rather than media of its own, so it has no tile, and the Satellaview card is
+	# where it is reached from. It used to land on the Super Famicom's card
+	# instead -- hardware from a different machine entirely, sat among the pads
+	# and the leads. The Jaguar CD was the other one and is not any more: its
+	# discs are jaguar_cd now, so it has a tile and is spawned from that.
+	# ExpansionCatalog.card_systemid is what decides.
 	items.append_array(_units_carded_here(systemid))
 	# With the peripherals rather than the leads below: it is something you hold.
 	if _LIGHT_GUN_PLATFORMS.has(systemid):

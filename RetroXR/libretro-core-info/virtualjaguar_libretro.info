@@ -12,10 +12,11 @@ categories = "Emulator"
 manufacturer = "Atari"
 systemname = "Jaguar"
 systemid = "atari_jaguar"
+secondary_systemids = "jaguar_cd:cue,cdi"
 
 # Libretro Features
 supports_no_game = "false"
-database = "Atari - Jaguar"
+database = "Atari - Jaguar|Atari - Jaguar CD"
 savestate = "true"
 savestate_features = "2"
 cheats = "true"

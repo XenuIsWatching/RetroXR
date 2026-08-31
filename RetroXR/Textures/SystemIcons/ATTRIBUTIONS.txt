@@ -166,6 +166,8 @@ intellivision-content.svg           Mattel - Intellivision-content.svg
 intellivision.svg                   Mattel - Intellivision.svg
 j2me-content.svg                    Mobile - J2ME-content.svg
 j2me.svg                            Mobile - J2ME.svg
+jaguar_cd-content.svg               Atari - Jaguar CD-content.svg
+jaguar_cd.svg                       Atari - Jaguar CD.svg
 jollycv-content.svg                 Coleco - ColecoVision-content.svg
 jollycv.svg                         Coleco - ColecoVision.svg
 jumpnbump-content.svg               Jump 'n Bump-content.svg

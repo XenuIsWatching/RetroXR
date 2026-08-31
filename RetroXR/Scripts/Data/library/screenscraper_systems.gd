@@ -40,6 +40,7 @@ const SYSTEM_MAP := {
 	# usually misses, which costs it art rather than giving it the wrong art.
 	"handheld_electronic": 52,
 	"intellivision": 115,
+	"jaguar_cd": 171,
 	"mame": 75,
 	"master_system": 2,
 	"mega_drive": 1,

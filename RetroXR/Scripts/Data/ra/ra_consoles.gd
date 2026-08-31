@@ -62,6 +62,7 @@ const CONSOLE_MAP := {
 	"atari_7800": 51,             # RC_CONSOLE_ATARI_7800
 	"atari_lynx": 13,             # RC_CONSOLE_ATARI_LYNX
 	"atari_jaguar": 17,           # RC_CONSOLE_ATARI_JAGUAR
+	"jaguar_cd": 77,              # RC_CONSOLE_ATARI_JAGUAR_CD
 	"atari_st": 36,               # RC_CONSOLE_ATARI_ST
 
 	# Other consoles and handhelds

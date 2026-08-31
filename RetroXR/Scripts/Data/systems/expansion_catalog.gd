@@ -183,13 +183,13 @@ const ROWS: Dictionary = {
 		"loader": MediaDimensions.LOADER_TRAY,
 	},
 	# It clamps to the cartridge slot and hangs over the console's back like a
-	# toilet seat, which is what everybody called it. Media systemid is the
-	# Jaguar's own: RetroXR has no separate jaguar_cd system, and the core takes
-	# a CD image against the same platform.
+	# toilet seat, which is what everybody called it. Its discs are its own
+	# media: virtualjaguar names jaguar_cd in secondary_systemids, so the CD half
+	# is a system in its own right and the unit is spawned from its own card.
 	"jaguar_cd": {
 		"label": "Jaguar CD",
 		"host": "atari_jaguar",
-		"media": "atari_jaguar",
+		"media": "jaguar_cd",
 		"mount": MOUNT_CARTRIDGE,
 		"size": Vector3(0.20, 0.09, 0.18),
 		"loader": MediaDimensions.LOADER_TRAY,
@@ -466,16 +466,18 @@ static func host_slot_media(host: String) -> Array[String]:
 ## The test is whether the unit's media is a systemid of its OWN. A 64DD's disks
 ## are "nintendo_64dd" and a Mega-CD's discs are "sega_cd", so both are systems
 ## the core info knows, both appear in the systems list, and both therefore get a
-## card that is the right place to spawn the unit from. A Jaguar CD runs the
-## Jaguar's own media -- "atari_jaguar" -- names no systemid of its own and
-## appears in no core's systemid list, so it has no card and can only be offered
-## from the console's.
+## card that is the right place to spawn the unit from.
 ##
-## Checked against libretro-core-info: media == id holds for exactly the seven
-## ids that appear as a systemid in at least one .info file, and fails for the
-## one that appears in none. The rule is not a coincidence of spelling -- a unit
-## whose media is its own systemid IS a system as far as the rest of RetroXR is
-## concerned, which is precisely what having a card means.
+## Checked against libretro-core-info: media == id holds for all eight ids, and
+## every one of them appears as a systemid in at least one .info file. The rule
+## is not a coincidence of spelling -- a unit whose media is its own systemid IS
+## a system as far as the rest of RetroXR is concerned, which is precisely what
+## having a card means.
+##
+## The Jaguar CD was the one that did not hold, because nothing named it: it ran
+## under "atari_jaguar" and had to be offered from the console's card. It names
+## itself now -- virtualjaguar's secondary_systemids -- so the rule is universal
+## here rather than seven-of-eight.
 static func has_own_card(id: String) -> bool:
 	return media_of(id) == id
 
@@ -488,8 +490,9 @@ static func has_own_card(id: String) -> bool:
 ## a rule: it runs Satellaview downloads, so it belongs on the Satellaview card
 ## and not on the Super Famicom's, where it sat beside a console it is only one
 ## third of and where a player who had never heard of the base station met it
-## first. The Jaguar CD runs the Jaguar's own media, so its media card and its
-## host card are the same card and nothing about it moves.
+## first. The Jaguar CD moved the same way and for the same reason: it used to
+## sit among the Jaguar's pads because its discs were filed as Jaguar media, and
+## now that they are jaguar_cd it is reached from the Jaguar CD's own card.
 static func card_systemid(id: String) -> String:
 	if has_own_card(id):
 		return id

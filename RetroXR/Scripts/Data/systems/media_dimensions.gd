@@ -106,6 +106,7 @@ const DISC_DIAMETERS: Dictionary = {
 	"sega_saturn":           0.12,
 	"sega_cd":               0.12,
 	"pc_engine_cd":          0.12,
+	"jaguar_cd":             0.12,
 	"amiga_cd32":            0.12,
 	"amiga_cdtv":            0.12,
 	"wii":                   0.12,

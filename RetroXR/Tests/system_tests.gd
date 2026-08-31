@@ -298,10 +298,17 @@ func _test_bsx_card() -> void:
 		ExpansionCatalog.ids_carded_on("satellaview").has("bsx_cart"))
 	_ok("bsx/not on the Super Famicom's",
 		not ExpansionCatalog.ids_carded_on("super_nes").has("bsx_cart"))
-	# The Jaguar CD is the case this rule must NOT move: its media is the
-	# Jaguar's own, so host and media are one card and it stays where it was.
-	_ok("bsx/the Jaguar CD stays on its console's card",
-		ExpansionCatalog.ids_carded_on("atari_jaguar").has("jaguar_cd"))
+	# The Jaguar CD used to be the case this rule did NOT move: its discs were
+	# filed as the Jaguar's own media, so it had no tile and the console's card
+	# was the only place it could be reached from. virtualjaguar names jaguar_cd
+	# in secondary_systemids now, so the CD half is a system, and the unit is
+	# spawned from its own card like every other expansion.
+	_eq("bsx/the Jaguar CD is filed on its own card",
+		ExpansionCatalog.card_systemid("jaguar_cd"), "jaguar_cd")
+	_ok("bsx/the Jaguar CD no longer sits on the console's",
+		not ExpansionCatalog.ids_carded_on("atari_jaguar").has("jaguar_cd"))
+	_ok("bsx/and is offered from its own spawn menu",
+		not _spawn_row("jaguar_cd", "expansion:jaguar_cd").is_empty())
 
 	_ok("bsx/never on the SNES spawn list", _spawn_row("super_nes", "expansion:bsx_cart").is_empty())
 	var installed := ExpansionCatalog.firmware_present("bsx_cart")
