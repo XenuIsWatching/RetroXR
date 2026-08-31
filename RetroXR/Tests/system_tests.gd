@@ -116,6 +116,7 @@ func _ready() -> void:
 	_test_memcard_presence()
 	_test_bios_seed()
 	_test_bios_boot_table()
+	_test_neo_geo_cd_cores()
 	_test_bios_pinned_options()
 	_test_bios_pins_reach_the_opt_file()
 	_test_power_on_verdict()
@@ -1145,6 +1146,31 @@ func _test_bios_seed() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(CoreOptionsStore.seeded_path(root)))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(root))
 	_ok("seed/cleaned up", not FileAccess.file_exists(path))
+
+
+func _test_neo_geo_cd_cores() -> void:
+	var db := CoreInfoDatabase.shared()
+
+	# neocd owns the id outright, so it needs nothing declared to be found.
+	var owners: Array[String] = []
+	for entry: Dictionary in db.get_by_systemid("neo_geo_cd"):
+		owners.append(str(entry.get("corename", "")))
+	_ok("neogeocd/neocd serves it", owners.has("NeoCD"))
+
+	# Geolith reads the CD too — its firmware list declares neocd.zip and
+	# neocdz.zip as required — but a core is only offered under a platform it
+	# NAMES, so without secondary_systemids it was reachable as an AES only.
+	_ok("neogeocd/geolith serves it as well", owners.has("Geolith"))
+	_ok("neogeocd/and still serves the cartridge Neo Geo",
+		CoreInfoDatabase.systemids_of(db.get_by_core_name("geolith")).has("neogeo"))
+
+	# A CHD is the point of the whole platform: the library stores these discs
+	# converted, so an extension list without chd files none of them.
+	var exts := CoreInfoDatabase.extensions_for_systemid("neo_geo_cd")
+	_ok("neogeocd/reads cue", exts.has("cue"))
+	_ok("neogeocd/reads chd", exts.has("chd"))
+	# Geolith contributes only its declared subset, never its whole list.
+	_ok("neogeocd/does not inherit the cartridge .neo", not exts.has("neo"))
 
 
 func _test_bios_boot_table() -> void:

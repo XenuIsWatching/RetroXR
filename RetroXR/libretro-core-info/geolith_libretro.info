@@ -12,6 +12,7 @@ display_version = "0.4.0"
 manufacturer = "SNK"
 systemname = "Neo Geo"
 systemid = "neogeo"
+secondary_systemids = "neo_geo_cd:cue,chd"
 
 # Libretro Features
 supports_no_game = "false"
@@ -27,7 +28,7 @@ load_subsystem = "false"
 hw_render = "false"
 needs_fullpath = "false"
 disk_control = "false"
-database = "SNK - Neo Geo"
+database = "SNK - Neo Geo|SNK - Neo Geo CD"
 
 # Firmware / BIOS
 firmware_count = 4
