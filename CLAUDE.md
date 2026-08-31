@@ -1029,6 +1029,32 @@ because the SNES draws the whole field whether or not the border has arrived —
 the border lands when the game sends its SGB packets, which for Donkey Kong is
 somewhere past ten seconds. `--at=8,16,26` rather than one fixed moment.
 
+**bsnes saves through its own VFS, not through RetroXR's SRAM path, and this is
+true of every bsnes machine rather than only the Super Game Boy.** Read at source
+and confirmed on disk:
+
+```cpp
+void *retro_get_memory_data(unsigned id) { return nullptr; }
+size_t retro_get_memory_size(unsigned id) { return 0; }
+```
+
+Every id, `RETRO_MEMORY_SAVE_RAM` included — so `SetSramPath` and everything
+`SramPaths` composes reaches nothing. bsnes instead answers `save.ram` out of
+`program.cpp`'s VFS by asking for `RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY` and
+appending the loaded ROM's base name, which lands at
+`libretro/save/bsnes/<rom>.srm`. Playing a Game Boy game through the adapter
+leaves exactly that file, and no `cart_save_dir` subdirectory is created at all.
+
+The save is therefore the Game Boy cartridge's, which is right — the battery is
+in the cartridge, not the adapter, and `ExpansionCatalog` deliberately gives the
+adapter no `save_owner` for that reason. But it is keyed to the ROM's **filename**
+where every other core's is keyed to the cartridge's `save_id`, so renaming a ROM
+orphans its save, and two copies under different names keep separate ones. The
+Saves panel, save backup and netplay's SRAM transfer all read the `SramPaths`
+file, which for this core is not the one being written. Not yet reconciled;
+`expansion_tests` pins RetroXR's half and says in as many words that it is not
+claiming the core's.
+
 ### 2i. The Sufami Turbo — two cartridges in one adapter
 
 The Bandai adapter that goes in a Super Famicom slot and takes **two** small

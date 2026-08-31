@@ -632,6 +632,38 @@ func _group_sgb() -> void:
 	_check(not sub.has("writable"),
 		"sgb/ with neither half marked writable, unlike a memory pack")
 
+	# Which object RetroXR thinks owns the save. Three routes could claim it and
+	# only the third is right: the adapter names no save_owner so it is not a
+	# unit-battery like the BS-X cartridge, and what sits in the console's own slot
+	# is the adapter, which carries no save_id to key off -- so _compose_sram_path
+	# falls through to the medium in the adapter's bay, the Game Boy cartridge,
+	# which is where the battery physically is.
+	#
+	# READ WHAT THIS DOES AND DOES NOT SAY. It pins RetroXR's own answer, and that
+	# answer is right. It does NOT say the file it names is the one bsnes writes,
+	# because bsnes does not write it: that core returns nullptr from
+	# retro_get_memory_data for every id, so SetSramPath reaches nothing, and it
+	# saves through its own vfs instead -- GET_SAVE_DIRECTORY plus the ROM's base
+	# name, giving save/bsnes/<rom>.srm. Measured, not deduced: playing a Game Boy
+	# game through the adapter leaves exactly that file and no cart_save_dir at
+	# all. So a bsnes save is keyed to a FILENAME where every other core's is keyed
+	# to a cartridge, and renaming a ROM orphans it. Proving that needs a real core
+	# and belongs in Tools/cores/sgb_probe, not here.
+	gb.save_id = "dk_gb"
+	_check(sfc._memcards._expansion_holding_battery() == null,
+		"sgb/ the adapter holds no battery of its own")
+	# _apply_expansion_launch first, because that is what fills rom_path and
+	# _compose_sram_path returns "" without one. Asking before it runs gives an
+	# empty string that passes any "does not contain" check by doing nothing --
+	# which is how the first draft of the case below fooled itself.
+	sfc._apply_expansion_launch()
+	var sram := sfc._memcards._compose_sram_path("bsnes")
+	_check(not sram.is_empty(), "sgb/ an assembled stack resolves a save path at all")
+	_check(sram.get_file() == "dk_gb.srm",
+		"sgb/ so the save is keyed to the Game Boy cartridge in its bay")
+	_check(not sram.contains("super_game_boy"),
+		"sgb/ and names neither adapter, so one cartridge is one save across both")
+
 	# The adapter is spawned from a menu, never from the library, so rom_path is
 	# empty for the whole of its life -- without the firmware fallback the pair is
 	# one short and degrades to a plain load, silently.
