@@ -118,14 +118,12 @@ func populate(pack_name: String, programmes: Array, free: int, total: int) -> vo
 	_usage.add_theme_color_override("font_color", COLOR_FREE if free > 0 else COLOR_DIM)
 
 	if named.is_empty():
-		# An untouched pack, said plainly. The placeholder header a blank is
-		# minted with names no programme, so listing it would invent one.
-		var empty := MenuStyle.label(
-			"Nothing written on this pack yet.", 20, COLOR_DIM)
-		_list.add_child(empty)
-		_list.add_child(MenuStyle.spacer(6))
-		_list.add_child(MenuStyle.hint(
-			"Take it to the Broadcast Station in the BS-X town and download something."))
+		# An untouched pack, said plainly and left there. The placeholder header a
+		# blank is minted with names no programme, so listing it would invent one.
+		# No instruction underneath: where a download comes from is the BS-X's
+		# business, this panel reports what is on the medium.
+		_list.add_child(MenuStyle.label(
+			"Nothing written on this pack yet.", 20, COLOR_DIM))
 		return
 
 	for p: Dictionary in named:
