@@ -941,9 +941,33 @@ pair comes up one short and degrades to a plain load **silently**.
 
 The SGB2 is a real difference and costs nothing to model: the original derives its
 clock from the SNES and runs the handheld about 2.4% fast, the revision carries its
-own crystal. Because the cartridge IS the program the console runs, naming a
-different firmware file is the whole of the change — a core that emulated the
-adapter internally would have needed an option instead.
+own crystal. Because the cartridge IS the program the console runs, handing the
+core a different dump is the whole of the change — a core that emulated the adapter
+internally would have needed an option instead.
+
+**What actually picks the revision is the dump's own SNES header, not its
+filename.** Verified at source and against both files: the titles at `0x7FC0` read
+`Super GAMEBOY` and `Super GAMEBOY2`, bsnes matches those against its bundled board
+database, and `Cartridge::loadICD` reads `icd.Revision`/the oscillator out of the
+board that matched. `icd.cpp` then branches on that single number, with its own
+comment saying why — *"SGB1 uses the CPU oscillator (~2.4% faster than a real Game
+Boy), SGB2 uses a dedicated oscillator"* — and it settles three things at once:
+
+```cpp
+if(Frequency == 0) { GB_init(&sameboy, GB_MODEL_SGB_NO_SFC);
+                     GB_load_boot_rom_from_buffer(&sameboy, &SGB1BootROM[0], 256); }
+else               { GB_init(&sameboy, GB_MODEL_SGB2_NO_SFC);
+                     GB_load_boot_rom_from_buffer(&sameboy, &SGB2BootROM[0], 256); }
+```
+with `frequency()` returning `Frequency ? Frequency : system.cpuFrequency()`.
+
+Two things follow. **The boot ROMs are compiled into bsnes**, so `sgb1.boot.rom` and
+`sgb2.boot.rom` are never wanted here even though higan and bsnes-mercury ask for
+them — a Super Game Boy runs on this core with nothing but the two `.sfc`. And
+**`SGB1.sfc`/`SGB2.sfc` are only where RetroXR looks**: an SGB1 dump installed under
+the other name yields two adapters that are both an SGB1, and the spawn gate will
+not catch it, because `firmware_present` accepts a `MISMATCH` md5 on purpose (see
+BS-X.bin). The BIOS / Extras tab is where that verdict is visible.
 
 They are carded on the **Game Boy** tile, not the Super Famicom's, because
 `ExpansionCatalog.card_systemid` files a unit under its media and these run Game

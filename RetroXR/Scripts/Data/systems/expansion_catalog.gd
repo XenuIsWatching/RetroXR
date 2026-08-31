@@ -236,9 +236,24 @@ const ROWS: Dictionary = {
 	# this one carries its own crystal and runs at true handheld speed.
 	#
 	# That difference costs nothing to model because the cartridge IS the program
-	# the console runs -- bsnes is handed it as content, so naming a different
-	# firmware file is the whole of the change. A core that emulated the Super Game
-	# Boy internally would have wanted an option toggled here instead.
+	# the console runs, so handing the core a different dump is the whole of the
+	# change. A core that emulated the adapter internally would have wanted an
+	# option toggled here instead.
+	#
+	# The dump's own SNES HEADER decides which machine it is, NOT the filename
+	# below. Checked at source and against both files: the titles at 0x7FC0 read
+	# "Super GAMEBOY" and "Super GAMEBOY2", bsnes matches those against its bundled
+	# board database, and Cartridge::loadICD takes the ICD's oscillator out of the
+	# board it picked. icd.cpp branches on that one number -- zero is an SGB1 on
+	# the SNES's own clock, running the handheld ~2.4% fast; non-zero is an SGB2
+	# with a dedicated crystal at true handheld speed -- and picks the SameBoy
+	# model and the boot ROM to match. Both boot ROMs are compiled into bsnes,
+	# which is why nothing here wants the sgb1.boot.rom that higan asks for.
+	#
+	# So the names below are only where RetroXR LOOKS. An SGB1 dump installed under
+	# the other name gives two adapters that are both an SGB1, and nothing here
+	# catches that: firmware_present accepts a MISMATCH deliberately, for the
+	# reason written out on BS-X.bin. The BIOS tab is where the md5 verdict shows.
 	#
 	# Gated on its OWN file, so a player who has one dump and not the other is
 	# offered exactly the machine they can build.
