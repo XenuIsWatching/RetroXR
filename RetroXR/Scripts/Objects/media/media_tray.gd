@@ -156,12 +156,12 @@ func _apply_open(open: bool, animate: bool) -> void:
 ## Snap zone captured a dropped disc (only fires while open). Take ownership next
 ## idle frame (clear of the zone's pick-up call stack).
 func _on_slot_captured(media: Node3D) -> void:
-	call_deferred("_accept", media)
+	call_deferred("_accept", media, true)
 
 
 ## Programmatic seat for save / net restore (no zone, filter bypassed).
 func restore(media: Node3D) -> void:
-	_accept(media)
+	_accept(media, false)
 
 
 ## Unseat with no hand involved — a net event, or a scripted eject. The mirror of
@@ -173,7 +173,7 @@ func release() -> void:
 		_on_media_taken(_media)
 
 
-func _accept(media: Node3D) -> void:
+func _accept(media: Node3D, by_hand: bool = false) -> void:
 	if not is_instance_valid(media) or _media != null:
 		return
 	if slot.has_snapped_object():
@@ -185,7 +185,12 @@ func _accept(media: Node3D) -> void:
 		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		rb.freeze = true
 	media.reparent(_holder)
-	media.transform = Transform3D(media_local_basis, seat_offset)
+	# reparent kept the world pose, so the media's transform is now the well-local
+	# one the hand offered it at — the only moment the hand's spin is still known.
+	var seat := media_local_basis
+	if by_hand:
+		seat = RetroDisc.seat_basis(media_local_basis, media, media.transform.basis)
+	media.transform = Transform3D(seat, seat_offset)
 	if is_instance_valid(host):
 		host.add_collision_exception_with(media)
 	if not media.picked_up.is_connected(_on_media_taken):

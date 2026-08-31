@@ -52,6 +52,8 @@ var _tween: Tween = null
 # under host rotation because the server keeps re-integrating it.
 var _orig_freeze_mode: RigidBody3D.FreezeMode = RigidBody3D.FREEZE_MODE_KINEMATIC
 var _riding: bool = false         # an insert/eject tween is animating the local pose
+# The basis this media is being carried at, set once when it is accepted.
+var _seat_basis: Basis = Basis.IDENTITY
 
 
 func _ready() -> void:
@@ -89,12 +91,12 @@ func is_media_seated() -> bool:
 
 ## Slot-local pose at the mouth (flush with the slot origin).
 func _mouth_pose() -> Transform3D:
-	return Transform3D(media_local_basis, Vector3.ZERO)
+	return Transform3D(_seat_basis, Vector3.ZERO)
 
 
 ## Slot-local pose seated inside the body.
 func _seated_pose() -> Transform3D:
-	return Transform3D(media_local_basis, Vector3(0.0, 0.0, -insert_depth))
+	return Transform3D(_seat_basis, Vector3(0.0, 0.0, -insert_depth))
 
 
 # --- Capture / insert ---------------------------------------------------------
@@ -128,6 +130,12 @@ func _accept(media: Node3D, seated_now: bool) -> void:
 		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		rb.freeze = true
 	media.reparent(_holder)
+	# reparent kept the world pose, so the media's transform is now the bay-local
+	# one the hand offered it at — the only moment the hand's spin is still known.
+	_seat_basis = media_local_basis
+	if not seated_now:
+		_seat_basis = RetroDisc.seat_basis(
+			media_local_basis, media, media.transform.basis)
 	# Not grabbable while it's inside the unit — only once ejected (see eject()).
 	_set_media_interactive(media, false)
 	if is_instance_valid(host):

@@ -127,3 +127,16 @@ func _apply_label_art() -> void:
 	var lbl := get_node_or_null("GameLabel") as Label3D
 	if lbl:
 		lbl.visible = false
+
+
+## The basis a bay should seat `media` at, given its authored seat basis `seat`
+## and the basis it currently has in the bay's own frame. A round platter is
+## symmetric about its spin axis, so it is seated with the spin the hand was
+## holding it at rather than snapped to one heading; anything else (a tape, a
+## disc in an opaque caddy) seats exactly as authored.
+static func seat_basis(seat: Basis, media: Node3D, in_bay: Basis) -> Basis:
+	var disc := media as RetroDisc
+	if disc == null or not disc.can_visually_spin():
+		return seat
+	var m := (seat.inverse() * in_bay).orthonormalized()
+	return seat * Basis(Vector3.UP, atan2(-m.x.z, m.x.x))
