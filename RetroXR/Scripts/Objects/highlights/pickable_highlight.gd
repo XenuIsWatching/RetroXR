@@ -30,6 +30,8 @@ const OUTLINE_SHADER := preload("res://Shaders/outline.gdshader")
 const OUTLINE_MASK_SHADER := preload("res://Shaders/outline_mask.gdshader")
 ## Stand-in for the pair above while foveation is on — see QualityManager.stencil_safe().
 const OUTLINE_HULL_SHADER := preload("res://Shaders/outline_hull.gdshader")
+## Depth pass ahead of the hull, so a transparent source still hides its middle.
+const OUTLINE_HULL_PRIMER_SHADER := preload("res://Shaders/outline_hull_primer.gdshader")
 
 ## Color shown while the pointer ray is hovering over the object.
 @export var hover_color: Color = Color(1.0, 1.0, 1.0, 1.0)
@@ -81,10 +83,17 @@ func _ready() -> void:
 		_mask_material.next_pass = _outline_material
 	else:
 		# Foveation is on, so the stencil pair would take the GPU down with it.
-		# One hull, no mask pass, and _mask_material is what the overlays are
-		# actually given — so it becomes the hull rather than gaining a next_pass.
+		# The hull carves its middle out with the DEPTH buffer rather than the
+		# stencil, which needs the object's own material to have written depth
+		# there. A transparent source (a disc's clear polycarbonate) never does,
+		# and the hull then fills the whole object, so a depth primer goes in
+		# front of it — chained, because pass order within one instance is the
+		# only ordering this can rely on.
 		_outline_material.shader = OUTLINE_HULL_SHADER
-		_mask_material = _outline_material
+		_mask_material = ShaderMaterial.new()
+		_mask_material.shader = OUTLINE_HULL_PRIMER_SHADER
+		_mask_material.render_priority = 1
+		_mask_material.next_pass = _outline_material
 	_sync_material_params()
 
 	var parent := get_parent()

@@ -32,6 +32,8 @@ const OUTLINE_SHADER := preload("res://Shaders/outline.gdshader")
 const OUTLINE_MASK_SHADER := preload("res://Shaders/outline_mask.gdshader")
 ## Stand-in for the pair above while foveation is on — see QualityManager.stencil_safe().
 const OUTLINE_HULL_SHADER := preload("res://Shaders/outline_hull.gdshader")
+## Depth pass ahead of the hull, so a transparent source still hides its middle.
+const OUTLINE_HULL_PRIMER_SHADER := preload("res://Shaders/outline_hull_primer.gdshader")
 
 # Mild HDR glow — enough to read as "hovered" without blooming out under the
 # room's glow post-process (2.0 rendered green x3, far too bright).
@@ -110,8 +112,15 @@ func _init() -> void:
 		mask.next_pass = _outline_material
 		material_override = mask
 	else:
-		# Foveation is on: no stencil may be drawn, so the hull stands alone.
-		material_override = _outline_material
+		# Foveation is on: no stencil may be drawn, so the hull carves its middle
+		# out with the depth buffer instead, which needs the source to have
+		# written depth there. A transparent source never does and the hull then
+		# fills it, so the primer goes ahead of it as the base pass.
+		var primer := ShaderMaterial.new()
+		primer.shader = OUTLINE_HULL_PRIMER_SHADER
+		primer.render_priority = 1
+		primer.next_pass = _outline_material
+		material_override = primer
 
 
 ## Point the overlay at the mesh it should trace. Safe to call repeatedly.
