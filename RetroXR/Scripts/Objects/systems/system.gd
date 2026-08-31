@@ -3458,9 +3458,39 @@ func _start_subsystem_content(dir: String, core: String, spec: Dictionary) -> bo
 	var writable := int(sub.get("writable", -1))
 	if writable >= 0 and writable < paths.size() and _libretro.has_method("SetPackPath"):
 		_libretro.SetPackPath(paths[writable])
+	# A second cartridge has a second battery, and the core keeps it in a region
+	# of its own. Set before the load, because the bridge reads the file back
+	# into the core as the content comes up.
+	var slot_b := _slot_b_save_path(core)
+	if not slot_b.is_empty() and _libretro.has_method("SetSramBPath"):
+		_libretro.SetSramBPath(slot_b)
 	print("[RetroSystem] subsystem load: %s %s <- %s" % [core, ident, str(paths)])
 	_libretro.StartSubsystemContent(dir, core, rom_path, ident, PackedStringArray(paths))
 	return true
+
+
+## Where the SECOND cartridge's battery is kept, or "" on every machine that
+## holds one cartridge.
+##
+## Keyed off that cartridge's OWN save_id, exactly as the first one is, so a save
+## follows the cartridge rather than the slot: swap which game is in slot B and
+## it brings its own progress with it, and putting it in slot A later finds the
+## same file. Keying it off the slot instead would give a linked pair one save
+## per POSITION, so lending a cartridge to a different game would overwrite it.
+func _slot_b_save_path(core: String) -> String:
+	if core.is_empty():
+		return ""
+	for unit in get_expansions():
+		if unit.get_bay_count() < 2:
+			continue
+		var m := unit.get_media(1)
+		if m == null or not ("save_id" in m):
+			continue
+		var save_id := str(m.get("save_id"))
+		if save_id.is_empty():
+			continue
+		return SramPaths.cart_save_path(core, rom_path, save_id)
+	return ""
 
 
 func _disk_drive_options(core: String) -> Dictionary:

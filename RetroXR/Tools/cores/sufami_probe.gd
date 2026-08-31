@@ -52,9 +52,14 @@ var root_dir := ""
 var shot := ""
 ## Which branch the run is asserted to take. Empty measures without judging.
 var expect := ""
-## Where to flush the save, so its SIZE can be read back. Answers whether one
-## file covers both cartridges of a linked pair.
+## Where to flush slot A's save, so its SIZE can be read back. 16384 bytes for a
+## Sufami Turbo, whether one cartridge is in or two -- which is how the slot B
+## gap was found, since SAVE_RAM covers slot A alone.
 var sram := ""
+## Slot B's save, which lives under a memory id of its own. Give both and a
+## two-cartridge run flushes TWO files: that is the check that the second
+## cartridge's battery is being kept at all.
+var sram_b := ""
 
 var _lib: Node = null
 var _load_failed := ""
@@ -79,6 +84,8 @@ func _ready() -> void:
 			expect = a.trim_prefix("--expect=")
 		elif a.begins_with("--sram="):
 			sram = a.trim_prefix("--sram=")
+		elif a.begins_with("--sram-b="):
+			sram_b = a.trim_prefix("--sram-b=")
 	if root_dir.is_empty():
 		root_dir = CoreDownloadManager.default_core_root()
 
@@ -150,6 +157,10 @@ func _measure() -> void:
 			% [size, " (final)" if final_flush else "", path.get_file()]))
 	if not sram.is_empty():
 		_lib.SetSramPath(sram)
+	if not sram_b.is_empty() and _lib.has_method("SetSramBPath"):
+		_lib.SetSramBPath(sram_b)
+	elif not sram_b.is_empty():
+		print("[stprobe] this build has no SetSramBPath -- slot B will not be saved")
 
 	var carts: Array[String] = [cart_a]
 	if not cart_b.is_empty():

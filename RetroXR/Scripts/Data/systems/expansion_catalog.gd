@@ -170,6 +170,17 @@ const ROWS: Dictionary = {
 	# wall between and a wall either side do not fit in 120 -- the box was sized
 	# for the bay it had, and it grows for the bay it should always have had.
 	#
+	# And SHALLOW: 55 mm front to back, not 100. The real adapter is a wide flat
+	# bar, and the wells cut into it are only `cart.z + 4` = 16 mm deep, so a
+	# 100 mm box was 84 mm of nothing behind them -- it read as a chunky console
+	# in its own right rather than the thin tray a cartridge stands out of.
+	# 30 mm tall for the same reason.
+	#
+	# Nothing here depends on either figure: the wells sit on the roof at
+	# s.y * 0.5, spread along X by _build_well_bay's own arithmetic, and the
+	# nameplate hangs below the join. Only the WIDTH is load-bearing, and only
+	# because two wells have to fit across it.
+	#
 	# The firmware is the adapter's own shell program, which snes9x loads itself
 	# from its system directory. Without it the unit is a prop, so the menu does
 	# not offer it -- the same contract the BS-X cartridge has, and NOT
@@ -184,7 +195,7 @@ const ROWS: Dictionary = {
 		"host": "super_nes",
 		"media": "sufami_turbo",
 		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.14, 0.05, 0.10),
+		"size": Vector3(0.14, 0.03, 0.055),
 		"loader": MediaDimensions.LOADER_NONE,
 		"bays": 2,
 		"firmware": ["STBIOS.bin"],
@@ -472,21 +483,17 @@ const BOOT: Dictionary = {
 	# one falls back to the unit's own ROM and there is none. An empty Sufami
 	# Turbo must say its slots are empty, not try to boot its BIOS as a game.
 	#
-	# KNOWN LIMIT, measured rather than feared: THE SECOND CARTRIDGE'S SAVE IS
-	# NOT KEPT. snes9x lays slot A's SRAM at the start of one block and slot B's
+	# BOTH cartridges keep their saves, and that took a bridge change rather than
+	# a data one. snes9x lays slot A's SRAM at the start of one block and slot B's
 	# 0x10000 into it, and retro_get_memory_size answers RETRO_MEMORY_SAVE_RAM and
-	# RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM from the SAME case -- slot A alone.
-	# Slot B is a separate region under _B_RAM, which this bridge does not read.
-	# Flushing a real linked pair gives 16384 bytes, exactly slot A's, with one
-	# cartridge in or two.
+	# RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM from the SAME case -- slot A alone, so
+	# a frontend reading only SAVE_RAM keeps half a linked pair's progress. Slot B
+	# lives under _B_RAM and is now read and written through Libretro.SetSramBPath,
+	# to a file of its own.
 	#
-	# What a player sees: SD Ultra Battle boots and reports that the B cassette's
-	# backup is not initialised, and initialising it does not stick. Slot A keeps
-	# its progress; slot B starts fresh every time.
-	#
-	# Not fixed here because it is not a data change -- it wants the extension to
-	# flush a second region to a second file, the way SetPackPath already does for
-	# the BS-X pack, and a rebuild with it.
+	# It is keyed off the CARTRIDGE, not the slot: a game carries its save between
+	# the two wells, and lending it to a different pairing does not overwrite it.
+	# See RetroSystem._slot_b_save_path.
 	"super_nes|sufami_turbo": {
 		"core": "snes9x",
 		"roms": ["expansion_media:sufami_turbo", "expansion_media_b:sufami_turbo"],

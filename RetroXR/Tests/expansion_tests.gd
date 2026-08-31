@@ -834,6 +834,33 @@ func _group_sufami() -> void:
 	_check(not sub.has("writable"),
 		"sufami/ with neither cartridge marked writable")
 
+	# Two cartridges, two batteries. snes9x answers RETRO_MEMORY_SAVE_RAM with
+	# slot A's SRAM alone, so slot B needs a file of its own or a linked pair
+	# keeps half its progress and loses the rest without saying so.
+	var path_a := SramPaths.cart_save_path("snes9x", sfc.rom_path,
+		str(cart_a.get("save_id")))
+	var path_b := sfc._slot_b_save_path("snes9x")
+	_check(path_b.get_file() == str(cart_b.get("save_id")) + ".srm",
+		"sufami/ the second cartridge has a save file of its own")
+	_check(not path_b.is_empty() and path_b != path_a,
+		"sufami/ which is not the first cartridge's")
+
+	# Keyed off the CARTRIDGE and not the well it happens to be in, so a game
+	# lent to a different pairing brings its progress and does not overwrite
+	# whatever was there.
+	var cart_c := await _cart("sufami_turbo", "/roms/sufami_turbo/C.sfc")
+	await _unbolt(b, cart_b)
+	unit.restore_media(cart_c, 1)
+	await _wait(5)
+	_check(sfc._slot_b_save_path("snes9x").get_file()
+			== str(cart_c.get("save_id")) + ".srm",
+		"sufami/ and the save follows the cartridge, not the slot")
+	await _unbolt(b, cart_c)
+	unit.restore_media(cart_b, 1)
+	await _wait(5)
+	_check(sfc._slot_b_save_path("snes9x") == path_b,
+		"sufami/ so putting the first one back finds its own save again")
+
 	# One cartridge is a machine in its own right: the core sniffs a lone cart's
 	# header and maps slot B empty. The pair must come up SHORT rather than
 	# doubling the one cartridge it has.
@@ -850,6 +877,11 @@ func _group_sufami() -> void:
 	_check(one_bay.get_bay_count() == 1, "sufami/ a 32X still has one bay")
 	_check(one_bay.get_media(1) == null and one_bay.get_media_path(1) == "",
 		"sufami/ whose second slot is empty rather than an alias of its first")
+	var md := await _console("mega_drive")
+	md.restore_cartridge(one_bay)
+	await _wait(5)
+	_check(md._slot_b_save_path("picodrive").is_empty(),
+		"sufami/ and asks for no second save file at all")
 	await _clear()
 
 	await _sufami_gate()

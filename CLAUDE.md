@@ -1043,12 +1043,24 @@ itself reporting the B cassette's backup state — which is the proof the link i
 live, since a game that could not see slot B would not mention it. Poi Poi Ninja
 World runs the single-cartridge path.
 
-**KNOWN LIMIT: the second cartridge's save is not kept.** `retro_get_memory_size`
-answers `RETRO_MEMORY_SAVE_RAM` and `RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM` from
-the same case — slot A alone — while slot B sits under `_B_RAM`, a region this
-bridge never reads. A real flush gives 16384 bytes with one cartridge in or two.
-Fixing it means teaching the extension a second region and a second file, as
-`SetPackPath` already does for the BS-X pack.
+**Both cartridges keep their saves, and it took a bridge change to do it.**
+`retro_get_memory_size` answers `RETRO_MEMORY_SAVE_RAM` and
+`RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM` from the same case — slot A alone — while
+slot B sits under `_B_RAM` at `(4 << 8) | RETRO_MEMORY_SAVE_RAM`, a core-specific
+id defined in snes9x's own `libretro.cpp` rather than in `libretro.h`. Reading
+only `SAVE_RAM` gave 16384 bytes whether one cartridge was in or two, so a linked
+pair kept half its progress; SD Ultra Battle said as much every launch, reporting
+that the B cassette's backup was not initialised.
+
+`Libretro.SetSramBPath` now carries slot B to a file of its own, with ordinary
+save semantics — read back at content load, written when it changes — unlike
+`SetPackPath`, which writes over the medium and never reads. The A id is
+deliberately NOT used: the core answers it and plain `SAVE_RAM` from one case, so
+asking for both would write one cartridge's save to two files.
+
+The path is keyed off the **cartridge**, not the slot (`RetroSystem._slot_b_save_path`),
+so a game carries its save between the two wells and lending it to a different
+pairing does not overwrite it.
 
 **Every dump is named `.sfc`, not `.st`.** `libretro-core-info-retroxr/snes9x_libretro.info`
 overrides `sufami_turbo:st,sfc` for that reason — otherwise the library files them
