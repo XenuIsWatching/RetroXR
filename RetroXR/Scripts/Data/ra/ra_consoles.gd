@@ -74,6 +74,7 @@ const CONSOLE_MAP := {
 	"odyssey2": 23,               # RC_CONSOLE_MAGNAVOX_ODYSSEY2
 	"channel_f": 57,              # RC_CONSOLE_FAIRCHILD_CHANNEL_F
 	"arcadia": 73,                # RC_CONSOLE_ARCADIA_2001
+	"neo_geo_cd": 56,             # RC_CONSOLE_NEO_GEO_CD
 	"neo_geo_pocket": 14,         # RC_CONSOLE_NEOGEO_POCKET
 	"wonderswan": 53,             # RC_CONSOLE_WONDERSWAN
 	"supervision": 63,            # RC_CONSOLE_SUPERVISION

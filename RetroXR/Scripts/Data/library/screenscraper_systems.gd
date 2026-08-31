@@ -47,6 +47,7 @@ const SYSTEM_MAP := {
 	"mega_duck": 90,
 	"msx": 113,
 	"nds": 15,
+	"neo_geo_cd": 70,
 	"neo_geo_pocket": 25,
 	"neogeo": 142,
 	"nes": 3,

@@ -178,6 +178,16 @@ func _test_systemid_for() -> void:
 	_eq("slug/64dd is not n64",
 		RommPlatforms.systemid_for({"slug": "64dd", "fs_slug": "n64dd"}), "nintendo_64dd")
 
+	# The same shape as 64DD: Neo Geo CD used to map to "neogeo", a CARTRIDGE
+	# system, so 105 discs spawned as cartridges and neocd — which declares
+	# neo_geo_cd as its own systemid — could never be selected for the folder.
+	_eq("slug/neogeocd is not neogeo",
+		RommPlatforms.systemid_for({"slug": "neogeocd", "fs_slug": "neogeocd"}), "neo_geo_cd")
+	_eq("slug/the hyphenated RomM form too",
+		RommPlatforms.systemid_for({"slug": "neo-geo-cd", "fs_slug": "neo-geo-cd"}), "neo_geo_cd")
+	_eq("slug/the cartridge Neo Geo is untouched",
+		RommPlatforms.systemid_for({"slug": "neogeo", "fs_slug": "neogeo"}), "neogeo")
+
 	# fs_slug beats slug — it is the folder the user named themselves.
 	_eq("slug/fs_slug wins",
 		RommPlatforms.systemid_for({"slug": "unknown-thing", "fs_slug": "snes"}), "super_nes")

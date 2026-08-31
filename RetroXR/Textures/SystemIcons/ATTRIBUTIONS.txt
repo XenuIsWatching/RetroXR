@@ -43,6 +43,10 @@ verified by opening the file rather than trusting the suffix:
   master_system  content: the untagged file — the black SMS cartridge. "(J)" is
                  the white Mark III card.
   mega_drive     content: "(U)" — red, against blue for "(E)".
+  neo_geo_cd     console: the untagged file — the top-loading model, whose
+                 square lift-up lid is the motion this system loads discs
+                 with. "Tray" is the front-loading drawer model and "CDZ"
+                 the 1996 revision; neither matches the lid.
   nes            content: the untagged file — the grey 72-pin NES cartridge.
                  "(J)" is the red-and-white Famicom cartridge.
   pc_engine      content: "(U)" — orange, against blue for "(E)" and red for
@@ -192,6 +196,8 @@ msx-content.svg                     Microsoft - MSX-content.svg
 msx.svg                             Microsoft - MSX.svg
 nds-content.svg                     Nintendo - Nintendo DS-content.svg
 nds.svg                             Nintendo - Nintendo DS.svg
+neo_geo_cd-content.svg              SNK - Neo Geo CD-content.svg
+neo_geo_cd.svg                      SNK - Neo Geo CD.svg
 neo_geo_pocket-content.svg          SNK - Neo Geo Pocket-content.svg
 neo_geo_pocket.svg                  SNK - Neo Geo Pocket.svg
 neogeo-content.svg                  SNK - Neo Geo-content.svg

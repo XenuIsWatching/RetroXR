@@ -688,6 +688,13 @@ func _test_media_removal() -> void:
 	_ok("media/a slot console keeps running", slot._media_survives_removal())
 	slot.free()
 
+	# A Neo Geo CD loads under a lift-up lid, the same motion as the PlayStation
+	# above. Without a DISC_DIAMETERS row it was not a disc system at all and its
+	# discs were moulded as cartridges.
+	_ok("media/the Neo Geo CD is a disc system", MediaDimensions.is_disc_system("neo_geo_cd"))
+	_eq("media/and loads under a lid", MediaDimensions.disc_loader("neo_geo_cd"),
+		MediaDimensions.LOADER_TRAY)
+
 	# No disc loader at all, but the media is a floppy — the drive is a slot in
 	# the tower's bezel and the machine runs on regardless.
 	var floppy := _system("dos")

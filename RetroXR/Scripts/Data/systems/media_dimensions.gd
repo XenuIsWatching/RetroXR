@@ -104,8 +104,7 @@ const FLOPPY_SYSTEMS: Dictionary = {
 
 ## Disc diameters: systemid -> diameter in metres. Doubles as the disc-system
 ## set — a systemid present here spawns a RetroDisc instead of a cartridge.
-## (pc_engine stays a cartridge: its HuCard — the CD add-on is pc_engine_cd.
-## neo_geo_cd has a systemid now but no descriptor yet.)
+## (pc_engine stays a cartridge: its HuCard — the CD add-on is pc_engine_cd.)
 const DISC_DIAMETERS: Dictionary = {
 	"playstation":           0.12,
 	"playstation2":          0.12,
@@ -113,6 +112,7 @@ const DISC_DIAMETERS: Dictionary = {
 	"sega_cd":               0.12,
 	"pc_engine_cd":          0.12,
 	"jaguar_cd":             0.12,
+	"neo_geo_cd":            0.12,
 	"amiga_cd32":            0.12,
 	"amiga_cdtv":            0.12,
 	"wii":                   0.12,

@@ -124,7 +124,8 @@ const SLUG_MAP := {
 
 	# SNK
 	"neogeo": "neogeo",
-	"neogeocd": "neogeo",
+	"neogeocd": "neo_geo_cd",
+	"neo-geo-cd": "neo_geo_cd",
 	"ngp": "neo_geo_pocket",
 	"ngpc": "neo_geo_pocket",
 
