@@ -1404,11 +1404,20 @@ func _bind_rom_row(row: Control, index: int) -> void:
 		main.disabled = true
 
 	# ── Trailing cluster ────────────────────────────────────────────────────
+	# A Satellaview memory pack is a MEDIUM, not a game, and half this cluster is
+	# about games. Worked out before the buttons rather than beside each one,
+	# because more than one of them asks.
+	var is_pack: bool = systemid == "satellaview" and not local_path.is_empty() \
+			and BsxPack.is_pack_path(local_path)
+
 	var meta := _romm_row_meta(systemid, local_path)
 	var game: Dictionary = meta["game"]
 	detail.text = String.chr(MenuIcons.GAMEPAD)
-	detail.visible = not game.is_empty()
-	if not game.is_empty():
+	# Not for a pack: there is no game to describe. A pack whose filename happens
+	# to match a catalog entry would otherwise offer that game's page, which is a
+	# different thing than the medium in front of you.
+	detail.visible = not game.is_empty() and not is_pack
+	if detail.visible:
 		detail.pressed.connect(_show_game_detail_panel.bind(game, systemid))
 
 	# The game's saves and achievements, the same page the cartridge's own menu
@@ -1430,8 +1439,6 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	# the placeholder title a blank carries.
 	# A pack is named by EVERY programme written on it, not by the first: several
 	# live on one medium, and naming it after block 0 leaves the rest invisible.
-	var is_pack: bool = systemid == "satellaview" and not local_path.is_empty() \
-			and BsxPack.is_pack_path(local_path)
 	if is_pack:
 		main.set_marquee_text("  " + BsxPack.display_name(local_path))
 	# Set on every bind, not only when true: rows are pooled, and a pack's button
@@ -1449,14 +1456,16 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	if has_manual:
 		manual.pressed.connect(spawn_manual_requested.emit.bind(manual_path))
 
-	# Scraping hashes the local file, so it needs one on disk.
+	# Scraping hashes the local file, so it needs one on disk. Not for a pack:
+	# ScreenScraper has no entry for a medium, and a pack's hash changes every
+	# time the player downloads onto it, so there is nothing stable to match.
 	# disabled is reset here or a mid-scrape scroll leaves it stuck on whichever
 	# row later reuses this pooled button.
 	scrape.text = String.chr(MenuIcons.SCRAPE)
 	scrape.disabled = false
-	scrape.visible = not local_path.is_empty()
+	scrape.visible = not local_path.is_empty() and not is_pack
 	scrape.tooltip_text = "Scrape artwork and details from ScreenScraper"
-	if not local_path.is_empty():
+	if scrape.visible:
 		scrape.pressed.connect(_on_scrape_pressed.bind(local_path, systemid, scrape))
 
 
