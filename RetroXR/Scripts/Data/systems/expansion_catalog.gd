@@ -170,11 +170,15 @@ const ROWS: Dictionary = {
 	# wall between and a wall either side do not fit in 120 -- the box was sized
 	# for the bay it had, and it grows for the bay it should always have had.
 	#
-	# And SHALLOW: 55 mm front to back, not 100. The real adapter is a wide flat
+	# And SHALLOW: 38 mm front to back, not 100. The real adapter is a wide flat
 	# bar, and the wells cut into it are only `cart.z + 4` = 16 mm deep, so a
 	# 100 mm box was 84 mm of nothing behind them -- it read as a chunky console
 	# in its own right rather than the thin tray a cartridge stands out of.
 	# 30 mm tall for the same reason.
+	#
+	# 38 is close to the floor. The well needs 16, and the walls in front of and
+	# behind it are 11 mm each at this depth; much less and the mouth starts
+	# eating the front face the nameplate is printed on.
 	#
 	# Nothing here depends on either figure: the wells sit on the roof at
 	# s.y * 0.5, spread along X by _build_well_bay's own arithmetic, and the
@@ -195,7 +199,7 @@ const ROWS: Dictionary = {
 		"host": "super_nes",
 		"media": "sufami_turbo",
 		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.14, 0.03, 0.055),
+		"size": Vector3(0.14, 0.03, 0.038),
 		"loader": MediaDimensions.LOADER_NONE,
 		"bays": 2,
 		"firmware": ["STBIOS.bin"],
