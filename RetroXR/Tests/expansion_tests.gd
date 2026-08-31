@@ -16,6 +16,8 @@
 ##   tower/   Mega Drive + Mega-CD + 32X, assembled in both directions
 ##   media/   the unit's own bay, and which media the assembled machine boots from
 ##   launch/  which core the combination resolves to, and its pinned options
+##   sgb/     the Super Game Boy adapters: the pairing they hand bsnes, the two
+##            cartridges that make them different machines, and the BIOS gate
 extends Node
 
 const SYSTEM_SCENE := preload("res://Scenes/Objects/system.tscn")
@@ -578,6 +580,187 @@ func _group_launch() -> void:
 	await _clear()
 
 
+# ── sgb ───────────────────────────────────────────────────────────────────────
+
+
+## The Super Game Boy: the second object in the room a player puts a cartridge
+## into and then puts into a console, and the first whose own program is a BIOS
+## rather than something spawned out of the library.
+func _group_sgb() -> void:
+	var sgb := await _unit("super_game_boy")
+	var sfc := await _console("super_nes")
+
+	_check(sgb.is_in_group("cartridge"), "sgb/ the adapter is itself a cartridge")
+	var slot := sfc._cartridge_slot as XRToolsSnapZone
+	_check(slot != null and slot.snap_filter.call(sgb),
+		"sgb/ and the Super Famicom's slot takes it")
+	_check(sgb.get_node_or_null("MediaBay") != null,
+		"sgb/ while having a slot of its own")
+
+	var gb := await _cart("game_boy", "/roms/game_boy/game.gb")
+	_check(sgb._accepts_media(gb), "sgb/ that slot takes a Game Boy cartridge")
+	_check(not sgb._accepts_media(await _cart("super_nes", "/roms/snes/x.sfc")),
+		"sgb/ and refuses a Super Famicom one")
+
+	sfc.restore_cartridge(sgb)
+	sgb.restore_media(gb)
+	await _wait(5)
+
+	# snes9x defines RETRO_GAME_TYPE_SUPER_GAME_BOY and then never advertises it,
+	# so a machine pinned to the console's own default would refuse to start.
+	var boot := sfc.expansion_boot()
+	_check(str(boot.get("core", "")) == "bsnes",
+		"sgb/ the stack pins bsnes, not the console's own default")
+
+	# Order is the CORE's, and it is the reverse of the BS-X pairing above: bsnes
+	# declares sgb_roms[] as { "Game Boy ROM", "Super Game Boy ROM" } and assigns
+	# gameBoy.location = info[0]. Handing those over the other way round would
+	# give a core a .sfc where it expects a .gb and look like a broken dump.
+	var sub: Dictionary = boot.get("subsystem", {})
+	_check(str(sub.get("ident", "")) == "sgb", "sgb/ and declares the sgb pairing")
+	var pair := sfc._expansion_roms(sub)
+	_check(pair.size() == 2 and pair[0] == "/roms/game_boy/game.gb",
+		"sgb/ whose FIRST half is the handheld's cartridge")
+	_check(pair.size() == 2 and pair[1].get_file() == "SGB1.sfc",
+		"sgb/ and whose second is the adapter's own, taken from the BIOS folder")
+
+	# A Game Boy cartridge's save is ordinary SRAM. `writable` binds a path to the
+	# SNES memory-pack region specifically, which is the BS-X pack's flash and
+	# nothing else's.
+	_check(not sub.has("writable"),
+		"sgb/ with neither half marked writable, unlike a memory pack")
+
+	# The adapter is spawned from a menu, never from the library, so rom_path is
+	# empty for the whole of its life -- without the firmware fallback the pair is
+	# one short and degrades to a plain load, silently.
+	_check(sgb.rom_path.is_empty(),
+		"sgb/ the unit carries no rom_path of its own")
+	await _unbolt(sgb.get_node("MediaBay") as XRToolsSnapZone, gb)
+	_check(sfc._expansion_roms(sub).size() == 1,
+		"sgb/ an empty bay leaves the pair incomplete, so the plain load runs")
+	# Indexed defensively. Breaking rom_from_firmware empties this list, and an
+	# unguarded [0] aborted the whole group on the exact regression the case is
+	# here to catch -- so the later checks, including the BIOS gate, never ran.
+	var alone := sfc._expansion_roms(sfc.expansion_boot())
+	_check(alone.size() == 1 and alone[0].get_file() == "SGB1.sfc",
+		"sgb/ and an empty adapter still boots its own cartridge")
+	await _clear()
+
+	# The 1998 revision is a different machine, and the ONLY thing that makes it
+	# one is which dump it is handed. A fallback to the first firmware that
+	# happens to be on disk would hand a player with both dumps the wrong one.
+	var one := ExpansionCatalog.firmware_rom_path("super_game_boy")
+	var two := ExpansionCatalog.firmware_rom_path("super_game_boy_2")
+	_check(one.get_file() == "SGB1.sfc" and two.get_file() == "SGB2.sfc",
+		"sgb/ the two adapters run two different cartridges")
+	_check(one != two, "sgb/ which is the whole of the difference between them")
+	_check(ExpansionCatalog.firmware_rom_path("bsx_cart").is_empty(),
+		"sgb/ and a unit spawned from the library keeps its own ROM")
+
+	var boot2 := ExpansionCatalog.boot_for("super_nes", ["super_game_boy_2"])
+	_check(str(boot2.get("core", "")) == "bsnes"
+			and str((boot2.get("subsystem", {}) as Dictionary).get("ident", "")) == "sgb",
+		"sgb/ the 2 has a recipe of its own, which is what gates it separately")
+
+	# The gate the whole feature hangs on. Filed under game_boy rather than
+	# super_nes: it runs Game Boy cartridges, and that is the card a player is on
+	# when they want one.
+	for id: String in ["super_game_boy", "super_game_boy_2"]:
+		var listed := false
+		for item: Dictionary in SpawnCatalog.items_for("game_boy"):
+			if str(item.get("spawn", "")) == "expansion:%s" % id:
+				listed = true
+		_check(listed == ExpansionCatalog.firmware_present(id),
+			"sgb/ the Game Boy card offers %s exactly when its BIOS is installed" % id)
+		_check(not _spawn_card_has("super_nes", id),
+			"sgb/ and the Super Famicom card does not also offer it")
+
+	# The claim the comment above _units_carded_here makes. Asked of
+	# ids_carded_on, which files a unit WITHOUT consulting its firmware -- the
+	# menu itself cannot answer this, because a BS-X cartridge with no BS-X.bin
+	# installed is absent from every card and that says nothing about which one it
+	# belongs to. Getting those two confused is what this case is guarding.
+	var on_gb: Array[String] = ExpansionCatalog.ids_carded_on("game_boy")
+	var on_sv: Array[String] = ExpansionCatalog.ids_carded_on("satellaview")
+	_check(on_gb == ["super_game_boy", "super_game_boy_2"],
+		"sgb/ and the two of them are the whole of what a console card carries now")
+	_check(on_sv == ["bsx_cart"],
+		"sgb/ while the BS-X cartridge is filed on the Satellaview card, not here")
+
+	await _sgb_gate_positive()
+
+
+## Drive the gate BOTH ways, whichever way this machine happens to be set up.
+##
+## The path is derived from the core name and cannot be pointed elsewhere, so
+## this works on the REAL bsnes BIOS folder -- the same bargain romm_tests makes
+## with the roms root, and restored at both ends the same way.
+##
+## Two routes to the same four checks, because the count must not depend on
+## whether the player owns a dump. With no dump installed a scratch file is
+## written and removed; with one installed it is moved ASIDE and put back, which
+## is the only way to see the shut direction on a machine that can already play.
+## A rename within one directory, never a copy: a 256 KB read-write of somebody's
+## BIOS to prove a menu row is the wrong trade.
+func _sgb_gate_positive() -> void:
+	var dest := ExpansionCatalog.firmware_rom_path("super_game_boy")
+	if dest.is_empty():
+		_check(false, "sgb/ the adapter names a firmware path at all")
+		return
+	var aside := dest + ".expansion_tests_backup"
+	# A previous run that died mid-swap left the player with no BIOS and a file
+	# they would never think to look for. Put it back before doing anything else.
+	if FileAccess.file_exists(aside) and not FileAccess.file_exists(dest):
+		DirAccess.rename_absolute(aside, dest)
+		print("[exp] sgb/ restored an SGB1.sfc left aside by an earlier run")
+
+	var real := FileAccess.file_exists(dest)
+	if real:
+		DirAccess.rename_absolute(dest, aside)
+		_refresh_firmware()
+		_check(not ExpansionCatalog.firmware_present("super_game_boy"),
+			"sgb/ with the dump moved away the adapter is withdrawn")
+		_check(not _spawn_card_has("game_boy", "super_game_boy"),
+			"sgb/ and the Game Boy card loses its row")
+		DirAccess.rename_absolute(aside, dest)
+		_refresh_firmware()
+		_check(FileAccess.file_exists(dest), "sgb/ and the player's dump is put back")
+		_check(ExpansionCatalog.firmware_present("super_game_boy"),
+			"sgb/ which brings the adapter back with it")
+		return
+
+	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
+	var f := FileAccess.open(dest, FileAccess.WRITE)
+	if f == null:
+		_check(false, "sgb/ can write to the BIOS folder to drive the gate")
+		return
+	f.store_string("retroxr expansion_tests scratch, safe to delete")
+	f.close()
+	_refresh_firmware()
+	_check(ExpansionCatalog.firmware_present("super_game_boy"),
+		"sgb/ a dump on disk makes the adapter available")
+	_check(_spawn_card_has("game_boy", "super_game_boy"),
+		"sgb/ and the Game Boy card grows a row for it")
+	DirAccess.remove_absolute(dest)
+	_refresh_firmware()
+	_check(not FileAccess.file_exists(dest), "sgb/ and the scratch dump is cleaned up")
+	_check(not ExpansionCatalog.firmware_present("super_game_boy"),
+		"sgb/ which withdraws the adapter again")
+
+
+## Drop the cached verdict. FirmwareState keys on size and mtime, so a file that
+## appeared or vanished since the last look is simply not noticed.
+func _refresh_firmware() -> void:
+	FirmwareState.shared().evaluate("bsnes", FirmwareRequirements.for_core("bsnes"))
+
+
+func _spawn_card_has(systemid: String, expansion_id: String) -> bool:
+	for item: Dictionary in SpawnCatalog.items_for(systemid):
+		if str(item.get("spawn", "")) == "expansion:%s" % expansion_id:
+			return true
+	return false
+
+
 func _run() -> void:
 	if _want("fit"):
 		await _group_fit()
@@ -589,3 +772,5 @@ func _run() -> void:
 		await _group_media()
 	if _want("launch"):
 		await _group_launch()
+	if _want("sgb"):
+		await _group_sgb()

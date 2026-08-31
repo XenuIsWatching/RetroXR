@@ -292,13 +292,23 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 	# this card, or a unit would be offered from two places at once and this card
 	# would grow a row that duplicates a whole tile.
 	#
-	# In practice that is the BS-X cartridge alone: it runs Satellaview downloads
-	# rather than media of its own, so it has no tile, and the Satellaview card is
-	# where it is reached from. It used to land on the Super Famicom's card
-	# instead -- hardware from a different machine entirely, sat among the pads
-	# and the leads. The Jaguar CD was the other one and is not any more: its
-	# discs are jaguar_cd now, so it has a tile and is spawned from that.
-	# ExpansionCatalog.card_systemid is what decides.
+	# ExpansionCatalog.card_systemid is what decides, and it files a unit with no
+	# card of its own under its MEDIA. So what reaches THIS call is the units whose
+	# media is an ordinary console: currently the two Super Game Boys, which run
+	# Game Boy cartridges and are therefore offered from the Game Boy card.
+	#
+	# That looks like the wrong card until you want one. A Super Game Boy is a
+	# Super Famicom cartridge, but nobody reaches for it because they want a Super
+	# Famicom -- the console is the thing it needs, not the thing it is for, and
+	# the player is standing on the Game Boy card when the thought occurs.
+	#
+	# The other two units with no tile do NOT arrive here, and both are worth
+	# knowing about because each used to. The BS-X cartridge is filed under
+	# satellaview, which is itself a row with a card, so the branch above catches
+	# it -- before that it landed here and put Satellaview hardware on the Super
+	# Famicom card among the pads and the leads. The Jaguar CD was the plain case
+	# this call was written for until its discs became a systemid of their own; it
+	# has a tile now and is spawned from that.
 	items.append_array(_units_carded_here(systemid))
 	# With the peripherals rather than the leads below: it is something you hold.
 	if _LIGHT_GUN_PLATFORMS.has(systemid):

@@ -900,6 +900,111 @@ prove: they exercise the BUS with real cores, not a netplay session over it.
 Dolphin having no transferable state is why it is DETERMINISM-only, which in
 turn means no late join and no desync repair.
 
+### 2h. The Super Game Boy — an adapter cartridge, and the core that can run one
+
+A Super Game Boy is a Super Famicom cartridge with a Game Boy slot in its roof, so
+it is the same three-layer object as the BS-X cartridge and is modelled the same
+way: `ExpansionCatalog.MOUNT_CARTRIDGE`, a cartridge to the console and a console
+to the cartridge. Two units, `super_game_boy` and `super_game_boy_2`.
+
+**Snes9x cannot serve it at any price, and this is not obvious from the source.**
+`libretro/libretro.cpp` defines `RETRO_GAME_TYPE_SUPER_GAME_BOY 0x104|0x1000`
+right beside the BS-X and Sufami Turbo constants, so grepping for it finds a hit
+and suggests support. It is vestigial: the `subsystems[]` array actually passed to
+`RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO` holds only `multicart_addon` and `bsx`, and
+`retro_load_game_special` drops that game type into `default:` and reports the load
+failed. The row therefore pins **bsnes**, which is why `RetroSystem._resolve_core`
+letting a stack's core beat the console's default is load-bearing here rather than
+a nicety — a Super Famicom is a snes9x machine until one of these goes into it.
+
+Verified in bsnes-libretro, `bsnes/target-libretro/libretro.cpp`:
+
+```c
+sgb_roms[]   = { "Game Boy ROM" (gb|gbc), "Super Game Boy ROM" (smc|sfc|swc|fig) }
+subsystems[] = { "Super Game Boy", "sgb", sgb_roms, 2, RETRO_GAME_TYPE_SGB }
+```
+with `retro_load_game_special` assigning `gameBoy.location = info[0]` and
+`superFamicom.location = info[1]`. So the ident is `sgb` and the **handheld's**
+cartridge goes FIRST — the reverse of the BS-X pairing, which is shell-first. The
+two orders are written out per row for exactly that reason; do not assume one from
+the other.
+
+**A BIOS is required, and it is the adapter's own cartridge**: `SGB1.sfc`
+(md5 `b15ddb15721c657d82c5bab6db982ee9`) and `SGB2.sfc`, declared in
+`bsnes_libretro.info` and installed to `libretro/system/bsnes/`. Each unit names
+one and is gated on it independently, so a player with one dump is offered one
+adapter. `rom_from_firmware` on the row is what lets the adapter find its own
+program there: unlike the BS-X cartridge, which is spawned from a `.sfc` in the
+library and carries it in `rom_path`, a Super Game Boy is spawned from a menu and
+has no library file at all — without that flag its `rom_path` stays empty, the
+pair comes up one short and degrades to a plain load **silently**.
+
+The SGB2 is a real difference and costs nothing to model: the original derives its
+clock from the SNES and runs the handheld about 2.4% fast, the revision carries its
+own crystal. Because the cartridge IS the program the console runs, naming a
+different firmware file is the whole of the change — a core that emulated the
+adapter internally would have needed an option instead.
+
+They are carded on the **Game Boy** tile, not the Super Famicom's, because
+`ExpansionCatalog.card_systemid` files a unit under its media and these run Game
+Boy cartridges. That is also where a player is standing when they want one.
+
+`RetroXR/Tools/cores/sgb_probe.tscn` is the measurement, and it needs a real core,
+a real `.gb` and the SGB dump, so it is a probe. **The oracle is the frame size,
+and it cannot pass by accident**: a Game Boy frame is 160×144 and a Super Game Boy
+frame is 256×224, because in SGB mode the SNES is the machine drawing. It does not
+depend on the ROM having any SGB support — a game that sends no border packets
+still gets the adapter's default frame — so a generated test ROM answers it.
+
+```bash
+"$godot" --path RetroXR --resolution 320x240 --position 20,20 \
+  res://Tools/cores/sgb_probe.tscn -- --core=bsnes \
+  --rom="$HOME/retroxr/roms/game_boy/game.gb" --leg=subsystem --shot=res://sgb.png
+```
+
+One core AND one leg per process.
+
+**Measured 2026-08-30, and the half that needs no copyrighted dump is settled.**
+bsnes publishes, at runtime:
+
+```
+Subsystem 'sgb' (Super Game Boy): 2 rom(s), id=4353
+Subsystem 'bsx' (BS-X Satellaview): 2 rom(s), id=4368
+```
+
+so the ident and the rom count in the catalog row are confirmed against the
+running core, not only against its source. **Note the two ids**: bsnes calls SGB
+4353, and snes9x calls BS-X 4353. The same number means two different machines in
+two different cores, which is exactly why `_start_subsystem_content` resolves by
+IDENT and lets the core's own published table supply the id. Never hardcode one.
+
+**bsnes refuses a bare `.gb`** — `retro_load_game` came back false, "This core
+refused the game", zero frames — so there is no plain-load path to fall back on
+and the subsystem really is the mechanism. (That control run had no `SGB1.sfc`
+installed, so it does not distinguish "bsnes has no standalone Game Boy mode"
+from "bsnes wanted SGB mode and could not find the cartridge"; either reading
+leaves the row as written.)
+
+**The subsystem leg passes end to end**, measured against Donkey Kong (World)
+(Rev A) (SGB Enhanced) with the No-Intro `SGB1.sfc`
+(md5 `b15ddb15721c657d82c5bab6db982ee9`, 256 KB) in `libretro/system/bsnes/`:
+1596 frames at **256×224**, and the arcade-cabinet border rendered in colour with
+the Game Boy screen inset. The whole path is proven — catalog row, ident, pair
+order, firmware lookup and core.
+
+**Two traps the picture cost, and neither shows up in a log.** The core's frame
+carries an alpha channel it never fills, so a straight `img.save_png` writes a
+fully transparent image — 13 KB of real picture that every viewer paints as a
+blank white rectangle. `sgb_probe` flattens to `FORMAT_RGB8` before saving. And
+`--headless` gives back a correctly SIZED frame with nothing drawn into it, so
+the size oracle reads 256×224 and passes while the shot is blank; run windowed
+whenever the border is what you are checking.
+
+Sample late, and more than once. The frame is 256×224 from the very first frame,
+because the SNES draws the whole field whether or not the border has arrived —
+the border lands when the game sends its SGB packets, which for Donkey Kong is
+somewhere past ten seconds. `--at=8,16,26` rather than one fixed moment.
+
 ### 3. Capturing a real screenshot on Linux (for visual validation)
 `--headless` uses the dummy renderer — it **cannot** produce a screenshot (a probe that awaits
 `RenderingServer.frame_post_draw` just hangs; `get_image()` is blank). To actually render a

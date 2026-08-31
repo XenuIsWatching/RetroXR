@@ -2143,7 +2143,9 @@ func power_on() -> void:
 	var verdict := _power_on_verdict(resolved_core, systemid, rom_path,
 		BiosBoot.missing_required(resolved_core), blank,
 		rom_path.is_empty() and BiosBoot.can_boot_empty(resolved_core, systemid)
-			and BiosBoot.boots_with_no_content(resolved_core, systemid))
+			and BiosBoot.boots_with_no_content(resolved_core, systemid),
+		resolved_core.is_empty()
+			or not CoreDownloadManager.installed_core_lib(resolved_core).is_empty())
 	if not bool(verdict["start"]):
 		push_error("RetroSystem: Cannot power on - %s" % verdict["log"])
 		# Over the hardware rather than the picture: every one of these is a
@@ -2261,7 +2263,8 @@ func _after_core_started() -> void:
 ##   * an empty slot the machine cannot boot from — the long-standing card
 ##   * an empty slot it CAN boot from — hand it a blank disc and start
 static func _power_on_verdict(core_name: String, sysid: String, rom: String,
-		missing: Array[Dictionary], blank: String, empty_ok := false) -> Dictionary:
+		missing: Array[Dictionary], blank: String, empty_ok := false,
+		core_installed := true) -> Dictionary:
 	var waiting := AchievementToast.ACCENT_WAITING
 	var fault := AchievementToast.ACCENT_NOTICE
 
@@ -2272,6 +2275,30 @@ static func _power_on_verdict(core_name: String, sysid: String, rom: String,
 			"title": "No core installed",
 			"description": "Pick one in OPTIONS > Cores, then switch it on.",
 			"accent": waiting,
+		}
+
+	# Named but not on disk, which is a different failure from having no core at
+	# all and used to be indistinguishable from a broken one: the machine went
+	# through every check, printed that it was powering on, and then sat black.
+	#
+	# An assembled machine is how a player meets this without ever having chosen a
+	# core. A stack pins the core its COMBINATION needs, which is often not the
+	# console's own -- a Super Famicom runs on snes9x until a Super Game Boy goes
+	# into it, and then it needs bsnes, because snes9x cannot do that at any
+	# price. So the core named here can be one the player has never been asked
+	# about, and saying which one is missing is the whole of the help.
+	#
+	# Defaulted true so the check stays out of the pure verdict logic: this
+	# function is a table of decisions and reads no disk, and its cases are tested
+	# by calling it directly.
+	if not core_installed:
+		return {
+			"start": false, "rom": rom,
+			"log": "core '%s' is not installed" % core_name,
+			"title": "Core not installed",
+			"description": "This machine needs the %s core.\nGet it in OPTIONS > Cores."
+				% core_name,
+			"accent": fault,
 		}
 
 	# Asked even when a game IS inserted: a PS2 with no bios folder cannot run
@@ -3304,12 +3331,16 @@ func _expansion_roms(spec: Dictionary) -> Array[String]:
 				match kind:
 					"expansion_rom":
 						path = unit.rom_path
+						if path.is_empty():
+							path = ExpansionCatalog.firmware_rom_path(id)
 					"expansion_media":
 						path = unit.get_media_path()
 					_:
 						path = unit.get_media_path()
 						if path.is_empty():
 							path = unit.rom_path
+							if path.is_empty():
+								path = ExpansionCatalog.firmware_rom_path(id)
 				# A broadcast that cannot start from its dump alone is handed to
 				# the core as a PATCHED COPY, never as the player's file. With no
 				# patch beside it this is the same path back again.

@@ -27,8 +27,17 @@
 ##               cartridge slot. See the Satellaview row.
 ##   firmware    files the CORE must already have for this unit to do anything,
 ##               named as its .info names them. A unit that has not got them is
-##               not offered in the spawn menu at all. Only the BS-X cartridge
-##               names any; see its row.
+##               not offered in the spawn menu at all. The BS-X cartridge and the
+##               two Super Game Boys are the only rows that name any.
+##   rom_from_firmware
+##               this unit's OWN program IS the firmware file above, rather than
+##               something a player spawns out of the library. The BS-X cartridge
+##               is the other way round -- its shell is a .sfc in the Satellaview
+##               folder, and spawning it from there is what fills rom_path. A
+##               Super Game Boy has no library file to be spawned from at all, so
+##               without this its rom_path stays empty and a pairing that needs
+##               it degrades to a plain load without saying so. See
+##               RetroSystem._expansion_roms.
 ##
 ## Which way a unit mounts is the whole of the geometry: the LOWER object always
 ## wears the socket (a snap zone on its top face) and the UPPER object always
@@ -152,6 +161,58 @@ const ROWS: Dictionary = {
 		"size": Vector3(0.12, 0.05, 0.10),
 		"loader": MediaDimensions.LOADER_NONE,
 	},
+	# The Super Game Boy: a Super Famicom cartridge with a Game Boy slot in its
+	# roof, which runs the handheld's game on a television inside a border.
+	#
+	# The same three layers as the BS-X cartridge, and modelled the same way: a
+	# cartridge to the console it goes into, a console to the cartridge that goes
+	# into it. What differs is where its own program comes from -- the BS-X
+	# cartridge is a .sfc a player spawns out of the library, and this one is a
+	# BIOS the core reads from its system directory, which is what
+	# `rom_from_firmware` is for.
+	#
+	# `media` is game_boy, an existing system, so the handheld library already
+	# fills this bay: no new roms folder and no new content routing, and a Game
+	# Boy cartridge a player already owns is the same object either way.
+	#
+	# No save_owner. The BS-X cartridge names SAVE_OWNER_UNIT because it has a
+	# battery of its own, holding the town and the player's name. A Super Game Boy
+	# has none -- the battery is in the cartridge seated in it -- so the default,
+	# which is the media, is the right one.
+	#
+	# Sized as the Super Famicom cartridge it is: the same footprint as the BS-X
+	# cartridge above.
+	"super_game_boy": {
+		"label": "Super Game Boy",
+		"host": "super_nes",
+		"media": "game_boy",
+		"mount": MOUNT_CARTRIDGE,
+		"size": Vector3(0.137, 0.088, 0.024),
+		"loader": MediaDimensions.LOADER_NONE,
+		"firmware": ["SGB1.sfc"],
+		"rom_from_firmware": true,
+	},
+	# The 1998 revision, and a different machine rather than a reskin: the original
+	# derives its clock from the SNES and runs the Game Boy about 2.4% fast, where
+	# this one carries its own crystal and runs at true handheld speed.
+	#
+	# That difference costs nothing to model because the cartridge IS the program
+	# the console runs -- bsnes is handed it as content, so naming a different
+	# firmware file is the whole of the change. A core that emulated the Super Game
+	# Boy internally would have wanted an option toggled here instead.
+	#
+	# Gated on its OWN file, so a player who has one dump and not the other is
+	# offered exactly the machine they can build.
+	"super_game_boy_2": {
+		"label": "Super Game Boy 2",
+		"host": "super_nes",
+		"media": "game_boy",
+		"mount": MOUNT_CARTRIDGE,
+		"size": Vector3(0.137, 0.088, 0.024),
+		"loader": MediaDimensions.LOADER_NONE,
+		"firmware": ["SGB2.sfc"],
+		"rom_from_firmware": true,
+	},
 	# Model 1 and Model 2 both sat UNDER the Mega Drive, which is why the console
 	# ends up in the middle of the tower rather than at the bottom of it.
 	"sega_cd": {
@@ -218,10 +279,13 @@ const ROWS: Dictionary = {
 ##   sidecar  a file extension the CORE looks for beside the host cartridge,
 ##            rather than being handed. See the 64DD row.
 ##
-## Subsystems: recorded, not reachable. Every row here loads through a plain
-## retro_load_game with ONE path, because libretro-godot has no array-of-paths
-## channel from GDScript — Libretro::StartContent takes a single String. For most
-## rows that is not a limitation at all; for ONE it is the real gap. Checked at
+## Subsystems: REACHABLE, since the BS-X pairing was wired up. A row that names
+## one is loaded through retro_load_game_special with the whole ordered set —
+## Libretro::StartSubsystemContent carries the array, RetroSystem's
+## _start_subsystem_content assembles it, and the C++ resolves the ident against
+## whatever table the core published. A row WITHOUT a `subsystem` block still
+## loads through a plain retro_load_game with one path, which for most of them is
+## not a limitation at all; for the 64DD it remains the real gap. Checked at
 ## source with the two sessions working on those cores:
 ##
 ##   - snes9x advertises exactly ONE subsystem, "multicart_addon", and it is not
@@ -230,13 +294,13 @@ const ROWS: Dictionary = {
 ##   - mupen64plus-next declares an "ndd" subsystem AND a sidecar workaround, and
 ##     the workaround is not good enough. See `subsystem` below.
 ##
-## `subsystem` on a row records a VERIFIED pairing that this side cannot perform
-## yet: the ident the core advertises and the order it wants its media in. It is
-## deliberately kept apart from `roms`, which means something else — `roms` is the
-## preference order for the single path we actually hand over today, and the two
-## orders genuinely differ for the 64DD. Nothing reads `subsystem`; it is here so
-## the research survives the wait, and so that wiring it up later is an edit to
-## the call site rather than a second round of source-reading.
+## `subsystem` on a row records a VERIFIED pairing: the ident the core advertises
+## and the order it wants its media in. It is deliberately kept apart from `roms`,
+## which means something else — `roms` is the preference order for the single path
+## handed over on a plain load, and the two orders genuinely differ for the 64DD
+## and again for the Super Game Boy. A row whose subsystem cannot be completed
+## (an empty bay, a core bridge without the call, a core that never published the
+## ident) falls back to that plain load rather than failing.
 ##
 ## An earlier version of this file asserted a "64dd" subsystem, a "bsx" one, and
 ## a "mupen64plus-64dd-hardware" core option. All three were invented, and the
@@ -356,6 +420,44 @@ const BOOT: Dictionary = {
 		"core": "snes9x",
 		"roms": ["expansion:sufami_turbo"],
 	},
+	# VERIFIED against bsnes-libretro, bsnes/target-libretro/libretro.cpp:
+	#
+	#   sgb_roms[]  = { "Game Boy ROM" (gb|gbc), "Super Game Boy ROM" (smc|sfc) }
+	#   subsystems[] = { "Super Game Boy", "sgb", sgb_roms, 2, RETRO_GAME_TYPE_SGB }
+	#
+	# and retro_load_game_special assigns gameBoy.location = info[0] and
+	# superFamicom.location = info[1]. So the HANDHELD's cartridge goes first and
+	# the adapter's own cartridge second -- the reverse of the BS-X rows above,
+	# which are shell-first, and the reason the two orders are written out per row
+	# rather than assumed to be the same.
+	#
+	# The core is NOT the platform default, and cannot be. snes9x defines
+	# RETRO_GAME_TYPE_SUPER_GAME_BOY and then never puts it in the subsystems[] it
+	# publishes, so a frontend cannot reach it; retro_load_game_special drops that
+	# game type into its default case and reports the load failed. The constant is
+	# vestigial. Naming snes9x here would give a machine that refuses to start.
+	#
+	# No `writable`. That key exists for the BS-X pack, which is flash the core
+	# writes a download back onto, and SetPackPath is bound to the SNES pack memory
+	# region specifically. A Game Boy cartridge's save is an ordinary SRAM and
+	# belongs on the ordinary path.
+	"super_nes|super_game_boy": {
+		"core": "bsnes",
+		"roms": ["expansion:super_game_boy"],
+		"subsystem": {"ident": "sgb",
+			"roms": ["expansion_media:super_game_boy", "expansion_rom:super_game_boy"]},
+	},
+	# A row of its own rather than a shared one, and not for tidiness: firmware_present
+	# finds a unit's core through the unit's OWN recipe, so a unit with no recipe is
+	# not gated at all -- which would offer a Super Game Boy 2 to a player who has no
+	# dump of one. Both are MOUNT_CARTRIDGE and a Super Famicom has one slot, so no
+	# combined row can arise.
+	"super_nes|super_game_boy_2": {
+		"core": "bsnes",
+		"roms": ["expansion:super_game_boy_2"],
+		"subsystem": {"ident": "sgb",
+			"roms": ["expansion_media:super_game_boy_2", "expansion_rom:super_game_boy_2"]},
+	},
 	# UNVERIFIED.
 	"nes|fds": {
 		"core": "fceumm",
@@ -468,16 +570,23 @@ static func host_slot_media(host: String) -> Array[String]:
 ## the core info knows, both appear in the systems list, and both therefore get a
 ## card that is the right place to spawn the unit from.
 ##
-## Checked against libretro-core-info: media == id holds for all eight ids, and
-## every one of them appears as a systemid in at least one .info file. The rule
-## is not a coincidence of spelling -- a unit whose media is its own systemid IS
-## a system as far as the rest of RetroXR is concerned, which is precisely what
-## having a card means.
+## Checked against libretro-core-info: media == id holds for eight of the eleven
+## ids, and every one of those eight appears as a systemid in at least one .info
+## file. The rule is not a coincidence of spelling -- a unit whose media is its
+## own systemid IS a system as far as the rest of RetroXR is concerned, which is
+## precisely what having a card means.
 ##
-## The Jaguar CD was the one that did not hold, because nothing named it: it ran
-## under "atari_jaguar" and had to be offered from the console's card. It names
-## itself now -- virtualjaguar's secondary_systemids -- so the rule is universal
-## here rather than seven-of-eight.
+## The Jaguar CD used to be an exception for a reason that was fixable: nothing
+## named its discs, so it ran under "atari_jaguar" and had to be offered from the
+## console's card. It names itself now, through virtualjaguar's
+## secondary_systemids, so it has a tile like the rest.
+##
+## The three that remain are exceptions on purpose, and no .info entry would fix
+## them. A BS-X cartridge runs Satellaview downloads and a Super Game Boy runs
+## Game Boy cartridges: the media each takes already belongs to another system,
+## and minting an id for the ADAPTER would put a tile in the systems list for a
+## machine nobody owns separately -- the imaginary-console mistake this whole file
+## was written to undo. They are offered from the card of whatever they play.
 static func has_own_card(id: String) -> bool:
 	return media_of(id) == id
 
@@ -518,6 +627,33 @@ static func ids_carded_on(systemid: String) -> Array[String]:
 ## names it. Empty for every unit whose hardware is entirely ours to draw.
 static func firmware_of(id: String) -> Array:
 	return (row(id).get("firmware", []) as Array).duplicate()
+
+
+## Where this unit's own program lives when the unit IS its firmware.
+##
+## Empty for every unit that does not set `rom_from_firmware`, which is all of
+## them but the two Super Game Boys — a BS-X cartridge carries a shell a player
+## spawned it from, and answering with BS-X.bin here would quietly swap the
+## cartridge in their hand for the one in the system directory.
+##
+## The FIRST firmware name, not any that happens to be present. firmware_of is a
+## list of alternatives for the gate, but a unit runs one program: the Super Game
+## Boy 2 names SGB2.sfc and must not fall back to SGB1.sfc, or a player with both
+## dumps would build one machine and be handed the other.
+##
+## Returns the path whether or not the file is there. Existence is
+## firmware_present's question, and it is asked before the unit can be spawned at
+## all.
+static func firmware_rom_path(id: String) -> String:
+	if not bool(row(id).get("rom_from_firmware", false)):
+		return ""
+	var wanted := firmware_of(id)
+	if wanted.is_empty():
+		return ""
+	var core := str(boot_for(host_of(id), [id]).get("core", ""))
+	if core.is_empty():
+		return ""
+	return FirmwareRequirements.destination(core, str(wanted[0]))
 
 
 ## Is this unit's firmware actually installed?

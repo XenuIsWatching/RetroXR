@@ -28,8 +28,18 @@ const SLUG_MAP := {
 	"satellaview": "satellaview",
 	"sufami": "sufami_turbo",
 	"sufamiturbo": "sufami_turbo",
-	"sgb": "super_nes",
-	"sgb-msu1": "super_nes",
+	# A Super Game Boy release is a GAME BOY cartridge that happens to light up
+	# extra colours and a border in the adapter. The file is a .gb, so filing it
+	# under super_nes put it in a folder whose extensions do not include it and
+	# nothing scanned it -- and it belongs in the handheld library anyway, which
+	# is what fills a Super Game Boy's bay.
+	"sgb": "game_boy",
+	# The MSU-1 variant is a Game Boy cartridge too, despite sitting beside
+	# snes-msu1 in every platform list. Checked against a real library rather than
+	# reasoned from the name: the folder declares ".gb .gbc .zip .7z .squashfs",
+	# so what is filed there is handheld ROMs with streamed audio beside them, not
+	# the .sfc that snes-msu1 holds.
+	"sgb-msu1": "game_boy",
 	"n64": "nintendo_64",
 	"n64dd": "nintendo_64dd",
 	"gb": "game_boy",
