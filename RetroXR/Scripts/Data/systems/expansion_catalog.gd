@@ -34,6 +34,13 @@
 ##               named as its .info names them. A unit that has not got them is
 ##               not offered in the spawn menu at all. The BS-X cartridge and the
 ##               two Super Game Boys are the only rows that name any.
+##   card        the systemid whose spawn card offers this unit, overriding the
+##               media rule in card_systemid. Only the Super Game Boys name it,
+##               and only because a player went looking for one on the Super
+##               Famicom card and did not find it there.
+##   rom_title   the title in the internal header of a ROM that IS this unit, so
+##               a dump sitting in the library spawns the adapter instead of a
+##               cartridge. See adapter_for_rom.
 ##   rom_from_firmware
 ##               this unit's OWN program IS the firmware file above, rather than
 ##               something a player spawns out of the library. The BS-X cartridge
@@ -232,6 +239,8 @@ const ROWS: Dictionary = {
 		"mount": MOUNT_CARTRIDGE,
 		"size": Vector3(0.137, 0.088, 0.024),
 		"loader": MediaDimensions.LOADER_NONE,
+		"card": "super_nes",
+		"rom_title": "Super GAMEBOY",
 		"firmware": ["SGB1.sfc"],
 		"rom_from_firmware": true,
 	},
@@ -268,6 +277,8 @@ const ROWS: Dictionary = {
 		"mount": MOUNT_CARTRIDGE,
 		"size": Vector3(0.137, 0.088, 0.024),
 		"loader": MediaDimensions.LOADER_NONE,
+		"card": "super_nes",
+		"rom_title": "Super GAMEBOY2",
 		"firmware": ["SGB2.sfc"],
 		"rom_from_firmware": true,
 	},
@@ -701,9 +712,21 @@ static func has_own_card(id: String) -> bool:
 ## first. The Jaguar CD moved the same way and for the same reason: it used to
 ## sit among the Jaguar's pads because its discs were filed as Jaguar media, and
 ## now that they are jaguar_cd it is reached from the Jaguar CD's own card.
+##
+## `card` on a row overrides all of that, and the Super Game Boys are why. The
+## media rule put them on the Game Boy card, which is arguable -- it is where you
+## are standing when you want to play a Game Boy game -- and was tried. It failed
+## the only test that counts: the person who asked for the feature went looking
+## for it, on the Super Famicom card, and did not find it. A Super Game Boy IS a
+## Super Famicom cartridge and goes into a Super Famicom slot, so that is where a
+## hand reaches for it. An override rather than a change to the rule, because the
+## rule is still right for the BS-X cartridge and the reasoning above still holds.
 static func card_systemid(id: String) -> String:
 	if has_own_card(id):
 		return id
+	var override := str(row(id).get("card", ""))
+	if not override.is_empty():
+		return override
 	var m := media_of(id)
 	return m if not m.is_empty() else host_of(id)
 
@@ -735,6 +758,55 @@ static func bays_of(id: String) -> int:
 ## names it. Empty for every unit whose hardware is entirely ours to draw.
 static func firmware_of(id: String) -> Array:
 	return (row(id).get("firmware", []) as Array).duplicate()
+
+
+## The unit a ROM in the library IS, or "" for an ordinary piece of media.
+##
+## A Super Game Boy dump is a perfectly good Super Famicom .sfc and sits in the
+## snes folder with everything else, so without this it spawns as a cartridge --
+## a slab with nowhere to put a Game Boy game in it. Same problem the BS-X shell
+## had, and the same answer: recognise it on the way out of the library and spawn
+## the unit instead.
+##
+## Matched on the ROM's INTERNAL HEADER, not its filename. That is what bsnes
+## itself matches on to decide which adapter it is emulating, so the two agree by
+## construction; a filename rule would disagree the moment somebody renamed a
+## file, and would have to guess at "Super Game Boy (Japan, USA) (Rev 1)" versus
+## "Super Game Boy 2 (Japan)" -- where the first two revisions are both an SGB1
+## and only the third is a different machine.
+##
+## Both header positions are read because the position is a fact about the ROM
+## rather than about the system, and a copier header is skipped: those add 512
+## bytes on the front, which is exactly what a size that is not a whole number of
+## kibibytes means.
+static func adapter_for_rom(path: String) -> String:
+	if path.is_empty():
+		return ""
+	var wanted := false
+	for id: String in ROWS:
+		if not str(ROWS[id].get("rom_title", "")).is_empty():
+			wanted = true
+			break
+	if not wanted:
+		return ""
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	var length := f.get_length()
+	var skip: int = 512 if (length % 1024) == 512 else 0
+	var titles: Array[String] = []
+	for base: int in [0x7FC0, 0xFFC0]:
+		var at: int = base + skip
+		if at + 21 > length:
+			continue
+		f.seek(at)
+		titles.append(f.get_buffer(21).get_string_from_ascii().strip_edges())
+	f.close()
+	for id: String in ROWS:
+		var title := str(ROWS[id].get("rom_title", ""))
+		if not title.is_empty() and titles.has(title):
+			return id
+	return ""
 
 
 ## Where this unit's own program lives when the unit IS its firmware.

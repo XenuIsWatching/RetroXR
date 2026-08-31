@@ -301,15 +301,17 @@ static func items_for(systemid: String, _system_name: String = "") -> Array:
 	# this card, or a unit would be offered from two places at once and this card
 	# would grow a row that duplicates a whole tile.
 	#
-	# ExpansionCatalog.card_systemid is what decides, and it files a unit with no
-	# card of its own under its MEDIA. So what reaches THIS call is the units whose
-	# media is an ordinary console: currently the two Super Game Boys, which run
-	# Game Boy cartridges and are therefore offered from the Game Boy card.
+	# ExpansionCatalog.card_systemid is what decides. It files a unit with no card
+	# of its own under its MEDIA unless the row names a `card`, and what reaches
+	# THIS call is whatever that lands on an ordinary console: currently the two
+	# Super Game Boys, on the Super Famicom's card.
 	#
-	# That looks like the wrong card until you want one. A Super Game Boy is a
-	# Super Famicom cartridge, but nobody reaches for it because they want a Super
-	# Famicom -- the console is the thing it needs, not the thing it is for, and
-	# the player is standing on the Game Boy card when the thought occurs.
+	# They are the reason `card` exists. The media rule put them on the GAME BOY
+	# card, which is defensible -- that is where you are standing when you want to
+	# play a Game Boy game -- and it was tried. Then the person who asked for the
+	# feature went looking for one, on the Super Famicom card, and did not find it.
+	# A Super Game Boy is a Super Famicom cartridge that goes into a Super Famicom
+	# slot, and that is where a hand reaches for it.
 	#
 	# The other two units with no tile do NOT arrive here, and both are worth
 	# knowing about because each used to. The BS-X cartridge is filed under

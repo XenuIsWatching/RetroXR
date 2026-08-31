@@ -1260,6 +1260,24 @@ func _on_spawn_cartridge_requested(rom_path: String, game_label: String, systemi
 	#
 	# Keyed on the extension, the same rule MediaDimensions.cart_size uses: under
 	# this systemid a .bs is a pack and a .sfc is the shell.
+	# A Super Game Boy is the same shape of problem and gets the same answer, but
+	# it cannot be keyed on the extension: its dump is an ordinary Super Famicom
+	# .sfc filed in the snes folder among hundreds of games, so what separates it
+	# from them is its internal header. ExpansionCatalog reads that, which also
+	# settles which of the two adapters it is -- both Rev 1 and Rev 2 are an SGB1,
+	# and only the 1998 cartridge is the other machine.
+	#
+	# Asked FIRST, so a dump the player can see in their library wins over the
+	# copy installed as firmware. That is the one they chose, and the one whose
+	# region and revision they can check by looking.
+	if not rom_path.is_empty():
+		var adapter := ExpansionCatalog.adapter_for_rom(rom_path)
+		if not adapter.is_empty():
+			var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
+			unit.expansion_id = adapter
+			unit.rom_path = rom_path
+			_place_spawned(unit, "expansion:%s" % adapter)
+			return
 	if systemid == "satellaview" and rom_path.get_extension().to_lower() in ["sfc", "smc"]:
 		var bsx := EXPANSION_SCENE.instantiate() as RetroExpansion
 		bsx.expansion_id = "bsx_cart"

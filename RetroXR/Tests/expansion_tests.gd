@@ -664,32 +664,95 @@ func _group_sgb() -> void:
 			and str((boot2.get("subsystem", {}) as Dictionary).get("ident", "")) == "sgb",
 		"sgb/ the 2 has a recipe of its own, which is what gates it separately")
 
-	# The gate the whole feature hangs on. Filed under game_boy rather than
-	# super_nes: it runs Game Boy cartridges, and that is the card a player is on
-	# when they want one.
+	# The gate the whole feature hangs on, and the card it hangs on. Filed under
+	# super_nes by the row's `card` override rather than under game_boy, which is
+	# where the media rule would put it: an adapter is looked for on the card of
+	# the console it goes into. Both directions are asserted, because a unit that
+	# appeared on BOTH cards would pass a check that only looked at one.
 	for id: String in ["super_game_boy", "super_game_boy_2"]:
 		var listed := false
-		for item: Dictionary in SpawnCatalog.items_for("game_boy"):
+		for item: Dictionary in SpawnCatalog.items_for("super_nes"):
 			if str(item.get("spawn", "")) == "expansion:%s" % id:
 				listed = true
 		_check(listed == ExpansionCatalog.firmware_present(id),
-			"sgb/ the Game Boy card offers %s exactly when its BIOS is installed" % id)
-		_check(not _spawn_card_has("super_nes", id),
-			"sgb/ and the Super Famicom card does not also offer it")
+			"sgb/ the Super Famicom card offers %s exactly when its BIOS is installed" % id)
+		_check(not _spawn_card_has("game_boy", id),
+			"sgb/ and the Game Boy card does not also offer it")
 
 	# The claim the comment above _units_carded_here makes. Asked of
 	# ids_carded_on, which files a unit WITHOUT consulting its firmware -- the
 	# menu itself cannot answer this, because a BS-X cartridge with no BS-X.bin
 	# installed is absent from every card and that says nothing about which one it
 	# belongs to. Getting those two confused is what this case is guarding.
+	var on_sfc: Array[String] = ExpansionCatalog.ids_carded_on("super_nes")
 	var on_gb: Array[String] = ExpansionCatalog.ids_carded_on("game_boy")
 	var on_sv: Array[String] = ExpansionCatalog.ids_carded_on("satellaview")
-	_check(on_gb == ["super_game_boy", "super_game_boy_2"],
-		"sgb/ and the two of them are the whole of what a console card carries now")
+	_check(on_sfc == ["super_game_boy", "super_game_boy_2"],
+		"sgb/ and the two of them are the whole of what that card carries")
+	_check(on_gb.is_empty(),
+		"sgb/ with nothing left filed on the Game Boy card")
 	_check(on_sv == ["bsx_cart"],
 		"sgb/ while the BS-X cartridge is filed on the Satellaview card, not here")
 
 	await _sgb_gate_positive()
+	_sgb_from_library()
+
+
+## A dump in the ROM library IS the adapter, and the header is what says so.
+##
+## Fixtures written here rather than borrowed from the player's snes folder: the
+## case has to hold on a machine that owns no Super Game Boy at all. A real dump
+## is 256 KB of program and this needs 32 KB of zeroes with 21 bytes of title in
+## the right place, because the only thing under test is the recognition.
+func _sgb_from_library() -> void:
+	var dir := "user://__sgb_selftest"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var made: Array[String] = []
+	for pair: Array in [["sgb1.sfc", "Super GAMEBOY"], ["sgb2.sfc", "Super GAMEBOY2"],
+			["game.sfc", "SOME OTHER GAME"]]:
+		var path: String = dir.path_join(str(pair[0]))
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		if f == null:
+			_check(false, "sgb/ can write a library fixture")
+			return
+		var blob := PackedByteArray()
+		blob.resize(0x8000)
+		f.store_buffer(blob)
+		f.seek(0x7FC0)
+		f.store_buffer(str(pair[1]).rpad(21).to_ascii_buffer())
+		f.close()
+		made.append(path)
+
+	_check(ExpansionCatalog.adapter_for_rom(made[0]) == "super_game_boy",
+		"sgb/ a dump whose header says Super GAMEBOY spawns the adapter")
+	# The one a filename rule gets wrong. "Super Game Boy 2 (Japan)" and "Super
+	# Game Boy (World) (Rev 2)" both contain a 2, and only one of them is the
+	# other machine.
+	_check(ExpansionCatalog.adapter_for_rom(made[1]) == "super_game_boy_2",
+		"sgb/ and the 1998 header spawns the OTHER adapter, not that one")
+	_check(ExpansionCatalog.adapter_for_rom(made[2]).is_empty(),
+		"sgb/ while an ordinary Super Famicom game stays a cartridge")
+	_check(ExpansionCatalog.adapter_for_rom("").is_empty()
+			and ExpansionCatalog.adapter_for_rom(dir.path_join("nope.sfc")).is_empty(),
+		"sgb/ and a missing file is not an adapter either")
+
+	# A copier-headered dump is the same ROM shifted 512 bytes. Detected from the
+	# size, which is the only thing that distinguishes one.
+	var padded: String = dir.path_join("headered.smc")
+	var g := FileAccess.open(padded, FileAccess.WRITE)
+	if g != null:
+		var pad := PackedByteArray()
+		pad.resize(512)
+		g.store_buffer(pad)
+		g.store_buffer(FileAccess.get_file_as_bytes(made[0]))
+		g.close()
+		made.append(padded)
+		_check(ExpansionCatalog.adapter_for_rom(padded) == "super_game_boy",
+			"sgb/ including one carrying a copier header")
+
+	for path: String in made:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(dir))
 
 
 ## Drive the gate BOTH ways, whichever way this machine happens to be set up.
@@ -722,8 +785,8 @@ func _sgb_gate_positive() -> void:
 		_refresh_firmware()
 		_check(not ExpansionCatalog.firmware_present("super_game_boy"),
 			"sgb/ with the dump moved away the adapter is withdrawn")
-		_check(not _spawn_card_has("game_boy", "super_game_boy"),
-			"sgb/ and the Game Boy card loses its row")
+		_check(not _spawn_card_has("super_nes", "super_game_boy"),
+			"sgb/ and the Super Famicom card loses its row")
 		DirAccess.rename_absolute(aside, dest)
 		_refresh_firmware()
 		_check(FileAccess.file_exists(dest), "sgb/ and the player's dump is put back")
@@ -741,8 +804,8 @@ func _sgb_gate_positive() -> void:
 	_refresh_firmware()
 	_check(ExpansionCatalog.firmware_present("super_game_boy"),
 		"sgb/ a dump on disk makes the adapter available")
-	_check(_spawn_card_has("game_boy", "super_game_boy"),
-		"sgb/ and the Game Boy card grows a row for it")
+	_check(_spawn_card_has("super_nes", "super_game_boy"),
+		"sgb/ and the Super Famicom card grows a row for it")
 	DirAccess.remove_absolute(dest)
 	_refresh_firmware()
 	_check(not FileAccess.file_exists(dest), "sgb/ and the scratch dump is cleaned up")
