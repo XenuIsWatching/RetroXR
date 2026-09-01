@@ -273,6 +273,23 @@ func _run_vrs_probe() -> void:
 	if cfg.has("eye_buffer"):
 		print("[VRSProbe] eye_buffer -> %.2f" % float(cfg["eye_buffer"]))
 		set_eye_buffer_scale(float(cfg["eye_buffer"]))
+	if cfg.has("msaa"):
+		var m := int(cfg["msaa"])
+		print("[VRSProbe] msaa -> %d" % m)
+		get_tree().root.msaa_3d = m as Viewport.MSAA
+	if cfg.has("hide"):
+		# Probe knob for the "what would you cut from the room" question: hide a
+		# named subtree and measure what it was costing, rather than reasoning
+		# about it from a draw list.
+		for want in cfg["hide"]:
+			var hit := 0
+			for node in get_tree().root.find_children("*", "Node3D", true, false):
+				if node.name == String(want):
+					(node as Node3D).visible = false
+					hit += 1
+			print("[VRSProbe] hide '%s' -> %d node(s)" % [want, hit])
+	if cfg.has("max_lights"):
+		_probe_cap_lights(int(cfg["max_lights"]))
 	if cfg.has("vrs_radius"):
 		_vrs_radius_override = float(cfg["vrs_radius"])
 	if cfg.has("vrs_strength"):
@@ -283,6 +300,25 @@ func _run_vrs_probe() -> void:
 		print("[VRSProbe] foveation -> %d" % int(cfg["foveation"]))
 		set_foveation_level(int(cfg["foveation"]))
 	print("[VRSProbe] applied, foveation_live=%s" % foveation_live())
+
+
+## Hide all but the `keep` strongest Light3Ds in the tree. A probe knob only:
+## the shell is lit by a baked volume now, so the room's real lights exist for
+## the PROPS, and how much those lights cost is worth measuring before any of
+## them is authored away.
+func _probe_cap_lights(keep: int) -> void:
+	var lights: Array[Light3D] = []
+	for node in get_tree().root.find_children("*", "Light3D", true, false):
+		var l := node as Light3D
+		if l.is_visible_in_tree() and l.light_energy > 0.0:
+			lights.append(l)
+	lights.sort_custom(func(a: Light3D, b: Light3D) -> bool:
+		return a.light_energy > b.light_energy)
+	var hidden := 0
+	for i in range(keep, lights.size()):
+		lights[i].visible = false
+		hidden += 1
+	print("[VRSProbe] max_lights %d - kept %d, hid %d" % [keep, mini(keep, lights.size()), hidden])
 
 
 ## Report what the settings actually resolved to, so a wrong renderer string or a
