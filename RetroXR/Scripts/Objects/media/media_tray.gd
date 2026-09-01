@@ -185,11 +185,9 @@ func _accept(media: Node3D, by_hand: bool = false) -> void:
 		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		rb.freeze = true
 	media.reparent(_holder)
-	# reparent kept the world pose, so the media's transform is now the well-local
-	# one the hand offered it at — the only moment the hand's spin is still known.
 	var seat := media_local_basis
 	if by_hand:
-		seat = RetroDisc.seat_basis(media_local_basis, media, media.transform.basis)
+		seat = RetroDisc.seat_basis(media_local_basis, media, _holder)
 	media.transform = Transform3D(seat, seat_offset)
 	if is_instance_valid(host):
 		host.add_collision_exception_with(media)

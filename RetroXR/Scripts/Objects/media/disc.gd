@@ -129,14 +129,36 @@ func _apply_label_art() -> void:
 		lbl.visible = false
 
 
+## The world basis this disc had when the hand let go of it. A bay cannot read
+## that off the disc when it accepts one: the snap zone has already re-posed the
+## body to its own grab point by the time has_picked_up fires, so the hand's
+## heading is gone one call earlier than the bay ever runs.
+var _release_basis := Basis.IDENTITY
+
+
+func let_go(by: Node3D, p_linear_velocity: Vector3, p_angular_velocity: Vector3) -> void:
+	# A snap zone handing the disc on is not a hand letting go of it, and it lets
+	# go from its OWN grab point: a bay drops the zone's grab before it seats, so
+	# recording that release would overwrite the heading with the zone's every
+	# time and the disc would always come up square.
+	if not (by is XRToolsSnapZone):
+		_release_basis = global_basis.orthonormalized()
+	super(by, p_linear_velocity, p_angular_velocity)
+
+
+## The heading the hand released it at, in the frame of `bay`.
+func release_basis_in(bay: Node3D) -> Basis:
+	return bay.global_basis.orthonormalized().inverse() * _release_basis
+
+
 ## The basis a bay should seat `media` at, given its authored seat basis `seat`
-## and the basis it currently has in the bay's own frame. A round platter is
-## symmetric about its spin axis, so it is seated with the spin the hand was
+## and the basis the hand released it at, in the bay's own frame. A round platter
+## is symmetric about its spin axis, so it is seated with the spin the hand was
 ## holding it at rather than snapped to one heading; anything else (a tape, a
 ## disc in an opaque caddy) seats exactly as authored.
-static func seat_basis(seat: Basis, media: Node3D, in_bay: Basis) -> Basis:
+static func seat_basis(seat: Basis, media: Node3D, bay: Node3D) -> Basis:
 	var disc := media as RetroDisc
 	if disc == null or not disc.can_visually_spin():
 		return seat
-	var m := (seat.inverse() * in_bay).orthonormalized()
+	var m := (seat.inverse() * disc.release_basis_in(bay)).orthonormalized()
 	return seat * Basis(Vector3.UP, atan2(-m.x.z, m.x.x))

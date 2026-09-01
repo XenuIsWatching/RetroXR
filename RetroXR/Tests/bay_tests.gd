@@ -16,6 +16,7 @@
 ##   plug/    a controller plug offered off its socket and slid in
 ##   restore/ a save comes back latched, without the slide
 ##   lid/     a room saved with a disc lid UP comes back with the machine agreeing
+##   seat/    the heading a disc keeps from the hand that put it in the well
 ##   other/   a deck with no push tray is untouched by any of it
 extends Node
 
@@ -740,6 +741,86 @@ func _group_lid() -> void:
 	_drop_lid_room()
 
 
+# --- seat -------------------------------------------------------------------------
+
+## A disc is round, so the well can seat it at any spin and still be right. It
+## takes the one the hand let go at, rather than snapping every disc to the same
+## heading. The trap this group exists for: the snap zone re-poses the body to
+## its own grab point BEFORE the well ever hears about it, so a well reading the
+## disc's pose when it accepts one reads the zone's heading and always comes up
+## square — which is what shipped first.
+const DISC_SCENE := preload("res://Scenes/Objects/media/disc.tscn")
+
+
+## Put a disc into `sys`'s open well at `yaw_deg` and hand back where it ended up.
+## `by_hand` false takes the restore path instead, which is the control.
+func _seat_disc(sys: Node3D, yaw_deg: float, by_hand: bool) -> Basis:
+	var disc: Node3D = DISC_SCENE.instantiate()
+	disc.systemid = sys.systemid
+	add_child(disc)
+	_spawned.append(disc)
+	await _wait(5)
+	var pose := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)),
+		sys.global_position + Vector3(0.0, 0.3, 0.0))
+	if by_hand:
+		var hand := Node3D.new()
+		hand.set_script(load("res://Scripts/Desktop/desktop_hand_pivot.gd"))
+		add_child(hand)
+		_spawned.append(hand)
+		hand.global_transform = pose
+		disc.global_transform = pose
+		disc.pick_up(hand)
+		await _wait(20)
+		disc.let_go(hand, Vector3.ZERO, Vector3.ZERO)
+		(sys.get_node("CartridgeSlot") as XRToolsSnapZone).pick_up_object(disc)
+	else:
+		disc.global_transform = pose
+		sys._tray.restore(disc)
+	await _wait(10)
+	var got := disc.global_basis.orthonormalized()
+	sys._tray.release()
+	await _wait(5)
+	disc.queue_free()
+	await _wait(5)
+	return got
+
+
+## The spin from `a` to `b` about the disc's own axis, in degrees.
+func _spin_between(a: Basis, b: Basis) -> float:
+	var m := (a.inverse() * b).orthonormalized()
+	return rad_to_deg(atan2(-m.x.z, m.x.x))
+
+
+func _group_seat() -> void:
+	var gc := await _console("gamecube_primitive", "gamecube")
+	gc._on_eject_pressed()
+	await _wait(80)
+	_check(gc._tray != null and gc._tray.is_open(), "seat/the well is open")
+	if gc._tray == null:
+		await _clear()
+		return
+
+	var square := await _seat_disc(gc, 0.0, true)
+	for yaw: float in [55.0, -110.0]:
+		var turned := await _seat_disc(gc, yaw, true)
+		_check(absf(angle_difference(deg_to_rad(_spin_between(square, turned)),
+			deg_to_rad(yaw))) < 0.02,
+			"seat/a disc handed in at %+.0f seats at %+.0f" % [yaw, yaw])
+		# ...and it is no less flat in the well for it. A seat that took the
+		# whole hand pose would pass the line above and leave the disc tilted.
+		_check(turned.y.dot(square.y) > 0.9999,
+			"seat/and lies exactly as flat as a square one")
+
+	# The control. A restore is a state the room was already in, not a hand, so
+	# it keeps the authored heading — and without this every check above would
+	# pass on a well that simply never squares anything.
+	var r0 := await _seat_disc(gc, 0.0, false)
+	var r1 := await _seat_disc(gc, 55.0, false)
+	_check(absf(_spin_between(r0, r1)) < 0.02,
+		"seat/a restore ignores the pose and seats as authored")
+	await _clear()
+
+
 func _run() -> void:
 	if _want("perch"):
 		await _group_perch()
@@ -751,5 +832,7 @@ func _run() -> void:
 		await _group_restore()
 	if _want("lid"):
 		await _group_lid()
+	if _want("seat"):
+		await _group_seat()
 	if _want("other"):
 		await _group_other()
