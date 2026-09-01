@@ -27,6 +27,7 @@
 [ext_resource type="Script" uid="uid://dae4m0i3dftd6" path="res://Scripts/Objects/room/bead_pull_cord.gd" id="48_pullcord"]
 [ext_resource type="Script" uid="uid://c3w241s4y5yli" path="res://Scripts/Objects/room/window_blinds.gd" id="49_blinds"]
 [ext_resource type="Script" uid="uid://bhgccddcdewok" path="res://Scripts/Objects/room/time_of_day.gd" id="50_timeofday"]
+[ext_resource type="Script" uid="uid://b60c1xkano3pa" path="res://Scripts/Objects/room/shell_lighting.gd" id="52_shelllight"]
 [ext_resource type="Script" uid="uid://bw7vpp7uu8q37" path="res://Scripts/Objects/widgets/vr_lever.gd" id="51_vrlever"]
 [ext_resource type="FontFile" uid="uid://bv8kh41jwy8bc" path="res://fonts/SymbolsNerdFont-Regular.ttf" id="52_nerdfont"]
 [ext_resource type="Shader" uid="uid://pr0hga62q1ni" path="res://Shaders/pbr_surface.gdshader" id="56_roomsurf"]
@@ -80,6 +81,7 @@ size = Vector3(1.15, 2.2, 0.05)
 [sub_resource type="ShaderMaterial" id="Mat_wall"]
 render_priority = 0
 shader = ExtResource("56_roomsurf")
+shader_parameter/shell = true
 shader_parameter/albedo_tex = ExtResource("20_wall_col")
 shader_parameter/roughness_tex = ExtResource("22_wall_rgh")
 shader_parameter/normal_tex = ExtResource("21_wall_nrm")
@@ -109,6 +111,7 @@ size = Vector3(1.1, 0.05, 0.6)
 [sub_resource type="ShaderMaterial" id="Mat_carpet"]
 render_priority = 0
 shader = ExtResource("56_roomsurf")
+shader_parameter/shell = true
 shader_parameter/albedo_tex = ExtResource("23_rug_col")
 shader_parameter/roughness_tex = ExtResource("25_rug_rgh")
 shader_parameter/normal_tex = ExtResource("24_rug_nrm")
@@ -191,6 +194,7 @@ size = Vector3(5.2, 0.15, 4.4)
 [sub_resource type="ShaderMaterial" id="Mat_ceiling"]
 render_priority = 0
 shader = ExtResource("56_roomsurf")
+shader_parameter/shell = true
 shader_parameter/albedo_tex = ExtResource("20_wall_col")
 shader_parameter/roughness_tex = ExtResource("22_wall_rgh")
 shader_parameter/normal_tex = ExtResource("21_wall_nrm")
@@ -229,6 +233,7 @@ size = Vector2(140, 140)
 [sub_resource type="ShaderMaterial" id="Mat_ground"]
 render_priority = 0
 shader = ExtResource("56_roomsurf")
+shader_parameter/shell = true
 shader_parameter/albedo_tex = ExtResource("57_grass_col")
 shader_parameter/roughness_tex = ExtResource("59_grass_rgh")
 shader_parameter/normal_tex = ExtResource("58_grass_nrm")
@@ -256,6 +261,7 @@ size = Vector3(90, 0.04, 6.5)
 [sub_resource type="ShaderMaterial" id="Mat_road"]
 render_priority = 0
 shader = ExtResource("56_roomsurf")
+shader_parameter/shell = true
 shader_parameter/albedo_tex = ExtResource("61_road_col")
 shader_parameter/roughness_tex = ExtResource("63_road_rgh")
 shader_parameter/normal_tex = ExtResource("62_road_nrm")
@@ -282,6 +288,7 @@ size = Vector3(90, 0.09, 1.4)
 [sub_resource type="ShaderMaterial" id="Mat_aggregate"]
 render_priority = 0
 shader = ExtResource("56_roomsurf")
+shader_parameter/shell = true
 shader_parameter/albedo_tex = ExtResource("75_agg_col")
 shader_parameter/roughness_tex = ExtResource("77_agg_rgh")
 shader_parameter/normal_tex = ExtResource("76_agg_nrm")
@@ -315,6 +322,7 @@ size = Vector3(6, 0.04, 1.1)
 [sub_resource type="ShaderMaterial" id="Mat_soil"]
 render_priority = 0
 shader = ExtResource("56_roomsurf")
+shader_parameter/shell = true
 shader_parameter/albedo_tex = ExtResource("79_soil_col")
 shader_parameter/roughness_tex = ExtResource("81_soil_rgh")
 shader_parameter/normal_tex = ExtResource("80_soil_nrm")
@@ -1058,5 +1066,9 @@ exterior_fill_path = NodePath("../ExteriorFill")
 street_lamp_path = NodePath("../Exterior/StreetLamp/Light")
 street_lamp_head_path = NodePath("../Exterior/StreetLamp/Head")
 lever_path = NodePath("../Furniture/TimeLever/LeverPivot/Lever")
+
+[node name="ShellLighting" type="Node" parent="." unique_id=1477203611]
+script = ExtResource("52_shelllight")
+world_env_path = NodePath("../WorldEnvironment")
 
 [connection signal="pulled" from="Furniture/BlindCord" to="Furniture/Blinds" method="_on_cord_pulled"]
