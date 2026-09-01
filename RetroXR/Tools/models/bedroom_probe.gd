@@ -113,6 +113,8 @@ func _run() -> void:
 	# `--lights-off` flips the wall switch before anything is framed. The room has
 	# two baked lighting states and only one of them is reachable by default, so
 	# without this half of the bake can never be looked at.
+	for i in 30:
+		await get_tree().process_frame
 	if OS.get_cmdline_user_args().has("--lights-off"):
 		# Flip the SWITCH, not the light. `visible` on a ceiling fixture belongs to
 		# LightSwitch, which reasserts it from its own state - setting the light
@@ -127,13 +129,11 @@ func _run() -> void:
 		# off at all.
 		var lit := 0
 		for node in get_tree().get_nodes_in_group("ceiling_light"):
-			print("[probe] ceiling id=%d vis=%s" % [node.get_instance_id(), (node as Light3D).visible])
 			if (node as Light3D).visible:
 				lit += 1
 		print("[probe] light switches turned off: %d, ceiling lights still visible: %d"
 			% [hit, lit])
-	for i in 30:
-		await get_tree().process_frame
+
 
 	var globe := get_tree().root.find_child("FanGlobeLight", true, false) as OmniLight3D
 	if globe != null:

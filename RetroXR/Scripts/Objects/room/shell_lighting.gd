@@ -186,10 +186,7 @@ func _volume(img: Image, dims: Vector3i) -> ImageTexture3D:
 func _switch_state() -> String:
 	for node in _room.find_children("*", "Light3D", true, false):
 		var light := node as Light3D
-		if not light.is_in_group(SWITCHED_GROUP):
-			continue
-		print("[dbg] %s id=%d vis=%s vis_tree=%s" % [light.name, light.get_instance_id(), light.visible, light.is_visible_in_tree()])
-		if light.is_visible_in_tree() and light.light_energy > 0.0:
+		if light.is_in_group(SWITCHED_GROUP) and light.is_visible_in_tree() 				and light.light_energy > 0.0:
 			return "on"
 	return "off"
 
