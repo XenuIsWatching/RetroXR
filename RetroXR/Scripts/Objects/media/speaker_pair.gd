@@ -5,7 +5,7 @@
 ## Because a television has none either. RetroTV never plays anything: it is two
 ## Marker3Ds and a volume number. The SOURCE owns its voices and walks them onto
 ## whatever get_speaker_positions() hands back, every frame (see
-## RetroSystem::_update_audio_position). So publishing this pair's two cabinet
+## SystemAudio.update_position). So publishing this pair's two cabinet
 ## positions is the whole of being a loudspeaker — and because it is read per frame
 ## rather than latched, carrying a box across the room carries its channel with it.
 ##

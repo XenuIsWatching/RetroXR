@@ -85,13 +85,6 @@ var _options_unavailable: String = ""
 # Array of Dictionaries: [{port, controllers: [{name, id}], current_id}]
 var _controller_info: Array = []
 
-# The core's AudioStreamPlayer3D (created in C++ under the Libretro node),
-# cached at power-on so _process can steer it without a per-frame node lookup.
-var _audio_player: AudioStreamPlayer3D = null
-# Meta XR Audio voice ids, when the core is being spatialised through the SDK.
-# The C++ AudioHandler owns their lifetime; this script only places them.
-var _audio_voices: PackedInt32Array = PackedInt32Array()
-var _audio_bind_settled := false
 var _port_devices_settled := false
 # The card that floats over this machine's picture — achievement unlocks, and
 # the notice raised when a game cannot run. Made on demand rather than at
@@ -100,18 +93,10 @@ var _screen_toast_card: AchievementToast = null
 # The card that floats over the hardware itself, for what the machine is waiting
 # on rather than showing. Same on-demand cost as _screen_toast_card.
 var _machine_toast_card: AchievementToast = null
-var _mx: Object = null
-# Last level pushed by the connected TV. Re-applied on every rebind: a fresh
-# voice starts at full gain, so a core restart would otherwise come back at full
-# volume with the set switched off.
-var _last_audio_volume: float = 1.0
-## The TV's mono switch, kept so a core started after it was set still comes up
-## routed the way the set is. See set_audio_channel_mode.
-var _audio_channel_mode: int = 0
 ## Upper bound on half the gap between the emitters when no TV is connected, in
 ## metres. A connected set reports its own speaker positions instead. The gap
 ## actually used is a fifth of the hardware's own width, so this only binds for
-## something console-sized; see _refresh_hardware_audio_geometry.
+## something console-sized; see SystemAudio._refresh_hardware_geometry.
 @export var audio_speaker_separation: float = 0.09
 
 ## How directional the speaker the sound comes out of is, 0 (omnidirectional)
@@ -128,26 +113,10 @@ var _audio_channel_mode: int = 0
 ## rather than gone.
 @export var audio_directivity: float = 0.45
 
-# Where the hardware's own sound comes from, in this system's local space, and
-# cached: _body_aabb walks every mesh in the model and this is wanted per frame.
-# Keyed on the model instance so a variant swap recomputes it.
-var _audio_geom_model_id: int = 0
-var _audio_centre_local: Vector3 = Vector3.ZERO
-var _audio_half_sep: float = 0.0
-
 # Top of the body in local space, for panels that float above the hardware.
 # Cached and model-keyed for the same reason as the audio geometry above.
 var _body_top_model_id: int = 0
 var _body_top_local: float = 0.0
-
-# Head position, for the distance law, and the last gain handed to the voices.
-var _audio_listener: Node = null
-var _sent_gain_l: float = -1.0
-var _sent_gain_r: float = -1.0
-var _sent_directivity: float = -1.0
-# Last distance term measured, so a volume change can be applied against it
-# without waiting for the next frame.
-var _audio_dist_factor: float = 1.0
 
 # Active system model — always set (falls back to RetroSystemModelDefault)
 var _model: RetroSystemModel = null
@@ -394,6 +363,10 @@ func _init() -> void:
 	_memcards.name = "MemoryCardController"
 	add_child(_memcards)
 	_memcards.setup(self)
+	_audio = SystemAudio.new()
+	_audio.name = "SystemAudio"
+	add_child(_audio)
+	_audio.setup(self)
 
 
 func _ready() -> void:
@@ -563,7 +536,7 @@ func _place_name_label() -> void:
 ## for a console lands inside the tower.
 ##
 ## Cached in local space and keyed on the model instance, the same way
-## _audio_centre_local is: _body_aabb walks every mesh in the model and a
+## SystemAudio._centre_local is: _body_aabb walks every mesh in the model and a
 ## floating panel wants this every frame.
 func body_top_y() -> float:
 	var inst_id := _model.get_instance_id() if _model != null else 0
@@ -901,105 +874,25 @@ func set_input_enabled(on: bool) -> void:
 	_libretro.SetInputEnabled(on)
 
 
+## Spatial audio for this machine, lifted out into SystemAudio. Created in
+## _init beside the other components, because every machine makes sound.
+var _audio: SystemAudio = null
+
+
 ## Set the audio volume for the running libretro instance (0.0 = silent, 1.0 = 100%).
+##
+## Stays on RetroSystem rather than moving to the component with its body: every
+## caller reaches it by DUCK TYPING — tv.gd, speaker_pair.gd and the handheld,
+## PSP and Virtual Boy models all test has_method("set_audio_volume") on whatever
+## is plugged in, and a VCR and a DVD player answer the same name.
 func set_audio_volume(volume: float) -> void:
-	_last_audio_volume = clampf(volume, 0.0, 1.0)
-	if not is_powered_on:
-		return
-	if not _audio_voices.is_empty() and _mx != null:
-		# Applied here and now against the distance factor already measured, not
-		# left for the next _process. A set being switched off has to go quiet at
-		# once, and must not depend on this node being processed to do it.
-		_send_voice_gain(_last_audio_volume * _audio_dist_factor)
-		return
-	_apply_player_volume()
+	_audio.set_volume(volume)
 
 
-## Part of the TV contract: the set's mono switch, applied to the core's own
-## sound. The core's samples are deinterleaved into its voices inside the
-## extension, so the mode is handed there rather than applied to a buffer here.
-## Remembered so a core started later comes up on the set's current setting.
+## Part of the TV contract: the set's mono switch. Reached by duck typing from
+## tv.gd exactly as set_audio_volume is, so it stays here too.
 func set_audio_channel_mode(mode: int) -> void:
-	_audio_channel_mode = clampi(mode, 0, 2)
-	if _libretro != null:
-		_libretro.SetAudioChannelMode(_audio_channel_mode)
-
-
-## Bind whichever audio backend the core came up on. With Meta XR Audio the
-## handler has already created a pair of voices and only needs them placed;
-## otherwise it made an AudioStreamPlayer3D that needs this system's tuning.
-func _bind_audio_player() -> void:
-	# A fresh handler starts on stereo, so a set left on mono has to say so again.
-	_libretro.SetAudioChannelMode(_audio_channel_mode)
-	_audio_voices = _libretro.GetAudioVoiceIds()
-	if not _audio_voices.is_empty():
-		if Engine.has_singleton("MetaXRAudio"):
-			_mx = Engine.get_singleton("MetaXRAudio")
-		_audio_player = null
-		_sent_directivity = -1.0     # fresh voices start omni; force a re-send
-		_update_audio_position()
-		_apply_bound_volume()
-		return
-
-	_audio_player = _libretro.get_node_or_null("AudioStreamPlayer3D") as AudioStreamPlayer3D
-	if _audio_player == null:
-		return
-	_audio_player.unit_size        = audio_unit_size
-	_audio_player.max_distance     = audio_max_distance
-	_audio_player.panning_strength = audio_panning_strength
-	_update_audio_position()
-	_apply_bound_volume()
-
-
-## Keep trying to bind until it takes. StartContent only ENQUEUES the audio
-## init — Wrapper posts a ThreadCommandInitAudio that the Libretro node drains in
-## a later _process — so neither the voices nor the AudioStreamPlayer3D exist yet
-## when _power_on calls _bind_audio_player on the very next line.
-##
-## Binding once therefore left BOTH backends unset, and _update_audio_position
-## returned early for the rest of the session. The voices still played, from the
-## SDK's default position: the world origin. Hardware that sits near the middle
-## of the room sounds about right like that, which is why this went unnoticed
-## until a handheld was carried around and its sound stayed behind.
-##
-## The wait ends on the handler's ANSWER, never on a deadline. It used to give up
-## after 300 frames, which at 72 Hz is 4.2 s — and Dolphin reported its voices
-## 8.1 s after power-on. The window closed first, the empty voice list was read as
-## "this core runs on the fallback", and the AudioStreamPlayer3D was bound for the
-## rest of the run. Nothing feeds that player once the handler picks the SDK, and
-## the two voices it did create are never placed, so they never publish a pose —
-## and the mixer does not mix a voice that has not said where it is. A silent Wii
-## in a room where everything else could be heard.
-##
-## Elapsed frames only ever stood in for "a backend has been chosen", and the two
-## agree solely for cores that come up fast. fceumm answers in about 34 frames and
-## never noticed; Dolphin straddles the deadline, which is why the same build was
-## silent on one launch and fine on the next — a warm shader cache decided it.
-func _ensure_audio_bound() -> void:
-	if _audio_bind_settled or not is_powered_on:
-		return
-	# IsAudioReady is the whole question. Before the sink is up an empty voice
-	# list means "not asked yet"; after it, the same empty list means the fallback
-	# backend, and that is the distinction nothing on this side could draw. A
-	# non-null _audio_player never could either: Wrapper creates that node
-	# unconditionally, before the handler has chosen anything, so it is already
-	# sitting there on the first attempt — keying the retry off it stopped the
-	# retry dead.
-	if not _libretro.IsAudioReady():
-		return
-	_bind_audio_player()
-	_audio_bind_settled = true
-
-
-## Push the remembered level onto whichever backend was just bound. A voice is
-## created at gain 1.0 and a fresh AudioStreamPlayer3D at 0 dB, so without this
-## a restart resurrects the sound at full volume regardless of the TV.
-func _apply_bound_volume() -> void:
-	if not _audio_voices.is_empty() and _mx != null:
-		_sent_gain_l = -1.0        # see set_audio_volume
-		_sent_gain_r = -1.0
-	else:
-		_apply_player_volume()
+	_audio.set_channel_mode(mode)
 
 
 ## The TV this system's sound should come out of: whichever channel is plugged
@@ -1017,211 +910,37 @@ func _audio_tv() -> Node3D:
 	return null
 
 
-## Measure where this hardware's own sound should come from: the middle of its
-## body, and a stereo gap of a fifth of its width, never wider than
-## audio_speaker_separation. A fifth keeps a handheld's two voices well inside
-## the shell while still reading as stereo, and leaves anything console-sized on
-## the old figure.
+## Everything SystemAudio needs to know about the cabling, in one answer.
 ##
-## The body centre matters as much as the gap. A model's origin is not
-## necessarily in the middle of it — the GBA's sits 1.6 cm off in Z — and at the
-## distance a handheld is held that is an audible angle.
-func _refresh_hardware_audio_geometry() -> void:
-	var mid := _model.get_instance_id() if _model != null else 0
-	if mid == _audio_geom_model_id:
-		return
-	var aabb := _body_aabb()
-	if aabb.size.x <= 0.0:
-		return          # meshes not up yet; try again next frame
-	_audio_geom_model_id = mid
-	_audio_centre_local = aabb.get_center()
-	_audio_half_sep = minf(audio_speaker_separation, aabb.size.x * 0.2)
-
-
-## The listener autoload, resolved once. Null before it exists.
-func _audio_listener_node() -> Node:
-	if _audio_listener == null or not is_instance_valid(_audio_listener):
-		_audio_listener = get_node_or_null("/root/SpatialAudioListener")
-	return _audio_listener
-
-
-## Switch the voices between directional and omnidirectional, following whether
-## this frame found a facing to give them. Decided per frame rather than once,
-## because a system's sound moves between its own shell and a connected set as
-## cables come and go, and those point different ways. Cached, since the answer
-## almost never changes.
-func _apply_voice_directivity(forward: Vector3) -> void:
-	if _mx == null or _audio_voices.is_empty():
-		return
-	var k: float = audio_directivity if forward != Vector3.ZERO else 0.0
-	if is_equal_approx(k, _sent_directivity):
-		return
-	_sent_directivity = k
-	for v in _audio_voices:
-		_mx.set_voice_directivity(v, k)
-
-
-## Fold the distance law into the voice gain. The SDK applies none of its own --
-## a source four metres away measures the same level as one a metre away -- so
-## without this a running game is exactly as loud from across the room as from
-## in front of the set, and audio_max_distance means nothing.
+## The component is deliberately given this rather than _av_ports and
+## _av_speaker_l/_r themselves. Which set the sound reaches, and which of that
+## set's speakers each channel lands on, is decided in _apply_av_feed as cords
+## are seated and pulled; a second reader of those three fields would be a
+## second owner of the routing, and the gains cached against them would go stale
+## in a way nothing here could see.
 ##
-## Shared with SpatialAudioEmitter so that hardware and everything else fall off
-## identically. RetroSystem cannot simply use an emitter here: the libretro
-## AudioHandler owns these voices and only hands back their ids.
-func _apply_voice_distance_gain(centre: Vector3) -> void:
-	if _mx == null or _audio_voices.is_empty():
-		return
-	var ln := _audio_listener_node()
-	if ln == null:
-		return
-	_audio_dist_factor = SpatialAudioEmitter.distance_gain(
-		centre, ln.get_listener_position(),
-		audio_unit_size, audio_max_distance)
-	_send_voice_gain(_last_audio_volume * _audio_dist_factor)
+## "socketed" is the hardware-has-phono-sockets test, not a
+## something-is-plugged-in test: it is what separates a console that is silent
+## until a cord reaches a set from a handheld whose captive lead always carries
+## its own speaker.
+func _audio_route() -> Dictionary:
+	var route := _audio_speakers()
+	route["tv"] = _audio_tv()
+	return route
 
 
-## Gain to the voices, silencing a channel whose cord is not plugged in.
+## The speaker half of _audio_route, without resolving the sink.
 ##
-## Only hardware with sockets can have half its sound connected; a captive lead
-## carries everything or nothing, so it keeps the single shared gain. The two
-## voices are separate sample streams, so silencing one is a gain of zero on it —
-## the same trick SpatialAudioEmitter.set_channel_gains uses on the decks.
-func _send_voice_gain(g: float) -> void:
-	var gl := g
-	var gr := g
-	if not _av_ports.is_empty():
-		gl = g if _av_speaker_l >= 0 else 0.0
-		gr = g if _av_speaker_r >= 0 else 0.0
-	if is_equal_approx(gl, _sent_gain_l) and is_equal_approx(gr, _sent_gain_r):
-		return
-	_sent_gain_l = gl
-	_sent_gain_r = gr
-	_mx.set_voice_gain(_audio_voices[0], gl)
-	for i in range(1, _audio_voices.size()):
-		_mx.set_voice_gain(_audio_voices[i], gr)
-
-
-## Whether this hardware's sound can be heard at all as it is currently cabled.
-##
-## The single-answer form of the rule _send_voice_gain applies per channel, for a
-## backend that has one volume rather than two voices. Hardware with sockets is
-## silent until an audio cord reaches a set, exactly as the real thing is; hardware
-## on a captive lead carries its own speaker (the handhelds, the Virtual Boy) and
-## is always live.
-func _audio_is_live() -> bool:
-	if _av_ports.is_empty():
-		return true
-	return _av_speaker_l >= 0 or _av_speaker_r >= 0
-
-
-## Push the remembered level onto the AudioStreamPlayer3D backend, through the same
-## cabling gate the voices get.
-##
-## The only writer of volume_db, so the gate cannot be bypassed by a caller that
-## forgets it. Reached whenever the level changes, the backend is bound, or the
-## cabling moves — a socketed console left ungated here plays at full volume out of
-## its own shell with nothing plugged into it.
-func _apply_player_volume() -> void:
-	if _audio_player == null or not is_instance_valid(_audio_player):
-		return
-	var v: float = _last_audio_volume if _audio_is_live() else 0.0
-	_audio_player.volume_db = linear_to_db(v) if v > 0.001 else -80.0
-
-
-## Sound comes from whatever is showing the picture: a connected TV takes the
-## audio, and the hardware takes it back when the cable is pulled. Driven every
-## frame because both the system and the TV can be picked up and carried.
-func _update_audio_position() -> void:
-	var tv := _audio_tv()
-
-	if not _audio_voices.is_empty():
-		if _mx == null:
-			return
-		# A TV radiates from two speakers on its front baffle, so ask the set
-		# where they are -- it knows its own geometry, and a shell can move or
-		# rescale the screen. Emitting from the TV's node origin instead puts
-		# the sound inside the cabinet, which amplitude panning hides but HRTF
-		# makes obvious.
-		var left_pos: Vector3
-		var right_pos: Vector3
-		# Which way the sound radiates. ZERO leaves the source omnidirectional,
-		# which is right for anything playing through a TV -- only hardware
-		# carried in the hand has a facing worth tracking.
-		var emit_forward := Vector3.ZERO
-		var emit_up := Vector3.UP
-		if tv != null and tv.has_method("get_speaker_positions"):
-			var sp: PackedVector3Array = tv.get_speaker_positions()
-			left_pos = sp[0]
-			right_pos = sp[1]
-			# Each channel plays at the speaker its cord actually reaches, so a
-			# crossed pair swaps them and mono hardware — whose one cord sets both
-			# — puts both voices on the same speaker, where they sum. A real
-			# downmix without touching a sample.
-			if not _av_ports.is_empty():
-				if _av_speaker_l >= 0:
-					left_pos = sp[_av_speaker_l]
-				if _av_speaker_r >= 0:
-					right_pos = sp[_av_speaker_r]
-			# Sound leaves a set the way the picture does.
-			if tv.has_method("get_screen_normal"):
-				emit_forward = tv.get_screen_normal()
-				emit_up = tv.get_screen_up()
-		elif tv != null:
-			# A set that predates get_speaker_positions: spread across its own
-			# local X, which for something TV-sized the default already suits.
-			var right := tv.global_transform.basis.x.normalized() * audio_speaker_separation
-			left_pos = tv.global_position - right
-			right_pos = tv.global_position + right
-		else:
-			# Unplugged, so the hardware radiates for itself -- and then the gap
-			# has to come from the hardware's own size. A flat 9 cm is a console
-			# figure: on a 14.5 cm GBA it puts both voices outside the shell you
-			# are holding, 18 cm apart and subtending 33 degrees at arm's length,
-			# which is a sound far wider than the object making it. Amplitude
-			# panning hides that; HRTF in a headset does not.
-			_refresh_hardware_audio_geometry()
-			var centre := global_transform * _audio_centre_local
-			var right := global_transform.basis.x.normalized() * _audio_half_sep
-			left_pos = centre - right
-			right_pos = centre + right
-			# A handheld radiates out of its face, and its face is the shell's
-			# local +Y -- the same axis the tilt sensor above calls the screen
-			# normal. Sending that lets the SDK quieten it as you turn it away.
-			if _model != null and _model.is_handheld():
-				emit_forward = global_transform.basis.y.normalized()
-				emit_up = -global_transform.basis.z.normalized()
-		# The mixer skips the SDK call when a position has not changed, so
-		# writing every frame is safe -- it saves a lock on a position that
-		# usually has not moved.
-		# Hold a handheld off the face: the SDK's HRTF goes dull and quiet inside
-		# a quarter metre, and a handheld raised to look at lands well inside it.
-		# The gain still uses the true centre, since holding off is about keeping
-		# the model usable, not about making a close source quieter.
-		var centre_true := (left_pos + right_pos) * 0.5
-		var ln := _audio_listener_node()
-		if ln != null:
-			var lp: Vector3 = ln.get_listener_position()
-			left_pos = SpatialAudioEmitter.hold_off_head(left_pos, lp)
-			right_pos = SpatialAudioEmitter.hold_off_head(right_pos, lp)
-		_apply_voice_directivity(emit_forward)
-		if emit_forward == Vector3.ZERO:
-			_mx.set_voice_position(_audio_voices[0], left_pos)
-			if _audio_voices.size() > 1:
-				_mx.set_voice_position(_audio_voices[1], right_pos)
-		else:
-			_mx.set_voice_pose(_audio_voices[0], left_pos, emit_forward, emit_up)
-			if _audio_voices.size() > 1:
-				_mx.set_voice_pose(_audio_voices[1], right_pos, emit_forward, emit_up)
-		_apply_voice_distance_gain(centre_true)
-		return
-
-	if _audio_player == null or not is_instance_valid(_audio_player):
-		return
-	if tv != null:
-		_audio_player.global_position = tv.global_position
-	elif not _audio_player.position.is_zero_approx():
-		_audio_player.position = Vector3.ZERO
+## Split out because the gain path wants it every frame and does not care which
+## set the sound is going to — and because _apply_av_feed has to invalidate the
+## gain cache one line BEFORE it assigns _av_tv, where _audio_tv() would still
+## answer with the old sink.
+func _audio_speakers() -> Dictionary:
+	return {
+		"socketed": not _av_ports.is_empty(),
+		"left": _av_speaker_l,
+		"right": _av_speaker_r,
+	}
 
 
 ## The core's picture. The ONE way anything gets at it — the television that shows
@@ -1626,12 +1345,14 @@ func _apply_av_feed(video_devs: Array[RetroTV], audio_dev: Node3D, l: int, r: in
 	_av_speaker_r = r
 	# The cached pair is keyed on the gains last sent, not on the routing, so a
 	# cord moving between sockets has to invalidate it or the new silence (or the
-	# new sound) never reaches the mixer.
-	_sent_gain_l = -1.0
-	_sent_gain_r = -1.0
-	# That cache belongs to the voices; the AudioStreamPlayer3D backend has its own
-	# level and is re-gated here, since nothing else re-reads the routing for it.
-	_apply_player_volume()
+	# new sound) never reaches the mixer. Told rather than inferred: SystemAudio
+	# reads the routing through _audio_speakers() and cannot see it change.
+	#
+	# Safe to call here, one line BEFORE _av_tv is assigned, because everything
+	# route_changed touches is keyed on the speakers rather than on the set. It
+	# must not grow a dependency on _audio_tv(), which is still the old sink at
+	# this point; the position follows on the next frame's update_position().
+	_audio.route_changed()
 	_av_tv = audio_dev
 	# The PICTURE follows the video cord alone: a lead with only its audio end in
 	# leaves the set on its blue no-signal screen, as it would.
@@ -2008,9 +1729,9 @@ func _process(_delta: float) -> void:
 				int(a.x * 1000.0), int(-a.z * 1000.0), int(a.y * 1000.0)):
 			_libretro.SetSensorAccel(0, a.x, -a.z, a.y)
 	_update_disc_spin(_delta)
-	_ensure_audio_bound()
+	_audio.ensure_bound()
 	_ensure_port_devices_bound()
-	_update_audio_position()
+	_audio.update_position()
 	# Nothing left to do until something switches on again. Tested here rather
 	# than per frame from outside: a room holds a lot of these, most of them off.
 	if not is_powered_on and _disc_spin <= 0.0:
@@ -2218,9 +1939,8 @@ func _after_core_started() -> void:
 	_apply_audio_playing()
 	# A fresh run re-asks which backend came up — that is decided per core start,
 	# and this first attempt is expected to find neither.
-	_audio_bind_settled = false
 	_port_devices_settled = false
-	_bind_audio_player()
+	_audio.rebind()
 	is_powered_on = true
 	set_process(true)
 	_start_card_polling()
@@ -2434,8 +2154,7 @@ func _stop_core() -> void:
 	RA.release_session(self)
 	_libretro.StopContent()
 	_release_cache_protection()
-	_audio_player = null
-	_audio_voices = PackedInt32Array()
+	_audio.on_core_stopped()
 	is_powered_on = false
 	# StopContent returned but the core has not finished: a card the core owns is
 	# written during the teardown that follows. Keep watching for a while.
@@ -3813,7 +3532,7 @@ func _reannounce_port_devices() -> void:
 ##
 ## One completed frame is the whole condition — retro_run has returned, so
 ## whatever the core sets up on its first pass is up. Deliberately not a frame
-## COUNT: see _ensure_audio_bound, where elapsed frames stood in for a readiness
+## COUNT: see SystemAudio.ensure_bound, where elapsed frames stood in for a readiness
 ## question and the two only agreed for cores that come up fast.
 func _ensure_port_devices_bound() -> void:
 	if _port_devices_settled or not is_powered_on:

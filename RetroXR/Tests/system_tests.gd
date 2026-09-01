@@ -123,6 +123,7 @@ func _ready() -> void:
 	_test_state_paths()
 	_test_state_thumbnail()
 	_test_state_disk_round_trip()
+	_test_audio_cabling_gate()
 
 	await _settle()
 	print("[test] ---- %d passed, %d failed ----" % [_pass, _fail])
@@ -1804,6 +1805,55 @@ func _test_sram_paths() -> void:
 	cart.queue_free()
 	nes.queue_free()
 	await get_tree().process_frame
+
+
+## The cabling gate SystemAudio applies: whether a machine can be heard at all
+## as it is currently wired.
+##
+## Pinned here because NOTHING else covers it. av_suite's audio/ cases drive a
+## mock that answers set_audio_volume itself, so they measure tv.gd's routing
+## decision and never reach a RetroSystem's own audio path — deleting this gate
+## outright leaves all 22 suites green, which is how the gap was found. It was
+## worth catching: the gate is the only thing stopping a socketed console with
+## nothing plugged into it from playing at full volume out of its own shell.
+##
+## The rule: hardware with phono sockets is silent until an audio cord reaches a
+## set, exactly as the real thing is. Hardware on a captive lead carries its own
+## speaker — the handhelds, the Virtual Boy — and is always live.
+func _test_audio_cabling_gate() -> void:
+	var sys := preload("res://Scenes/Objects/system.tscn").instantiate() as RetroSystem
+	sys.systemid = "nes"
+	add_child(sys)
+
+	# A captive lead: no sockets at all, so there is nothing to be unplugged from.
+	sys._av_ports = []
+	sys._av_speaker_l = -1
+	sys._av_speaker_r = -1
+	_ok("audio/captive-lead hardware is always live", sys._audio._is_live())
+	_ok("audio/and reports itself unsocketed",
+		not bool(sys._audio_speakers().get("socketed", true)))
+
+	# Sockets, but no cord in any of them.
+	sys._av_ports = [null, null]
+	_ok("audio/a socketed machine wired to nothing is silent",
+		not sys._audio._is_live())
+
+	# Half connected is still audible — one cord carries one channel.
+	sys._av_speaker_l = 0
+	_ok("audio/one audio cord makes it live", sys._audio._is_live())
+	sys._av_speaker_l = -1
+	sys._av_speaker_r = 1
+	_ok("audio/either channel alone makes it live", sys._audio._is_live())
+
+	# The speaker map the component reads. Deliberately answered WITHOUT
+	# resolving the sink: _apply_av_feed invalidates the gain cache one line
+	# before it assigns _av_tv, where _audio_tv() would still name the old set.
+	var spk: Dictionary = sys._audio_speakers()
+	_eq("audio/the speaker map carries left", spk.get("left", 99), -1)
+	_eq("audio/the speaker map carries right", spk.get("right", 99), 1)
+	_ok("audio/and does not resolve the sink", not spk.has("tv"))
+
+	sys.queue_free()
 
 
 class _StubCart extends Node3D:
