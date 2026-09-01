@@ -19,6 +19,7 @@ config/version="0.4.0"
 run/main_scene="res://Scenes/BedroomScene.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://Textures/app_icon.png"
+run/main_scene.android="res://Scenes/MainScene.tscn"
 run/main_scene.rendermodelprobe="res://Tools/perf/quest_render_model_probe.tscn"
 
 [audio]
