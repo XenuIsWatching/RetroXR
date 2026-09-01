@@ -59,7 +59,7 @@ const AV_INPUT_NAMES := ["Composite 1", "Composite 2", "Composite 3", "Composite
 @export var crt_enabled: bool = true
 
 ## Which cabinet to wear. Empty = the original box body authored in tv.tscn, and
-## _load_shell() is then a strict no-op — the arcade and den TVs must render
+## TvFit.load_shell() is then a strict no-op — the arcade and den TVs must render
 ## bit-identically to before this system existed.
 @export var tv_model: String = ""
 
@@ -114,16 +114,10 @@ static func drop_mod_shells(owner_id: String) -> void:
 			_mod_shells.erase(shell_id)
 
 
-const _LEGACY_TV_MODELS := {
-	"crt_90s": "",
-	"crt_monitor": "crt_plain",
-}
-
 var _shell: RetroTVShell = null
 
-# Whether the worn shell named speaker seats. False means the markers still hold
-# the stock body's positions and _ready recomputes them for the fitted tube.
-var _speakers_seated: bool = false
+# Seating this set's nodes onto a shell — see tv_fit.gd.
+var _fit: TvFit = null
 
 @onready var _screen_mesh: MeshInstance3D = $ScreenMesh
 @onready var _tube_collar: MeshInstance3D = $TubeCollar
@@ -314,29 +308,33 @@ const BLUE_SCREEN_COLOR := Color(0.0, 0.05, 0.65)
 const STATIC_LIGHT_COLOR := Color(0.42, 0.44, 0.46)
 
 
-## The resize helper is built HERE and not in _ready, because _ready applies the
-## authored size on its way past and would find a null.
+## The helpers are built HERE and not in _ready, because _ready applies the
+## authored size and wears the shell on its way past, and would find a null.
 func _init() -> void:
 	_resize = TvResize.new()
 	_resize.name = "TvResize"
 	add_child(_resize)
 	_resize.setup(self)
+	_fit = TvFit.new()
+	_fit.name = "TvFit"
+	add_child(_fit)
+	_fit.setup(self)
 
 
 func _ready() -> void:
 	super._ready()
-	# Before _load_shell, which re-seats every one of them.
+	# Before the shell is worn, which re-seats every one of them.
 	_collect_av_ports()
 	# Before anything reads the screen mesh or the buttons — _screen_size_m below
 	# is derived from ScreenMesh, and a shell may have moved and rescaled it.
-	_load_shell()
+	_fit.load_shell()
 	# After the shell, so each legend is printed round wherever its group ended up,
 	# and so a cabinet that carries fewer than four has already said so.
 	_disable_absent_inputs()
 	_print_av_legends()
 	# The set defaults to Composite 1 and a cabinet need not have it, so land on one
 	# it does before anything reads current_source. _seat_vga_port has already run
-	# inside _load_shell, which is what decides whether Composite 1 counts here.
+	# inside load_shell, which is what decides whether Composite 1 counts here.
 	if not _source_available(current_source):
 		current_source = _first_available_source()
 	# TV = power: it runs the power-on animation and flashes POWER on the OSD.
@@ -415,8 +413,7 @@ func _ready() -> void:
 	# Now the fitted tube's size is known. A shell that moved it without saying
 	# where its speakers went gets them computed; everything else keeps the
 	# markers exactly as authored.
-	if _shell != null and not _speakers_seated:
-		_place_default_speakers()
+	_fit.place_default_speakers()
 
 	# A texture rather than a material: the no-signal screen is SAMPLED like every
 	# other picture, so it goes through the tube stage instead of being a flat
@@ -433,98 +430,6 @@ func _ready() -> void:
 	_dark_material.set_shader_parameter("crt_enabled", crt_enabled)
 	_apply_crt_params(_dark_material)
 
-
-## Wear a cabinet variant. Strict no-op when tv_model is empty — that is the
-## acceptance test for this whole mechanism, since the arcade and den TVs must
-## look and behave exactly as they did before.
-##
-## Only nodes the shell actually names a seat for are moved; everything else keeps
-## its tv.tscn pose, so a shell describes differences rather than the whole layout.
-func _load_shell() -> void:
-	if _LEGACY_TV_MODELS.has(tv_model):
-		tv_model = _LEGACY_TV_MODELS[tv_model]
-	if tv_model.is_empty():
-		return
-	var path: String = _mod_shell_path(tv_model)
-	if path.is_empty():
-		path = _SHELL_SCENES.get(tv_model, "")
-	if path.is_empty():
-		push_warning("RetroTV: unknown tv_model '%s' — falling back to the stock body" % tv_model)
-		return
-	var packed := load(path) as PackedScene
-	if packed == null:
-		push_warning("RetroTV: failed to load shell scene: %s" % path)
-		return
-	_shell = packed.instantiate() as RetroTVShell
-	if _shell == null:
-		push_warning("RetroTV: shell scene root is not a RetroTVShell: %s" % path)
-		return
-	add_child(_shell)
-	$TVBody.hide()
-
-	_seat_node(_screen_mesh, _shell.screen_seat())
-	_seat_node(_tube_collar, _shell.screen_seat())
-	_seat_av_row(_shell.port_seat())
-	_seat_vga_port(_shell.vga_port_seat())
-	_seat_node(_ambilight, _shell.ambilight_seat())
-
-	# Both or neither: one seated speaker and one still on the stock tube's edge
-	# would be a lopsided stereo image nobody authored. _ready falls back to the
-	# computed pair when this stays false.
-	var spk_l: Variant = _shell.speaker_l_seat()
-	var spk_r: Variant = _shell.speaker_r_seat()
-	_speakers_seated = spk_l is Transform3D and spk_r is Transform3D
-	if _speakers_seated:
-		_seat_node(_speaker_l, spk_l)
-		_seat_node(_speaker_r, spk_r)
-
-	# Bezel buttons march along the row marker's local +X from the first cap, and
-	# wrap onto a second row below it. Same order the stock cabinet authors, so a
-	# shelled set and the plain box read alike.
-	var row: Variant = _shell.button_row_seat()
-	var buttons: Array[Node3D] = _bezel_buttons()
-	if not _shell.show_button_row:
-		for btn in buttons:
-			(btn as VRButton).set_active(false)
-	elif row is Transform3D:
-		var base: Transform3D = row
-		var per_row: int = maxi(1, _shell.buttons_per_row)
-		for i in buttons.size():
-			var b: Node3D = buttons[i]
-			# Keep each cap's authored basis (they are rotated to face outward);
-			# only the origin walks the row.
-			@warning_ignore("integer_division")
-			b.transform = Transform3D(b.transform.basis, base * Vector3(
-				float(i % per_row) * _shell.button_pitch,
-				float(i / per_row) * -_shell.button_row_drop,
-				0.0))
-
-	_resize_body_collision(_shell.body_size)
-
-
-## The bezel caps in the order they are laid out, reading left to right and then
-## down. The everyday controls of the set fill the first row; the picture and
-## sound MODES — the ones you set once and leave — go on the second.
-##
-## 3D comes LAST on purpose. It is the one cap that comes and goes (only a
-## stereo source has anything for it to switch), and a hidden button still owns
-## its slot — anywhere else in the order it leaves a hole in the middle of the
-## row that reads as a missing control. At the end it simply is not there.
-##
-## Mute and the speaker switch used to sit outside this list, so a shell moved
-## nine caps onto its marker and left those two wherever the stock cabinet had
-## put them. One list now, and both paths read it.
-func _bezel_buttons() -> Array[Node3D]:
-	return [
-		_tv_toggle_btn, _source_btn, _ch_down_btn, _ch_up_btn,
-		_vol_down_btn, _vol_up_btn, _mute_btn,
-		_audio_mode_btn, _crt_btn, _aspect_btn, _stereo_btn,
-	]
-
-
-func _seat_node(node: Node3D, seat: Variant) -> void:
-	if node != null and seat is Transform3D:
-		node.transform = seat
 
 
 ## Centre-to-centre along the A/V row. The pitch the primitive console, the NES, the
@@ -703,7 +608,7 @@ func _seat_av_row(seat: Variant) -> void:
 	for i in COMPOSITE_INPUTS:
 		for j in (_av_ports[i] as Array).size():
 			var offset: Vector3 = group_step * float(i) + socket_step * float(j)
-			_seat_node(_av_ports[i][j], Transform3D(base.basis, base * offset))
+			TvFit.seat(_av_ports[i][j], Transform3D(base.basis, base * offset))
 	# The aerial socket takes the next group slot along, so it travels with the row
 	# onto a fitted cabinet instead of being left at tv.tscn's own coordinates —
 	# which, with the stock body hidden, is a live socket floating beside the set.
@@ -716,7 +621,7 @@ func _seat_av_row(seat: Variant) -> void:
 	# 18 mm right of where the pattern wants it — close enough to overlap Composite
 	# 4's and z-fight with it, the two being coplanar and the same colour.
 	if _rf_port != null:
-		_seat_node(_rf_port, Transform3D(base.basis,
+		TvFit.seat(_rf_port, Transform3D(base.basis,
 			base * (group_step * float(COMPOSITE_INPUTS) + socket_step)))
 
 
@@ -739,25 +644,6 @@ func _seat_vga_port(seat: Variant) -> void:
 	_vga_port.visible = on
 	_vga_port.enabled = on
 
-
-## Resize the pickup collider and the pointer box to the cabinet.
-##
-## BoxShape3D_body and BoxShape3D_pointer are plain sub_resources in tv.tscn, i.e.
-## SHARED between every TV in the scene — writing a size straight onto them would
-## resize the den's TV too. Duplicate first. (Same trap the resource_local_to_scene
-## note on Mat_phosphor_a already documents for the phosphor materials.)
-func _resize_body_collision(size: Vector3) -> void:
-	var body_col := get_node_or_null("CollisionShape3D") as CollisionShape3D
-	if body_col and body_col.shape is BoxShape3D:
-		var s := (body_col.shape as BoxShape3D).duplicate() as BoxShape3D
-		s.size = size
-		body_col.shape = s
-	var ptr_col := get_node_or_null("PointerArea/CollisionShape3D") as CollisionShape3D
-	if ptr_col and ptr_col.shape is BoxShape3D:
-		var p := (ptr_col.shape as BoxShape3D).duplicate() as BoxShape3D
-		# The stock pointer box is 20 mm proud of the body on each axis.
-		p.size = size + Vector3(0.02, 0.02, 0.02)
-		ptr_col.shape = p
 
 
 func _process(_delta: float) -> void:
@@ -1577,55 +1463,10 @@ func _paint(mat: Material) -> void:
 	_screen_mesh.set_surface_override_material(0, mat)
 
 
-## World positions of the set's left and right speakers, in that order.
-##
-## Read straight off the SpeakerL / SpeakerR markers, so where a set radiates
-## from is authored in the scene and can be dragged in the editor like any other
-## node. Being children of the root they ride scale_factor and any parent's
-## transform for free.
-##
-## Left and right are the LISTENER's. The set faces +Z (the screen sits proud of
-## the front face, the composite port is on the back at -Z), so someone watching
-## it has its +X on their right, and SpeakerR is the one at +X.
-##
-## Emitting from the cabinet centre instead makes the sound appear to come from
-## inside the box -- inaudible with amplitude panning, obvious with HRTF.
+## World positions of the set's left and right speakers, in that order. See
+## tv_fit.gd; speaker_pair.gd and the spatial emitters call this by name.
 func get_speaker_positions() -> PackedVector3Array:
-	var out := PackedVector3Array()
-	if _speaker_l != null and _speaker_r != null:
-		out.push_back(_speaker_l.global_position)
-		out.push_back(_speaker_r.global_position)
-		return out
-	# No markers (a scene predating them): the defaults, computed in place.
-	var frame := global_transform.basis
-	var face: Vector3 = _screen_mesh.global_position + frame.z * 0.005
-	var right: Vector3 = frame.x * (_screen_size_m.x * 0.5 + 0.055)
-	var down: Vector3 = -frame.y * (_screen_size_m.y * 0.35)
-	out.push_back(face - right + down)
-	out.push_back(face + right + down)
-	return out
-
-
-## Put the speaker markers where a set of this size wears them: flanking the tube
-## 5.5 cm outboard of its edges, a little below its centre, and just proud of the
-## glass -- which is where a CRT of this vintage puts them.
-##
-## Only for a shell that names no speaker seats. tv.tscn's own markers are already
-## these numbers for the stock 0.35 x 0.25 tube, so this exists for a cabinet that
-## moves and rescales the screen without saying where its speakers went; leaving
-## the stock markers there would strand them on the old tube's edges.
-##
-## Local metres throughout, since the markers are children of the root: no basis
-## juggling, and the scale that ScreenSeat gave the tube is already inside
-## _screen_size_m.
-func _place_default_speakers() -> void:
-	if _speaker_l == null or _speaker_r == null:
-		return
-	var half_w: float = _screen_size_m.x * 0.5 + 0.055
-	var drop_m: float = _screen_size_m.y * 0.35
-	var face: Vector3 = _screen_mesh.position + Vector3(0.0, 0.0, 0.005)
-	_speaker_l.position = face + Vector3(-half_w, -drop_m, 0.0)
-	_speaker_r.position = face + Vector3(half_w, -drop_m, 0.0)
+	return _fit.speaker_positions()
 
 
 ## Which way the picture faces. Sound leaves a set the same way it does, so
