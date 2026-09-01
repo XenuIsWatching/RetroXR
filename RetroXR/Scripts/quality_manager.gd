@@ -229,6 +229,13 @@ func _ready() -> void:
 	apply_forced_quality()
 	apply_shadow_quality()
 	apply_ao_quality()
+	# apply_foveation() is deliberately NOT called here, and that is worth a note
+	# because it looks like an omission. It is one - a saved foveation level does
+	# nothing until the player opens the graphics menu and changes it, and every
+	# launch logs "foveation 0" whatever the preference says. Calling it was
+	# measured, and it makes the app SLOWER: foveation returns nothing on this
+	# stack while attaching it costs 1-2.4 ms, so honouring the preference at
+	# boot is a straight regression until that is fixed. See apply_foveation().
 	# Lights and each room's WorldEnvironment arrive with every scene load, and
 	# lights also with every spawned TV or handheld, so both are configured as
 	# they enter the tree rather than swept for.
@@ -655,6 +662,22 @@ func _generate_centered_vrs() -> void:
 	var size: Vector2 = xr.get_render_target_size()
 	if size.x <= 0.0 or size.y <= 0.0:
 		_foveation_live = false
+		return
+	if _vrs_mode_override == "runtime":
+		# The ORIGINAL path: the runtime owns the density map and Godot's own VRS
+		# stays out of it entirely. Not VRS_XR, which asks the viewport to fetch
+		# a texture from the interface - a different mechanism, and the one that
+		# measured nothing. The eye-buffer ladder documented above was taken with
+		# this on ("foveation HIGH"), including 72 Hz at 1.75x.
+		root.vrs_mode = Viewport.VRS_DISABLED
+		RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), RID())
+		xr.set("foveation_with_subsampled_images", false)
+		xr.set("foveation_dynamic", false)
+		xr.set("foveation_level", int(foveation_level))
+		_vrs_generator = null
+		_foveation_live = true
+		print("QualityManager: runtime foveation level %d, eye %dx%d"
+			% [int(foveation_level), int(size.x), int(size.y)])
 		return
 	if _vrs_mode_override == "xr":
 		# VRS_XR fetches the density map from the XR INTERFACE, so the interface's
