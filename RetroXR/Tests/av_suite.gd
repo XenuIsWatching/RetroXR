@@ -301,8 +301,8 @@ func _glass(tv: RetroTV) -> Material:
 ## back would report a ViewportTexture rather than the picture behind it.
 func _shown(tv: RetroTV) -> Texture2D:
 	var mat := _glass(tv)
-	if mat == tv._crt_material:
-		return tv._crt_source_tex
+	if mat == tv._display._crt_material:
+		return tv._display._crt_source_tex
 	if mat is ShaderMaterial:
 		return (mat as ShaderMaterial).get_shader_parameter("source_tex") as Texture2D
 	if mat is StandardMaterial3D:
@@ -801,7 +801,7 @@ func _d_away() -> void:
 	tv.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(6)
 	_check(_shown(tv) != src.texture, "an input with nothing on it must not show the other one")
-	_check_eq(_shown(tv), tv._blue_texture, "it shows the no-signal screen")
+	_check_eq(_shown(tv), tv._display._blue_texture, "it shows the no-signal screen")
 
 
 func _d_back() -> void:
@@ -829,7 +829,7 @@ func _d_stopped() -> void:
 	await _wait(4)
 	src.texture = null                   # switched off / stopped / unplugged
 	await _wait(6)
-	_check_eq(_shown(tv), tv._blue_texture, "a source that stops leaves no frozen frame")
+	_check_eq(_shown(tv), tv._display._blue_texture, "a source that stops leaves no frozen frame")
 
 
 func _d_off() -> void:
@@ -842,9 +842,9 @@ func _d_off() -> void:
 	tv.remote_power_toggle()          # the set has no setter; this is the POWER key
 	await _wait(6)
 	_check(_shown(tv) != src.texture, "a set that is off shows nothing")
-	_check_eq(_glass(tv), tv._dark_material, "it wears its own dark glass")
+	_check_eq(_glass(tv), tv._display._dark_material, "it wears its own dark glass")
 	_check(_glass(tv) is ShaderMaterial, "the dark glass keeps the reflective shader")
-	_check_eq(_shown(tv), tv._dark_texture, "the phosphors behind it are black")
+	_check_eq(_shown(tv), tv._display._dark_texture, "the phosphors behind it are black")
 
 
 func _d_empty() -> void:
@@ -852,7 +852,7 @@ func _d_empty() -> void:
 	await _wait(30)
 	tv.set_source(RetroTV.Source.COMPOSITE_2)
 	await _wait(6)
-	_check_eq(_shown(tv), tv._blue_texture, "an input with nothing plugged in is blue")
+	_check_eq(_shown(tv), tv._display._blue_texture, "an input with nothing plugged in is blue")
 
 
 ## Being ON an input is not the same as SENDING a picture to it.
@@ -875,7 +875,7 @@ func _d_no_video_cord() -> void:
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_1, src)
 	await _wait(6)
 	_check(_shown(tv) != src.texture, "a host sending no picture here must not be shown")
-	_check_eq(_shown(tv), tv._blue_texture, "the set shows its no-signal screen")
+	_check_eq(_shown(tv), tv._display._blue_texture, "the set shows its no-signal screen")
 
 	# And the moment a picture cord does land, the same host appears.
 	src.video_to_tv = true
@@ -895,7 +895,7 @@ func _d_rf_untuned() -> void:
 	await _seat_stub(tv, RetroTV.Source.RF, src)
 	await _wait(6)
 	_check(_shown(tv) != src.texture, "a machine modulating on the other channel is not shown")
-	_check_eq(_glass(tv), tv._rf_static_material,
+	_check_eq(_glass(tv), tv._display._rf_static_material,
 		"an aerial channel with nothing on it is SNOW, not the blue no-signal screen")
 
 
@@ -927,7 +927,7 @@ func _d_no_ghost() -> void:
 	first.texture = _a_texture(Color(1, 0, 0, 1))
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_1, first)
 	await _wait(8)
-	_check(tv._phosphor_fresh == 0, "the accumulator settles while one source runs")
+	_check(tv._display._phosphor_fresh == 0, "the accumulator settles while one source runs")
 
 	var second := StubSource.new()
 	second.texture = _a_texture(Color(0, 1, 0, 1))
@@ -936,7 +936,7 @@ func _d_no_ghost() -> void:
 	tv._panel._connected_systems[RetroTV.Source.COMPOSITE_2] = second
 	tv.set_source(RetroTV.Source.COMPOSITE_2)
 	await _wait(1)
-	_check(tv._phosphor_fresh > 0 or _prev_is(tv, second.texture),
+	_check(tv._display._phosphor_fresh > 0 or _prev_is(tv, second.texture),
 		"a new source starts with no history behind it")
 
 	# And the same when a machine restarts: its picture stops, then a new one
@@ -944,10 +944,10 @@ func _d_no_ghost() -> void:
 	await _wait(10)
 	second.texture = null
 	await _wait(6)
-	_check(tv._phosphor_fresh > 0, "a source that stops arms the accumulator")
+	_check(tv._display._phosphor_fresh > 0, "a source that stops arms the accumulator")
 	second.texture = _a_texture(Color(0, 0, 1, 1))
 	await _wait(1)
-	_check(tv._phosphor_fresh > 0 or _prev_is(tv, second.texture),
+	_check(tv._display._phosphor_fresh > 0 or _prev_is(tv, second.texture),
 		"and the picture that comes back does not blend with the old one")
 
 
@@ -1041,7 +1041,7 @@ func _d_glass_wear() -> void:
 	tv.remote_power_toggle()
 	await _wait(6)
 	var dark := _glass(tv) as ShaderMaterial
-	_check_eq(dark, tv._dark_material, "power-off uses the dark glass")
+	_check_eq(dark, tv._display._dark_material, "power-off uses the dark glass")
 	if dark != null:
 		_check_eq(dark.get_shader_parameter("crt_glass_wear"), 2.5,
 			"powered-off glass keeps the chosen wear")
@@ -1171,7 +1171,7 @@ func _g_allowed() -> void:
 	_check(tv.can_paint(src), "the shown host may paint")
 	_check(tv.paint_screen(src, mine), "and its paint is accepted")
 	_check_eq(_glass(tv), mine, "its material is on the glass")
-	_check_eq(tv._screen_owner, src, "and the set records who put it there")
+	_check_eq(tv._display._screen_owner, src, "and the set records who put it there")
 
 
 func _g_release() -> void:

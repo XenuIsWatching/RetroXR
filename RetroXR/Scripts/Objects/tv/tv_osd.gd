@@ -179,7 +179,7 @@ func route() -> void:
 	var sm: ShaderMaterial = null
 	if mat is ShaderMaterial:
 		var candidate := mat as ShaderMaterial
-		if candidate == _tv._crt_material or candidate.shader == RetroTV.VCR_SHADER \
+		if candidate == _tv._display._crt_material or candidate.shader == RetroTV.VCR_SHADER \
 				or candidate.shader == RetroTV.WINDOW_SHADER \
 				or candidate.shader == RetroTV.STATIC_SHADER:
 			sm = candidate

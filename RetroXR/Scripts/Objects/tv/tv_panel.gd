@@ -327,7 +327,7 @@ func input_holding(plug: Node3D) -> int:
 func on_plug_snapped(plug: Node3D, input: int) -> void:
 	# Hand the incoming host a clean screen so the C++ video handler doesn't
 	# capture our CRT wrapper as the "original" material to restore later.
-	_tv._drop_sampled()
+	_tv._display.drop_sampled()
 	if plug is CablePlug:
 		var plugged := plug as CablePlug
 		_snapped_plugs[input] = plugged
@@ -368,7 +368,7 @@ func source_found(source: Node3D) -> void:
 		return                  # nothing of ours is actually joined to it
 	# Hand the incoming host a clean screen, exactly as the plug path does, so the
 	# video handler doesn't capture our CRT wrapper as the material to restore.
-	_tv._drop_sampled()
+	_tv._display.drop_sampled()
 	_connected_systems[input] = source
 	source.set_audio_volume(_tv._audio.volume_for(input))
 	_tv._audio.apply_channel_mode()
@@ -386,7 +386,7 @@ func source_lost(source: Node3D) -> void:
 			found = true
 	if not found:
 		return                  # already replaced by something else
-	_tv._drop_sampled()
+	_tv._display.drop_sampled()
 
 
 ## Which input a device's signal is arriving on, or -1 if none of ours reaches it.
@@ -436,7 +436,7 @@ func _input_for_device(dev: Node3D) -> int:
 func on_plug_released(input: int) -> void:
 	# Unwrap before the host tears down so it restores over its own material,
 	# not our CRT wrapper.
-	_tv._drop_sampled()
+	_tv._display.drop_sampled()
 	var plugged: CablePlug = _snapped_plugs[input]
 	if plugged:
 		_tv.remove_collision_exception_with(plugged)

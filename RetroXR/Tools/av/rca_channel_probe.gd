@@ -53,8 +53,8 @@ func _wait(frames: int) -> void:
 ## buffer, so the uniform would report that instead of the picture behind it.
 func _shown(tv: RetroTV) -> Texture2D:
 	var mat: Material = tv.get_screen_mesh().get_surface_override_material(0)
-	if mat == tv._crt_material:
-		return tv._crt_source_tex
+	if mat == tv._display._crt_material:
+		return tv._display._crt_source_tex
 	if mat is ShaderMaterial:
 		return (mat as ShaderMaterial).get_shader_parameter("source_tex") as Texture2D
 	return null
@@ -128,10 +128,10 @@ func _run() -> void:
 	print("[rca] the console says picture_on_tv=%s" % sys.picture_on_tv())
 	var glass := _shown(tv)
 	print("[rca] the glass is showing: %s (blue=%s, the core's own=%s)"
-		% [glass, glass == tv._blue_texture, glass == sys.get_video_texture()])
+		% [glass, glass == tv._display._blue_texture, glass == sys.get_video_texture()])
 	_check(glass != sys.get_video_texture(),
 		"an AUDIO cord in the VIDEO socket does not put the core's picture on the set")
-	_check(glass == tv._blue_texture,
+	_check(glass == tv._display._blue_texture,
 		"and the set shows its no-signal screen instead (console)")
 
 	sys.power_off()
@@ -173,8 +173,8 @@ func _run() -> void:
 	print("[rca] the deck says _feed_video=%s" % deck._feed_video)
 	var glass2 := _shown(tv2)
 	print("[rca] the deck's set is showing: %s (blue=%s)"
-		% [glass2, glass2 == tv2._blue_texture])
-	_check(glass2 == tv2._blue_texture,
+		% [glass2, glass2 == tv2._display._blue_texture])
+	_check(glass2 == tv2._display._blue_texture,
 		"the same miswiring leaves the set blue (deck, the control)")
 
 	for n in [cable2, deck, tv2]:
