@@ -44,7 +44,7 @@ func apply_channel_mode() -> void:
 	# Every connected host, not just the one showing: the speaker switch is a
 	# property of the SET, so an input switched to later has to already be routed
 	# the way the switch says rather than reverting to stereo for one press.
-	for system in _tv._connected_systems:
+	for system in _tv._panel._connected_systems:
 		if system != null and is_instance_valid(system) \
 				and system.has_method("set_audio_channel_mode"):
 			system.set_audio_channel_mode(_tv.audio_mode)
@@ -93,8 +93,8 @@ func volume_for(source: int) -> float:
 func apply_volume() -> void:
 	# Every slot, not just the composite ones: a console reached through an RF switch
 	# is on Source.RF and has to be silenced with the rest when it is not showing.
-	for i in _tv._connected_systems.size():
-		var system: Node3D = _tv._connected_systems[i]
+	for i in _tv._panel._connected_systems.size():
+		var system: Node3D = _tv._panel._connected_systems[i]
 		if system != null and is_instance_valid(system):
 			system.set_audio_volume(volume_for(i))
 	if _tv._tuner:

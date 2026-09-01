@@ -121,8 +121,8 @@ func _run() -> void:
 	await _wait(45)
 
 	var filed := -1
-	for i in (tv._connected_systems as Array).size():
-		if tv._connected_systems[i] == sys:
+	for i in (tv._panel._connected_systems as Array).size():
+		if tv._panel._connected_systems[i] == sys:
 			filed = i
 	print("[rca] the set filed the console on input %d" % filed)
 	print("[rca] the console says picture_on_tv=%s" % sys.picture_on_tv())

@@ -78,8 +78,8 @@ func _run() -> void:
 	green.texture = _solid(Color(0, 1, 0, 1))
 	add_child(red)
 	add_child(green)
-	_tv._connected_systems[RetroTV.Source.COMPOSITE_1] = red
-	_tv._connected_systems[RetroTV.Source.COMPOSITE_2] = green
+	_tv._panel._connected_systems[RetroTV.Source.COMPOSITE_1] = red
+	_tv._panel._connected_systems[RetroTV.Source.COMPOSITE_2] = green
 	_tv.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(45)          # let the accumulator saturate red
 	print("[ghost] on the red source:   %s" % await _screen())

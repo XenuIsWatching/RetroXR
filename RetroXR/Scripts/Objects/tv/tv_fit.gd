@@ -69,8 +69,8 @@ func load_shell() -> void:
 	var shell: RetroTVShell = _tv._shell
 	seat(_tv._screen_mesh, shell.screen_seat())
 	seat(_tv._tube_collar, shell.screen_seat())
-	_tv._seat_av_row(shell.port_seat())
-	_tv._seat_vga_port(shell.vga_port_seat())
+	_tv._panel.seat_av_row(shell.port_seat())
+	_tv._panel.seat_vga_port(shell.vga_port_seat())
 	seat(_tv._ambilight, shell.ambilight_seat())
 
 	# Both or neither: one seated speaker and one still on the stock tube's edge

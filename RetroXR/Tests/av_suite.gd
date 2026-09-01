@@ -248,7 +248,7 @@ func _lead(pairs: Array) -> Node3D:
 func _seat_stub(tv: RetroTV, input: int, source: StubSource) -> void:
 	add_child(source)
 	_spawned.append(source)
-	tv._connected_systems[input] = source
+	tv._panel._connected_systems[input] = source
 	tv.set_source(input)
 	await _wait(4)
 
@@ -284,8 +284,8 @@ func _unplug(plug: RcaPlug) -> void:
 
 
 func _which_input(tv: RetroTV, dev: Node3D) -> int:
-	for i in (tv._connected_systems as Array).size():
-		if tv._connected_systems[i] == dev:
+	for i in (tv._panel._connected_systems as Array).size():
+		if tv._panel._connected_systems[i] == dev:
 			return i
 	return -1
 
@@ -933,7 +933,7 @@ func _d_no_ghost() -> void:
 	second.texture = _a_texture(Color(0, 1, 0, 1))
 	add_child(second)
 	_spawned.append(second)
-	tv._connected_systems[RetroTV.Source.COMPOSITE_2] = second
+	tv._panel._connected_systems[RetroTV.Source.COMPOSITE_2] = second
 	tv.set_source(RetroTV.Source.COMPOSITE_2)
 	await _wait(1)
 	_check(tv._phosphor_fresh > 0 or _prev_is(tv, second.texture),
@@ -1085,8 +1085,8 @@ func _d_stage_per_tv() -> void:
 	}
 	add_child(src)
 	_spawned.append(src)
-	tv_top._connected_systems[RetroTV.Source.COMPOSITE_1] = src
-	tv_bottom._connected_systems[RetroTV.Source.COMPOSITE_1] = src
+	tv_top._panel._connected_systems[RetroTV.Source.COMPOSITE_1] = src
+	tv_bottom._panel._connected_systems[RetroTV.Source.COMPOSITE_1] = src
 	tv_top.set_source(RetroTV.Source.COMPOSITE_1)
 	tv_bottom.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(6)
@@ -1203,8 +1203,8 @@ func _a_selected_only() -> void:
 	add_child(hidden)
 	_spawned.append(shown)
 	_spawned.append(hidden)
-	tv._connected_systems[RetroTV.Source.COMPOSITE_1] = shown
-	tv._connected_systems[RetroTV.Source.COMPOSITE_2] = hidden
+	tv._panel._connected_systems[RetroTV.Source.COMPOSITE_1] = shown
+	tv._panel._connected_systems[RetroTV.Source.COMPOSITE_2] = hidden
 	tv.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(4)
 	shown.volumes.clear()

@@ -100,7 +100,7 @@ func _run() -> void:
 	_source = StubSource.new()
 	_source.texture = _test_picture()
 	_viewport.add_child(_source)
-	_tv._connected_systems[RetroTV.Source.COMPOSITE_1] = _source
+	_tv._panel._connected_systems[RetroTV.Source.COMPOSITE_1] = _source
 	_tv.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(12)
 
@@ -212,7 +212,7 @@ func _replace_tv_with_plain_monitor() -> void:
 	_tv.freeze = true
 	_viewport.add_child(_tv)
 	await _wait(40)
-	_tv._connected_systems[RetroTV.Source.VGA] = _source
+	_tv._panel._connected_systems[RetroTV.Source.VGA] = _source
 	_tv.set_source(RetroTV.Source.VGA)
 	await _wait(12)
 
