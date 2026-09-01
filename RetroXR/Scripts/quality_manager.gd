@@ -212,6 +212,7 @@ var _desktop: bool
 
 func _ready() -> void:
 	_desktop = OS.get_name() != "Android"
+	_read_vrs_overrides()
 	# The old full-frame readback needed a 30-frame Quest throttle. The new path
 	# transfers only an older, completed 12x8 pass, so both renderers use this cadence.
 	screen_light_interval = 6
@@ -219,6 +220,8 @@ func _ready() -> void:
 	# to provide. Applied before _load_prefs so a saved preset wins.
 	apply_preset(Preset.LOW if not _desktop else Preset.MEDIUM, false)
 	_load_prefs()
+	# _load_prefs restores the saved foveation, which would undo a boot override.
+	_read_vrs_overrides()
 	_adjust_lights()
 	apply_render_scale()
 	apply_msaa()
@@ -232,6 +235,42 @@ func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
 	_log_state()
 	_run_vrs_probe()
+
+
+## Read the VRS overrides BEFORE anything applies foveation.
+##
+## The whole sweep so far set foveation part way into a session, which is what
+## `vrsprobe.cfg` is for — and an XR runtime normally wants its foveation
+## requested when the swapchain is CREATED. Applying it later can be quietly
+## ignored, which would look exactly like the inert result measured: a level
+## that reports live and changes no frame time. This reads the same file at the
+## top of _ready so the boot path can be measured too, and leaves the file in
+## place for _run_vrs_probe to consume as usual.
+func _read_vrs_overrides() -> void:
+	var path := "user://vrsprobe.cfg"
+	if not FileAccess.file_exists(path):
+		path = VRS_PROBE_EXTERNAL_CFG
+		if not FileAccess.file_exists(path):
+			return
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return
+	var cfg: Dictionary = parsed
+	if cfg.has("vrs_mode"):
+		_vrs_mode_override = str(cfg["vrs_mode"])
+	if cfg.has("vrs_radius"):
+		_vrs_radius_override = float(cfg["vrs_radius"])
+	if cfg.has("vrs_strength"):
+		_vrs_strength_override = float(cfg["vrs_strength"])
+	if cfg.has("boot_foveation"):
+		foveation_level = clampi(int(cfg["boot_foveation"]),
+			Foveation.OFF, Foveation.HIGH) as Foveation
+	print("[VRSProbe] boot overrides: mode '%s', foveation %d"
+		% [_vrs_mode_override, int(foveation_level)])
 
 
 ## On-device QA hook, in the shape of spike.cfg and glprobe.cfg: a
