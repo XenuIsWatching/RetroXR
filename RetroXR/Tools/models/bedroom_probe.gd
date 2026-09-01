@@ -110,6 +110,28 @@ func _run() -> void:
 	_cam.near = 0.05
 	_sv.add_child(_cam)
 	_cam.current = true          # make_current() does NOT work in a SubViewport
+	# `--lights-off` flips the wall switch before anything is framed. The room has
+	# two baked lighting states and only one of them is reachable by default, so
+	# without this half of the bake can never be looked at.
+	if OS.get_cmdline_user_args().has("--lights-off"):
+		# Flip the SWITCH, not the light. `visible` on a ceiling fixture belongs to
+		# LightSwitch, which reasserts it from its own state - setting the light
+		# directly is overwritten a frame later, and the room renders lit while
+		# the log says it was turned off.
+		var hit := 0
+		for node in get_tree().get_root().find_children("*", "LightSwitch", true, false):
+			(node as LightSwitch).set_lights_on(false)
+			hit += 1
+		# Counted, not announced: printing "off" whether or not a switch was found
+		# is a check that cannot fail, and it passed for a run that turned nothing
+		# off at all.
+		var lit := 0
+		for node in get_tree().get_nodes_in_group("ceiling_light"):
+			print("[probe] ceiling id=%d vis=%s" % [node.get_instance_id(), (node as Light3D).visible])
+			if (node as Light3D).visible:
+				lit += 1
+		print("[probe] light switches turned off: %d, ceiling lights still visible: %d"
+			% [hit, lit])
 	for i in 30:
 		await get_tree().process_frame
 

@@ -274,7 +274,10 @@ func _build(vr_mode: bool) -> void:
 	vbox.add_child(_msaa_opt)
 
 	vbox.add_child(MenuStyle.hint("Multisampling on the 3D view. Smooths geometry edges only, "
-		+ "and is nearly free on the headset's tiled GPU."))
+		+ "and is nearly free on the headset's tiled GPU. The selected value is saved, but "
+		+ "temporarily stands down while Foveation is on: on this Quest/Godot render path, "
+		+ "combining the two eventually hangs the GPU. It returns automatically when "
+		+ "Foveation is turned off."))
 
 	# SMAA renders a stereo viewport black, so a headset session is offered only
 	# what can actually run there rather than a row that breaks the view.

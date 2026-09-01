@@ -44,49 +44,17 @@ enum PerfLevel { POWER_SAVINGS, SUSTAINED_LOW, SUSTAINED_HIGH, BOOST }
 ## over-samples the periphery anyway. Where it works it pays for the eye-buffer
 ## scale outright (12.92 ms / 71 fps against 17.04 / 56 at x1.229, Quest 3).
 ##
-## It works, but NOT down the road it looks like it should, and the wrong road
-## is the one the property name points at. Measured on a Quest 3, Godot 4.7 +
-## vendors 5.1, at the panel-native eye buffer:
-##
-##   XR_FB foveation (`foveation_level`)      what happens
-##   ---------------------------------------  --------------------------------
-##   level 3, rooms' glow ON                   nothing. Godot force-disables
-##                                             subsampled images ("rendering
-##                                             features are in use") and the
-##                                             level is a silent no-op: same GPU
-##                                             time, same image at every radius.
-##   level 3, glow OFF                         the whole eye buffer paints one
-##                                             flat brown — 21351c5, and it was
-##                                             never about MSAA. Glow had been
-##                                             hiding it by disabling the path.
-##   subsampled images off, any level          nothing, at any radius.
-##
-## So that route is unusable: it is either inert or it is a brown screen. What
-## works is Godot's own VRS, which reaches the same density map without the
-## subsampled allocation — `vrs_mode = VRS_XR` with the interface's radial
-## generator. Same room, same MSAA 4x, eye buffer x1.4, at 120 Hz:
-##
-##   VRS off   85 fps, 11.1 ms      VRS high   120 fps, 7.9 ms
-##
-## and peripheral detail falls to 0.80 of the centre's where every unfoveated
-## capture measures 1.8-2.0, which is the check that separates the two paths.
-## Glow survives it. The stencil outline does not — see stencil_safe().
+## The Quest runtime's XR_FB density-map path is deliberately not used here: on
+## this Godot 4.7 / Quest 3 Vulkan stack both it and the subsampled-image variant
+## cause Adreno GPU hangs. Instead we attach Godot's generated, ordinary VRS
+## texture. Each eye gets an explicit (0, 0) NDC focus, i.e. its optical centre.
 enum Foveation { OFF, LOW, MEDIUM, HIGH }
 
-## How each Foveation level is expressed to Godot's VRS generator. `min_radius`
-## is how far out, in eye-buffer pixels, full rate is kept — the centre a reader
-## actually looks through — and `strength` how hard the rate falls off past it.
-## OFF is absent on purpose: it selects VRS_DISABLED rather than a weak tier.
-const VRS_TIERS := {
-	Foveation.LOW:    {"min_radius": 45.0, "strength": 0.5},
+const FOVEATION_TIERS := {
+	Foveation.LOW: {"min_radius": 45.0, "strength": 0.5},
 	Foveation.MEDIUM: {"min_radius": 30.0, "strength": 1.0},
-	Foveation.HIGH:   {"min_radius": 20.0, "strength": 2.0},
+	Foveation.HIGH: {"min_radius": 20.0, "strength": 2.0},
 }
-
-## How long the VRS copy is held open after a change, in frames. Covers the
-## eye-buffer case, where the swapchain is rebuilt on the rendering thread a
-## frame or more after the resize is requested.
-const VRS_REFRESH_FRAMES := 12
 
 ## Render scale and the eye buffer are deliberately absent: both are a taste call
 ## about how much resolution to buy, not a quality tier, so a preset never moves
@@ -169,9 +137,9 @@ const RENDER_SCALE_MAX := 1.5
 ##   1680x1760 (x1.0)      13.55 ms  68 fps
 ##   2065x2163 (x1.229)    17.04 ms  56 fps
 ##
-## Fixed foveation would pay for it outright (12.92 ms / 71 fps at x1.229), but
-## foveation_level >= 1 fills the whole eye buffer with one flat colour on this
-## stack (Godot 4.7 + vendors 5.1 + 4x MSAA + multiview / Quest 3) — see 21351c5.
+## Fixed foveation pays for it outright: 12.92 ms / 71 fps at x1.229 in the same
+## room. The generated VRS texture below is intended to recover that saving
+## without enabling the runtime-owned XR_FB profile that lost the Vulkan device.
 const EYE_BUFFER_SCALE_MIN := 0.7
 const EYE_BUFFER_SCALE_MAX := 2.0
 ## Where a saved rate does not say otherwise. The headset takes the rate a heavy
@@ -217,13 +185,11 @@ var eye_buffer_scale: float = EYE_BUFFER_PANEL
 var display_rate: float = 0.0
 var cpu_level: PerfLevel = PerfLevel.SUSTAINED_HIGH
 var gpu_level: PerfLevel = PerfLevel.SUSTAINED_HIGH
-var foveation_level: Foveation = Foveation.OFF
-## Whether the VRS attachment `foveation_level` asks for is actually live.
-##
-## Tracked rather than read back, because nothing on this stack reports it.
-## `Viewport.vrs_mode` is the obvious candidate and is a trap: it goes on
-## answering VRS_XR while the map the VRS buffer holds is stale, so it describes
-## what was requested, never what is being shaded with.
+var foveation_level: Foveation = Foveation.HIGH
+## Keep the XRVRS object alive: it owns the RID returned by make_vrs_texture().
+var _vrs_generator: Object
+var _vrs_refresh_serial: int = 0
+## Whether the requested generated texture and its viewport attachment are live.
 var _foveation_live: bool = false
 ## Engine glow. The rooms author it; this is the switch that can take it away,
 ## because it is the only full-frame post-process the mobile backend still runs
@@ -432,12 +398,8 @@ func apply_eye_buffer_scale() -> void:
 		return
 	var xr := XRServer.find_interface("OpenXR")
 	xr.set("render_target_size_multiplier", eye_buffer_scale)
-	# On a live session the resize frees and rebuilds both swapchains, and the map
-	# the VRS buffer holds is still the one generated for the OLD size. Re-arm the
-	# copy so it is regenerated against the new one. At startup `use_xr` is still
-	# false and apply_foveation runs after this, so a launch is unaffected.
-	if get_tree().root.use_xr:
-		_refresh_vrs()
+	if foveation_live():
+		_schedule_vrs_refresh()
 
 
 ## The rates this runtime will accept, straight from xrEnumerateDisplayRefreshRatesFB.
@@ -540,13 +502,14 @@ func apply_perf_levels() -> void:
 	xr.call("set_gpu_level", int(gpu_level))
 
 
-## Foveation is an FB extension, so the runtime is asked directly rather than the
-## platform guessed at.
+## This requires Vulkan VRS and Godot's generator, but not the unstable runtime
+## XR_FB foveation extension.
 func supports_foveation() -> bool:
-	var xr := XRServer.find_interface("OpenXR")
-	if xr == null or not xr.is_initialized() or not xr.has_method("is_foveation_supported"):
+	if _desktop or not ClassDB.class_exists("XRVRS"):
 		return false
-	return bool(xr.call("is_foveation_supported"))
+	var xr := XRServer.find_interface("OpenXR")
+	return xr != null and xr.is_initialized() \
+		and RenderingServer.get_rendering_device() != null
 
 
 ## Whether a stencil-based material may be drawn this session.
@@ -560,92 +523,89 @@ func stencil_safe() -> bool:
 	return foveation_level == Foveation.OFF
 
 
-## Takes effect on the session you are in, including over an Eye Buffer change.
-##
-## What used to make this launch-only was reading `vrs_mode` as the state: it
-## goes on answering VRS_XR after the map has stopped being refreshed, so a
-## mid-session call looked like it dropped the attachment. The map is what
-## actually goes stale, and `_refresh_vrs` re-arms the copy that rebuilds it.
+## Takes effect on the current root viewport without changing the XR swapchain.
 func set_foveation_level(level: int) -> void:
-	foveation_level = clampi(level, Foveation.OFF, Foveation.HIGH) as Foveation
+	foveation_level = clampi(level, Foveation.OFF, Foveation.HIGH) as Foveation \
+		if supports_foveation() else Foveation.OFF
 	apply_foveation()
 	save_prefs()
 
 
-## Safe to call before the swapchain exists, and NOT a way to change foveation on
-## a live one. XR_FB_foveation did re-apply its profile on every swapchain
-## creation, which is what the rest of this comment used to promise; the VRS path
-## below carries no such guarantee, because its attachment is latched when the XR
-## swapchain is created. A mid-session call can only lose foveation, never raise
-## or restore it — see set_foveation_level.
+## Attach a conventional two-layer VRS texture. This intentionally keeps every
+## XR_FB setting at zero/off: the generated image is a normal Godot texture and
+## does not ask the Quest runtime to create or import a fragment-density map.
 func apply_foveation() -> void:
-	if not supports_foveation():
-		return
 	var xr := XRServer.find_interface("OpenXR")
-	# XR_FB_foveation stays OFF at every level. Measured on this stack, it has
-	# exactly two outcomes and neither is foveation: with the rooms' glow on,
-	# Godot force-disables subsampled images and the level becomes a silent
-	# no-op; with glow off, subsampled images engage and the whole eye buffer
-	# paints one flat brown. See the enum comment for the table.
-	#
-	# `xr/openxr/foveation_eye_tracked` is false in project.godot for the same
-	# reason it is pinned here: the runtime logs that it skips
-	# XR_META_foveation_eye_tracked outright, for want of an
-	# `oculus.software.eye_tracking` manifest feature this app does not want.
-	xr.set("foveation_level", 0)
-	# Godot's own VRS instead, which reaches the same density map without the
-	# subsampled allocation that breaks. The interface generates a radial rate
-	# texture from these two, so the level is expressed as a strength and a
-	# clean-centre radius rather than an FB profile.
-	var tier: Dictionary = VRS_TIERS.get(foveation_level, {})
-	if tier.is_empty():
-		get_tree().root.vrs_mode = Viewport.VRS_DISABLED
+	var root := get_tree().root
+	if xr != null and xr.is_initialized():
+		xr.set("foveation_with_subsampled_images", false)
+		xr.set("foveation_dynamic", false)
+		xr.set("foveation_level", int(Foveation.OFF))
+	_vrs_refresh_serial += 1
+	if foveation_level == Foveation.OFF or not supports_foveation():
+		root.vrs_mode = Viewport.VRS_DISABLED
+		RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), RID())
+		_vrs_generator = null
+		_foveation_live = false
+		apply_msaa()
+		return
+	# Fragment-density VRS and MSAA share the mobile render subpass. On Quest 3
+	# this combination eventually hangs the Adreno Vulkan context even at Low
+	# VRS; the same scene survived beyond that failure window single-sampled.
+	# Keep the preference intact, but render single-sample while VRS is live.
+	apply_msaa()
+	_generate_centered_vrs()
+
+
+func _generate_centered_vrs() -> void:
+	var xr := XRServer.find_interface("OpenXR")
+	var root := get_tree().root
+	if xr == null or not xr.is_initialized():
 		_foveation_live = false
 		return
-	xr.set("vrs_min_radius", tier["min_radius"])
-	xr.set("vrs_strength", tier["strength"])
-	# Only when it is actually changing. Assigning VRS_XR over VRS_XR is not the
-	# no-op it reads as: measured on a Quest 3 at eye buffer 1.5 / 120 Hz, one
-	# such assignment took a foveated room from 88 fps to 65 — 62 is what that
-	# room runs UNFOVEATED, so the attachment is dropped rather than reused, and
-	# the re-arm below only partly rebuilt it (80).
-	var root := get_tree().root
-	if root.vrs_mode != Viewport.VRS_XR:
-		root.vrs_mode = Viewport.VRS_XR
-	_refresh_vrs()
-	_foveation_live = true
-
-
-## Re-arm the copy that puts the interface's radial map into the render target's
-## VRS buffer.
-##
-## `Viewport.vrs_update_mode` defaults to ONCE, and the engine sets it to
-## DISABLED again as soon as that one copy is made (VRS::update_vrs_texture).
-## So the map is generated once, at the size and strength in force at startup,
-## and NOTHING refreshes it afterwards — which is the whole reason a foveation
-## or Eye Buffer change used to be a launch-only setting.
-##
-## Held open across several frames rather than armed once: an Eye Buffer change
-## reaches the rendering thread later than this call, and the map has to be
-## regenerated at the size the rebuilt swapchain settles on, so a single copy
-## fired now would capture the size on the way out.
-func _refresh_vrs() -> void:
-	var root := get_tree().root
-	if root.vrs_mode == Viewport.VRS_DISABLED:
+	var size: Vector2 = xr.get_render_target_size()
+	if size.x <= 0.0 or size.y <= 0.0:
+		_foveation_live = false
 		return
-	root.vrs_update_mode = Viewport.VRS_UPDATE_ALWAYS
-	for i in VRS_REFRESH_FRAMES:
+	var generator: Object = ClassDB.instantiate("XRVRS")
+	var tier: Dictionary = FOVEATION_TIERS[foveation_level]
+	generator.set("vrs_min_radius", tier["min_radius"])
+	generator.set("vrs_strength", tier["strength"])
+	# Two layers, one per eye. ZERO maps to the exact middle of each layer.
+	var texture: RID = generator.call("make_vrs_texture", size,
+		PackedVector2Array([Vector2.ZERO, Vector2.ZERO]))
+	if not texture.is_valid():
+		push_error("QualityManager: failed to generate centered XR VRS texture")
+		_foveation_live = false
+		return
+	RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), texture)
+	root.vrs_mode = Viewport.VRS_TEXTURE
+	_vrs_generator = generator
+	_foveation_live = true
+	print("QualityManager: centered VRS level %d, eye texture %dx%d, focus (0,0), msaa %d, post_aa %d" % [
+		int(foveation_level), int(size.x), int(size.y), root.msaa_3d,
+		root.screen_space_aa])
+
+
+## OpenXR rebuilds its swapchain asynchronously after an eye-buffer change. Wait
+## until that has settled, then regenerate the VRS texture at the new dimensions.
+func _schedule_vrs_refresh() -> void:
+	_vrs_refresh_serial += 1
+	var serial := _vrs_refresh_serial
+	_refresh_vrs_after_resize(serial)
+
+
+func _refresh_vrs_after_resize(serial: int) -> void:
+	for frame in 12:
 		await get_tree().process_frame
-	# Back to the engine default, so the copy is not paid for every frame.
-	root.vrs_update_mode = Viewport.VRS_UPDATE_ONCE
+	if serial == _vrs_refresh_serial and foveation_level != Foveation.OFF:
+		_generate_centered_vrs()
 
 
-## Whether foveation is actually shading the eye buffer right now, as opposed to
-## merely being the saved level. The two part company for a whole session the
-## first time the Eye Buffer row is used, which is a ~20% GPU difference with
-## nothing on screen to say so.
+## Whether a generated texture is owned and its viewport VRS mode is set.
 func foveation_live() -> bool:
-	return foveation_level != Foveation.OFF and _foveation_live
+	return foveation_level != Foveation.OFF and _foveation_live \
+		and get_tree().root.vrs_mode == Viewport.VRS_TEXTURE
 
 
 ## Window mode and resolution were the only GRAPHICS rows that reset every launch,
@@ -666,8 +626,13 @@ func set_msaa(mode: int) -> void:
 	save_prefs()
 
 
+func effective_msaa() -> Viewport.MSAA:
+	return (Viewport.MSAA_DISABLED if foveation_level != Foveation.OFF
+		else msaa_3d) as Viewport.MSAA
+
+
 func apply_msaa() -> void:
-	get_tree().root.msaa_3d = msaa_3d as Viewport.MSAA
+	get_tree().root.msaa_3d = effective_msaa()
 
 
 func set_post_aa(mode: int) -> void:

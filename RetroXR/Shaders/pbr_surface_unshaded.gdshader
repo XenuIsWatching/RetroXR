@@ -77,6 +77,25 @@ uniform float diffuse_wrap : hint_range(0.0, 1.0) = 0.12;
 // default: the shell is plaster and carpet, not polish.
 uniform float specular_strength : hint_range(0.0, 1.0) = 0.15;
 
+// --- Baked irradiance volume -------------------------------------------------
+// When a room ships a bake, the light loop above is not run at all: the lighting
+// comes from a volume indexed by world position, which costs two fetches and no
+// arithmetic. Measured on a Quest 3 at eye buffer 1.00x, bedroom: Godot's
+// lighting 20.04 ms, the analytic loop 14.72 ms, a bake-shaped profile 12.34 ms
+// — 72 fps, the refresh cap. The loop is kept for rooms with no bake, and for
+// the exterior surfaces, which sit outside the volume.
+//
+// `gi_dir` is what stops a volume looking like flat ambient. Irradiance at a
+// point knows nothing about which way a surface faces, so the ceiling under the
+// globe would read as brightly as the floor. The dominant direction and how
+// directional the point is (a = 1 one lamp, a = 0 fully diffuse) put the normal
+// back in.
+uniform bool use_gi = false;
+uniform sampler3D gi_irr : filter_linear, repeat_disable;
+uniform sampler3D gi_dir : filter_linear, repeat_disable;
+uniform vec3 gi_min = vec3(0.0);
+uniform vec3 gi_size = vec3(1.0);
+
 
 void vertex() {
 	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -164,6 +183,19 @@ void fragment() {
 	float sky_mix = n.y * 0.5 + 0.5;
 	vec3 lit = albedo * mix(ambient_ground, ambient_sky, sky_mix) * ambient_energy * contact;
 
+	// The branch is on a uniform, so it is coherent across every fragment in the
+	// draw and only one side is ever taken. `return` cannot be used to skip the
+	// loop instead: Godot rejects it outright in fragment().
+	if (use_gi) {
+		vec3 uvw = clamp((v_world_pos - gi_min) / gi_size, vec3(0.0), vec3(1.0));
+		vec4 dr = texture(gi_dir, uvw);
+		vec3 gl = normalize(dr.rgb * 2.0 - 1.0);
+		float gndl = clamp((dot(n, gl) + diffuse_wrap) / (1.0 + diffuse_wrap), 0.0, 1.0);
+		// The volume already carries the room's ambient, so this REPLACES `lit`
+		// rather than adding to it - adding would count the ambient twice.
+		lit = albedo * texture(gi_irr, uvw).rgb * mix(1.0, gndl, dr.a) * contact;
+	} else {
+
 	float shine = exp2(mix(4.0, 10.0, 1.0 - rough));
 	for (int i = 0; i < light_count; i++) {
 		vec4 lv = light_vec[i];
@@ -202,6 +234,8 @@ void fragment() {
 
 		float spec = pow(max(dot(n, normalize(l + view)), 0.0), shine);
 		lit += energy * spec * specular_strength * ndl;
+	}
+
 	}
 
 	ALBEDO = lit;

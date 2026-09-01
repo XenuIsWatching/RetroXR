@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://trashcan_001"]
+[gd_scene load_steps=16 format=3 uid="uid://trashcan_001"]
 
 [ext_resource type="Script" path="res://Scripts/Objects/room/storage_box.gd" id="1_boxscript"]
 [ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
@@ -104,18 +104,12 @@ size = Vector3(0.34, 0.012, 0.34)
 [sub_resource type="BoxShape3D" id="BoxShape_pointer"]
 size = Vector3(0.34, 0.3, 0.34)
 
-[sub_resource type="CylinderShape3D" id="CylShape_trash_area"]
-radius = 0.19
-height = 0.25
-
-; The cavity itself. Squared off rather than a second cylinder because the box
-; is square and an object can sit in a corner, and 1 mm clear of the liners on
-; each side (half-extent 0.153 against their inner faces at 0.154) so nothing
-; standing AGAINST an outer wall reaches in through it. The mouth cylinder above
-; is deliberately wider than the box and may not be extended downwards for that
-; reason.
+; The cavity, squared off because the box is square and an object can sit in a
+; corner, and 1 mm clear of the liners on each side (half-extent 0.153 against
+; their inner faces at 0.154) so nothing standing AGAINST an outer wall reaches
+; in through it. It runs from the base at y=-0.138 up past the rim to y=0.425.
 [sub_resource type="BoxShape3D" id="BoxShape_trash_cavity"]
-size = Vector3(0.306, 0.313, 0.306)
+size = Vector3(0.306, 0.563, 0.306)
 
 [sub_resource type="PhysicsMaterial" id="PhysMat_box"]
 friction = 0.8
@@ -253,16 +247,12 @@ collision_mask = 65540
 monitoring = true
 monitorable = false
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="TrashArea"]
-shape = SubResource("CylShape_trash_area")
-
-; The zone is two shapes, the mouth and the cavity under it, meeting at y=0.175.
-; The mouth alone would only catch an object still HELD over the box: one let go
-; low, or one that has fallen to the base and is picked up again, sits entirely
-; below 0.175 and never turned red. Together they run from the base at y=-0.138
-; to y=0.425.
+; One shape, reaching from the base up through the mouth and into the free space
+; above it. It has to cover both: an object still HELD over the box, and one let
+; go low or picked up again off the base, which sits entirely inside the box and
+; would otherwise never turn red.
 ;
-; TrashArea's own origin is y=0.3, so this offset is 0.0185 - 0.3.
+; TrashArea's own origin is y=0.3, so this offset is 0.1435 - 0.3.
 [node name="CollisionCavity" type="CollisionShape3D" parent="TrashArea"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2815, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1565, 0)
 shape = SubResource("BoxShape_trash_cavity")

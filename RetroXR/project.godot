@@ -289,7 +289,9 @@ worker_pool/max_threads.android=4
 [xr]
 
 openxr/enabled=true
+openxr/foveation_level=0
 openxr/foveation_eye_tracked=false
+openxr/foveation_with_subsampled_images=false
 openxr/startup_alert=false
 openxr/extensions/hand_tracking=true
 openxr/extensions/hand_tracking_unobstructed_data_source=true
@@ -300,3 +302,5 @@ openxr/extensions/meta/passthrough=true
 openxr/extensions/meta/hand_tracking_mesh=true
 openxr/extensions/meta/render_model=true
 openxr/extensions/meta/composition_layer_settings/main_projection_layer/filtering/sharpening_mode=1
+openxr/extensions/meta/dynamic_resolution=false
+openxr/extensions/androidxr/dynamic_resolution=false

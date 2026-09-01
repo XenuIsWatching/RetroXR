@@ -1070,5 +1070,6 @@ lever_path = NodePath("../Furniture/TimeLever/LeverPivot/Lever")
 [node name="ShellLighting" type="Node" parent="." unique_id=1477203611]
 script = ExtResource("52_shelllight")
 world_env_path = NodePath("../WorldEnvironment")
+gi_bake = "bedroom"
 
 [connection signal="pulled" from="Furniture/BlindCord" to="Furniture/Blinds" method="_on_cord_pulled"]

@@ -43,6 +43,23 @@ const MAX_LIGHTS := 4
 ## plaster's relief readable there.
 @export_range(0.0, 1.0) var ambient_floor_ratio: float = 0.45
 
+## Basename of this room's baked irradiance volumes under `res://Scenes/baked`,
+## as written by `Tools/room/bake_shell_gi.gd`. Empty, or a bake that is not on
+## disk, leaves every material on the analytic loop — which is what a room
+## without a bake wants, and is why this is not an error.
+@export var gi_bake: String = ""
+
+## Render layer the bake covers. The volume is fitted to the room's INTERIOR;
+## the ground, road and kerbs outside the window are on layer 2, sit far outside
+## it, and keep the analytic loop.
+@export_flags_3d_render var gi_layers: int = 1
+
+const BAKE_DIR := "res://Scenes/baked"
+
+## Group naming the lights the two bakes differ by. Their state chooses which
+## volume is bound.
+const SWITCHED_GROUP := "ceiling_light"
+
 var _materials: Array[ShaderMaterial] = []
 ## Render layer mask each material's meshes were found on, parallel to
 ## `_materials`. A light only reaches a material whose layers its cull mask
@@ -60,6 +77,12 @@ var _layers: PackedInt32Array = PackedInt32Array()
 var _bounds: Array[AABB] = []
 var _room: Node3D
 var _elapsed: float = 0.0
+## {"on": {"irr": ImageTexture3D, "dir": ImageTexture3D}, "off": {...}}
+var _volumes: Dictionary = {}
+var _gi_min: Vector3
+var _gi_size: Vector3
+## Which volume is currently bound, so a rebind only happens when it changes.
+var _gi_state: String = ""
 
 
 const OFF_CFG := "/sdcard/Android/data/com.xenu.retroxr/files/shellshaded.cfg"
@@ -100,12 +123,14 @@ func _ready() -> void:
 	if _room == null:
 		set_process(false)
 		return
+	_load_bake()
 	_convert()
 	# Logged for the same reason QualityManager logs its resolved state: on a
 	# headset the only evidence this path is live is the frame time, and a
 	# measurement whose mechanism cannot be seen is not a measurement.
-	print("[ShellLighting] %d shell material(s) unshaded in %s"
-		% [_materials.size(), _room.name])
+	print("[ShellLighting] %d shell material(s) unshaded in %s, bake %s"
+		% [_materials.size(), _room.name,
+			"'%s'" % gi_bake if not _volumes.is_empty() else "none"])
 	if _materials.is_empty():
 		set_process(false)
 		return
@@ -118,6 +143,55 @@ func _process(delta: float) -> void:
 		return
 	_elapsed = 0.0
 	_refresh()
+
+
+## Read the baked volumes off disk and rebuild them into 3D textures.
+##
+## They are stored as flat `Image` resources, dims.z slices of dims.y rows
+## stacked into one tall image, because an ImageTexture3D drops its source
+## images once uploaded and therefore cannot be serialised — ResourceSaver
+## writes an empty texture and reports success. The grid's frame rides on the
+## image as resource metadata.
+func _load_bake() -> void:
+	if gi_bake.is_empty():
+		return
+	var dims := Vector3i.ZERO
+	for state in ["on", "off"]:
+		var pair: Dictionary = {}
+		for kind in ["irr", "dir"]:
+			var path := "%s/%s_gi_%s_%s.res" % [BAKE_DIR, gi_bake, state, kind]
+			if not ResourceLoader.exists(path):
+				return
+			var img: Image = load(path) as Image
+			if img == null or not img.has_meta("gi_dims"):
+				push_warning("[ShellLighting] %s is not a baked volume" % path)
+				return
+			dims = img.get_meta("gi_dims")
+			_gi_min = img.get_meta("gi_min")
+			_gi_size = img.get_meta("gi_size")
+			pair[kind] = _volume(img, dims)
+		_volumes[state] = pair
+
+
+func _volume(img: Image, dims: Vector3i) -> ImageTexture3D:
+	var slices: Array[Image] = []
+	for z in dims.z:
+		slices.append(img.get_region(Rect2i(0, z * dims.y, dims.x, dims.y)))
+	var tex := ImageTexture3D.new()
+	tex.create(img.get_format(), dims.x, dims.y, dims.z, false, slices)
+	return tex
+
+
+## Which baked state the room is in right now, from the wall switch.
+func _switch_state() -> String:
+	for node in _room.find_children("*", "Light3D", true, false):
+		var light := node as Light3D
+		if not light.is_in_group(SWITCHED_GROUP):
+			continue
+		print("[dbg] %s id=%d vis=%s vis_tree=%s" % [light.name, light.get_instance_id(), light.visible, light.is_visible_in_tree()])
+		if light.is_visible_in_tree() and light.light_energy > 0.0:
+			return "on"
+	return "off"
 
 
 ## Find every shell material under the room and put it on the unshaded shader.
@@ -177,7 +251,7 @@ func _materials_of(gi: GeometryInstance3D) -> Array[ShaderMaterial]:
 func _is_shell(mat: ShaderMaterial) -> bool:
 	if mat.shader == null or mat.shader.resource_path != SHADED_SHADER:
 		return false
-	return bool(mat.get_shader_parameter("shell"))
+	return mat.get_shader_parameter("shell") == true
 
 
 ## Push the current lights into every shell material.
@@ -191,11 +265,30 @@ func _refresh() -> void:
 		sky = Vector3(c.r, c.g, c.b)
 		energy = env.ambient_light_energy
 	var ground := sky * ambient_floor_ratio
+	var state := _switch_state() if not _volumes.is_empty() else ""
+	var rebind := state != _gi_state
+	if rebind and not state.is_empty():
+		print("[ShellLighting] bake state -> %s" % state)
+	_gi_state = state
 	for i in _materials.size():
 		var mat := _materials[i]
 		mat.set_shader_parameter("ambient_sky", sky)
 		mat.set_shader_parameter("ambient_ground", ground)
 		mat.set_shader_parameter("ambient_energy", energy)
+		# A material the bake covers takes the volume and skips the loop
+		# entirely. One the bake does not reach - the street outside the window -
+		# keeps the loop, so it still follows the time of day.
+		var baked: bool = not state.is_empty() and _layers[i] & gi_layers != 0
+		if rebind or not baked:
+			mat.set_shader_parameter("use_gi", baked)
+		if baked:
+			if rebind:
+				var pair: Dictionary = _volumes[state]
+				mat.set_shader_parameter("gi_irr", pair["irr"])
+				mat.set_shader_parameter("gi_dir", pair["dir"])
+				mat.set_shader_parameter("gi_min", _gi_min)
+				mat.set_shader_parameter("gi_size", _gi_size)
+			continue
 		_write(mat, _for_layer(lights, _layers[i], _bounds[i]))
 
 
