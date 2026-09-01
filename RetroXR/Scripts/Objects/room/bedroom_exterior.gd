@@ -25,6 +25,24 @@ const EXTERIOR_LAYER := 2
 @export var desaturate: float = 0.62
 @export var darken: float = 0.62
 
+## How many of the planting-bed shrubs survive on a headset. Nought disables the
+## thinning and keeps every one.
+##
+## The street is set dressing seen through one window, and it is the largest
+## single item in this room's frame. Measured on a Quest 3 at eye buffer 1.75x,
+## VrApi App time, against a 24.9 ms frame: the whole exterior is 8.2 ms, of
+## which the four houses are 1.15 ms, the tree row 2.44 ms, and these nine
+## shrubs 4.27 ms - more than the houses and the trees together. They are
+## alpha-tested foliage, which a tile-based GPU pays for in overdraw rather than
+## in triangles, so their cost is out of all proportion to their size on screen.
+##
+## Thinned rather than removed: the bed still reads as planted from inside the
+## room, which is the only place it is ever seen from.
+@export var mobile_foliage_budget: int = 3
+
+## Node-name prefix identifying those shrubs.
+const FOLIAGE_PREFIX := "Plant"
+
 
 ## Toned materials, keyed by the instance id of the material they came from.
 ##
@@ -38,12 +56,35 @@ var _toned: Dictionary = {}
 
 
 func _ready() -> void:
+	_thin_foliage()
 	for node in find_children("*", "VisualInstance3D", true, false):
 		var vi := node as VisualInstance3D
 		vi.layers = EXTERIOR_LAYER
 		var mi := vi as MeshInstance3D
 		if mi != null:
 			_tone_down(mi)
+
+
+## Drop all but `mobile_foliage_budget` shrubs, on a headset only.
+##
+## Which ones survive is by scene order rather than by anything clever: they are
+## a row in a bed, so keeping the first few keeps the bed planted at one end and
+## bare at the other, and the row is authored left to right across the window.
+func _thin_foliage() -> void:
+	if mobile_foliage_budget <= 0 or OS.get_name() != "Android":
+		return
+	var kept := 0
+	var dropped := 0
+	for child in get_children():
+		if not (child is Node3D) or not String(child.name).begins_with(FOLIAGE_PREFIX):
+			continue
+		if kept < mobile_foliage_budget:
+			kept += 1
+			continue
+		(child as Node3D).visible = false
+		dropped += 1
+	if dropped > 0:
+		print("[BedroomExterior] foliage thinned: kept %d, hid %d" % [kept, dropped])
 
 
 func _tone_down(mi: MeshInstance3D) -> void:

@@ -448,7 +448,7 @@ scene_id = "bedroom"
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1686756441]
 environment = SubResource("Env_bedroom")
 
-[node name="Dusk" type="DirectionalLight3D" parent="." unique_id=912911964]
+[node name="Dusk" type="DirectionalLight3D" parent="." unique_id=912911964 groups=["shell_only_light"]]
 transform = Transform3D(0.94, -0.24, 0.24, 0, 0.7, 0.71, -0.34, -0.67, 0.66, 0, 2.2, -2.2)
 light_color = Color(1, 0.72, 0.5, 1)
 light_energy = 0.15
@@ -732,6 +732,7 @@ surface_material_override/0 = SubResource("Mat_lamp_head")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.8, 0)
 light_color = Color(1, 0.82, 0.52, 1)
 light_energy = 3.0
+light_cull_mask = 2
 omni_range = 14.0
 
 [node name="Furniture" type="Node3D" parent="." unique_id=1208427786]
@@ -1038,7 +1039,7 @@ light_energy = 1.2
 light_cull_mask = 1
 omni_range = 7.0
 
-[node name="FloorBounce" type="OmniLight3D" parent="FanGlobeLight" unique_id=1839153888 groups=["no_shadow"]]
+[node name="FloorBounce" type="OmniLight3D" parent="FanGlobeLight" unique_id=1839153888 groups=["no_shadow", "shell_only_light"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.19, 0)
 light_color = Color(1, 0.88, 0.74, 1)
 light_energy = 0.18

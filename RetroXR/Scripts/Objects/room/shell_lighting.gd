@@ -60,6 +60,17 @@ const BAKE_DIR := "res://Scenes/baked"
 ## volume is bound.
 const SWITCHED_GROUP := "ceiling_light"
 
+## Lights that exist only to fake shell lighting, and which a bake makes
+## redundant. The bedroom's "Dusk" is a directional fill standing in for sky
+## light indoors, and "FloorBounce" is a fake bounce under the ceiling globe -
+## both were authored because nothing was lighting the walls. The volume carries
+## both now, and every light left in the room costs the PROPS: measured on a
+## Quest 3 at eye buffer 1.75x, the room's lights are 5.8 ms of a 24.9 ms frame.
+##
+## Only dropped where a bake is actually bound, so a desktop and any room
+## without one keep them.
+const SHELL_ONLY_GROUP := "shell_only_light"
+
 var _materials: Array[ShaderMaterial] = []
 ## Render layer mask each material's meshes were found on, parallel to
 ## `_materials`. A light only reaches a material whose layers its cull mask
@@ -134,7 +145,26 @@ func _ready() -> void:
 	if _materials.is_empty():
 		set_process(false)
 		return
+	_retire_shell_lights()
 	_refresh()
+
+
+## Turn off the lights the bake has replaced.
+##
+## `visible`, not `light_energy`: energy on several of these belongs to
+## TimeOfDay and WindowBlinds, which go on writing it, and a value this node
+## zeroed would be overwritten by its real owner a frame later.
+func _retire_shell_lights() -> void:
+	if _volumes.is_empty():
+		return
+	var retired := 0
+	for node in _room.find_children("*", "Light3D", true, false):
+		var light := node as Light3D
+		if light.is_in_group(SHELL_ONLY_GROUP):
+			light.visible = false
+			retired += 1
+	if retired > 0:
+		print("[ShellLighting] retired %d shell-only light(s)" % retired)
 
 
 func _process(delta: float) -> void:
