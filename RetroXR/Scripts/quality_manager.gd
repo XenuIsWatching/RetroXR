@@ -173,13 +173,20 @@ const DISPLAY_RATE_HEADSET := 72.0
 ## in overdraw on a tiler rather than in triangles.
 ##
 ## So the ladder was never re-measured against the room that shipped. What holds
-## 72 Hz today, with the shell baked and the redundant lights retired:
+## 72 Hz today, with the shell and the props both on the baked volume and the
+## redundant lights retired:
 ##
 ##   scale  per eye      72 Hz
-##   1.00   1680x1760     72   (9.2 ms)
-##   1.15   1932x2024     72   (11.9 ms)
-##   1.30   2184x2288     65   (13.4 ms)
-##   1.75   2940x3080     38   (21.3 ms)
+##   1.00   1680x1760     72   (8.5 ms)
+##   1.25   2100x2200     72   (11.6 ms)
+##   1.40   2352x2464     64   (13.4 ms)
+##   1.75   2940x3080     42   (19.4 ms)
+##
+## x1.75 is out of reach and it is the ROOM, not one subsystem: with the shell
+## baked, the props baked, the lights retired and the ENTIRE street hidden, it
+## still measures 14.5 ms / 56 fps against a budget of about 12.3. What is left
+## at that point is the shell and the machines being rasterised at 18.1 Mpixel a
+## frame, and the only thing that reduces that is foveation.
 ##
 ## And the other half of the old ladder does not reproduce either: "foveation
 ## HIGH" bought its top rungs, and foveation now returns nothing on any of the

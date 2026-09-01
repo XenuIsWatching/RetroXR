@@ -28,6 +28,7 @@
 [ext_resource type="Script" uid="uid://c3w241s4y5yli" path="res://Scripts/Objects/room/window_blinds.gd" id="49_blinds"]
 [ext_resource type="Script" uid="uid://bhgccddcdewok" path="res://Scripts/Objects/room/time_of_day.gd" id="50_timeofday"]
 [ext_resource type="Script" uid="uid://b60c1xkano3pa" path="res://Scripts/Objects/room/shell_lighting.gd" id="52_shelllight"]
+[ext_resource type="Script" path="res://Scripts/Objects/room/prop_lighting.gd" id="54_proplight"]
 [ext_resource type="Script" uid="uid://bw7vpp7uu8q37" path="res://Scripts/Objects/widgets/vr_lever.gd" id="51_vrlever"]
 [ext_resource type="FontFile" uid="uid://bv8kh41jwy8bc" path="res://fonts/SymbolsNerdFont-Regular.ttf" id="52_nerdfont"]
 [ext_resource type="Shader" uid="uid://pr0hga62q1ni" path="res://Shaders/pbr_surface.gdshader" id="56_roomsurf"]
@@ -1072,5 +1073,9 @@ lever_path = NodePath("../Furniture/TimeLever/LeverPivot/Lever")
 script = ExtResource("52_shelllight")
 world_env_path = NodePath("../WorldEnvironment")
 gi_bake = "bedroom"
+
+[node name="PropLighting" type="Node" parent="." unique_id=1477203613]
+script = ExtResource("54_proplight")
+shell_lighting_path = NodePath("../ShellLighting")
 
 [connection signal="pulled" from="Furniture/BlindCord" to="Furniture/Blinds" method="_on_cord_pulled"]

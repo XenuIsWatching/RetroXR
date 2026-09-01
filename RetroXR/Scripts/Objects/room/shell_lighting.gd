@@ -14,6 +14,11 @@
 class_name ShellLighting
 extends Node
 
+## The bound volume changed, because the wall switch was flipped. PropLighting
+## listens so the machines and the furniture go dark with the walls rather than
+## staying lit in a room whose light was just switched off.
+signal bake_volume_changed(volume: Dictionary)
+
 const SHADED_SHADER := "res://Shaders/pbr_surface.gdshader"
 const UNSHADED_SHADER := "res://Shaders/pbr_surface_unshaded.gdshader"
 
@@ -147,6 +152,20 @@ func _ready() -> void:
 		return
 	_retire_shell_lights()
 	_refresh()
+
+
+## The currently bound volume, for PropLighting to share.
+##
+## Handed out rather than reloaded so both readers hold the same textures - the
+## volume is 400 KB and there is no reason for two copies of it on a headset.
+## Empty when this room has no bake, which is PropLighting's signal to leave
+## every prop on Godot's lighting.
+func volume_for_props() -> Dictionary:
+	if _volumes.is_empty():
+		return {}
+	var state := _gi_state if not _gi_state.is_empty() else _switch_state()
+	var pair: Dictionary = _volumes[state]
+	return {"irr": pair["irr"], "dir": pair["dir"], "min": _gi_min, "size": _gi_size}
 
 
 ## Turn off the lights the bake has replaced.
@@ -297,6 +316,8 @@ func _refresh() -> void:
 	if rebind and not state.is_empty():
 		print("[ShellLighting] bake state -> %s" % state)
 	_gi_state = state
+	if rebind:
+		bake_volume_changed.emit(volume_for_props())
 	for i in _materials.size():
 		var mat := _materials[i]
 		mat.set_shader_parameter("ambient_sky", sky)
