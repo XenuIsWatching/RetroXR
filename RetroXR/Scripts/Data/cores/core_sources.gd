@@ -4,10 +4,15 @@
 ## core lands in this table when we maintain a fork of it, because then the
 ## buildbot's build is not the one we want the player to have.
 ##
-## Six of them, and five are here for the same reason: this room has cables in
+## Eight of them, and four are here for the same reason: this room has cables in
 ## it, and libretro has nowhere to put the far end of one. Dolphin, mGBA,
-## gambatte and pcsx_rearmed each reach a link bus the frontend hosts; azahar is
-## the odd one, and is here to surface stereo 3D the libretro glue never exposed.
+## gambatte and pcsx_rearmed each reach a link bus the frontend hosts.
+##
+## Three more are hardware the core could always emulate and no frontend could
+## ever ask it to, because the libretro glue never surfaced it: azahar's stereo
+## 3D, the Satellaview's 8M Memory Pack in snes9x, and a cartridge-less 64DD
+## disk in mupen64plus_next. Play! is the odd one, and is here for two crashes
+## that stop the buildbot's build running on a Quest at all.
 ##
 ## Dolphin is the one to read first if you want the shape of it. The buildbot
 ## build cannot do Wiimote IR passthrough — the frontend hands the emulated
@@ -33,6 +38,13 @@
 ## that name, so a new one would strand the Sys folder, every GameCube memory
 ## card and the whole Wii NAND. Ours replaces the stock build in place and
 ## inherits all of it.
+##
+## Which is why mupen64plus_next is TWO entries. The buildbot publishes plain
+## mupen64plus_next for Windows and only the _gles2 and _gles3 variants for
+## Android, so one core has two names depending on where the player is standing,
+## and matching them exactly is the whole point of the paragraph above. Both
+## entries name the same repository and the same tag; they differ only in which
+## platform they carry an asset for.
 class_name CoreSources
 extends RefCounted
 
@@ -178,6 +190,77 @@ const SOURCES := {
 		"assets": {
 			"Windows": "pcsx_rearmed_libretro.dll.zip",
 			"Android": "pcsx_rearmed_libretro_android.so.zip",
+		},
+	},
+	# snes9x, for the Satellaview's 8M Memory Pack.
+	#
+	# The BS-X shell has always run on this core; what it had nowhere to put was
+	# the 1 MB of removable flash a download is stored in. There was no memory id
+	# for the pack, it was absent from the savestate, and S9xResetBSX erased it to
+	# 0x00 — where a flash write is an AND, so every byte written to it was
+	# discarded while the fixed 0x80 status register reported success. A download
+	# hung rather than failed.
+	#
+	# Our build gives the pack its own id, restores it after the reset that ends
+	# a load, advertises the `bsx` subsystem so a translated shell can be paired
+	# with a pack, tells the shell when the slot is EMPTY — which it reports in
+	# its own words rather than ours — and publishes the front-panel ACCESS lamp
+	# through the LED interface.
+	#
+	# One fix in it is not about the Satellaview: g_rom_dir was set only in
+	# retro_load_game, so every subsystem load ran with it empty and each path
+	# built from it resolved against a drive root. That is the Sufami Turbo's
+	# beside-the-cartridge STBIOS.bin lookup as much as the BS-X's stream files.
+	#
+	# snes9x is non-commercial rather than GPL, so the tag beside the binary is
+	# not an obligation here; it is where the build comes from all the same.
+	"snes9x": {
+		"repo":  "XenuIsWatching/snes9x",
+		"known_tag": "retroxr-snes9x-libretro-v1",
+		"label": "Snes9x (retroXR build)",
+		"assets": {
+			"Windows": "snes9x_libretro.dll.zip",
+			"Android": "snes9x_libretro_android.so.zip",
+		},
+	},
+	# mupen64plus_next, for a 64DD disk with no cartridge behind it.
+	#
+	# Mario Artist and Kyojin no Doshin shipped on a disk alone, and this core
+	# could always boot one — none of it was reachable. emu_step_load_data()
+	# issued M64CMD_ROM_OPEN unconditionally, so is_valid_rom() rejected a disk
+	# and M64CMD_DISK_OPEN was never sent. Our build detects a disk at load,
+	# supplies the media loader's get_dd_disk, and closes the disk path with
+	# DISK_CLOSE rather than a ROM_CLOSE the core refuses.
+	#
+	# Windows only, because the buildbot publishes no Android build under this
+	# name — see mupen64plus_next_gles3 below, which is the same fork and the
+	# same tag.
+	#
+	# mupen64plus is GPLv2, so the source has to sit on the tag beside the
+	# binary — same arrangement as Dolphin, gambatte and pcsx_rearmed.
+	"mupen64plus_next": {
+		"repo":  "XenuIsWatching/mupen64plus-libretro-nx",
+		"known_tag": "retroxr-mupen64plus-next-libretro-v1",
+		"label": "Mupen64Plus-Next (retroXR build)",
+		"assets": {
+			"Windows": "mupen64plus_next_libretro.dll.zip",
+		},
+	},
+	# The same core and the same tag, under the name the buildbot gives its
+	# Android build. Not a second fork: the buildbot ships mupen64plus_next for
+	# Windows and mupen64plus_next_gles2 / _gles3 for Android, and CoreSources is
+	# keyed by the buildbot's name so ours replaces the stock build in place.
+	#
+	# gles3 and not gles2 because gles2 does not work here. Measured on a Quest:
+	# it runs at full speed and never draws a pixel, while the gles3 build of the
+	# same core renders the same ROM correctly. It is also the build
+	# CoreRecommendations already names for nintendo_64 on Android.
+	"mupen64plus_next_gles3": {
+		"repo":  "XenuIsWatching/mupen64plus-libretro-nx",
+		"known_tag": "retroxr-mupen64plus-next-libretro-v1",
+		"label": "Mupen64Plus-Next GLES3 (retroXR build)",
+		"assets": {
+			"Android": "mupen64plus_next_gles3_libretro_android.so.zip",
 		},
 	},
 }

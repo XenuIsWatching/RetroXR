@@ -1,0 +1,63 @@
+# Nintendo - Nintendo 64 (Mupen64Plus-Next), retroXR build.
+#
+# Overrides the vendored libretro-core-info entry of the same name. It lives in
+# its own directory because res://libretro-core-info is vendored wholesale from
+# libretro's repository and is refreshed wholesale too — an edit there would be
+# lost the next time, silently.
+#
+# The binary this describes is built from XenuIsWatching/mupen64plus-libretro-nx
+# at the tag retroxr-mupen64plus-next-libretro-v1 and published on that
+# repository's releases page, which is also where its source is: mupen64plus is
+# GPLv2, so the two travel together.
+#
+# This is the WINDOWS core. The buildbot publishes no Android build under this
+# name, so the Android half of the same fork is described by
+# mupen64plus_next_gles3_libretro.info beside this file.
+#
+# Every field but the three naming ones is a verbatim copy of the vendored file,
+# and has to be. The overlay REPLACES an entry rather than merging into it, so a
+# file carrying only the lines that changed would delete the IPL.n64 firmware
+# declaration with them — taking out the 64DD's BIOS/Extras row and the spawn
+# gate that reads it.
+
+# Software Information
+display_name = "Nintendo - Nintendo 64 (Mupen64Plus-Next, retroXR)"
+authors = "m4xw|Hacktarux|gonetz|GLideN64 Contributors|Mupen64Plus Team"
+supported_extensions = "n64|v64|z64|ndd|bin|u1"
+corename = "Mupen64Plus-Next (retroXR)"
+license = "GPLv2"
+permissions = "dynarec_optional"
+display_version = "retroXR build"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Nintendo"
+systemname = "Nintendo 64"
+systemid = "nintendo_64"
+secondary_systemids = "nintendo_64dd:ndd"
+
+# Libretro Features
+supports_no_game = "false"
+database = "Nintendo - Nintendo 64"
+hw_render = "true"
+required_hw_api = "OpenGL Core >= 3.3 | OpenGL ES >= 2.0"
+savestate = "true"
+savestate_features = "serialized"
+cheats = "true"
+input_descriptors = "true"
+memory_descriptors = "true"
+libretro_saves = "true"
+core_options = "true"
+load_subsystem = "true"
+needs_fullpath = "false"
+disk_control = "false"
+is_experimental = "false"
+
+# Firmware / BIOS
+firmware_count = 1
+firmware0_desc = "Mupen64plus/IPL.n64 (64DD BIOS)"
+firmware0_path = "Mupen64plus/IPL.n64"
+firmware0_opt = "true"
+notes = "(!) IPL.n64 (md5): 8d3d9f294b6e174bc7b1d2fd1c727530"
+
+description = "An up-to-date port of the Mupen64Plus N64 emulator, ported to libretro. It uses up-to-date GLideN64 plugin as its default graphics plug, though the high-accuracy Angrylion and ParaLLEl-RDP plugins are also available. The retroXR build adds a cartridge-less 64DD boot: the core could always run a bare disk image, but the load path always asked for a ROM, so Mario Artist and Kyojin no Doshin could not be started at all. A disk is now detected at load and opened as one."

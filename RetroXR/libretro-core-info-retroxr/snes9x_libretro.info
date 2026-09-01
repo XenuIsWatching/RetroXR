@@ -1,11 +1,25 @@
-# Nintendo - SNES / SFC (Snes9x), retroXR override.
+# Nintendo - SNES / SFC (Snes9x), retroXR build.
 #
 # Overrides the vendored libretro-core-info entry of the same name. It lives in
 # its own directory because res://libretro-core-info is vendored wholesale from
 # libretro's repository and is refreshed wholesale too — an edit there would be
 # lost the next time, silently.
 #
-# ONE field differs from the vendored file: secondary_systemids gains `sfc` for
+# This file described the BUILDBOT's snes9x until 2026-09-01, when we began
+# publishing our own. The binary it describes is now built from
+# XenuIsWatching/snes9x at the tag retroxr-snes9x-libretro-v1 and published on
+# that repository's releases page, which is also where its source is. snes9x is
+# non-commercial rather than GPL, so that is not an obligation here; it is the
+# only way anyone can tell what they are running.
+#
+# What our build adds is the Satellaview's 8M Memory Pack, which is the 1 MB of
+# removable flash a download is stored in and which nothing could reach: no
+# memory id, absent from the savestate, and erased to 0x00 by S9xResetBSX where
+# a flash write is an AND — so every byte written to it was discarded while the
+# status register reported success. See CoreSources for the rest of it.
+#
+# Beyond the three naming fields, ONE field differs from the vendored file:
+# secondary_systemids gains `sfc` for
 # sufami_turbo. Every Sufami Turbo dump in the wild is named .sfc rather than
 # .st, so with the vendored list the library filed them under super_nes — where
 # .sfc is also claimed — and spawned a plain Super Famicom cartridge that the
@@ -22,14 +36,14 @@
 # and re-apply this one line whenever that file is refreshed.
 
 # Software Information
-display_name = "Nintendo - SNES / SFC (Snes9x)"
+display_name = "Nintendo - SNES / SFC (Snes9x, retroXR)"
 categories = "Emulator"
 authors = "Snes9x Team"
-corename = "Snes9x"
+corename = "Snes9x (retroXR)"
 supported_extensions = "smc|sfc|swc|fig|bs|st"
 license = "Non-commercial"
 permissions = ""
-display_version = "1.61"
+display_version = "retroXR build"
 
 # Hardware Information
 manufacturer = "Nintendo"
@@ -63,4 +77,4 @@ hw_render = "false"
 needs_fullpath = "false"
 disk_control = "false"
 
-description = "Snes9x is a classic and popular SNES emulator that is very fast while still maintaining solid accuracy and high compatibility. It is perfect for use on desktop and laptop PCs of all ages, as well as many reasonably powerful mobile devices. This core is based on the latest up-to-date Snes9x sources and is the one most users should try first, only falling back to the year-marked snapshots if this one can't maintain full speed on their device."
+description = "Snes9x for the Super Nintendo, built from retroXR's fork. It is the stock libretro Snes9x plus the Satellaview's 8M Memory Pack — the 1 MB of removable flash a BS-X download is stored in, which nothing could reach before: it had no memory id, it was absent from the savestate, and the reset erased it to 0x00, where a flash write only clears bits, so every download was silently discarded while the status register said it had worked. This build gives the pack its own id, restores it after the reset that ends a load, lets a translated BS-X shell be paired with a pack through the bsx subsystem, tells the shell when the slot is empty so it reports that itself, and publishes the front-panel ACCESS lamp through the LED interface. It also fixes the content directory being empty for every subsystem load, which broke the beside-the-cartridge lookup for the BS-X's satellite stream and the Sufami Turbo's STBIOS.bin alike. Everything else is stock: fast, accurate and highly compatible, and the SNES core most users should try first."
