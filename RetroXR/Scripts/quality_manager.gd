@@ -191,6 +191,14 @@ var _vrs_generator: Object
 var _vrs_refresh_serial: int = 0
 ## Whether the requested generated texture and its viewport attachment are live.
 var _foveation_live: bool = false
+## QA overrides for the VRS knobs, set by `vrsprobe.cfg` and normally unset.
+## The tier table is what ships; these exist because a foveation level that is
+## attached and measurably doing NOTHING cannot be told apart from one that is
+## working without turning the knobs by hand on the device.
+var _vrs_radius_override: float = -1.0
+var _vrs_strength_override: float = -1.0
+## "texture" (Godot's generated map) or "xr" (the runtime's own density map).
+var _vrs_mode_override: String = ""
 ## Engine glow. The rooms author it; this is the switch that can take it away,
 ## because it is the only full-frame post-process the mobile backend still runs
 ## and it is what reads the eye buffer back.
@@ -265,6 +273,12 @@ func _run_vrs_probe() -> void:
 	if cfg.has("eye_buffer"):
 		print("[VRSProbe] eye_buffer -> %.2f" % float(cfg["eye_buffer"]))
 		set_eye_buffer_scale(float(cfg["eye_buffer"]))
+	if cfg.has("vrs_radius"):
+		_vrs_radius_override = float(cfg["vrs_radius"])
+	if cfg.has("vrs_strength"):
+		_vrs_strength_override = float(cfg["vrs_strength"])
+	if cfg.has("vrs_mode"):
+		_vrs_mode_override = str(cfg["vrs_mode"])
 	if cfg.has("foveation"):
 		print("[VRSProbe] foveation -> %d" % int(cfg["foveation"]))
 		set_foveation_level(int(cfg["foveation"]))
@@ -567,10 +581,28 @@ func _generate_centered_vrs() -> void:
 	if size.x <= 0.0 or size.y <= 0.0:
 		_foveation_live = false
 		return
+	if _vrs_mode_override == "xr":
+		# VRS_XR fetches the density map from the XR INTERFACE, so the interface's
+		# own foveation has to be on for there to be one. apply_foveation() forces
+		# it to OFF a few lines above (the hang guard), which made an earlier
+		# VRS_XR measurement identical to no foveation at all and read as "the
+		# runtime path is inert too". It was measuring an unset texture.
+		xr.set("foveation_level", int(foveation_level))
+		xr.set("foveation_dynamic", false)
+		xr.set("foveation_with_subsampled_images", false)
+		RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), RID())
+		root.vrs_mode = Viewport.VRS_XR
+		_vrs_generator = null
+		_foveation_live = true
+		print("QualityManager: VRS_XR runtime density map, xr foveation_level %d, eye %dx%d"
+			% [int(foveation_level), int(size.x), int(size.y)])
+		return
 	var generator: Object = ClassDB.instantiate("XRVRS")
 	var tier: Dictionary = FOVEATION_TIERS[foveation_level]
-	generator.set("vrs_min_radius", tier["min_radius"])
-	generator.set("vrs_strength", tier["strength"])
+	var radius: float = _vrs_radius_override if _vrs_radius_override >= 0.0 		else tier["min_radius"]
+	var strength: float = _vrs_strength_override if _vrs_strength_override >= 0.0 		else tier["strength"]
+	generator.set("vrs_min_radius", radius)
+	generator.set("vrs_strength", strength)
 	# Two layers, one per eye. ZERO maps to the exact middle of each layer.
 	var texture: RID = generator.call("make_vrs_texture", size,
 		PackedVector2Array([Vector2.ZERO, Vector2.ZERO]))
@@ -582,9 +614,10 @@ func _generate_centered_vrs() -> void:
 	root.vrs_mode = Viewport.VRS_TEXTURE
 	_vrs_generator = generator
 	_foveation_live = true
-	print("QualityManager: centered VRS level %d, eye texture %dx%d, focus (0,0), msaa %d, post_aa %d" % [
-		int(foveation_level), int(size.x), int(size.y), root.msaa_3d,
-		root.screen_space_aa])
+	print(("QualityManager: centered VRS level %d, radius %.1f, strength %.2f, "
+		+ "eye texture %dx%d, focus (0,0), msaa %d, post_aa %d") % [
+		int(foveation_level), radius, strength, int(size.x), int(size.y),
+		root.msaa_3d, root.screen_space_aa])
 
 
 ## OpenXR rebuilds its swapchain asynchronously after an eye-buffer change. Wait
