@@ -154,8 +154,9 @@ const DISPLAY_RATE_HEADSET := 72.0
 ## above panel resolution still suppresses the aliasing that minified content
 ## (a core's picture across the room) shows. RetroGameDevVR ships 1.75-2.0.
 ##
-## Measured in the bedroom, MSAA 4x, foveation HIGH, static head, no core
-## running — so this is a ceiling, not a promise about a busy arcade:
+## STALE, and left here with its provenance because it is worth knowing why.
+## Measured 2026-08-26 19:51 in the bedroom, MSAA 4x, foveation HIGH, static
+## head, no core running:
 ##
 ##   scale  per eye      72 Hz   120 Hz    120 Hz, foveation OFF
 ##   1.00   1680x1760     72      120       120
@@ -164,8 +165,26 @@ const DISPLAY_RATE_HEADSET := 72.0
 ##   1.75   2940x3080     72       85        58
 ##   2.00   3360x3520     72       68        43
 ##
-## Which is what the cap is doing at 2.0 rather than 1.4: at the shipping 72 Hz
-## every step holds, and foveation is what pays for the top of the ladder.
+## The room it describes no longer exists. `Polish bedroom exterior` landed at
+## 22:12 the SAME EVENING, two hours and twenty-one minutes later, and put a
+## street outside the window: four houses, a tree row and nine shrubs. Measured
+## 2026-09-01 on a Quest 3 at x1.75, that street is 7.9 ms — the houses 1.15,
+## the trees 2.44, and the shrubs 4.27, because alpha-tested foliage is paid for
+## in overdraw on a tiler rather than in triangles.
+##
+## So the ladder was never re-measured against the room that shipped. What holds
+## 72 Hz today, with the shell baked and the redundant lights retired:
+##
+##   scale  per eye      72 Hz
+##   1.00   1680x1760     72   (9.2 ms)
+##   1.15   1932x2024     72   (11.9 ms)
+##   1.30   2184x2288     65   (13.4 ms)
+##   1.75   2940x3080     38   (21.3 ms)
+##
+## And the other half of the old ladder does not reproduce either: "foveation
+## HIGH" bought its top rungs, and foveation now returns nothing on any of the
+## five paths tried — see apply_foveation(). Both halves of this table are
+## waiting on that.
 const EYE_BUFFER_PANEL := 1.229
 
 ## Frames between tiny GPU-blurred regional samples for TV/handheld glow.
