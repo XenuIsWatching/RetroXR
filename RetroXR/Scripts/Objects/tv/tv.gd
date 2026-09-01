@@ -257,6 +257,9 @@ var _poweron_tween: Tween = null
 # The corner banner and the volume bar — see tv_osd.gd.
 var _osd: TvOsd = null
 
+# Volume, mute and the speaker switch — see tv_audio.gd.
+var _audio: TvAudio = null
+
 # The captive lead seated in each input's video socket, so a disconnect knows
 # which host to tell. One entry per composite input, indexed by it.
 var _snapped_plugs: Array = []
@@ -320,6 +323,10 @@ func _init() -> void:
 	_osd.name = "TvOsd"
 	add_child(_osd)
 	_osd.setup(self)
+	_audio = TvAudio.new()
+	_audio.name = "TvAudio"
+	add_child(_audio)
+	_audio.setup(self)
 
 
 func _ready() -> void:
@@ -357,10 +364,10 @@ func _ready() -> void:
 	# gate.
 	_vga_port.has_picked_up.connect(_on_plug_snapped.bind(Source.VGA))
 	_vga_port.has_dropped.connect(_on_plug_released.bind(Source.VGA))
-	_mute_btn.button_pressed.connect(_on_mute_toggle)
-	_audio_mode_btn.button_pressed.connect(_on_audio_mode_toggle)
-	_vol_down_btn.button_pressed.connect(_on_volume_down)
-	_vol_up_btn.button_pressed.connect(_on_volume_up)
+	_mute_btn.button_pressed.connect(_audio.on_mute_toggle)
+	_audio_mode_btn.button_pressed.connect(_audio.on_mode_toggle)
+	_vol_down_btn.button_pressed.connect(_audio.on_volume_down)
+	_vol_up_btn.button_pressed.connect(_audio.on_volume_up)
 	_tv_toggle_btn.button_pressed.connect(_on_tv_toggle)
 	_crt_btn.button_pressed.connect(_on_crt_toggle)
 	_stereo_btn.button_pressed.connect(_on_stereo_toggle)
@@ -372,8 +379,8 @@ func _ready() -> void:
 	_vol_up_btn.set_color(Color(0.0, 0.9, 0.9))     # cyan
 	_tv_toggle_btn.set_color(Color(0.0, 1.0, 0.0) if _tv_enabled
 		else Color(1.0, 0.1, 0.1))
-	_update_mute_button_color()
-	_update_audio_mode_button()
+	_audio.update_mute_button()
+	_audio.update_mode_button()
 	# Hidden until a stereo source is connected (see _update_stereo_button).
 	# VRButton._ready adds the pointable layer — strip it while hidden so the
 	# invisible button can't eat pokes or laser clicks (deferred: our _ready
@@ -1325,53 +1332,6 @@ func _update_stereo_button_color() -> void:
 	_update_stereo_button_glyph()
 
 
-## Cycle the speaker switch: stereo -> the left channel from both speakers -> the
-## right from both. Called by the front-panel key and by the remote.
-func set_audio_mode(mode: int) -> void:
-	audio_mode = clampi(mode, 0, 2)
-	_apply_audio_channel_mode()
-	_update_audio_mode_button()
-	show_osd_timed(AUDIO_MODE_NAMES[audio_mode], 2.0)
-	NetworkManager.report_event(NetObjectSync.EV_TV_AUDIO_MODE,
-		{"tv": self, "mode": audio_mode})
-
-
-func _on_audio_mode_toggle() -> void:
-	set_audio_mode((audio_mode + 1) % 3)
-
-
-## The routing itself belongs to whoever owns the samples, so it is handed to the
-## connected deck rather than done here — the set has no emitter of its own.
-func _apply_audio_channel_mode() -> void:
-	# Every connected host, not just the one showing: the speaker switch is a
-	# property of the SET, so an input switched to later has to already be routed
-	# the way the switch says rather than reverting to stereo for one press.
-	for system in _connected_systems:
-		if system != null and is_instance_valid(system) \
-				and system.has_method("set_audio_channel_mode"):
-			system.set_audio_channel_mode(audio_mode)
-	# The tuner is the one source the set does own an emitter for, so it takes the
-	# same routing directly rather than being asked to do it.
-	if _tuner:
-		_tuner.set_channel_mode(audio_mode)
-
-
-## Stereo gets the two-speaker symbol; a mono mode gets a single speaker leaning
-## to the channel it is carrying, matching how the 3D key shows its eye.
-func _update_audio_mode_button() -> void:
-	match audio_mode:
-		0:
-			TransportGlyphs.set_glyph(self, "AudioModeButton", "audio_stereo",
-				TransportGlyphs.TV_SIZE)
-		1:
-			TransportGlyphs.set_glyph(self, "AudioModeButton", "audio_mono",
-				TransportGlyphs.TV_SIZE, -1.0)
-		2:
-			TransportGlyphs.set_glyph(self, "AudioModeButton", "audio_mono",
-				TransportGlyphs.TV_SIZE, 1.0)
-	if _audio_mode_btn:
-		_audio_mode_btn.set_color(Color(0.35, 0.55, 0.9) if audio_mode == 0
-			else Color(0.9, 0.65, 0.25))
 
 
 ## Both eyes gets the 3D symbol; a single eye gets an eye leaning to the side it
@@ -1602,7 +1562,7 @@ func _on_plug_snapped(plug: Node3D, input: int) -> void:
 			# remembers the "no" — every host must, since it can arrive while the
 			# machine is off — would never hear it lifted.
 			# …and it must be silent too until SOURCE picks it, for the same reason.
-			_apply_audio_volume()
+			_audio.apply_volume()
 			NetworkManager.report_event(NetObjectSync.EV_TV_PLUG,
 				{"owner": system, "tv": self, "ch": plugged.channel, "in": input})
 
@@ -1619,8 +1579,8 @@ func on_av_source_found(source: Node3D) -> void:
 	# video handler doesn't capture our CRT wrapper as the material to restore.
 	_drop_sampled()
 	_connected_systems[input] = source
-	source.set_audio_volume(_volume_for(input))
-	_apply_audio_channel_mode()
+	source.set_audio_volume(_audio.volume_for(input))
+	_audio.apply_channel_mode()
 	# Same rule as the captive-lead path, and stated the same way: a deck cabled up
 	# to an input nobody is watching waits its turn rather than painting over the one
 	# they are, and hears so when its turn comes.
@@ -1715,15 +1675,15 @@ func remote_power_toggle() -> void:
 
 
 func remote_volume_up() -> void:
-	_on_volume_up()
+	_audio.on_volume_up()
 
 
 func remote_volume_down() -> void:
-	_on_volume_down()
+	_audio.on_volume_down()
 
 
 func remote_mute_toggle() -> void:
-	_on_mute_toggle()
+	_audio.on_mute_toggle()
 
 
 func remote_source_cycle() -> void:
@@ -1766,7 +1726,7 @@ func _select_tv_then(up: bool) -> void:
 		var i := RF_CHANNELS.find(rf_channel)
 		var n := RF_CHANNELS.size()
 		rf_channel = RF_CHANNELS[((i if i >= 0 else 0) + (1 if up else n - 1)) % n]
-		_apply_audio_volume()
+		_audio.apply_volume()
 		show_osd_timed(_source_banner(), 2.0)
 		_report_channel_state()
 		return
@@ -1808,7 +1768,7 @@ func net_set_channel_state(source: int, rf: int, index: int) -> void:
 	rf_channel = rf if RF_CHANNELS.has(rf) else RF_CHANNELS[0]
 	if current_source == Source.TV and index >= 0:
 		_ensure_tuner().tune(index)
-	_apply_audio_volume()
+	_audio.apply_volume()
 	show_osd_timed(_source_banner(), 2.0)
 
 
@@ -1880,7 +1840,7 @@ func set_source(source: int) -> void:
 
 	# Sound still has to be told: only the picture is pulled. Without this the input
 	# you just left goes on being heard.
-	_apply_audio_volume()
+	_audio.apply_volume()
 
 	if current_source == Source.TV:
 		_ensure_tuner()
@@ -1915,7 +1875,7 @@ func _ensure_tuner() -> TVTuner:
 		_tuner.status_changed.connect(_on_tuner_status)
 		add_child(_tuner)
 		_tuner.reload_channels()
-		_tuner.set_volume(_volume_for(Source.TV))
+		_tuner.set_volume(_audio.volume_for(Source.TV))
 		_tuner.set_channel_mode(audio_mode)
 	return _tuner
 
@@ -1980,14 +1940,14 @@ func restore_control_state(state: Dictionary) -> void:
 		_ensure_tuner().tune(index)
 	_tv_toggle_btn.set_color(Color(0.0, 1.0, 0.0) if _tv_enabled
 		else Color(1.0, 0.1, 0.1))
-	_update_mute_button_color()
-	_update_audio_mode_button()
+	_audio.update_mute_button()
+	_audio.update_mode_button()
 	_update_aspect_button()
 	_apply_aspect()
 	if _tuner != null:
 		_tuner.set_active(_tv_enabled and current_source == Source.TV)
-	_apply_audio_channel_mode()
-	_apply_audio_volume()
+	_audio.apply_channel_mode()
+	_audio.apply_volume()
 
 
 # ── Options panel / display scale ────────────────────────────────────────────────
@@ -2054,33 +2014,12 @@ func is_muted() -> bool:
 	return _muted
 
 
-## What the set's own amplifier is passing: silence while off or muted.
-func _effective_volume() -> float:
-	return 0.0 if (not _tv_enabled or _muted) else _volume
+## Cycle the speaker switch. Stays on the set because object_sync replays it by
+## name on a peer and the remote's own key calls it. See tv_audio.gd.
+func set_audio_mode(mode: int) -> void:
+	_audio.set_mode(mode)
 
 
-## …and what reaches one input, which is nothing at all unless that input is the
-## one SOURCE has selected.
-##
-## The set has five sound sources and only ever plays one. Deselecting an input
-## used to silence only its PICTURE (set_screen_enabled) and leave its sound
-## running, so switching a console to the tuner played the channel over the top
-## of the game you had just been playing.
-func _volume_for(source: int) -> float:
-	return _effective_volume() if current_source == source else 0.0
-
-
-## Push the current volume to every connected device and to the built-in tuner, so
-## one knob governs whichever input is showing and the other four are quiet.
-func _apply_audio_volume() -> void:
-	# Every slot, not just the composite ones: a console reached through an RF switch
-	# is on Source.RF and has to be silenced with the rest when it is not showing.
-	for i in _connected_systems.size():
-		var system: Node3D = _connected_systems[i]
-		if system != null and is_instance_valid(system):
-			system.set_audio_volume(_volume_for(i))
-	if _tuner:
-		_tuner.set_volume(_volume_for(Source.TV))
 
 
 ## Hand the glass to the selected input and take it off every other one.
@@ -2144,7 +2083,7 @@ func _rf_tuned() -> bool:
 func on_rf_channel_changed() -> void:
 	if current_source != Source.RF:
 		return
-	_apply_audio_volume()
+	_audio.apply_volume()
 	show_osd_timed(_source_banner(), 2.0)
 
 
@@ -2157,52 +2096,6 @@ func _selected_system() -> Node3D:
 	return system if system != null and is_instance_valid(system) else null
 
 
-## A volume key clears mute (like a real set) so the change is audible.
-func _clear_mute_silently() -> void:
-	if _muted:
-		_muted = false
-		hide_osd()
-
-
-func _on_volume_down() -> void:
-	_clear_mute_silently()
-	_volume = maxf(0.0, _volume - 0.1)
-	if _tv_enabled:
-		_osd.show_volume()
-	if _tv_enabled:
-		_apply_audio_volume()
-	NetworkManager.report_event(NetObjectSync.EV_TV_VOL_DOWN, {"tv": self})
-
-
-func _on_volume_up() -> void:
-	_clear_mute_silently()
-	_volume = minf(1.0, _volume + 0.1)
-	if _tv_enabled:
-		_osd.show_volume()
-	if _tv_enabled:
-		_apply_audio_volume()
-	NetworkManager.report_event(NetObjectSync.EV_TV_VOL_UP, {"tv": self})
-
-
-## Toggle mute: silence (or restore) the connected device and show/clear a sticky
-## "MUTE" OSD in the same corner "POWER" uses. No-op audibility change while off.
-## Red while muted, matching the remote's own mute tint. Driven from here rather
-## than the button so the remote's mute lands on the same cap.
-func _update_mute_button_color() -> void:
-	if _mute_btn:
-		_mute_btn.set_color(Color(1.0, 0.35, 0.35) if _muted else Color(0.35, 0.35, 0.35))
-
-
-func _on_mute_toggle() -> void:
-	_muted = not _muted
-	_update_mute_button_color()
-	_update_audio_mode_button()
-	_apply_audio_volume()
-	if _muted:
-		show_osd("MUTE")
-	else:
-		hide_osd()
-	NetworkManager.report_event(NetObjectSync.EV_TV_MUTE, {"tv": self})
 
 
 func _on_tv_toggle() -> void:
@@ -2224,7 +2117,7 @@ func _on_tv_toggle() -> void:
 	# the tuner (or another input) -- it would start repainting the screen underneath.
 	if _tuner:
 		_tuner.set_active(_tv_enabled and current_source == Source.TV)
-	_apply_audio_volume()
+	_audio.apply_volume()
 	NetworkManager.report_event(NetObjectSync.EV_TV_POWER, {"tv": self})
 
 
