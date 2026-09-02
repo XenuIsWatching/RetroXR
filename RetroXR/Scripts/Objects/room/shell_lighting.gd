@@ -19,8 +19,19 @@ extends Node
 ## staying lit in a room whose light was just switched off.
 signal bake_volume_changed(volume: Dictionary)
 
-const SHADED_SHADER := "res://Shaders/pbr_surface.gdshader"
-const UNSHADED_SHADER := "res://Shaders/pbr_surface_unshaded.gdshader"
+## Every shell shader, and the unshaded twin it is swapped to on a headset.
+##
+## A map rather than one pair because a room's shell is not one material: the
+## bedroom's walls, floor and ceiling all wear `pbr_surface`, and the arcade's
+## floor and ceiling are two procedural shaders that could not be one - a neon
+## carpet pattern and a tile grid are not a texture set. What they share is the
+## contract, not the paint: each twin reads the same baked volume through
+## `shell_gi.gdshaderinc` and takes the same uniforms from this node.
+const SHELL_SHADERS := {
+	"res://Shaders/pbr_surface.gdshader": "res://Shaders/pbr_surface_unshaded.gdshader",
+	"res://Shaders/arcade_carpet.gdshader": "res://Shaders/arcade_carpet_unshaded.gdshader",
+	"res://Shaders/ceiling_tiles.gdshader": "res://Shaders/ceiling_tiles_unshaded.gdshader",
+}
 
 ## Slots in the shader. Past this the lights are ranked and the tail dropped.
 const MAX_LIGHTS := 4
@@ -249,9 +260,6 @@ func _switch_state() -> String:
 ## keeps the real lighting, which is right: a prop is small on screen, so it was
 ## never part of the cost, and it wants the shadows.
 func _convert() -> void:
-	var unshaded: Shader = load(UNSHADED_SHADER)
-	if unshaded == null:
-		return
 	var seen: Dictionary = {}
 	for node in _room.find_children("*", "GeometryInstance3D", true, false):
 		var gi := node as GeometryInstance3D
@@ -265,6 +273,9 @@ func _convert() -> void:
 				_bounds[at] = _bounds[at].merge(_world_aabb(gi))
 				continue
 			if not _is_shell(mat):
+				continue
+			var unshaded: Shader = load(SHELL_SHADERS[mat.shader.resource_path])
+			if unshaded == null:
 				continue
 			mat.shader = unshaded
 			seen[id] = _materials.size()
@@ -295,7 +306,7 @@ func _materials_of(gi: GeometryInstance3D) -> Array[ShaderMaterial]:
 
 
 func _is_shell(mat: ShaderMaterial) -> bool:
-	if mat.shader == null or mat.shader.resource_path != SHADED_SHADER:
+	if mat.shader == null or not SHELL_SHADERS.has(mat.shader.resource_path):
 		return false
 	return mat.get_shader_parameter("shell") == true
 

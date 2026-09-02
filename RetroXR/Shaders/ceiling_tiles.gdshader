@@ -1,23 +1,19 @@
 shader_type spatial;
 
-// Drop ceiling tile grid — off-white tiles with dark aluminum grid lines
+// The arcade's drop ceiling. DESKTOP variant: it hands the surface to Godot's
+// lighting and gets the full PBR treatment.
+//
+// On a headset `shell_lighting.gd` swaps this material to
+// `ceiling_tiles_unshaded.gdshader`. The ceiling is the second largest surface
+// in the room after the floor, and the four fixtures sit right against it.
+
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
-uniform vec3 tile_color : source_color = vec3(0.88, 0.86, 0.82);
-uniform vec3 grid_color : source_color = vec3(0.25, 0.25, 0.25);
-uniform float tile_scale : hint_range(0.5, 10.0) = 5.0;
-uniform float grid_width : hint_range(0.005, 0.05) = 0.02;
+#include "res://Shaders/ceiling_tiles_common.gdshaderinc"
 
 void fragment() {
-	vec2 uv = UV * tile_scale;
-	vec2 cell = fract(uv);
-
-	// Grid lines along edges
-	float grid = step(cell.x, grid_width) + step(1.0 - grid_width, cell.x);
-	grid += step(cell.y, grid_width) + step(1.0 - grid_width, cell.y);
-	grid = clamp(grid, 0.0, 1.0);
-
-	ALBEDO = mix(tile_color, grid_color, grid);
+	float grid = ceiling_grid(UV);
+	ALBEDO = ceiling_albedo(grid);
 	ROUGHNESS = mix(0.9, 0.5, grid);
 	METALLIC = mix(0.0, 0.4, grid);
 }

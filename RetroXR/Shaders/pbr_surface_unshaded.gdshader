@@ -33,6 +33,7 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, unshaded;
 
 #include "res://Shaders/pbr_surface_common.gdshaderinc"
+#include "res://Shaders/shell_gi.gdshaderinc"
 
 const int MAX_SHELL_LIGHTS = 4;
 
@@ -54,47 +55,12 @@ uniform vec4 light_axis[MAX_SHELL_LIGHTS];
 // bounce rather than as a second lamp.
 uniform vec4 light_falloff[MAX_SHELL_LIGHTS];
 
-// Hemispheric ambient. Godot's own is a single constant colour, which leaves a
-// normal map completely flat wherever no light reaches; splitting it by the
-// world normal's Y costs one mix and keeps the plaster's relief readable in the
-// parts of the room the lamps do not get to.
-//
-// LINEAR, like every colour below. Not `source_color`: these are fed from script
-// beside `light_rgbe`, which cannot be a `source_color` uniform because it
-// carries an energy in its alpha — so one converter in `shell_lighting.gd`
-// handles them all rather than half being converted by the engine and half not.
-uniform vec3 ambient_sky = vec3(0.35, 0.33, 0.30);
-uniform vec3 ambient_ground = vec3(0.16, 0.14, 0.13);
-uniform float ambient_energy : hint_range(0.0, 4.0) = 1.0;
-
-// Lambert goes hard to black at the terminator, which on a large flat wall reads
-// as a seam. Wrapping the diffuse pushes the terminator round the back and is
-// what a rough painted surface with a lot of local bounce actually looks like.
-// Kept small: at 0.35 it lifted every unlit wall and the room read flat.
-uniform float diffuse_wrap : hint_range(0.0, 1.0) = 0.12;
+// Ambient, the wrapped-diffuse constant and the baked volume all live in
+// `shell_gi.gdshaderinc`, which every shell shader shares.
 
 // A single Blinn lobe, so the roughness map is not fetched for nothing. Small by
 // default: the shell is plaster and carpet, not polish.
 uniform float specular_strength : hint_range(0.0, 1.0) = 0.15;
-
-// --- Baked irradiance volume -------------------------------------------------
-// When a room ships a bake, the light loop above is not run at all: the lighting
-// comes from a volume indexed by world position, which costs two fetches and no
-// arithmetic. Measured on a Quest 3 at eye buffer 1.00x, bedroom: Godot's
-// lighting 20.04 ms, the analytic loop 14.72 ms, a bake-shaped profile 12.34 ms
-// — 72 fps, the refresh cap. The loop is kept for rooms with no bake, and for
-// the exterior surfaces, which sit outside the volume.
-//
-// `gi_dir` is what stops a volume looking like flat ambient. Irradiance at a
-// point knows nothing about which way a surface faces, so the ceiling under the
-// globe would read as brightly as the floor. The dominant direction and how
-// directional the point is (a = 1 one lamp, a = 0 fully diffuse) put the normal
-// back in.
-uniform bool use_gi = false;
-uniform sampler3D gi_irr : filter_linear, repeat_disable;
-uniform sampler3D gi_dir : filter_linear, repeat_disable;
-uniform vec3 gi_min = vec3(0.0);
-uniform vec3 gi_size = vec3(1.0);
 
 
 void vertex() {
@@ -180,20 +146,15 @@ void fragment() {
 	//
 	// Contact darkens it as well as the albedo, which is where a flat ambient
 	// shows itself — the same reason the desktop variant feeds AO.
-	float sky_mix = n.y * 0.5 + 0.5;
-	vec3 lit = albedo * mix(ambient_ground, ambient_sky, sky_mix) * ambient_energy * contact;
+	vec3 lit = albedo * shell_ambient(n) * contact;
 
 	// The branch is on a uniform, so it is coherent across every fragment in the
 	// draw and only one side is ever taken. `return` cannot be used to skip the
 	// loop instead: Godot rejects it outright in fragment().
 	if (use_gi) {
-		vec3 uvw = clamp((v_world_pos - gi_min) / gi_size, vec3(0.0), vec3(1.0));
-		vec4 dr = texture(gi_dir, uvw);
-		vec3 gl = normalize(dr.rgb * 2.0 - 1.0);
-		float gndl = clamp((dot(n, gl) + diffuse_wrap) / (1.0 + diffuse_wrap), 0.0, 1.0);
 		// The volume already carries the room's ambient, so this REPLACES `lit`
 		// rather than adding to it - adding would count the ambient twice.
-		lit = albedo * texture(gi_irr, uvw).rgb * mix(1.0, gndl, dr.a) * contact;
+		lit = albedo * shell_gi_irradiance(v_world_pos, n) * contact;
 	} else {
 
 	float shine = exp2(mix(4.0, 10.0, 1.0 - rough));
@@ -229,7 +190,7 @@ void fragment() {
 		vec4 rgbe = light_rgbe[i];
 		vec3 energy = rgbe.rgb * rgbe.a * atten;
 
-		float ndl = clamp((dot(n, l) + diffuse_wrap) / (1.0 + diffuse_wrap), 0.0, 1.0);
+		float ndl = shell_wrapped_ndl(n, l);
 		lit += albedo * energy * ndl * contact;
 
 		float spec = pow(max(dot(n, normalize(l + view)), 0.0), shine);

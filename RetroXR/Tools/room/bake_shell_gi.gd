@@ -76,6 +76,14 @@ func _bake(scene_path: String, out_name: String) -> void:
 		await get_tree().process_frame
 	await get_tree().physics_frame
 
+	# The energies a HEADSET applies, not the ones the scene authors.
+	# QualityManager is an autoload, so its own boot call ran before this room
+	# existed and reached none of its lights; and this bake runs on a desktop but
+	# is only ever read on a headset. Skipping it bakes the arcade 33% bright and
+	# its neon three times over, into a file nothing downstream can correct.
+	QualityManager.adjust_lights(false)
+	await get_tree().physics_frame
+
 	var bounds := _shell_bounds(room)
 	if bounds.size == Vector3.ZERO:
 		push_error("[bake] no shell meshes found in %s" % scene_path)

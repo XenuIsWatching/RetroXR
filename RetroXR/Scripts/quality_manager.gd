@@ -248,7 +248,7 @@ func _ready() -> void:
 	_load_prefs()
 	# _load_prefs restores the saved foveation, which would undo a boot override.
 	_read_vrs_overrides()
-	_adjust_lights()
+	adjust_lights()
 	apply_render_scale()
 	apply_msaa()
 	apply_post_aa()
@@ -664,15 +664,22 @@ func is_desktop() -> bool:
 	return _desktop
 
 
-func _adjust_lights() -> void:
+## Public, and platform-explicit, because this autoload is ready BEFORE any room
+## scene exists — the boot call below reaches no light in the room a player
+## actually walks into, only whatever is in the boot scene. `bake_shell_gi.gd`
+## calls it against the room it has just instantiated, and passes `false`: a bake
+## runs on a desktop but is FOR a headset, and one that skipped this would encode
+## the energies the scene authors (0.8 / 1.5) rather than the ones a Quest
+## applies (0.6 / 0.5), then ship them in a .res nothing reads back.
+func adjust_lights(desktop: bool = _desktop) -> void:
 	# Ceiling lights — dimmer for arcade feel, extra dim on Quest
-	var ceil_energy := 0.8 if _desktop else 0.6
+	var ceil_energy := 0.8 if desktop else 0.6
 	for light in get_tree().get_nodes_in_group("ceiling_light"):
 		if light is Light3D:
 			light.light_energy = ceil_energy
 
 	# Neon sign lights — reduced on Quest
-	var neon_energy := 1.5 if _desktop else 0.5
+	var neon_energy := 1.5 if desktop else 0.5
 	for light in get_tree().get_nodes_in_group("neon_light"):
 		if light is Light3D:
 			light.light_energy = neon_energy

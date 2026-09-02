@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" uid="uid://btn0gji8qtw2l" path="res://Scripts/XR/xr_init.gd" id="3_xrinit"]
 [ext_resource type="PackedScene" uid="uid://mft7vy78rjrv" path="res://Scenes/Objects/tv.tscn" id="13_tv"]
+[ext_resource type="Script" path="res://Scripts/Objects/room/shell_lighting.gd" id="25_shelllight"]
+[ext_resource type="Script" path="res://Scripts/Objects/room/prop_lighting.gd" id="26_proplight"]
 [ext_resource type="Shader" uid="uid://ctwkb7jcoma01" path="res://Shaders/arcade_carpet.gdshader" id="20_carpet"]
 [ext_resource type="Shader" uid="uid://ck7deycag7kku" path="res://Shaders/ceiling_tiles.gdshader" id="21_ceiltiles"]
 [ext_resource type="PackedScene" path="res://Scenes/player_rig.tscn" id="23_playerrig"]
@@ -39,6 +41,7 @@ size = Vector2(10, 10)
 [sub_resource type="ShaderMaterial" id="Mat_carpet"]
 render_priority = 0
 shader = ExtResource("20_carpet")
+shader_parameter/shell = true
 shader_parameter/base_color = Color(0.06, 0.04, 0.08, 1)
 shader_parameter/color_cyan = Color(0, 0.9, 0.9, 1)
 shader_parameter/color_pink = Color(0.95, 0.1, 0.5, 1)
@@ -108,6 +111,7 @@ size = Vector3(10, 0.15, 10)
 [sub_resource type="ShaderMaterial" id="Mat_ceiling_tiles"]
 render_priority = 0
 shader = ExtResource("21_ceiltiles")
+shader_parameter/shell = true
 shader_parameter/tile_color = Color(0.88, 0.86, 0.82, 1)
 shader_parameter/grid_color = Color(0.25, 0.25, 0.25, 1)
 shader_parameter/tile_scale = 5.0
@@ -303,7 +307,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.95, -0.5)
 
 [node name="CeilLight_NE" type="OmniLight3D" parent="." unique_id=-1294967096 groups=["ceiling_light"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.7, -2.5)
-visible = false
 light_color = Color(1, 0.9, 0.7, 1)
 light_energy = 0.8
 omni_range = 6.0
@@ -315,7 +318,6 @@ surface_material_override/0 = SubResource("Mat_fixture")
 
 [node name="CeilLight_NW" type="OmniLight3D" parent="." unique_id=-1294967095 groups=["ceiling_light"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2.7, -2.5)
-visible = false
 light_color = Color(1, 0.9, 0.7, 1)
 light_energy = 0.8
 omni_range = 6.0
@@ -327,7 +329,6 @@ surface_material_override/0 = SubResource("Mat_fixture")
 
 [node name="CeilLight_SE" type="OmniLight3D" parent="." unique_id=-1294967094 groups=["ceiling_light"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.7, 2.5)
-visible = false
 light_color = Color(1, 0.9, 0.7, 1)
 light_energy = 0.8
 omni_range = 6.0
@@ -339,7 +340,6 @@ surface_material_override/0 = SubResource("Mat_fixture")
 
 [node name="CeilLight_SW" type="OmniLight3D" parent="." unique_id=-1294967093 groups=["ceiling_light"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2.7, 2.5)
-visible = false
 light_color = Color(1, 0.9, 0.7, 1)
 light_energy = 0.8
 omni_range = 6.0
@@ -356,8 +356,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 4.95)
 mesh = SubResource("QuadMesh_neon")
 surface_material_override/0 = SubResource("Mat_neon_pink")
 
-[node name="NeonLight" type="OmniLight3D" parent="NeonSign_South" unique_id=1692349355 groups=["neon_light"]]
-visible = false
+[node name="NeonLight" type="OmniLight3D" parent="NeonSign_South" unique_id=1692349355 groups=["neon_light", "shell_only_light"]]
 light_color = Color(0.95, 0.1, 0.5, 1)
 light_energy = 1.5
 omni_range = 3.5
@@ -369,8 +368,7 @@ transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 4.95, 2.2, 0)
 mesh = SubResource("QuadMesh_neon")
 surface_material_override/0 = SubResource("Mat_neon_cyan")
 
-[node name="NeonLight" type="OmniLight3D" parent="NeonSign_East" unique_id=1500393000 groups=["neon_light"]]
-visible = false
+[node name="NeonLight" type="OmniLight3D" parent="NeonSign_East" unique_id=1500393000 groups=["neon_light", "shell_only_light"]]
 light_color = Color(0, 0.9, 0.9, 1)
 light_energy = 1.5
 omni_range = 3.5
@@ -382,8 +380,7 @@ transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -4.95, 2.2, 0)
 mesh = SubResource("QuadMesh_neon")
 surface_material_override/0 = SubResource("Mat_neon_green")
 
-[node name="NeonLight" type="OmniLight3D" parent="NeonSign_West" unique_id=496482046 groups=["neon_light"]]
-visible = false
+[node name="NeonLight" type="OmniLight3D" parent="NeonSign_West" unique_id=496482046 groups=["neon_light", "shell_only_light"]]
 light_color = Color(0.2, 1, 0.3, 1)
 light_energy = 1.5
 omni_range = 3.5
@@ -464,3 +461,12 @@ surface_material_override/0 = SubResource("Mat_poster_4")
 [node name="ReflectionProbe" type="ReflectionProbe" parent="." unique_id=1388420262 groups=["reflection_probe"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 size = Vector3(10, 3.5, 10)
+
+[node name="ShellLighting" type="Node" parent="." unique_id=1033434417]
+script = ExtResource("25_shelllight")
+world_env_path = NodePath("../WorldEnvironment")
+gi_bake = "arcade"
+
+[node name="PropLighting" type="Node" parent="." unique_id=1033434418]
+script = ExtResource("26_proplight")
+shell_lighting_path = NodePath("../ShellLighting")
