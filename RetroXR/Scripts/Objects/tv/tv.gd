@@ -268,6 +268,8 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	# Off its own cast lights' layer; see ScreenCastLight.SCREEN_LAYER.
+	ScreenCastLight.mark_screen(_screen_mesh)
 	super._ready()
 	# Before the shell is worn, which re-seats every one of them.
 	_panel.collect()

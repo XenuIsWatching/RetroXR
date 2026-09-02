@@ -35,9 +35,27 @@ var _left_light: SpotLight3D = null
 var _right_light: SpotLight3D = null
 
 
+## Render layer the screens themselves live on, and the one these lights do
+## not light. A cast light sits at its own screen's face and points away, so
+## it can never light that glass - yet the mobile renderer shades every light
+## whose range reaches an object for every pixel of it, and a screen's own
+## three cones cost its CRT shader hundreds of ALU per fragment for nothing.
+## Measured on a Quest 3 at eye buffer 1.5: the screen draws were 1,400 to
+## 1,700 ALU a fragment, a few hundred of it the picture. mark_screen puts a
+## screen on this layer alone; the ceiling lights still reach it, so the
+## glass keeps its reflections.
+const SCREEN_LAYER := 1 << 9
+
+
+static func mark_screen(mesh: MeshInstance3D) -> void:
+	if mesh != null:
+		mesh.layers = SCREEN_LAYER
+
+
 func _ready() -> void:
 	shadow_enabled = false
 	spot_angle = GLOW_ANGLE_DEG
+	light_cull_mask &= ~SCREEN_LAYER
 	_left_light = _make_region_light("LeftGlow")
 	_right_light = _make_region_light("RightGlow")
 	_refresh_frame = randi() % _refresh_interval()
@@ -122,6 +140,7 @@ func _make_region_light(light_name: String) -> SpotLight3D:
 	light.name = light_name
 	light.shadow_enabled = false
 	light.spot_angle = GLOW_ANGLE_DEG
+	light.light_cull_mask &= ~SCREEN_LAYER
 	add_child(light)
 	return light
 

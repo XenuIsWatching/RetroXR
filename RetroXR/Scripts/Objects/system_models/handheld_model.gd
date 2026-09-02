@@ -124,6 +124,7 @@ func _setup_screen_light() -> void:
 ## (or lid-mounted) screen automatically. Reusable for devices with more than one
 ## screen (see RetroSystemModelDualScreen).
 func _make_screen_light(screen: MeshInstance3D) -> ScreenCastLight:
+	ScreenCastLight.mark_screen(screen)
 	if screen == null:
 		return null
 	var light := ScreenCastLight.new()
