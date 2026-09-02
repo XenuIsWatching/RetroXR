@@ -17,10 +17,6 @@ on:
         description: Create a GitHub Release from this build
         type: boolean
         default: false
-      notify:
-        description: Send the SideQuest webhook (needs publish)
-        type: boolean
-        default: false
 
 env:
   GODOT_VERSION: 4.7-stable
@@ -446,66 +442,57 @@ jobs:
           set -euo pipefail
           ls -la dist
           gh release create "$TAG" --title "RetroXR $TAG" --generate-notes dist/*
-
-      # Neither webhook can be trusted to report what it did.
+      # SideQuest's GitHub integration no longer takes a push from CI, so this
+      # step reports rather than acts. version-webhook answers 410 Gone to every
+      # request (a deliberately fake token included, which is how its death was
+      # told apart from a bad credential). release-webhook is still routed but
+      # answers 200 whatever happens - a malformed payload comes back 200
+      # "No! repo", and a well-formed one came back 200 with an empty body while
+      # leaving the listing untouched, on v0.3.0 and again on v0.5.0-rc.
       #
-      # version-webhook was retired: it answers 410 Gone to every request, a
-      # deliberately fake token included, which is how its death was told apart
-      # from a bad credential. release-webhook is still routed but answers 200
-      # whatever happens - a malformed payload comes back 200 "No! repo", and on
-      # v0.3.0 a well-formed one came back 200 with an empty body while leaving
-      # the listing on v0.2.0. Reading the status code is what let that ship as
-      # "sent".
-      #
-      # So: poke the webhook, then ask the public listing what SideQuest is
-      # actually serving, and believe only that. Failing here does not unpublish
-      # anything - the release is already out by this point - it just says the
-      # portal needs a hand.
-      - name: Point SideQuest at the new APK
+      # Two no-ops on two releases is enough: the POST is gone. What is left is
+      # the only thing that was ever true - ask the public listing what SideQuest
+      # is serving, and if it is not this tag, say so and print the manual steps.
+      # This never fails the job. The release is already published by this point,
+      # and the portal visit is a human action either way.
+      - name: Report what SideQuest is serving
         env:
-          GH_TOKEN: ${{ github.token }}
-          WEBHOOK: ${{ secrets.SIDEQUEST_RELEASE_WEBHOOK }}
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', needs.preflight.outputs.version_name) }}
-          NOTIFY: ${{ github.ref_type == 'tag' || inputs.notify }}
           APP_ID: '61366'
         run: |
-          set -euo pipefail
-          [ -n "${WEBHOOK:-}" ] || { echo "::error::secret SIDEQUEST_RELEASE_WEBHOOK is unset"; exit 1; }
+          set -uo pipefail
 
           # api.sidequestvr.com 403s a bare urllib-style client; curl is fine.
           serving() {
             curl -sS --max-time 30 "https://api.sidequestvr.com/v2/apps/$APP_ID" \
               | jq -r '[.urls[] | select(.provider == "Github Release") | .link_url] | join(" ")'
           }
-          echo "listing currently serves: $(serving || echo '<unreadable>')"
 
-          if [ "$NOTIFY" != true ]; then
-            echo "notify is off - would POST the release payload to the webhook"
-            exit 0
-          fi
-
-          # The same payload shape a GitHub repository webhook would send, which
-          # is what this endpoint expects. sidequest.yml builds it identically.
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > release.json
-          gh api "repos/$GITHUB_REPOSITORY" > repository.json
-          jq -n --slurpfile r release.json --slurpfile repo repository.json \
-            '{action: "published", release: $r[0], repository: $repo[0]}' > payload.json
-
-          code=$(curl -sS -o resp.txt -w '%{http_code}' -X POST "$WEBHOOK" \
-                   -H 'Content-Type: application/json' -H 'X-GitHub-Event: release' \
-                   --data-binary @payload.json)
-          echo "webhook: HTTP $code $(cat resp.txt)"
-
-          # The sync is not synchronous even when it works, so give it five
-          # minutes before calling it dead.
-          for _ in $(seq 1 20); do
+          # The listing does update itself when Release is left on [ latest ],
+          # so give it a minute before assuming it needs a hand.
+          for _ in $(seq 1 6); do
             now=$(serving || true)
             case "$now" in
-              *"/download/$TAG/"*) echo "SideQuest is serving $TAG:"; echo "  $now"; exit 0 ;;
+              *"/download/$TAG/"*)
+                echo "SideQuest is serving $TAG:"
+                echo "  $now"
+                exit 0 ;;
             esac
-            sleep 15
+            sleep 10
           done
 
-          echo "listing still serves: ${now:-<unreadable>}"
-          echo "::error::SideQuest did not pick up $TAG (webhook said HTTP $code). Set it by hand: Developer Portal > RetroXR > Edit listing > Distribution > Release, choose $TAG, Save & publish. That dropdown reads the repo's releases directly, so $TAG is already in it."
-          exit 1
+          echo "listing serves: ${now:-<unreadable>}"
+          {
+            echo "### SideQuest still needs a hand"
+            echo
+            echo "The listing is not serving \`$TAG\` yet. Set it by hand:"
+            echo
+            echo "Developer Portal > RetroXR > Edit listing > Distribution > **Release**,"
+            echo "choose \`$TAG\`, then *Save & publish*. That dropdown reads the repo's"
+            echo "releases directly, so \`$TAG\` is already in it, and the sync pulls every"
+            echo "asset on the release (the Windows .zip comes along with the APK)."
+            echo
+            echo "Note it leaves Release pinned to that tag rather than \`[ latest ]\`,"
+            echo "so the next release needs the same visit."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::SideQuest is not serving $TAG - set it by hand in the Developer Portal (steps in the job summary)"
