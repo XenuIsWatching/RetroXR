@@ -56,7 +56,7 @@ const SOURCES := {
 		# URL — see base_url. It is only the version to show when GitHub cannot be
 		# reached, so an offline player still sees something truthful rather than
 		# a blank.
-		"known_tag": "retroxr-dolphin-libretro-v7",
+		"known_tag": "retroxr-dolphin-libretro-v8",
 		"label": "Dolphin (retroXR build)",
 		# Per platform, because we only publish what we build. A platform absent
 		# here is not an error — the manager falls back to the buildbot for it,
