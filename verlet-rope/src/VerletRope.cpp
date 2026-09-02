@@ -611,11 +611,24 @@ void VerletRope::RebuildMaterials()
         m_materials[c]->set_shader_parameter("cable_color", CordColor(c));
 }
 
+bool VerletRope::CordsShareColour() const
+{
+    const int cords = m_ribbon_count > 0 ? m_ribbon_count : 1;
+    for (int c = 1; c < cords; ++c)
+        if (CordColor(c) != CordColor(0))
+            return false;
+    return true;
+}
+
+// A colour change can move a built ribbon between one shared surface and a
+// surface per cord (BuildMeshTopology), so the mesh is rebuilt when it does.
 void VerletRope::SetRopeColor(const Color &p_color)
 {
     m_rope_color = p_color;
     for (size_t c = 0; c < m_materials.size(); ++c)
         m_materials[c]->set_shader_parameter("cable_color", CordColor(static_cast<int>(c)));
+    if (m_built_cords > 1 && m_built_merged != CordsShareColour())
+        BuildMeshTopology();
 }
 
 void VerletRope::SetRibbonColors(const PackedColorArray &p_colors)
@@ -623,6 +636,8 @@ void VerletRope::SetRibbonColors(const PackedColorArray &p_colors)
     m_ribbon_colors = p_colors;
     for (size_t c = 0; c < m_materials.size(); ++c)
         m_materials[c]->set_shader_parameter("cable_color", CordColor(static_cast<int>(c)));
+    if (m_built_cords > 1 && m_built_merged != CordsShareColour())
+        BuildMeshTopology();
 }
 
 // Changing the cord count changes the surface count, so the mesh has to be

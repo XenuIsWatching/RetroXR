@@ -443,6 +443,10 @@ private:
     // resize after _ready rebuilds instead of overrunning the ring buffers.
     int m_built_cords = 0;
     int m_built_rings = 0;
+    // Cords of one colour share a single surface; see BuildMeshTopology.
+    bool m_built_merged = false;
+    int m_built_vertices = 0;
+    bool CordsShareColour() const;
     int m_built_sides = 0;
 
     // ── Exported values ──────────────────────────────────────────────────────

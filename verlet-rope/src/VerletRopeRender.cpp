@@ -8,10 +8,14 @@
 // Custom attributes live in the ATTRIBUTE buffer instead, which has its own
 // region-update call, so the normal rides along for one extra bulk upload.
 //
-// A ribbon cable draws one SURFACE per cord, each with its own material, rather
-// than one surface carrying per-vertex colour: colour would have to live in the
-// attribute buffer next to CUSTOM0, and the per-frame region upload rewrites
-// that whole buffer. Every cord shares the trunk's simulated centreline and is
+// A ribbon cable whose cords differ in colour draws one SURFACE per cord, each
+// with its own material, rather than one surface carrying per-vertex colour:
+// colour would have to live in the attribute buffer next to CUSTOM0, and the
+// per-frame region upload rewrites that whole buffer. Cords that all wear ONE
+// colour - the composite lead, black on every cord - share a single surface
+// instead, each cord at its own offset in the buffers: the mobile renderer
+// issues a draw per surface, and three of the same material were three draws
+// where one does. Every cord shares the trunk's simulated centreline and is
 // offset laterally in its transport frame, so the extra cost is meshing, never
 // solving.
 
@@ -127,13 +131,44 @@ void VerletRope::BuildMeshTopology()
     am.instantiate();
     const uint64_t fmt = static_cast<uint64_t>(Mesh::ARRAY_CUSTOM_RGBA_FLOAT)
                          << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT;
-    for (int c = 0; c < cords; ++c)
+    const bool merged = cords > 1 && CordsShareColour();
+    if (merged)
     {
+        // Every cord's vertices in one buffer, cord c starting at
+        // c * vertex_count; the index array is the same topology repeated with
+        // that offset. RenderCord uploads each cord's region into the one
+        // surface.
+        PackedVector3Array all_vertices;
+        all_vertices.resize(vertex_count * cords);
+        PackedFloat32Array all_normals;
+        all_normals.resize(vertex_count * 4 * cords);
+        PackedInt32Array all_indices;
+        const int per_cord = static_cast<int>(index_array.size());
+        all_indices.resize(per_cord * cords);
+        int32_t *iw = all_indices.ptrw();
+        const int32_t *ir = index_array.ptr();
+        for (int c = 0; c < cords; ++c)
+            for (int k = 0; k < per_cord; ++k)
+                iw[c * per_cord + k] = ir[k] + c * vertex_count;
+        arrays[Mesh::ARRAY_VERTEX] = all_vertices;
+        arrays[Mesh::ARRAY_INDEX] = all_indices;
+        arrays[Mesh::ARRAY_CUSTOM0] = all_normals;
         am->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, TypedArray<Array>(),
                                     Dictionary(), fmt);
-        am->surface_set_material(c, m_materials[c]);
+        am->surface_set_material(0, m_materials[0]);
+    }
+    else
+    {
+        for (int c = 0; c < cords; ++c)
+        {
+            am->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, TypedArray<Array>(),
+                                        Dictionary(), fmt);
+            am->surface_set_material(c, m_materials[c]);
+        }
     }
     set_mesh(am);
+    m_built_merged = merged;
+    m_built_vertices = vertex_count;
 
     // Staging buffers for the per-frame region uploads, sized once. One pair per
     // cord: the region update queues the array for the render thread, so writing
@@ -350,6 +385,17 @@ void VerletRope::RenderCord(int p_cord)
     Ref<ArrayMesh> am = get_mesh();
     if (am.is_null())
         return;
+    if (m_built_merged)
+    {
+        // One surface for every cord: this cord's region sits after the ones
+        // before it. Positions are float3 and CUSTOM0 is float4, and neither
+        // buffer holds anything else (no normal array, see the file header).
+        const int64_t v_off = static_cast<int64_t>(p_cord) * m_built_vertices * 3 * sizeof(float);
+        const int64_t n_off = static_cast<int64_t>(p_cord) * m_built_vertices * 4 * sizeof(float);
+        am->surface_update_vertex_region(0, v_off, m_vertex_bytes[p_cord]);
+        am->surface_update_attribute_region(0, n_off, m_normal_bytes[p_cord]);
+        return;
+    }
     am->surface_update_vertex_region(p_cord, 0, m_vertex_bytes[p_cord]);
     am->surface_update_attribute_region(p_cord, 0, m_normal_bytes[p_cord]);
 }
