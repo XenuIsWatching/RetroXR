@@ -14,6 +14,8 @@
 ##     bearing, and this shader does not reproduce them.
 ##   • Nothing on the exterior layer. The volume is fitted to the room's inside,
 ##     and the street is nowhere near it.
+##   • Nothing under a ControllerArt. The controller the runtime draws is not a
+##     prop, and that node owns its materials — see _in_controller_art.
 ##
 ## The prop's own albedo, normal and emission maps are carried across, so a
 ## console still looks like that console. What it gives up is per-light
@@ -79,6 +81,8 @@ func _convert(gi: GeometryInstance3D, shader: Shader, volume: Dictionary,
 		seen: Dictionary) -> void:
 	if gi.layers & layers == 0:
 		return
+	if _in_controller_art(gi):
+		return
 	var mi := gi as MeshInstance3D
 	if mi == null or mi.mesh == null:
 		return
@@ -137,3 +141,27 @@ func _translate(src: BaseMaterial3D, shader: Shader, volume: Dictionary) -> Shad
 	out.set_shader_parameter("gi_min", volume["min"])
 	out.set_shader_parameter("gi_size", volume["size"])
 	return out
+
+
+## The controller art the XR runtime hands over is not a prop, and converting it
+## does lasting damage rather than costing a frame. ControllerArt duplicates
+## those materials and writes `albedo_color.a` on them to fade the controller out
+## of a grab; this shader resolves ALPHA from a COPY of albedo_color taken at
+## conversion, so a walk that lands mid-fade freezes the controller translucent
+## for the rest of the session — and leaves a ShaderMaterial behind, which is not
+## a BaseMaterial3D, so the fade can never write to it again to put it right.
+##
+## The room walk reaches it at all because the scene root is the room here, and
+## because the runtime delivers the model asynchronously — measured on a Quest 3,
+## it landed 354 ms before this walk, so the ordering is not reliably either way.
+##
+## Scoped to ControllerArt rather than to the whole rig on purpose: the hands and
+## pointers hanging off XROrigin3D are shown and hidden outright, never faded, so
+## they have no alpha to freeze and go on taking the room's light as before.
+func _in_controller_art(node: Node) -> bool:
+	var n: Node = node
+	while n != null:
+		if n is ControllerArt:
+			return true
+		n = n.get_parent()
+	return false
