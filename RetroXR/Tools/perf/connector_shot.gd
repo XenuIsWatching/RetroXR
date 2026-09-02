@@ -73,6 +73,9 @@ func _ready() -> void:
 	await _shoot(sv, cam, "tv_jacks", tv.get_node_or_null("AudioLIn"), 0.11, Vector3(0.02, 0.03, 0))
 	await _shoot(sv, cam, "plug", cable.get_node_or_null("PlugA0/PlugTip"), 0.07, Vector3(0.02, 0.025, 0))
 	await _shoot(sv, cam, "psx_jacks", psx.get_node_or_null("AudioLOut"), 0.09, Vector3(0.02, 0.03, 0))
+	# The whole console from the front and above: the top shell's trims and
+	# decals, which the post-import merge folds into two surfaces.
+	await _shoot(sv, cam, "psx_top", psx, -0.42, Vector3(0.12, 0.30, 0))
 	print("[shot] done")
 	get_tree().quit(0)
 
