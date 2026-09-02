@@ -54,10 +54,15 @@
 ## connector's equivalent of the RCA pair's 10 mm. vga_port.tscn and every seat
 ## that copies it carry that number; use the RCA one and the plug floats.
 ##
-## Surface order is public API — composite_cable.gd::_tint_plug recolours surface 0:
-##   0 = plastic (blue hood / blue insulator)
-##   1 = metal (D-shell, flange, thumbscrews)
-##   2 = brass pins (male) / the dark contact bores (female)
+## Each half is ONE surface on the shared connector material
+## (Shaders/connector.gdshader), the part carried in vertex colour:
+##   plastic (blue hood / blue insulator)
+##   metal (D-shell, flange, thumbscrews)
+##   brass pins (male) / the dark contact bores (female)
+## The blue is the GLOSS class in its own colour rather than the tinted one:
+## vga_cable.tscn's cord_colors carries this same blue, so the tint
+## composite_cable.gd::_tint_plug sets on the instance has nothing to add, and a
+## jack with no script would otherwise fall back to the shader's default yellow.
 ##
 ## The 15 bores are dark by MATERIAL, not by depth. These rooms light with
 ## ambient_light_source = COLOR and no radiance map, so nothing is shadowed for being
@@ -189,9 +194,13 @@ func _build_plug() -> void:
 		BORE_W_BOT - 2.0 * MALE_CLEAR - 2.0 * SHELL_WALL,
 		BORE_H - 2.0 * MALE_CLEAR - 2.0 * SHELL_WALL)
 
-	# --- surface 0: blue hood, strain relief, insert, thumbscrew knobs --------
+	# --- blue hood, strain relief, insert, thumbscrew knobs ------------------
+	# One SurfaceTool for the whole plug: each part is built after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(VGA_BLUE))
 	var l_front := _rrect_loop(HOOD_W, HOOD_H, HOOD_R)
 	var l_mid := _rrect_loop(MID_W, MID_W, MID_R)
 	var l_cord := _rrect_loop(CORD_R * 2.0, CORD_R * 2.0, CORD_R)
@@ -231,39 +240,23 @@ func _build_plug() -> void:
 	# lead are moulded plastic, and only the shank that reaches the panel is metal.
 	for sx in [-SCREW_X, SCREW_X]:
 		_lathe(st, _knob_profile(), Vector3(sx, 0.0, 0.0))
-	st.generate_normals()
-	var m_body := PlugMats.plastic(VGA_BLUE)
-	st.set_material(m_body)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_body)
 
-	# --- surface 1: D-shell and the thumbscrew shanks ------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- D-shell and the thumbscrew shanks -----------------------------------
+	st.set_color(PlugMats.chrome_vertex())
 	_loft(st, sh_out, Z_HOOD_FACE, sh_out, Z_SHELL_END)      # outside wall
 	_loft(st, sh_in, Z_SHELL_END, sh_in, Z_HOOD_FACE)        # bore, wound inward
 	_band(st, sh_in, sh_out, Z_SHELL_END, true)              # rim at the open end
 	for sx in [-SCREW_X, SCREW_X]:
 		_tube(st, SCREW_R, SCREW_R, Z_KNOB_FRONT, Z_SCREW_TIP, true,
 			Vector3(sx, 0.0, 0.0), RING_PIN)
-	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
 
-	# --- surface 2: the 15 pins ----------------------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- the 15 pins ---------------------------------------------------------
+	st.set_color(PlugMats.metal_vertex(Color(0.86, 0.78, 0.48)))   # brass
 	for xy: Vector2 in _contacts():
 		_tube(st, PIN_R, PIN_R, Z_INSERT_FACE, Z_PIN_END, true,
 			Vector3(xy.x, xy.y, 0.0), RING_PIN)
-	st.generate_normals()
-	var m_pin := PlugMats.brass()
-	st.set_material(m_pin)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_pin)
 
+	_commit(st, mesh)
 	_save(mesh, OUT_PLUG, true)
 
 
@@ -322,21 +315,16 @@ func _build_jack() -> void:
 		BORE_H + 2.0 * SHELL_WALL)
 	var flange := _rrect_loop(FLANGE_W, FLANGE_H, 0.0015)
 
-	# --- surface 0: the blue insulator face, holes and all -------------------
+	# --- the blue insulator face, holes and all ------------------------------
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(VGA_BLUE))
 	_insulator_face(st, bore, Z_JACK_INSERT)
-	st.generate_normals()
-	var m_body := PlugMats.plastic(VGA_BLUE)
-	st.set_material(m_body)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_body)
 
-	# --- surface 1: flange, shell, thumbscrew bosses -------------------------
+	# --- flange, shell, thumbscrew bosses ------------------------------------
 	# Open at the back, as the RCA jack is: that end is against the panel and
 	# closing it would only add triangles nobody can see.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.chrome_vertex())
 	_loft(st, flange, Z_PANEL, flange, Z_FLANGE_END)          # flange edge
 	_band(st, sh_out, flange, Z_FLANGE_END, true)             # flange face
 	_loft(st, sh_out, Z_JACK_BACK, sh_out, Z_JACK_SHELL_END)  # shell outside
@@ -350,18 +338,12 @@ func _build_jack() -> void:
 		var at := Vector3(sx, 0.0, 0.0)
 		_tube(st, BOSS_R, BOSS_R, Z_PANEL, Z_BOSS_END, false, at, 6)
 		_annulus(st, SCREW_R + 0.0002, BOSS_R, Z_BOSS_END, at, 6)
-	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
 
-	# --- surface 2: the 15 contact bores, and the screw bores ---------------
+	# --- the 15 contact bores, and the screw bores ---------------------------
 	# Nearly black and rough, which is what a recessed contact looks like anyway —
-	# see the header. Kept off surface 0 so recolouring an insulator could never
-	# turn its holes blue.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# see the header. Its own class, so the holes stay dark whatever the insulator
+	# is coloured.
+	st.set_color(PlugMats.socket_vertex())
 	for xy: Vector2 in _contacts():
 		var at := Vector3(xy.x, xy.y, 0.0)
 		_tube(st, HOLE_R, HOLE_R, Z_JACK_INSERT, Z_BORE_FLOOR, false, at, RING_PIN)
@@ -371,13 +353,18 @@ func _build_jack() -> void:
 		_tube(st, SCREW_R + 0.0002, SCREW_R + 0.0002, Z_BOSS_END, Z_PANEL, false,
 			at, RING_PIN)
 		_disc(st, SCREW_R + 0.0002, Z_PANEL, at, RING_PIN)
-	st.generate_normals()
-	var m_bore := PlugMats.metal(Color(0.035, 0.035, 0.04), 0.55)
-	st.set_material(m_bore)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_bore)
 
+	_commit(st, mesh)
 	_save(mesh, OUT_JACK, false)
+
+
+## The whole connector as ONE surface on the shared connector material.
+func _commit(st: SurfaceTool, mesh: ArrayMesh) -> void:
+	st.generate_normals()
+	var mat := PlugMats.connector()
+	st.set_material(mat)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
+	mesh.surface_set_material(0, mat)
 
 
 ## The insulator's front face: a plate filling the shell bore with fifteen genuine

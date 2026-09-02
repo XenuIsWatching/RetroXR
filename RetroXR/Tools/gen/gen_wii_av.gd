@@ -56,13 +56,17 @@
 ## lit exactly as brightly as its mouth. Same trap gen_rca_jack.gd and gen_vga.gd
 ## both document.
 ##
-## Surface order is public API — composite_cable.gd::_tint_plug recolours surface 0:
-##   0 = grey shroud and its boot        (plug) / black bezel        (jack)
-##   1 = black tongue                    (plug) / the dark slot      (jack)
-##   2 = the dark cavity inside it       (plug) / the contact blade  (jack)
-## Surface 0 is the SHROUD rather than the tongue on purpose: this lead's console end
-## is one connector carrying three cords and has no cord colour, so if anything ever
-## does tint it the grey is the harmless thing to lose.
+## Two surfaces each:
+##   0 = every moulded part, ONE surface on the shared connector material
+##       (Shaders/connector.gdshader) with the part carried in vertex colour —
+##       grey shroud, boot and black tongue (plug) / black bezel and the contact
+##       blade (jack)
+##   1 = the dark cavity inside the tongue (plug) / the dark slot (jack), on
+##       _void() — UNSHADED, which the connector shader has no class for, so it
+##       stays its own surface
+## Nothing here is the tinted class: this lead's console end is one connector
+## carrying three cords and has no cord colour, and CompositeCable never tints a
+## shared plug, so the tinted class would only fall back to the shader's yellow.
 ##
 ## Winding is load-bearing: generate_normals() derives facing from vertex order alone.
 ## Every helper below emits in Godot's Plane(a,b,c) order, so a loft with z increasing
@@ -161,9 +165,13 @@ func _build_plug() -> void:
 	var cavity := _key_loop(TONGUE_W - 2.0 * TONGUE_WALL, TONGUE_H - 2.0 * TONGUE_WALL,
 		KEY_CUT - TONGUE_WALL, TONGUE_R)
 
-	# --- surface 0: the grey shroud and its boot -----------------------------
+	# --- surface 0: the grey shroud and its boot, and the black tongue -------
+	# One SurfaceTool for every moulded part: each is built after set_color() with
+	# its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.matte_vertex(SHROUD_GREY))
 	# -1 is the FLAT smooth group, and it is not optional here: generate_normals()
 	# averages every face meeting at a shared position, and this connector has plenty —
 	# the orange rim's inner edge sits exactly on the cup's mouth, the barrel's tip on
@@ -179,25 +187,14 @@ func _build_plug() -> void:
 	# inside the moulding where nothing looks at it.
 	_cap(st, shroud, Z_SHROUD_BACK, false)
 	_lathe(st, _boot_profile())
-	st.generate_normals()
-	var m_shroud := PlugMats.matte(SHROUD_GREY)
-	st.set_material(m_shroud)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_shroud)
 
-	# --- surface 1: the black tongue -----------------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_smooth_group(-1)
+	# The black tongue.
+	st.set_color(PlugMats.matte_vertex(TONGUE_BLACK))
 	_loft(st, tongue, Z_FACE, tongue, Z_TIP)         # outside wall
 	_band(st, cavity, tongue, Z_TIP, true)           # the rim at the open end
-	st.generate_normals()
-	var m_tongue := PlugMats.matte(TONGUE_BLACK, 0.62)
-	st.set_material(m_tongue)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_tongue)
+	_commit(st, mesh)
 
-	# --- surface 2: the cavity the socket's blade enters ---------------------
+	# --- surface 1: the cavity the socket's blade enters ---------------------
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_smooth_group(-1)
@@ -207,7 +204,7 @@ func _build_plug() -> void:
 	var m_void := _void()
 	st.set_material(m_void)
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_void)
+	mesh.surface_set_material(1, m_void)
 
 	_save(mesh, OUT_PLUG, true)
 
@@ -256,17 +253,21 @@ func _build_jack() -> void:
 	var mouth := _key_loop(TONGUE_W + 2.0 * CLEAR, TONGUE_H + 2.0 * CLEAR,
 		KEY_CUT, TONGUE_R)
 
-	# --- surface 0: the black bezel ------------------------------------------
+	# --- surface 0: the black bezel, and the contact blade -------------------
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_smooth_group(-1)
+	st.set_color(PlugMats.matte_vertex(TONGUE_BLACK))
 	_loft(st, bezel, Z_PANEL, bezel, Z_BEZEL)            # the frame's outside
 	_band(st, mouth, bezel, Z_BEZEL, true)               # its face, straight to the mouth
-	st.generate_normals()
-	var m_bezel := PlugMats.matte(TONGUE_BLACK, 0.62)
-	st.set_material(m_bezel)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_bezel)
+	# The contact blade: the bar across the mouth, which is what the plug's hollow
+	# tongue swallows. It is the one light thing inside a black opening, so it is
+	# most of what says this socket is a socket rather than a printed rectangle.
+	st.set_color(PlugMats.matte_vertex(BLADE_GREY))
+	var bw: float = TONGUE_W - 2.0 * TONGUE_WALL - 0.0010
+	_box(st, -bw * 0.5, bw * 0.5, BLADE_Y - BLADE_T * 0.5, BLADE_Y + BLADE_T * 0.5,
+		Z_MOUTH_FLOOR, Z_BLADE)
+	_commit(st, mesh)
 
 	# --- surface 1: the slot itself ------------------------------------------
 	st = SurfaceTool.new()
@@ -280,23 +281,16 @@ func _build_jack() -> void:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
 	mesh.surface_set_material(1, m_void)
 
-	# --- surface 2: the contact blade ----------------------------------------
-	# The bar across the mouth, which is what the plug's hollow tongue swallows. It is
-	# the one light thing inside a black opening, so it is most of what says this
-	# socket is a socket rather than a printed rectangle.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_smooth_group(-1)
-	var bw: float = TONGUE_W - 2.0 * TONGUE_WALL - 0.0010
-	_box(st, -bw * 0.5, bw * 0.5, BLADE_Y - BLADE_T * 0.5, BLADE_Y + BLADE_T * 0.5,
-		Z_MOUTH_FLOOR, Z_BLADE)
-	st.generate_normals()
-	var m_blade := PlugMats.matte(BLADE_GREY, 0.55)
-	st.set_material(m_blade)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_blade)
-
 	_save(mesh, OUT_JACK, false)
+
+
+## Every moulded part as ONE surface on the shared connector material.
+func _commit(st: SurfaceTool, mesh: ArrayMesh) -> void:
+	st.generate_normals()
+	var mat := PlugMats.connector()
+	st.set_material(mat)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
+	mesh.surface_set_material(0, mat)
 
 
 ## Near-black and UNSHADED, for the inside of the slot and the inside of the tongue.

@@ -1,5 +1,10 @@
 ## Bakes the reusable mains connector family used by the bedroom props.
 ## Connector mating planes are z=0; plugs point +Z into sockets and cords leave -Z.
+##
+## Each connector is ONE surface on the shared connector material
+## (Shaders/connector.gdshader): the moulding goes in first after set_color() with
+## the matte class, the contacts after it with theirs, and the vertex index where
+## the moulding ends is what lets _check_outward still test the two parts apart.
 extends SceneTree
 
 const PlugMats := preload("res://Tools/gen/plug_materials.gd")
@@ -21,8 +26,7 @@ func _init() -> void:
 ## 6.35 mm line blade and 7.9 mm polarized neutral blade. The moulding is a
 ## compact one-piece vinyl style, not the much larger rewireable plug body.
 func _bake_nema_1_15(polarized: bool) -> void:
-	var plastic := SurfaceTool.new(); plastic.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var metal := SurfaceTool.new(); metal.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var plastic := _begin(PlugMats.matte_vertex(Color(0.050,0.048,0.045)))
 	var body := [
 		_round_ring(0.000,0.0130,0.0084,0.0042),
 		_round_ring(-0.003,0.0140,0.0090,0.0045),
@@ -41,20 +45,19 @@ func _bake_nema_1_15(polarized: bool) -> void:
 		_round_ring(-0.047,0.0036,0.0018,0.0018),
 	]
 	_loft_chain(plastic,boot,110); _cap(plastic,boot[-1],Vector3(0,0,-0.047),false)
+	var metal := _part(plastic,PlugMats.metal_vertex(Color(0.72,0.52,0.20)))
 	var neutral_width := 0.0079 if polarized else 0.00635
-	_box(metal,Vector3(-0.00635,0,0.0080),Vector3(0.0015,neutral_width,0.0160))
-	_box(metal,Vector3( 0.00635,0,0.0080),Vector3(0.0015,0.00635,0.0160))
+	_box(plastic,Vector3(-0.00635,0,0.0080),Vector3(0.0015,neutral_width,0.0160))
+	_box(plastic,Vector3( 0.00635,0,0.0080),Vector3(0.0015,0.00635,0.0160))
 	var suffix := "_polarized" if polarized else ""
-	_save(DIR + "nema_1_15%s_plug.res" % suffix,plastic,metal,
-		PlugMats.matte(Color(0.050,0.048,0.045),0.78),PlugMats.metal(Color(0.72,0.52,0.20),0.30))
+	_save(DIR + "nema_1_15%s_plug.res" % suffix,plastic,metal)
 
 ## SCHURTER 4810 gives the straight C7 moulding as 19.6 x 12 mm. The mating
 ## contour below follows the usual 16-ish x 8-ish figure-eight profile with
 ## 8.0 mm contact spacing; C7P replaces the neutral lobe with the square key
 ## shown on Quail WS-027A-2's dimensioned drawing.
 func _bake_c7(polarized: bool) -> void:
-	var plastic := SurfaceTool.new(); plastic.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var dark := SurfaceTool.new(); dark.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var plastic := _begin(PlugMats.matte_vertex(Color(0.045,0.045,0.050)))
 	var face0 := _c7_ring(0.000,polarized,1.0)
 	var face1 := _c7_ring(-0.003,polarized,1.10)
 	# _round_ring begins on the upper-right side; the figure-eight begins at its
@@ -74,17 +77,16 @@ func _bake_c7(polarized: bool) -> void:
 	_loft_chain(plastic,boot,202); _cap(plastic,boot[-1],Vector3(0,0,-0.050),false)
 	_cap(plastic,face0,Vector3.ZERO,true)
 	# Two recessed female contacts, 8.0 mm on centre.
+	var dark := _part(plastic,PlugMats.matte_vertex(Color(0.006,0.006,0.008)))
 	for x in [-0.004,0.004]:
-		_cylinder(dark,Vector3(x,0,0.0006),0.00145,0.0012,16)
+		_cylinder(plastic,Vector3(x,0,0.0006),0.00145,0.0012,16)
 	var suffix := "_polarized" if polarized else ""
-	_save(DIR + "iec_c7%s_plug.res" % suffix,plastic,dark,
-		PlugMats.matte(Color(0.045,0.045,0.050),0.76),PlugMats.matte(Color(0.006,0.006,0.008),0.98))
+	_save(DIR + "iec_c7%s_plug.res" % suffix,plastic,dark)
 
 ## Matching panel-mount C8 and C8P inlets. The mating shroud projects from the
 ## z=0 seating plane and keeps both pins inside it, like the existing C14 asset.
 func _bake_c8(polarized: bool) -> void:
-	var plastic := SurfaceTool.new(); plastic.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var metal := SurfaceTool.new(); metal.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var plastic := _begin(PlugMats.matte_vertex(Color(0.035,0.035,0.040)))
 	_box(plastic,Vector3(0,0,-0.0015),Vector3(0.0280,0.0160,0.0030))
 	_box(plastic,Vector3(0,0,-0.0090),Vector3(0.0210,0.0125,0.0150))
 	var shroud0 := _c7_ring(0.000,polarized,1.04)
@@ -92,16 +94,14 @@ func _bake_c8(polarized: bool) -> void:
 	# _loft faces outward for rings advancing in -Z, which every moulding does.
 	# A shroud stands out of the panel in +Z, so its rings go in reversed.
 	_loft(plastic,shroud1,shroud0,250)
+	var metal := _part(plastic,PlugMats.metal_vertex(Color(0.68,0.69,0.66)))
 	for x in [-0.004,0.004]:
-		_cylinder(metal,Vector3(x,0,0.0030),0.00115,0.0060,16)
+		_cylinder(plastic,Vector3(x,0,0.0030),0.00115,0.0060,16)
 	var suffix := "_polarized" if polarized else ""
-	_save(DIR + "iec_c8%s_inlet.res" % suffix,plastic,metal,
-		PlugMats.matte(Color(0.035,0.035,0.040),0.82),PlugMats.metal(Color(0.68,0.69,0.66),0.38),
-		true)
+	_save(DIR + "iec_c8%s_inlet.res" % suffix,plastic,metal,true)
 
 func _bake_nema() -> void:
-	var plastic := SurfaceTool.new(); plastic.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var metal := SurfaceTool.new(); metal.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var plastic := _begin(PlugMats.matte_vertex(Color(0.055,0.052,0.048)))
 	# Rounded straight-body overmold. The broad palm end tapers into a flexible
 	# ribbed boot instead of ending in the square step the placeholder used.
 	var body := [
@@ -123,15 +123,14 @@ func _bake_nema() -> void:
 	_loft_chain(plastic,boot,30); _cap(plastic,boot[-1],Vector3(0,0,-0.0504),false)
 	# Brass blades: neutral is wider, matching the polarized receptacle.
 	# MP005982 drawing: 6.3 x 1.5 mm solid blades and Ø4.75 mm earth pin.
-	_box(metal, Vector3(-0.00635,0.0042,0.0085), Vector3(0.0015,0.0063,0.0170))
-	_box(metal, Vector3( 0.00635,0.0042,0.0085), Vector3(0.0015,0.0063,0.0170))
-	_cylinder(metal, Vector3(0,-0.0078,0.0105), 0.002375, 0.0210, 16)
-	_save(DIR + "nema_5_15_plug.res", plastic, metal,
-		PlugMats.matte(Color(0.055,0.052,0.048),0.78), PlugMats.metal(Color(0.72,0.52,0.20),0.30))
+	var metal := _part(plastic,PlugMats.metal_vertex(Color(0.72,0.52,0.20)))
+	_box(plastic, Vector3(-0.00635,0.0042,0.0085), Vector3(0.0015,0.0063,0.0170))
+	_box(plastic, Vector3( 0.00635,0.0042,0.0085), Vector3(0.0015,0.0063,0.0170))
+	_cylinder(plastic, Vector3(0,-0.0078,0.0105), 0.002375, 0.0210, 16)
+	_save(DIR + "nema_5_15_plug.res", plastic, metal)
 
 func _bake_c13() -> void:
-	var plastic := SurfaceTool.new(); plastic.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var dark := SurfaceTool.new(); dark.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var plastic := _begin(PlugMats.matte_vertex(Color(0.045,0.045,0.050)))
 	# IEC 60320 C13 overmold. The mating face is the real keyed six-sided outline;
 	# its clipped upper corners are the feature that distinguishes it at a glance.
 	var face0 := _iec_ring(0.000,0.0270,0.0196)
@@ -153,14 +152,13 @@ func _bake_c13() -> void:
 	_loft_chain(plastic,boot,42); _cap(plastic,boot[-1],Vector3(0,0,-0.062),false)
 	_cap(plastic,face0,Vector3(0,0,0),true)
 	# Three recessed female contacts in the standard two-over-one arrangement.
+	var dark := _part(plastic,PlugMats.matte_vertex(Color(0.008,0.008,0.010)))
 	for p in [Vector2(-0.007,0.0048), Vector2(0.007,0.0048), Vector2(0,-0.0060)]:
-		_box(dark, Vector3(p.x,p.y,0.0006), Vector3(0.0032,0.0068,0.0012))
-	_save(DIR + "iec_c13_plug.res", plastic, dark,
-		PlugMats.matte(Color(0.045,0.045,0.050),0.76), PlugMats.matte(Color(0.008,0.008,0.010),0.96))
+		_box(plastic, Vector3(p.x,p.y,0.0006), Vector3(0.0032,0.0068,0.0012))
+	_save(DIR + "iec_c13_plug.res", plastic, dark)
 
 func _bake_c14() -> void:
-	var plastic := SurfaceTool.new(); plastic.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var metal := SurfaceTool.new(); metal.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var plastic := _begin(PlugMats.matte_vertex(Color(0.035,0.035,0.040)))
 	# Schurter 6067: 48 x 22.2 flange, 27 x 19.6 panel body and about 24.8
 	# mm total depth. The keyed shroud projects 8 mm; pins stay INSIDE it.
 	_box(plastic, Vector3(0,0,-0.0015), Vector3(0.048,0.0222,0.003))
@@ -168,25 +166,42 @@ func _bake_c14() -> void:
 	var shroud0 := _iec_ring(0.000,0.0270,0.0196)
 	var shroud1 := _iec_ring(0.008,0.0270,0.0196)
 	_loft(plastic,shroud1,shroud0,70)
+	var metal := _part(plastic,PlugMats.metal_vertex(Color(0.68,0.69,0.66)))
 	for p in [Vector2(-0.007,0.0048), Vector2(0.007,0.0048), Vector2(0,-0.0060)]:
-		_box(metal, Vector3(p.x,p.y,0.004), Vector3(0.0020,0.0055,0.008))
-	_save(DIR + "iec_c14_inlet.res", plastic, metal,
-		PlugMats.matte(Color(0.035,0.035,0.040),0.82), PlugMats.metal(Color(0.68,0.69,0.66),0.38),
-		true)
+		_box(plastic, Vector3(p.x,p.y,0.004), Vector3(0.0020,0.0055,0.008))
+	_save(DIR + "iec_c14_inlet.res", plastic, metal, true)
 
-func _save(path: String, a: SurfaceTool, b: SurfaceTool, ma: Material, mb: Material,
-		shrouded := false) -> void:
-	a.generate_normals(); b.generate_normals()
+## A SurfaceTool with the moulding's vertex class set, ready for its geometry.
+func _begin(cls: Color) -> SurfaceTool:
+	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(cls)
+	return st
+
+## Switch the tool to the contacts' class and return the vertex index they start
+## at — generate_normals() keeps a non-indexed tool's vertex order, so that index
+## is what _check_outward uses to test the moulding and the contacts apart.
+func _part(st: SurfaceTool, cls: Color) -> int:
+	var split: int = st.commit_to_arrays()[Mesh.ARRAY_VERTEX].size()
+	st.set_color(cls)
+	return split
+
+## ONE surface on the shared connector material; `split` is where the contacts
+## begin in it.
+func _save(path: String, st: SurfaceTool, split: int, shrouded := false) -> void:
+	st.generate_normals()
+	var mat := PlugMats.connector()
+	st.set_material(mat)
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a.commit_to_arrays()); mesh.surface_set_material(0,ma)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, b.commit_to_arrays()); mesh.surface_set_material(1,mb)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays()); mesh.surface_set_material(0,mat)
 	var err := ResourceSaver.save(mesh,path)
+	var total: int = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size()
 	var shroud := ""
 	if shrouded:
 		# On an inlet nothing but the shroud stands in front of the mating plane.
-		shroud = "  shroud %s" % _check_outward(mesh,0,0.0001)
+		shroud = "  shroud %s" % _check_outward(mesh,"moulding",0,split,0.0001)
 	print("[gen] %s err=%d size=%s %s %s%s"
-		% [path,err,mesh.get_aabb().size,_check_outward(mesh,0),_check_outward(mesh,1),shroud])
+		% [path,err,mesh.get_aabb().size,_check_outward(mesh,"moulding",0,split),
+		_check_outward(mesh,"contacts",split,total),shroud])
 
 ## Godot's front face is the clockwise one, so generate_normals() returns the
 ## negative of (b-a) x (c-a) and a soup wound anticlockwise-from-outside bakes
@@ -194,28 +209,30 @@ func _save(path: String, a: SurfaceTool, b: SurfaceTool, ma: Material, mb: Mater
 ## furthest along each axis, its normal must not point back down that axis.
 ## Faces exactly edge-on to an axis (open shroud rims) read 0 and are ignored.
 ##
-## zmin/zmax restrict it to one part. A whole-mesh test only ever samples the
-## widest thing on each axis, so on a panel inlet the flange hides the shroud
-## behind it entirely; the inlets are checked twice, once over the shroud alone.
-func _check_outward(mesh: ArrayMesh, surface: int, zmin := -1e9, zmax := 1e9) -> String:
-	var arrays := mesh.surface_get_arrays(surface)
+## first/last pick one PART out of the single surface, by vertex index, and
+## zmin/zmax narrow it further. A whole-part test only ever samples the widest
+## thing on each axis, so on a panel inlet the flange hides the shroud behind it
+## entirely; the inlets are checked twice, once over the shroud alone.
+func _check_outward(mesh: ArrayMesh, label: String, first: int, last: int,
+		zmin := -1e9, zmax := 1e9) -> String:
+	var arrays := mesh.surface_get_arrays(0)
 	var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 	var pick := PackedInt32Array()
-	for i in v.size():
+	for i in range(first, last):
 		if v[i].z >= zmin and v[i].z <= zmax: pick.append(i)
-	if pick.is_empty(): return "surf%d <-- NOTHING IN RANGE" % surface
+	if pick.is_empty(): return "%s <-- NOTHING IN RANGE" % label
 	var bad := PackedStringArray()
 	var axes := {"+X":Vector3.RIGHT,"-X":Vector3.LEFT,"+Y":Vector3.UP,
 		"-Y":Vector3.DOWN,"+Z":Vector3.BACK,"-Z":Vector3.FORWARD}
-	for label: String in axes:
-		var axis: Vector3 = axes[label]
+	for label_axis: String in axes:
+		var axis: Vector3 = axes[label_axis]
 		var best := pick[0]
 		for i in pick:
 			if v[i].dot(axis) > v[best].dot(axis): best = i
-		if n[best].dot(axis) < -0.0001: bad.append(label)
-	if bad.is_empty(): return "surf%d outward" % surface
-	return "surf%d <-- INSIDE OUT on %s" % [surface,", ".join(bad)]
+		if n[best].dot(axis) < -0.0001: bad.append(label_axis)
+	if bad.is_empty(): return "%s outward" % label
+	return "%s <-- INSIDE OUT on %s" % [label,", ".join(bad)]
 
 ## 24-point rounded rectangle, matching the outlet generator's dry molded edges.
 func _round_ring(z: float, hx: float, hy: float, radius: float) -> PackedVector3Array:

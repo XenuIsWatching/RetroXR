@@ -56,10 +56,13 @@
 ## these rooms light with ambient_light_source = COLOR and no radiance map, so the
 ## floor of a bore is lit exactly as brightly as its mouth.
 ##
-## Surface order:
-##   0 = grey hood and boot   (plug) / the red moulding (jack)
-##   1 = the chrome barrel    (plug) / the dark slot     (jack)
-##   2 = the orange cap       (plug)
+## Surfaces:
+##   plug: ONE, on the shared connector material (Shaders/connector.gdshader) —
+##         grey hood and boot, chrome barrel and orange cap, the part carried in
+##         vertex colour
+##   jack: 0 = the red moulding, on the same shared material
+##         1 = the dark slot, UNSHADED, which that shader has no class for, so it
+##             stays its own surface
 extends SceneTree
 
 const PlugMats := preload("res://Tools/gen/plug_materials.gd")
@@ -142,30 +145,23 @@ func _build_plug() -> void:
 	# the snap zone's Rx(180) negates one of them.
 	var barrel := _key_loop(BARREL_W, BARREL_H, KEY_CUT, BARREL_R, true)
 
-	# --- surface 0: the grey hood and its boot -------------------------------
+	# --- the grey hood and its boot ------------------------------------------
+	# One SurfaceTool for the whole plug: each part is built after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.matte_vertex(HOOD_GREY))
 	_loft(st, hood, Z_HOOD_BACK, hood, Z_FACE)
 	_band(st, barrel, hood, Z_FACE, true)
 	_cap(st, hood, Z_HOOD_BACK, false)
 	_lathe(st, _boot_profile())
-	st.generate_normals()
-	var m_hood := PlugMats.matte(HOOD_GREY)
-	st.set_material(m_hood)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_hood)
 
-	# --- surface 1: the chrome barrel ----------------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- the chrome barrel ---------------------------------------------------
+	st.set_color(PlugMats.chrome_vertex())
 	_loft(st, barrel, Z_FACE, barrel, Z_CAP)
-	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
 
-	# --- surface 2: the orange cap -------------------------------------------
+	# --- the orange cap ------------------------------------------------------
 	# The one part of this connector anybody can name from across the room, and the
 	# only reason the socket is findable at all: an orange nose against a white case.
 	# A RIM and not a face. The wall is 1.25 mm and everything inside it is orange too,
@@ -173,18 +169,13 @@ func _build_plug() -> void:
 	# ring round a dimmer bore rather than a solid orange block.
 	var cup := _key_loop(BARREL_W - 2.0 * LIP_T, BARREL_H - 2.0 * LIP_T,
 		KEY_CUT - LIP_T, BARREL_R, true)
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.matte_vertex(CAP_ORANGE))
 	_loft(st, barrel, Z_CAP, barrel, Z_TIP)        # the outside of the lip
 	_band(st, cup, barrel, Z_TIP, true)            # the 1.25 mm rim itself
 	_loft(st, cup, Z_TIP, cup, Z_CUP_FLOOR)        # wound inward: the cup's wall
 	_cap(st, cup, Z_CUP_FLOOR, true)               # and its floor
-	st.generate_normals()
-	var m_cap := PlugMats.matte(CAP_ORANGE, 0.60)
-	st.set_material(m_cap)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_cap)
 
+	_commit(st, mesh)
 	_save(mesh, OUT_PLUG, true)
 
 
@@ -222,18 +213,16 @@ func _build_jack() -> void:
 	var outer := _key_loop(MOUTH_W + 2.0 * RED_WALL, MOUTH_H + 2.0 * RED_WALL,
 		MOUTH_CUT, HOOD_R, false)
 
-	# --- surface 0: the red moulding -----------------------------------------
+	# --- surface 0: the red moulding, on the shared connector material -------
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.matte_vertex(RED_MOULD))
 	_loft(st, outer, Z_PANEL, outer, Z_RED)
 	_band(st, mouth, outer, Z_RED, true)
-	st.generate_normals()
-	var m_red := PlugMats.matte(RED_MOULD, 0.60)
-	st.set_material(m_red)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_red)
+	_commit(st, mesh)
 
 	# --- surface 1: the slot -------------------------------------------------
+	# UNSHADED, which the connector shader has no class for, so its own surface.
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	_loft(st, mouth, Z_RED, mouth, Z_MOUTH_FLOOR)   # wound inward
@@ -247,6 +236,15 @@ func _build_jack() -> void:
 	mesh.surface_set_material(1, m_void)
 
 	_save(mesh, OUT_JACK, false)
+
+
+## Every moulded part as ONE surface on the shared connector material.
+func _commit(st: SurfaceTool, mesh: ArrayMesh) -> void:
+	st.generate_normals()
+	var mat := PlugMats.connector()
+	st.set_material(mat)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
+	mesh.surface_set_material(0, mat)
 
 
 # ── geometry helpers ─────────────────────────────────────────────────────────

@@ -180,32 +180,27 @@ func _init() -> void:
 func _build_jack(file_name: String, collar_tint: Color) -> void:
 	var mesh := ArrayMesh.new()
 
-	# --- surface 0: the PC99-coloured collar ---------------------------------
+	# --- the PC99-coloured collar --------------------------------------------
+	# One SurfaceTool for the whole jack: each part is built after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why. The collar is the GLOSS
+	# class in its own colour, not the tinted one: nothing sets a tint on a
+	# tower's back panel, and the tinted class falls back to the shader's yellow.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(collar_tint))
 	_tube(st, JACK_COLLAR_OD * 0.5, JACK_COLLAR_OD * 0.5, 0.0, Z_COLLAR_END, false)
 	_annulus(st, JACK_COLLAR_ID * 0.5, JACK_COLLAR_OD * 0.5, Z_COLLAR_END)
 	_tube(st, JACK_COLLAR_ID * 0.5, JACK_COLLAR_ID * 0.5, Z_COLLAR_END, 0.0, false)
-	st.generate_normals()
-	var m_collar := PlugMats.plastic(collar_tint)
-	st.set_material(m_collar)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_collar)
 
-	# --- surface 1: the metal shroud -----------------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- the metal shroud ----------------------------------------------------
+	st.set_color(PlugMats.chrome_vertex())
 	_tube(st, JACK_SHROUD_OD * 0.5, JACK_SHROUD_OD * 0.5, 0.0, Z_SHROUD_END, false)
 	_annulus(st, JACK_BORE_ID * 0.5, JACK_SHROUD_OD * 0.5, Z_SHROUD_END)
 	# Bore, wound inward so it faces the eye looking down the socket.
 	_tube(st, JACK_BORE_ID * 0.5, JACK_BORE_ID * 0.5, Z_SHROUD_END, Z_INSULATOR, false)
-	st.generate_normals()
-	var m_shell := PlugMats.chrome()
-	st.set_material(m_shell)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_shell)
 
-	# --- surface 2: the insulator, with the sockets OPEN through it -----------
+	# --- the insulator, with the sockets OPEN through it ---------------------
 	# DARK, and the same family as the male's insert and key. It went the other way
 	# first — a warm off-white at (0.80, 0.78, 0.72), which sat within a few percent
 	# of the case beige and read as the panel showing through a hole in the connector,
@@ -216,24 +211,17 @@ func _build_jack(file_name: String, collar_tint: Color) -> void:
 	# 0.20 against the sockets' 0.035 is what keeps the holes legible: dark enough to
 	# read as one dark face at arm's length, far enough off the wells that they are
 	# still obviously holes in it.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(Color(0.20, 0.20, 0.21)))
 	_holed_face(st, JACK_BORE_ID * 0.5, Z_INSULATOR)
-	st.generate_normals()
-	var m_ins := PlugMats.plastic(Color(0.20, 0.20, 0.21))
-	st.set_material(m_ins)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_ins)
 
-	# --- surface 3: the wells behind those holes, and the shell keyway --------
+	# --- the wells behind those holes, and the shell keyway ------------------
 	# REAL recesses. These began as flat dark discs laid 0.15 mm PROUD of a solid
 	# face, on the argument that at 1.3 mm a disc and a bore come to the same few
 	# pixels. That was wrong in a way that mattered: a disc standing off a surface
 	# catches the key light exactly as a pin does, and the key slot as a key TAB, so
 	# the receptacle read as a second PLUG. A socket has to actually be open.
 	var z_floor: float = Z_INSULATOR - WELL_DEPTH
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.socket_vertex())
 	for xy in PIN_XY:
 		var at := Vector3(xy.x, xy.y, 0.0)
 		_tube(st, SOCKET_DIA * 0.5, SOCKET_DIA * 0.5, Z_INSULATOR, z_floor, false, at)
@@ -245,12 +233,8 @@ func _build_jack(file_name: String, collar_tint: Color) -> void:
 	_rect_well(st, NOTCH_W, (JACK_SHROUD_OD - JACK_BORE_ID) * 0.5 + 0.0005,
 		Z_SHROUD_END, Z_SHROUD_END - NOTCH_D,
 		Vector3(0.0, (JACK_BORE_ID + JACK_SHROUD_OD) * 0.25, 0.0))
-	st.generate_normals()
-	var m_dark := PlugMats.metal(Color(0.035, 0.035, 0.04), 0.55)
-	st.set_material(m_dark)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(3, m_dark)
 
+	_commit(st, mesh)
 	var path := OUT_DIR + file_name
 	var err := ResourceSaver.save(mesh, path)
 	var ab: AABB = mesh.get_aabb()
@@ -362,44 +346,33 @@ func _build(file_name: String, barrel_tint: Color) -> void:
 	var r_out := SHROUD_OD * 0.5
 	var r_in := r_out - SHROUD_WALL
 
-	# --- surface 0: plastic barrel, strain relief, alignment key -------------
+	# --- plastic barrel, strain relief, alignment key ------------------------
+	# One SurfaceTool for the whole plug: each part is built after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why. The barrel is the GLOSS
+	# class in its own colour, not the tinted one: ControllerPlug.set_plug_mesh
+	# sets no tint, and the tinted class falls back to the shader's yellow.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(barrel_tint))
 	# The shroud occupies z 0..SHROUD_LEN, so the barrel runs from 0 back to
 	# -BARREL_LEN and the relief tapers back from there to the cable.
 	_tube(st, BARREL_DIA * 0.5, BARREL_DIA * 0.5, -BARREL_LEN, 0.0, true)
 	_tube(st, RELIEF_DIA * 0.5, BARREL_DIA * 0.5, -BARREL_LEN - RELIEF_LEN, -BARREL_LEN, true)
-	st.generate_normals()
-	var m_barrel := PlugMats.plastic(barrel_tint)
-	st.set_material(m_barrel)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_barrel)
 
-	# --- surface 1: metal shroud --------------------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- metal shroud --------------------------------------------------------
+	st.set_color(PlugMats.chrome_vertex())
 	_tube(st, r_out, r_out, 0.0, SHROUD_LEN, false)      # outside wall
 	_tube(st, r_in, r_in, SHROUD_LEN, 0.0, false)        # inside wall, wound inward
 	_annulus(st, r_in, r_out, SHROUD_LEN)                # rim at the open end
-	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
 
-	# --- surface 2: pins -----------------------------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- pins ----------------------------------------------------------------
+	st.set_color(PlugMats.metal_vertex(Color(0.86, 0.78, 0.48)))   # brass
 	for xy in PIN_XY:
 		_tube(st, PIN_DIA * 0.5, PIN_DIA * 0.5, 0.0, PIN_LEN, true,
 			Vector3(xy.x, xy.y, 0.0))
-	st.generate_normals()
-	var m_pin := PlugMats.brass()
-	st.set_material(m_pin)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_pin)
 
-	# --- surface 3: the insert the pins stand in, and the key ----------------
+	# --- the insert the pins stand in, and the key ---------------------------
 	# Without this you look straight down the shroud into the coloured barrel, and
 	# the key — moulded in the barrel's own colour — disappears into it.
 	#
@@ -408,38 +381,36 @@ func _build(file_name: String, barrel_tint: Color) -> void:
 	# faces, and the purple won the depth fight in patches. Pulling the insert
 	# forward settles it, and black is what stops the eye reading the bore as a
 	# window onto the inside of the plug body.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(Color(0.055, 0.055, 0.06)))
 	_disc(st, r_in, 0.0004)
-	st.generate_normals()
-	var m_insert := PlugMats.plastic(Color(0.055, 0.055, 0.06))
-	st.set_material(m_insert)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(3, m_insert)
 
-	# --- surface 4: the alignment key ----------------------------------------
-	# Its own surface only so it can be a shade off the insert. On the real part both
+	# --- the alignment key ---------------------------------------------------
+	# Its own colour only so it can be a shade off the insert. On the real part both
 	# are one black moulding and the key is genuinely hard to pick out — but this is
 	# the feature a player lines the plug up ON, and against a black bore a black tab
 	# showed as nothing but a lit top edge. Dark enough to still read as the same
 	# piece of plastic, light enough to have a silhouette.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(Color(0.22, 0.22, 0.23)))
 	# The key stands in the CENTRE of the bore, with the pins ringing it. Not a notch
 	# in the wall.
 	_box(st, KEY_W, KEY_H, SHROUD_LEN * 0.62,
 		Vector3(0.0, KEY_Y, SHROUD_LEN * 0.31))
-	st.generate_normals()
-	var m_key := PlugMats.plastic(Color(0.22, 0.22, 0.23))
-	st.set_material(m_key)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(4, m_key)
 
+	_commit(st, mesh)
 	var path := OUT_DIR + file_name
 	var err := ResourceSaver.save(mesh, path)
 	var ab: AABB = mesh.get_aabb()
 	print("[gen] %s  err=%d  size %.4f x %.4f x %.4f m  z %.4f..%.4f" % [
 		path, err, ab.size.x, ab.size.y, ab.size.z, ab.position.z, ab.end.z])
+
+
+## The whole connector as ONE surface on the shared connector material.
+func _commit(st: SurfaceTool, mesh: ArrayMesh) -> void:
+	st.generate_normals()
+	var mat := PlugMats.connector()
+	st.set_material(mat)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
+	mesh.surface_set_material(0, mat)
 
 
 ## Tube along +Z between z0 and z1, radius r0 at z0 tapering to r1 at z1.

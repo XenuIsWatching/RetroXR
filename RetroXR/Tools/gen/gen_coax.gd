@@ -33,8 +33,12 @@
 ## section, and both the hexagon (vertices on the axes, phase 0) and every round
 ## part are symmetric under that reflection. Do not copy VGA's Y-flip here.
 ##
-## Surface 0 is the black boot, and must stay the plastic: CompositeCable._tint_plug
-## writes surface 0 to colour a cord, and that wants the moulding, not the metal.
+## ONE surface on the shared connector material (Shaders/connector.gdshader), the
+## part carried in vertex colour. The boot is the MATTE class in its own near-black,
+## not the tinted one: the only lead that carries this plug is the RF switch, whose
+## cord colour is the same near-black as the bake, so the tint
+## CompositeCable._tint_plug sets on the instance has nothing to add and the boot
+## keeps its dry finish.
 ##
 ## Winding is load-bearing — generate_normals() reads facing from vertex order
 ## alone. _lathe_n emits in Godot's Plane(a,b,c) order, so an increasing-z segment
@@ -127,18 +131,16 @@ func _bake_plug() -> void:
 	# open mouth of the boot never shows.
 	prof.append(Vector2(Z_BOOT_END, FERRULE_R - 0.00005))
 
+	# One SurfaceTool for the whole plug: each part is lathed after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.matte_vertex(Color(0.06, 0.06, 0.07)))
 	_lathe_n(st, prof, RING)
-	st.generate_normals()
-	var m_boot := PlugMats.matte(Color(0.06, 0.06, 0.07), 0.80)
-	st.set_material(m_boot)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_boot)
 
-	# --- surface 1: nickel — round ferrule plus the six-sided nut ------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- nickel — round ferrule plus the six-sided nut -----------------------
+	st.set_color(PlugMats.metal_vertex(Color(0.86, 0.87, 0.89)))
 	# Ferrule: a plain crimp barrel running up to the back of the nut.
 	_lathe_n(st, PackedVector2Array([
 		Vector2(FERRULE_BACK, FERRULE_R),
@@ -170,43 +172,27 @@ func _bake_plug() -> void:
 		Vector2(0.0, NUT_INNER_R),               # bore floor, faces +Z
 	]), HEX_SIDES)
 	st.set_smooth_group(0)
-	st.generate_normals()
-	var m_nickel := PlugMats.metal(Color(0.86, 0.87, 0.89), 0.18)
-	st.set_material(m_nickel)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_nickel)
 
-	# --- surface 2: the PTFE disc closing the bore ---------------------------
+	# --- the PTFE disc closing the bore --------------------------------------
 	# Sat 0.2 mm behind the nut's floor so the two never z-fight. Its 16-gon is
 	# wider at every angle than the hexagonal hole it covers.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.matte_vertex(Color(0.92, 0.92, 0.90)))
 	_lathe_n(st, PackedVector2Array([
 		Vector2(-0.0002, PTFE_R),
 		Vector2(-0.0002, PIN_R + 0.0002),
 	]), RING)
-	st.generate_normals()
-	var m_ptfe := PlugMats.matte(Color(0.92, 0.92, 0.90), 0.55)
-	st.set_material(m_ptfe)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_ptfe)
 
-	# --- surface 3: the centre conductor -------------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- the centre conductor ------------------------------------------------
+	# Copper, not chrome: on the real thing this IS the cable's core, stripped.
+	st.set_color(PlugMats.metal_vertex(Color(0.84, 0.62, 0.38)))
 	_lathe_n(st, PackedVector2Array([
 		Vector2(-0.0002, PIN_R),
 		Vector2(PIN_END, PIN_R),
 		Vector2(PIN_END + 0.0004, PIN_TIP_R),
 		Vector2(PIN_END + 0.0004, 0.0),
 	]), RING)
-	st.generate_normals()
-	# Copper, not chrome: on the real thing this IS the cable's core, stripped.
-	var m_pin := PlugMats.metal(Color(0.84, 0.62, 0.38), 0.30)
-	st.set_material(m_pin)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(3, m_pin)
 
+	_commit(st, mesh)
 	_report(PLUG_PATH, mesh)
 
 
@@ -215,20 +201,16 @@ func _bake_plug() -> void:
 func _bake_jack() -> void:
 	var mesh := ArrayMesh.new()
 
-	# --- surface 0: the PTFE ring at the bottom of the bore ------------------
+	# --- the PTFE ring at the bottom of the bore -----------------------------
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.matte_vertex(Color(0.92, 0.92, 0.90)))
 	_lathe_n(st, PackedVector2Array([
 		Vector2(BORE_FLOOR, BORE_R),
 		Vector2(BORE_FLOOR, SOCKET_R),
 	]), RING)
-	st.generate_normals()
-	var m_ptfe := PlugMats.matte(Color(0.92, 0.92, 0.90), 0.55)
-	st.set_material(m_ptfe)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_ptfe)
 
-	# --- surface 1: flange, threaded stub, bore — one continuous profile -----
+	# --- flange, threaded stub, bore — one continuous profile ----------------
 	var prof := PackedVector2Array()
 	# Rear body, behind the panel. Not decoration: the plug's centre conductor
 	# reaches 2.4 mm past the flange when seated, and without something to go into
@@ -253,36 +235,34 @@ func _bake_jack() -> void:
 	prof.append(Vector2(STUB_TIP + 0.0004, BORE_R))  # rim, faces +Z
 	prof.append(Vector2(BORE_FLOOR, BORE_R))         # bore wall, faces inward
 
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.metal_vertex(Color(0.86, 0.87, 0.89)))
 	_lathe_n(st, prof, RING)
-	st.generate_normals()
-	var m_nickel := PlugMats.metal(Color(0.86, 0.87, 0.89), 0.18)
-	st.set_material(m_nickel)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_nickel)
 
-	# --- surface 2: the socket the centre conductor slides into --------------
+	# --- the socket the centre conductor slides into -------------------------
 	# Dark by MATERIAL, not by depth. These rooms light with
 	# ambient_light_source = COLOR and no radiance map, so a bore renders as
 	# brightly as its mouth — the same trap the other three generators document.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.socket_vertex())
 	_lathe_n(st, PackedVector2Array([
 		Vector2(BORE_FLOOR, SOCKET_R),
 		Vector2(SOCKET_BACK, SOCKET_R),
 		Vector2(SOCKET_BACK, 0.0),
 	]), RING)
-	st.generate_normals()
-	var m_socket := PlugMats.metal(Color(0.035, 0.035, 0.04), 0.55)
-	st.set_material(m_socket)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_socket)
 
+	_commit(st, mesh)
 	_report(JACK_PATH, mesh)
 
 
 # ── shared ────────────────────────────────────────────────────────────────────
+
+## The whole connector as ONE surface on the shared connector material.
+func _commit(st: SurfaceTool, mesh: ArrayMesh) -> void:
+	st.generate_normals()
+	var mat := PlugMats.connector()
+	st.set_material(mat)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
+	mesh.surface_set_material(0, mat)
+
 
 func _report(path: String, mesh: ArrayMesh) -> void:
 	var err := ResourceSaver.save(mesh, path)

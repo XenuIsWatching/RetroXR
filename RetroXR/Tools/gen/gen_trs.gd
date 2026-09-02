@@ -47,11 +47,15 @@
 ## front face stops against its rim, so a seated plug's origin ends up 2.0 mm proud.
 ## trs_port.tscn and every seat that copies it carry that number.
 ##
-## Surface order follows gen_rca_jack.gd's, and surface 0 is public API —
-## composite_cable.gd::_tint_plug recolours it:
-##   0 = green plastic (the plug's handle, the jack's collar ring)
-##   1 = chrome (the plug's tip/ring/sleeve, the jack's mounting bezel)
-##   2 = near-black (the plug's two insulator bands, the jack's bore)
+## Each half is ONE surface on the shared connector material
+## (Shaders/connector.gdshader), the part carried in vertex colour:
+##   green plastic (the plug's handle, the jack's collar ring)
+##   chrome (the plug's tip/ring/sleeve, the jack's mounting bezel)
+##   near-black (the plug's two insulator bands, the jack's bore)
+## The green is the GLOSS class in its own colour rather than the tinted one:
+## trs_cable.tscn's cord_colors carries this same lime, so the tint
+## composite_cable.gd::_tint_plug sets on the instance has nothing to add, and a
+## jack with no script would otherwise fall back to the shader's default yellow.
 ##
 ## The bore is dark by MATERIAL, not by depth — these rooms light with
 ## ambient_light_source = COLOR and no radiance map, so nothing is shadowed for
@@ -145,21 +149,19 @@ func _build_plug() -> void:
 	# Flat front annulus down to the shaft — this face is what stops against the
 	# jack's collar rim, and it is why the plug's ORIGIN is here.
 	prof.append(Vector2(Z_HANDLE_FACE, SHAFT_R))
+	# One SurfaceTool for the whole plug: each part is lathed after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(PC99_LIME))
 	_lathe(st, prof)
-	st.generate_normals()
-	var m_body := PlugMats.plastic(PC99_LIME)
-	st.set_material(m_body)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_body)
 
-	# --- surface 1: tip, ring and sleeve ------------------------------------
+	# --- tip, ring and sleeve ------------------------------------------------
 	# Three bands at one diameter, butted against the insulators so no seam shows.
 	# The sleeve is capped at z 0 facing -Z; that cap is inside the handle and
 	# costs 16 triangles to never think about it again.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.chrome_vertex())
 	_lathe(st, PackedVector2Array([
 		Vector2(0.0, 0.0), Vector2(0.0, SHAFT_R), Vector2(Z_SLEEVE_END, SHAFT_R)]))
 	_lathe(st, PackedVector2Array([
@@ -171,25 +173,15 @@ func _build_plug() -> void:
 		var a: float = PI * 0.5 * float(i) / float(DOME_N)
 		tip.append(Vector2(z_straight + TIP_DOME * sin(a), SHAFT_R * cos(a)))
 	_lathe(st, tip)
-	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
 
-	# --- surface 2: the two insulator bands ---------------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- the two insulator bands ---------------------------------------------
+	st.set_color(PlugMats.socket_vertex())
 	_lathe(st, PackedVector2Array([
 		Vector2(Z_SLEEVE_END, SHAFT_R), Vector2(Z_INS1_END, SHAFT_R)]))
 	_lathe(st, PackedVector2Array([
 		Vector2(Z_RING_END, SHAFT_R), Vector2(Z_INS2_END, SHAFT_R)]))
-	st.generate_normals()
-	var m_dark := PlugMats.metal(Color(0.035, 0.035, 0.04), 0.55)
-	st.set_material(m_dark)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_dark)
 
+	_commit(st, mesh)
 	_save(mesh, OUT_PLUG, true)
 
 
@@ -198,55 +190,49 @@ func _build_plug() -> void:
 func _build_jack() -> void:
 	var mesh := ArrayMesh.new()
 
-	# --- surface 0: the green collar ring ------------------------------------
+	# --- the green collar ring -----------------------------------------------
 	# The ring the whole request turns on: outside wall, front rim, and back down
 	# the inside to where the dark insert takes over.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.gloss_vertex(PC99_LIME))
 	_lathe(st, PackedVector2Array([
 		Vector2(0.0, COLLAR_OR),
 		Vector2(Z_COLLAR_END, COLLAR_OR),        # outside wall
 		Vector2(Z_COLLAR_END, COLLAR_IR),        # front rim, faces +Z
 		Vector2(Z_RECESS, COLLAR_IR),            # inside wall, faces inward
 	]))
-	st.generate_normals()
-	var m_ring := PlugMats.plastic(PC99_LIME)
-	st.set_material(m_ring)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_ring)
 
-	# --- surface 1: the stamped mounting bezel -------------------------------
+	# --- the stamped mounting bezel ------------------------------------------
 	# A low ring round the collar's base. Open at the back: that face is against
 	# the panel and closing it would only add triangles nobody can see.
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.chrome_vertex())
 	_lathe(st, PackedVector2Array([
 		Vector2(0.0, BEZEL_OR),
 		Vector2(Z_BEZEL_END, BEZEL_OR),
 		Vector2(Z_BEZEL_END, COLLAR_OR),
 	]))
-	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
 
-	# --- surface 2: the insert face and the bore -----------------------------
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# --- the insert face and the bore ----------------------------------------
+	st.set_color(PlugMats.socket_vertex())
 	_lathe(st, PackedVector2Array([
 		Vector2(Z_RECESS, COLLAR_IR),
 		Vector2(Z_RECESS, BORE_R),               # insert face, faces +Z
 		Vector2(Z_BORE_FLOOR, BORE_R),           # bore wall, faces inward
 		Vector2(Z_BORE_FLOOR, 0.0),              # floor, faces +Z
 	]))
-	st.generate_normals()
-	var m_dark := PlugMats.metal(Color(0.035, 0.035, 0.04), 0.55)
-	st.set_material(m_dark)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_dark)
 
+	_commit(st, mesh)
 	_save(mesh, OUT_JACK, false)
+
+
+## The whole connector as ONE surface on the shared connector material.
+func _commit(st: SurfaceTool, mesh: ArrayMesh) -> void:
+	st.generate_normals()
+	var mat := PlugMats.connector()
+	st.set_material(mat)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
+	mesh.surface_set_material(0, mat)
 
 
 ## Revolve a (z, radius) profile about the Z axis. gen_rca_plug.gd's, whose header
