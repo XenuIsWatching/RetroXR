@@ -639,6 +639,12 @@ func _process(_delta: float) -> void:
 	# behind the _desktop_held gate it simply never ran.
 	_sync_desktop_scope()
 
+	# A pad lying on the table, plugged into nothing, has no hand to read and no
+	# machine to feed. A plugged one still has to send its idle state below.
+	if _connected_system == null and not _desktop_held \
+			and not is_instance_valid(_holding_ctrl):
+		return
+
 	var secondary_ctrl := _get_secondary_ctrl()
 	_combo_debug(_holding_ctrl)
 

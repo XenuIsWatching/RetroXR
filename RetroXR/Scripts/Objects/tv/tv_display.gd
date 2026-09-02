@@ -61,7 +61,7 @@ var _crt_params := {
 
 ## The scale/size the derived uniforms were last solved for, so they are re-solved
 ## only when one of those actually moves.
-var _crt_derived_key: String = ""
+var _crt_derived_key: Array = []
 
 ## The texture currently being sampled onto the glass.
 var _crt_source_tex: Texture2D = null
@@ -361,7 +361,7 @@ func _is_sampling_material(mat: Material) -> bool:
 ## which renders as a white panel, not a blue one.
 func drop_sampled() -> void:
 	_crt_source_tex = null
-	_crt_derived_key = ""
+	_crt_derived_key = []
 	_phosphor_fresh = 2
 
 
@@ -576,10 +576,12 @@ func refresh_crt_derived() -> void:
 	if mat == null:
 		return
 	var tex := mat.get_shader_parameter("source_tex") as Texture2D
-	var key := "%s|%.4f|%.4f|%s" % [
+	# Compared as values, not formatted into a string: this runs every frame
+	# on every set in the room, and the steady state is meant to cost nothing.
+	var key: Array = [
 		mat.get_instance_id(), _tv.scale_factor,
 		float(_crt_params.get("crt_mask_pitch_mm", 2.0)),
-		"null" if tex == null else str(tex.get_size()),
+		Vector2i(-1, -1) if tex == null else tex.get_size(),
 	]
 	if key == _crt_derived_key:
 		return
@@ -596,7 +598,7 @@ func set_crt_param(pname: String, value: Variant) -> void:
 	for mat: ShaderMaterial in known_display_materials():
 		mat.set_shader_parameter(pname, value)
 	# crt_mask_pitch_mm isn't a uniform — it feeds the derived triad count.
-	_crt_derived_key = ""
+	_crt_derived_key = []
 
 
 ## Current CRT tuning values, for the options panel to populate its controls.
@@ -616,7 +618,7 @@ func set_crt_params(values: Dictionary) -> void:
 			_crt_params[key] = int(values[key])
 		else:
 			_crt_params[key] = float(values[key])
-	_crt_derived_key = ""
+	_crt_derived_key = []
 	# Seeded before _ready (scene restore instantiates then sets): the values are
 	# in place and get pushed when the filter first wraps a source.
 	if _tv._screen_mesh == null:

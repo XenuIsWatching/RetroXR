@@ -1731,7 +1731,11 @@ func _process(_delta: float) -> void:
 	_update_disc_spin(_delta)
 	_audio.ensure_bound()
 	_ensure_port_devices_bound()
-	_audio.update_position()
+	# Every fourth frame, staggered across machines: the route is a dictionary
+	# and two dynamic lookups per call, and a room holds eight of these. A
+	# carried set's sound trails it by 55 ms at most, under what the ear places.
+	if (Engine.get_process_frames() + get_instance_id()) % 4 == 0:
+		_audio.update_position()
 	# Nothing left to do until something switches on again. Tested here rather
 	# than per frame from outside: a room holds a lot of these, most of them off.
 	if not is_powered_on and _disc_spin <= 0.0:

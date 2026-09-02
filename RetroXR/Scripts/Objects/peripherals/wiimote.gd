@@ -237,6 +237,7 @@ var _gyro_smoothed := Vector3.ZERO
 
 # LED animation
 var _led_materials: Array[StandardMaterial3D] = []
+var _led_lit: PackedInt32Array = PackedInt32Array()
 var _blink_clock := 0.0
 ## Last aim state printed, so the log speaks only on change. See _log_aim.
 var _last_aim_log: String = ""
@@ -1116,12 +1117,20 @@ func _update_leds(delta: float) -> void:
 	var blink_on := fmod(_blink_clock, LED_BLINK_PERIOD * 2.0) < LED_BLINK_PERIOD
 	var live := _port_index >= 0 and is_instance_valid(_connected_system) \
 		and _connected_system.is_powered_on
+	if _led_lit.size() != _led_materials.size():
+		_led_lit.resize(_led_materials.size())
+		_led_lit.fill(-1)
 	for i in range(_led_materials.size()):
 		var lit := false
 		if _port_index < 0:
 			lit = blink_on
 		elif live:
 			lit = i == _port_index
+		# A material write is a render-server call; four of them a frame for
+		# LEDs that change twice a second is the wrong ratio.
+		if _led_lit[i] == int(lit):
+			continue
+		_led_lit[i] = int(lit)
 		var mat := _led_materials[i]
 		mat.albedo_color = LED_ON if lit else LED_OFF
 		mat.emission_energy_multiplier = 1.6 if lit else 0.0
