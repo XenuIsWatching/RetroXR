@@ -56,7 +56,7 @@ const SOURCES := {
 		# URL — see base_url. It is only the version to show when GitHub cannot be
 		# reached, so an offline player still sees something truthful rather than
 		# a blank.
-		"known_tag": "retroxr-dolphin-libretro-v6",
+		"known_tag": "retroxr-dolphin-libretro-v7",
 		"label": "Dolphin (retroXR build)",
 		# Per platform, because we only publish what we build. A platform absent
 		# here is not an error — the manager falls back to the buildbot for it,
@@ -108,7 +108,7 @@ const SOURCES := {
 	# name here fails silently, as a core that simply never downloads.
 	"mgba": {
 		"repo":  "XenuIsWatching/mgba",
-		"known_tag": "retroxr-mgba-libretro-v4",
+		"known_tag": "retroxr-mgba-libretro-v5",
 		"label": "mGBA (retroXR build)",
 		"assets": {
 			"Windows": "mgba_libretro.dll.zip",
@@ -162,7 +162,7 @@ const SOURCES := {
 	# tag beside the binary is what meets it.
 	"gambatte": {
 		"repo":  "XenuIsWatching/gambatte-libretro",
-		"known_tag": "retroxr-gambatte-libretro-v1",
+		"known_tag": "retroxr-gambatte-libretro-v2",
 		"label": "gambatte (retroXR build)",
 		"assets": {
 			"Windows": "gambatte_libretro.dll.zip",
@@ -185,7 +185,7 @@ const SOURCES := {
 	# binary — same arrangement as Dolphin and gambatte.
 	"pcsx_rearmed": {
 		"repo":  "XenuIsWatching/pcsx_rearmed",
-		"known_tag": "retroxr-pcsx-rearmed-libretro-v1",
+		"known_tag": "retroxr-pcsx-rearmed-libretro-v2",
 		"label": "PCSX-ReARMed (retroXR build)",
 		"assets": {
 			"Windows": "pcsx_rearmed_libretro.dll.zip",
