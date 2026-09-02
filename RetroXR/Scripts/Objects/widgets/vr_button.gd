@@ -130,12 +130,19 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# A hand nowhere near the cap is asked nothing: a press in flight keeps
+	# polling wherever the hand roams, an idle button only wakes for a tip
+	# within reach.
 	if not _controllers.is_empty():
-		if require_trigger:
-			_process_trigger_mode()
+		if _touch_ctrl != null or _trigger_pressed \
+				or PokeTip.any_tip_within(_controllers, global_position, PokeTip.WIDGET_NEAR):
+			if require_trigger:
+				_process_trigger_mode()
+			else:
+				_process_touch_mode(delta)
+			_claim_contact()
 		else:
-			_process_touch_mode(delta)
-	_claim_contact()
+			_armed = false
 	_sync_outline()
 
 

@@ -72,10 +72,58 @@ var _claim_smooth := Vector3.ZERO  # smoothed contact, in WORLD space
 var _blend := 0.0                 # 0 free … 1 landed; drives the disc's alpha
 
 
+# ── Per-frame cache ──────────────────────────────────────────────────────────
+
+## tip_of and is_poking are asked by every widget in the room, several times
+## per controller per frame, and each ask is a method lookup, a node lookup and
+## a dynamic get. A tracked pose changes once per frame, so the answers are
+## kept per process frame, keyed by controller. With eight machines' worth of
+## buttons, lids and knobs those lookups were a measurable slice of the main
+## thread on a Quest 3.
+static var _cache_frame := -1
+static var _tip_cache: Dictionary = {}
+static var _poking_cache: Dictionary = {}
+
+## How far a fingertip may be from a widget before the widget stops polling
+## the controllers at all. Larger than any widget's reach, including a lid's
+## grab box measured from its hinge.
+const WIDGET_NEAR := 0.6
+
+
+static func _cache_for_frame() -> void:
+	var frame := Engine.get_process_frames()
+	if frame != _cache_frame:
+		_cache_frame = frame
+		_tip_cache.clear()
+		_poking_cache.clear()
+
+
+## Whether any controller's tip is within `radius` of `pos` - the cheap first
+## question a widget asks before polling triggers, grips and poke faces.
+static func any_tip_within(controllers: Array, pos: Vector3, radius: float) -> bool:
+	var r2 := radius * radius
+	for ctrl in controllers:
+		if ctrl == null or not is_instance_valid(ctrl):
+			continue
+		if tip_of(ctrl).distance_squared_to(pos) <= r2:
+			return true
+	return false
+
+
 ## The poke position for a controller. Hands/BOTH use the current runtime index
 ## joint whenever it is valid; Controllers mode and unavailable tracking use the
-## controller-forward point. The joint is queried on every call.
+## controller-forward point. The joint is queried once per frame per controller.
 static func tip_of(ctrl: Node3D) -> Vector3:
+	_cache_for_frame()
+	var id := ctrl.get_instance_id()
+	if _tip_cache.has(id):
+		return _tip_cache[id]
+	var tip := _tip_of_now(ctrl)
+	_tip_cache[id] = tip
+	return tip
+
+
+static func _tip_of_now(ctrl: Node3D) -> Vector3:
 	if ctrl.has_method("capsense_index_tip"):
 		var tracked: Variant = ctrl.call("capsense_index_tip")
 		if tracked is Vector3:
@@ -91,6 +139,16 @@ static func tip_of(ctrl: Node3D) -> Vector3:
 ## for which this is false, so a hand busy holding a handheld can't trigger a
 ## nearby widget by bumping it. Desktop hands (no FunctionPickup) always poke.
 static func is_poking(ctrl: Node3D) -> bool:
+	_cache_for_frame()
+	var id := ctrl.get_instance_id()
+	if _poking_cache.has(id):
+		return _poking_cache[id]
+	var poking := _is_poking_now(ctrl)
+	_poking_cache[id] = poking
+	return poking
+
+
+static func _is_poking_now(ctrl: Node3D) -> bool:
 	var pk := ctrl.get_node_or_null("FunctionPickup")
 	if pk == null:
 		return true

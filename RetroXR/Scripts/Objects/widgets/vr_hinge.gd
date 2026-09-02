@@ -179,19 +179,30 @@ func _process(delta: float) -> void:
 	# read was already false and _on_released() never fired (a lid wheeled shut then
 	# released sprang straight back open instead of latching).
 	var was_held := _held_prev
-	# A trigger already down cannot grab lid after lid as the hand sweeps across a
-	# console — it has to fall below TRIGGER_OFF first. Same re-arm guard VRSlider
-	# uses.
-	for ctrl in _controllers:
-		if ctrl == null:
-			continue
-		if ctrl.get_float(TRIGGER_ACTION) < TRIGGER_OFF:
-			_rearmed[ctrl.get_instance_id()] = true
-		if ctrl.get_float(GRIP_ACTION) < GRIP_OFF:
-			_rearmed_grip[ctrl.get_instance_id()] = true
-	_sync_pickup_mutes()
-	_process_poke(delta)
-	_remember_poke_tips()
+	# A hand nowhere near the hinge is asked nothing: no trigger, grip or poke
+	# polling until a tip comes within reach. A latched or poking hand keeps
+	# driving the hinge wherever it roams. The lid's own motion (release,
+	# idle, momentum) runs either way, further down.
+	var near := _trigger_ctrl != null or _poke_ctrl != null \
+		or PokeTip.any_tip_within(_controllers, global_position, PokeTip.WIDGET_NEAR)
+	if not near:
+		if not _muted_pickups.is_empty():
+			_sync_pickup_mutes()
+		_poke_prev_tips.clear()
+	else:
+		# A trigger already down cannot grab lid after lid as the hand sweeps
+		# across a console — it has to fall below TRIGGER_OFF first. Same re-arm
+		# guard VRSlider uses.
+		for ctrl in _controllers:
+			if ctrl == null:
+				continue
+			if ctrl.get_float(TRIGGER_ACTION) < TRIGGER_OFF:
+				_rearmed[ctrl.get_instance_id()] = true
+			if ctrl.get_float(GRIP_ACTION) < GRIP_OFF:
+				_rearmed_grip[ctrl.get_instance_id()] = true
+		_sync_pickup_mutes()
+		_process_poke(delta)
+		_remember_poke_tips()
 	# VR: button-latched engagement. A latched controller drives the hinge until
 	# it lets the button go — however far the hand roams from the grab box.
 	if _trigger_ctrl != null:
@@ -201,7 +212,7 @@ func _process(delta: float) -> void:
 			_trigger_ctrl = null
 		else:
 			_track_world_point(PokeTip.tip_of(_trigger_ctrl))
-	elif not _pointer_held and _poke_ctrl == null and _can_engage():
+	elif near and not _pointer_held and _poke_ctrl == null and _can_engage():
 		# Not latched (and desktop isn't dragging): latch a hovering hand that
 		# pulls the trigger. A hand holding something is skipped, so firing a held
 		# object's action never swings a lid as a side effect.

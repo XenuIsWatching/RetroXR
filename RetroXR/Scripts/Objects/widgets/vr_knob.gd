@@ -123,6 +123,12 @@ func get_value() -> float:
 
 
 func _process(_delta: float) -> void:
+	# A hand nowhere near the cap is asked nothing; a latched hand keeps driving
+	# the knob wherever it roams.
+	if _trigger_ctrl == null \
+			and not PokeTip.any_tip_within(_controllers, global_position, PokeTip.WIDGET_NEAR):
+		_update_icon()
+		return
 	# A trigger already down cannot grab control after control as the hand sweeps
 	# across a panel — it has to fall below TRIGGER_OFF first. Same re-arm guard
 	# VRSlider and VRHinge use.

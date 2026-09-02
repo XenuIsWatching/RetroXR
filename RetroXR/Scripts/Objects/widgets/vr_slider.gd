@@ -203,12 +203,18 @@ func _process(delta: float) -> void:
 	if _pointer_engaged:
 		_sync_outline()
 		return   # pointer drag owns the knob (handled in pointer_event)
+	# A hand nowhere near the knob is asked nothing; an engaged hand keeps
+	# tracking wherever it roams.
 	if not _controllers.is_empty():
-		if require_trigger:
-			_process_trigger_mode()
+		if _engaged_ctrl != null \
+				or PokeTip.any_tip_within(_controllers, global_position, PokeTip.WIDGET_NEAR):
+			if require_trigger:
+				_process_trigger_mode()
+			else:
+				_process_touch_mode(delta)
+			_claim_contact()
 		else:
-			_process_touch_mode(delta)
-	_claim_contact()
+			_armed = false
 	_sync_outline()
 
 
