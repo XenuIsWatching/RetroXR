@@ -103,6 +103,13 @@ var _layers: PackedInt32Array = PackedInt32Array()
 ## budget. That is not hypothetical: it is what the first run did.
 var _bounds: Array[AABB] = []
 var _room: Node3D
+## Every Light3D under the room, walked once and kept. _refresh reads it ten
+## times a second, and walking an eight-machine arcade for it each time cost
+## 9 ms a refresh on a Quest 3 - a dropped frame every tenth frame. Lights come
+## and go with spawned objects, so the tree's add/remove signals mark the list
+## stale and the next refresh rewalks.
+var _lights: Array[Light3D] = []
+var _lights_stale := true
 var _elapsed: float = 0.0
 ## {"on": {"irr": ImageTexture3D, "dir": ImageTexture3D}, "off": {...}}
 var _volumes: Dictionary = {}
@@ -150,6 +157,8 @@ func _ready() -> void:
 	if _room == null:
 		set_process(false)
 		return
+	get_tree().node_added.connect(_on_tree_changed)
+	get_tree().node_removed.connect(_on_tree_changed)
 	_load_bake()
 	_convert()
 	# Logged for the same reason QualityManager logs its resolved state: on a
@@ -188,8 +197,7 @@ func _retire_shell_lights() -> void:
 	if _volumes.is_empty():
 		return
 	var retired := 0
-	for node in _room.find_children("*", "Light3D", true, false):
-		var light := node as Light3D
+	for light in _room_lights():
 		if light.is_in_group(SHELL_ONLY_GROUP):
 			light.visible = false
 			retired += 1
@@ -244,8 +252,7 @@ func _volume(img: Image, dims: Vector3i) -> ImageTexture3D:
 
 ## Which baked state the room is in right now, from the wall switch.
 func _switch_state() -> String:
-	for node in _room.find_children("*", "Light3D", true, false):
-		var light := node as Light3D
+	for light in _room_lights():
 		if light.is_in_group(SWITCHED_GROUP) and light.is_visible_in_tree() 				and light.light_energy > 0.0:
 			return "on"
 	return "off"
@@ -369,12 +376,25 @@ func _environment() -> Environment:
 ## player, so all three are dropped here rather than written as a zero.
 func _gather() -> Array[Light3D]:
 	var out: Array[Light3D] = []
-	for node in _room.find_children("*", "Light3D", true, false):
-		var light := node as Light3D
+	for light in _room_lights():
 		if not light.is_visible_in_tree() or light.light_energy <= 0.0:
 			continue
 		out.append(light)
 	return out
+
+
+func _room_lights() -> Array[Light3D]:
+	if _lights_stale:
+		_lights.clear()
+		for node in _room.find_children("*", "Light3D", true, false):
+			_lights.append(node as Light3D)
+		_lights_stale = false
+	return _lights
+
+
+func _on_tree_changed(node: Node) -> void:
+	if node is Light3D:
+		_lights_stale = true
 
 
 ## The MAX_LIGHTS lights that put the most light on this material.

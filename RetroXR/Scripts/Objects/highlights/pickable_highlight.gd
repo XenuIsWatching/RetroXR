@@ -146,7 +146,7 @@ func _collect_overlays(node: Node) -> void:
 
 
 func _connect_pickup_nodes() -> void:
-	for node in get_tree().root.find_children("*", "XRToolsFunctionPickup", true, false):
+	for node in get_tree().get_nodes_in_group(XRToolsFunctionPickup.PICKUP_GROUP):
 		node.has_picked_up.connect(_on_ray_picked_up.bind(node))
 		node.has_dropped.connect(_on_ray_dropped.bind(node))
 

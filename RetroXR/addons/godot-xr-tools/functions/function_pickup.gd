@@ -225,6 +225,7 @@ func _ready():
 # Called when we're added to the tree
 func _enter_tree():
 	super._enter_tree()
+	add_to_group(PICKUP_GROUP)
 
 	_collision_hand = XRToolsCollisionHand.find_ancestor(self)
 
@@ -958,8 +959,14 @@ func is_ray_grabbing_target(target: XRToolsPickable) -> bool:
 	return is_instance_valid(target) and _ray_grab_object == target
 
 
+## Every pickup function in the tree. The two checks below run every frame per
+## hand whenever the laser rests on a pickable, and walking the whole room with
+## find_children for them cost 11% of the main thread in an eight-machine arcade.
+const PICKUP_GROUP := &"xrt_function_pickup"
+
+
 func _is_any_other_pickup_ray_grabbing() -> bool:
-	for pickup in get_tree().root.find_children("*", "XRToolsFunctionPickup", true, false):
+	for pickup in get_tree().get_nodes_in_group(PICKUP_GROUP):
 		if pickup == self:
 			continue
 		if pickup is XRToolsFunctionPickup and pickup.is_ray_grabbing():
@@ -971,7 +978,7 @@ func _is_target_ray_grabbed_elsewhere(target: XRToolsPickable) -> bool:
 	if not is_instance_valid(target):
 		return false
 
-	for pickup in get_tree().root.find_children("*", "XRToolsFunctionPickup", true, false):
+	for pickup in get_tree().get_nodes_in_group(PICKUP_GROUP):
 		if pickup == self:
 			continue
 		if pickup is XRToolsFunctionPickup and pickup.is_ray_grabbing_target(target):
