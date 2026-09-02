@@ -402,6 +402,11 @@ func _process(_delta: float) -> void:
 	_send_joypad(m["btn"], m["alx"], m["aly"], m["arx"], m["ary"])
 
 
+## Hysteresis for the analog sources — see InputLatch. Without it a single
+## squeeze reaches the core as two presses.
+var _latch := InputLatch.new()
+
+
 func _apply_buttons_for_ctrl(ctrl: XRController3D, left_hand: bool) -> int:
 	var bits: int = 0
 	for full_source: String in _button_map:
@@ -420,7 +425,8 @@ func _apply_buttons_for_ctrl(ctrl: XRController3D, left_hand: bool) -> int:
 		else:
 			vr_input = full_source
 		var threshold: float = INPUT_THRESHOLDS.get(vr_input, 0.5)
-		if ctrl.get_float(vr_input) > threshold:
+		var key := "%d:%s" % [ctrl.get_instance_id(), vr_input]
+		if _latch.pressed(key, ctrl.get_float(vr_input), threshold):
 			bits |= (1 << bit)
 	return bits
 

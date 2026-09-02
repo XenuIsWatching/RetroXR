@@ -1258,6 +1258,11 @@ func _dpad_animation_stick() -> Vector2:
 
 # ── Input forwarding ──────────────────────────────────────────────────────────
 
+## Hysteresis for the analog VR sources — see InputLatch. Without it a single
+## squeeze reaches the core as two presses.
+var _latch := InputLatch.new()
+
+
 ## Which PHYSICAL remote controls are down this frame, from the active upright
 ## or sideways binding layer plus a hand poking the shell. One read is shared by
 ## the core and animation, so the visible button and emulated button agree.
@@ -1293,7 +1298,8 @@ func _pressed_now() -> Dictionary:
 				if ctrl.tracker != &"right_hand":
 					continue
 				input = source.substr(6)
-			if ctrl.get_float(input) > float(INPUT_THRESHOLDS.get(input, 0.5)):
+			var key := "%d:%s" % [ctrl.get_instance_id(), input]
+			if _latch.pressed(key, ctrl.get_float(input), float(INPUT_THRESHOLDS.get(input, 0.5))):
 				out[control] = true
 				break
 	# A poke is an OR, not an override: pressing 1 on the shell while the bound

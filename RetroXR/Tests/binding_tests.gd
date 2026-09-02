@@ -66,6 +66,7 @@ func _ready() -> void:
 	_test_desktop_legacy_file()
 	_test_xr_identity()
 	_test_json_store()
+	_test_input_latch()
 
 	_restore()
 	print("[test] ---- %d passed, %d failed ----" % [_pass, _fail])
@@ -1073,3 +1074,41 @@ func _test_json_store() -> void:
 	DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(path + ".part")
 	DirAccess.remove_absolute(JS_DIR)
+
+
+## The analog latch behind every VR game button. A grip is an axis, not a switch:
+## one squeeze crosses its threshold, dips back under it as the hand settles, and
+## climbs again, which without hysteresis reaches the core as two presses. These
+## cases are the sequences that used to double.
+func _test_input_latch() -> void:
+	var l := InputLatch.new()
+
+	_ok("latch/below the threshold is not pressed", not l.pressed("g", 0.20, 0.3))
+	_ok("latch/above it is", l.pressed("g", 0.35, 0.3))
+
+	# The defect, in one line. A settle dip that clears the press threshold but
+	# not the release threshold must not read as a release. Set RELEASE_MARGIN to
+	# 0 and this is the case that goes red.
+	_ok("latch/a settle dip under the threshold stays pressed",
+		l.pressed("g", 0.24, 0.3))
+	_ok("latch/and the squeeze that follows is still one press",
+		l.pressed("g", 0.40, 0.3))
+
+	# It must still let go, or a latched button is worse than a doubled one.
+	_ok("latch/a real release clears it", not l.pressed("g", 0.05, 0.3))
+	_ok("latch/and stays clear at the old dip level", not l.pressed("g", 0.24, 0.3))
+
+	# An axis resting at a small non-zero value must not stay latched for ever,
+	# which is what MIN_RELEASE is for: a 0.10 threshold cannot release at -0.02.
+	_ok("latch/a low threshold still releases",
+		l.pressed("g", 0.30, 0.10) and not l.pressed("g", 0.01, 0.10))
+
+	# Two hands hold their own state — the key carries the controller, so the
+	# left hand's squeeze can never latch the right hand's button.
+	_ok("latch/one key does not press another", l.pressed("left:grip", 0.9, 0.3))
+	_ok("latch/the other key is independent",
+		not l.pressed("right:grip", 0.24, 0.3))
+
+	l.clear()
+	_ok("latch/clear releases everything",
+		not l.pressed("left:grip", 0.24, 0.3))

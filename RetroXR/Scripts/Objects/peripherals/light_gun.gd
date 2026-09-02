@@ -329,6 +329,11 @@ func _cache_controls() -> void:
 		_trigger_rest = _trigger_pivot.transform
 
 
+## Hysteresis for the analog VR sources — see InputLatch. Without it a single
+## squeeze reaches the core as two presses.
+var _latch := InputLatch.new()
+
+
 ## Which lightgun buttons are down this frame, keyed by LIGHTGUN_* id. One read
 ## of the input, shared by the core and the shell animation. Every mapped id is
 ## present, so an unheld gun reports them all false rather than reporting nothing.
@@ -347,7 +352,9 @@ func _pressed_now() -> Dictionary:
 		var lid: int = _lightgun_map[vr_source]
 		if lid < 0:
 			continue
-		out[lid] = vr and _holding_ctrl.get_float(vr_source) 			> float(INPUT_THRESHOLDS.get(vr_source, 0.5))
+		var key := "%d:%s" % [_holding_ctrl.get_instance_id() if vr else 0, vr_source]
+		var value: float = _holding_ctrl.get_float(vr_source) if vr else 0.0
+		out[lid] = _latch.pressed(key, value, float(INPUT_THRESHOLDS.get(vr_source, 0.5)))
 	return out
 
 

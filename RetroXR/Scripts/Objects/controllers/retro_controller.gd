@@ -352,6 +352,7 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 		_saved_by = null
 		_holding_ctrl = null
 		_desktop_held = false
+		_latch.clear()
 		_update_locomotion_block()
 		_apply_rumble()
 
@@ -606,6 +607,11 @@ func _load_bindings() -> void:
 	_stick_map  = bindings["sticks"]
 
 
+## Hysteresis for the analog sources above — see InputLatch. Without it a single
+## squeeze reaches the core as two presses.
+var _latch := InputLatch.new()
+
+
 # Returns the joypad button bitmask contributed by one controller.
 # Only processes sources prefixed for the given hand.
 func _apply_buttons_for_ctrl(ctrl: XRController3D, left_hand: bool) -> int:
@@ -626,7 +632,8 @@ func _apply_buttons_for_ctrl(ctrl: XRController3D, left_hand: bool) -> int:
 		else:
 			vr_input = full_source
 		var threshold: float = INPUT_THRESHOLDS.get(vr_input, 0.5)
-		if ctrl.get_float(vr_input) > threshold:
+		var key := "%d:%s" % [ctrl.get_instance_id(), vr_input]
+		if _latch.pressed(key, ctrl.get_float(vr_input), threshold):
 			bits |= (1 << bit)
 	return bits
 

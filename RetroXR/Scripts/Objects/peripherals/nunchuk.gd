@@ -362,13 +362,19 @@ func get_state() -> Dictionary:
 	}
 
 
+## Hysteresis for the analog VR sources — see InputLatch. Without it a single
+## squeeze reaches the core as two presses.
+var _latch := InputLatch.new()
+
+
 func _held(source: Variant) -> bool:
 	if not is_instance_valid(_holding_ctrl):
 		return false
 	var name_str := str(source)
 	if name_str.is_empty() or name_str == "none":
 		return false
-	return _holding_ctrl.get_float(name_str) > float(INPUT_THRESHOLDS.get(name_str, 0.5))
+	var key := "%d:%s" % [_holding_ctrl.get_instance_id(), name_str]
+	return _latch.pressed(key, _holding_ctrl.get_float(name_str), float(INPUT_THRESHOLDS.get(name_str, 0.5)))
 
 
 func _process(_delta: float) -> void:
