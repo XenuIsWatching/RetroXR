@@ -127,12 +127,23 @@ func _make_region_light(light_name: String) -> SpotLight3D:
 
 
 func _apply_energy() -> void:
+	# Off means GONE, not dimmed to nothing. The mobile renderer shades every
+	# light whose range reaches an object for every pixel of that object, energy
+	# or not — it only ranks lights by energy once an object is over its cap. Three
+	# spotlights per dark screen, reaching 4-8 m, put the whole floor's light list
+	# at the cap: measured 1.5 ms per switched-off Game Boy on a Quest 3.
+	visible = _output_active
 	# The three shares add back to the configured physical output. The stronger
-	# centre wash prevents three visibly separate cones where they overlap.
-	light_energy = _lit_energy * 0.5 if _output_active else 0.0
+	# centre wash prevents three visibly separate cones where they overlap. A
+	# solid colour has no left and right to tell apart, so it is one cone at the
+	# full output and the side lights are gone for the same reason as above.
+	var split := _output_active and _picture_active
+	light_energy = (_lit_energy * 0.5 if split else _lit_energy) if _output_active else 0.0
 	if _left_light != null:
-		_left_light.light_energy = _lit_energy * 0.25 if _output_active else 0.0
-		_right_light.light_energy = _lit_energy * 0.25 if _output_active else 0.0
+		_left_light.visible = split
+		_right_light.visible = split
+		_left_light.light_energy = _lit_energy * 0.25 if split else 0.0
+		_right_light.light_energy = _lit_energy * 0.25 if split else 0.0
 
 
 func _ensure_sampler() -> void:

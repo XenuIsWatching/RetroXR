@@ -299,11 +299,24 @@ func _read_vrs_overrides() -> void:
 		_vrs_radius_override = float(cfg["vrs_radius"])
 	if cfg.has("vrs_strength"):
 		_vrs_strength_override = float(cfg["vrs_strength"])
+	if cfg.has("boot_scene"):
+		# Boot straight into a named scene, so a bare room can be measured on the
+		# same build, the same headset and the same eye buffer as the real one.
+		# Without that, "the room is the cost" is an attribution nobody checked.
+		_probe_boot_scene(String(cfg["boot_scene"]))
 	if cfg.has("boot_foveation"):
 		foveation_level = clampi(int(cfg["boot_foveation"]),
 			Foveation.OFF, Foveation.HIGH) as Foveation
 	print("[VRSProbe] boot overrides: mode '%s', foveation %d"
 		% [_vrs_mode_override, int(foveation_level)])
+
+
+func _probe_boot_scene(path: String) -> void:
+	if not ResourceLoader.exists(path):
+		push_error("[VRSProbe] boot_scene %s does not exist" % path)
+		return
+	print("[VRSProbe] boot_scene -> %s" % path)
+	get_tree().change_scene_to_file.call_deferred(path)
 
 
 ## On-device QA hook, in the shape of spike.cfg and glprobe.cfg: a
@@ -344,7 +357,11 @@ func _run_vrs_probe() -> void:
 			await get_tree().process_frame
 	if cfg.has("eye_buffer"):
 		print("[VRSProbe] eye_buffer -> %.2f" % float(cfg["eye_buffer"]))
-		set_eye_buffer_scale(float(cfg["eye_buffer"]))
+		# Applied, never saved: a probe value that outlives the run is a graphics
+		# setting the player never chose. That is how a x1.75 ladder rung was still
+		# the eye buffer a week later, at 26 fps.
+		eye_buffer_scale = clampf(float(cfg["eye_buffer"]), EYE_BUFFER_SCALE_MIN, EYE_BUFFER_SCALE_MAX)
+		apply_eye_buffer_scale()
 	if cfg.has("msaa"):
 		var m := int(cfg["msaa"])
 		print("[VRSProbe] msaa -> %d" % m)
@@ -360,6 +377,18 @@ func _run_vrs_probe() -> void:
 					(node as Node3D).visible = false
 					hit += 1
 			print("[VRSProbe] hide '%s' -> %d node(s)" % [want, hit])
+	if cfg.has("hide_groups"):
+		# Spawned hardware is not named in any scene file - it is restored at run
+		# time and only findable by its group. Without this a "bare room" still
+		# has every console and television in it, which is the opposite of the
+		# thing being measured.
+		for g in cfg["hide_groups"]:
+			var hit := 0
+			for node in get_tree().get_nodes_in_group(String(g)):
+				if node is Node3D:
+					(node as Node3D).visible = false
+					hit += 1
+			print("[VRSProbe] hide group '%s' -> %d node(s)" % [g, hit])
 	if cfg.has("max_lights"):
 		_probe_cap_lights(int(cfg["max_lights"]))
 	if cfg.has("vrs_radius"):
@@ -370,8 +399,205 @@ func _run_vrs_probe() -> void:
 		_vrs_mode_override = str(cfg["vrs_mode"])
 	if cfg.has("foveation"):
 		print("[VRSProbe] foveation -> %d" % int(cfg["foveation"]))
-		set_foveation_level(int(cfg["foveation"]))
+		foveation_level = clampi(int(cfg["foveation"]), Foveation.OFF, Foveation.HIGH) as Foveation \
+			if supports_foveation() else Foveation.OFF
+		apply_foveation()
 	print("[VRSProbe] applied, foveation_live=%s" % foveation_live())
+	if cfg.has("profile_scripts"):
+		_probe_profile_scripts(maxi(int(cfg["profile_scripts"]), 1))
+	if cfg.has("bisect_scenes"):
+		await _probe_bisect_scenes(maxi(int(cfg["bisect_scenes"]), 30))
+	if cfg.has("bisect_children"):
+		await _probe_bisect_children(String(cfg["bisect_children"]), int(cfg.get("frames", 60)))
+	if cfg.has("report"):
+		_probe_report(maxi(int(cfg["report"]), 1))
+
+
+## One level down from _probe_bisect_scenes: every spawned node instanced from
+## `scene` has its direct children bucketed by name, and each bucket is hidden
+## across all of them in turn. Before that, a census of the first one — every
+## MeshInstance3D under it with its surface count and how each material blends,
+## because an alpha-tested surface costs a tiler far more than an opaque one.
+func _probe_bisect_children(scene: String, frames: int) -> void:
+	var rid := get_tree().root.get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	var hosts: Array[Node3D] = []
+	for node: Node in get_tree().get_nodes_in_group("spawned"):
+		if node is Node3D and node.scene_file_path.get_file().get_basename() == scene:
+			hosts.append(node as Node3D)
+	if hosts.is_empty():
+		print("[VRSProbe] bisect_children: no spawned '%s'" % scene)
+		return
+	print("[VRSProbe] census of %s (%d hosts):" % [hosts[0].name, hosts.size()])
+	var meshes: int = 0
+	var surfaces: int = 0
+	for mi: Node in hosts[0].find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null or not m.is_visible_in_tree():
+			continue
+		meshes += 1
+		var modes: Array = []
+		for s in m.mesh.get_surface_count():
+			surfaces += 1
+			var mat: Material = m.get_active_material(s)
+			var mode := "?"
+			if mat is BaseMaterial3D:
+				mode = "T%d" % int((mat as BaseMaterial3D).transparency)
+			elif mat is ShaderMaterial:
+				mode = "shader"
+			modes.append(mode)
+		print("[VRSProbe]   %-40s %2d surf  %s" % [
+			str(hosts[0].get_path_to(m)).right(40), m.mesh.get_surface_count(), " ".join(modes)])
+	print("[VRSProbe]   %d visible meshes, %d surfaces" % [meshes, surfaces])
+	var buckets: Dictionary = {}
+	for host in hosts:
+		for child: Node in host.get_children():
+			if child is Node3D:
+				if not buckets.has(child.name):
+					buckets[child.name] = []
+				(buckets[child.name] as Array).append(child)
+	var baseline := await _probe_average_gpu(rid, frames)
+	print("[VRSProbe] children baseline gpu %.2f ms, %d buckets" % [baseline, buckets.size()])
+	var keys: Array = buckets.keys()
+	keys.sort()
+	for key: String in keys:
+		var nodes: Array = buckets[key]
+		var was: Array = []
+		for n: Node3D in nodes:
+			was.append(n.visible)
+			n.visible = false
+		var hidden := await _probe_average_gpu(rid, frames)
+		for i in nodes.size():
+			(nodes[i] as Node3D).visible = was[i]
+		print("[VRSProbe]   without %-24s x%-2d  gpu %.2f ms  saves %.2f ms" % [
+			key, nodes.size(), hidden, baseline - hidden])
+
+
+## What each KIND of spawned object costs the eye viewport, in one run: the
+## spawned nodes are bucketed by the scene they were instanced from, every
+## bucket is hidden in turn for `frames` frames, and the root viewport's
+## measured GPU time is printed against the unhidden baseline. A negative
+## saving is noise; the frame count is what averages it out.
+func _probe_bisect_scenes(frames: int) -> void:
+	var rid := get_tree().root.get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	var buckets: Dictionary = {}
+	for node: Node in get_tree().get_nodes_in_group("spawned"):
+		if node is Node3D and not node.scene_file_path.is_empty():
+			var key := node.scene_file_path.get_file().get_basename()
+			if not buckets.has(key):
+				buckets[key] = []
+			(buckets[key] as Array).append(node)
+	var baseline := await _probe_average_gpu(rid, frames)
+	print("[VRSProbe] bisect baseline gpu %.2f ms over %d frames, %d kinds" % [baseline, frames, buckets.size()])
+	var keys: Array = buckets.keys()
+	keys.sort()
+	for key: String in keys:
+		var nodes: Array = buckets[key]
+		for n: Node3D in nodes:
+			n.visible = false
+		var hidden := await _probe_average_gpu(rid, frames)
+		for n: Node3D in nodes:
+			n.visible = true
+		print("[VRSProbe]   without %-22s x%-2d  gpu %.2f ms  saves %.2f ms" % [
+			key, nodes.size(), hidden, baseline - hidden])
+
+
+func _probe_average_gpu(rid: RID, frames: int) -> float:
+	# The first frames after a visibility change still carry the old picture.
+	for i in 10:
+		await get_tree().process_frame
+	var total := 0.0
+	for i in frames:
+		await get_tree().process_frame
+		total += RenderingServer.viewport_get_measured_render_time_gpu(rid)
+	return total / float(frames)
+
+
+## Where the process step goes, by script. The engine's own script profiler
+## needs the editor's debugger on the other end of a socket, which a headset on
+## a desk does not have, so this times an EXTRA call of every processing node's
+## `_process` / `_physics_process` and adds it up per script — the callbacks run
+## twice for the sampled frames, which is fine for a measurement and wrong for
+## anything else. Reads as a table of total ms over `frames` frames, worst first.
+func _probe_profile_scripts(frames: int) -> void:
+	var totals: Dictionary = {}
+	var counts: Dictionary = {}
+	var delta := 1.0 / maxf(effective_display_rate(), 1.0)
+	for f in frames:
+		await get_tree().process_frame
+		for node: Node in get_tree().root.find_children("*", "", true, false):
+			var script: Script = node.get_script()
+			if script == null:
+				continue
+			var key := script.resource_path
+			for method: StringName in [&"_process", &"_physics_process"]:
+				var wants: bool = node.is_processing() if method == &"_process" \
+					else node.is_physics_processing()
+				if not wants or not node.has_method(method):
+					continue
+				var t0 := Time.get_ticks_usec()
+				node.call(method, delta)
+				var dt := Time.get_ticks_usec() - t0
+				var k := "%s %s" % [key, method]
+				totals[k] = int(totals.get(k, 0)) + dt
+				if f == 0:
+					counts[k] = int(counts.get(k, 0)) + 1
+	var rows: Array = totals.keys()
+	rows.sort_custom(func(a: String, b: String) -> bool: return totals[a] > totals[b])
+	print("[VRSProbe] script profile over %d frames (ms per frame, nodes):" % frames)
+	for i in mini(rows.size(), 25):
+		var k: String = rows[i]
+		print("[VRSProbe]   %6.2f ms  x%-3d  %s" % [
+			float(totals[k]) / 1000.0 / float(frames), int(counts.get(k, 0)), k])
+
+
+## Print the frame's cost split every `every` frames, for the rest of the
+## session. The perf HUD measures the same things and paints them in the
+## headset; over adb, with nobody wearing it, logcat is the only readout. GPU
+## and render-CPU are the root viewport's measured times, the counts are the
+## whole frame's, so a cost that does not move with the eye buffer can be told
+## apart from one that does.
+func _probe_report(every: int) -> void:
+	var root := get_tree().root
+	while is_inside_tree():
+		# Every viewport alive right now, the root first. Measurement is off by
+		# default and a SubViewport can be born between reports, so re-arm each time.
+		var viewports: Array[Viewport] = [root]
+		for vp: Node in root.find_children("*", "SubViewport", true, false):
+			viewports.append(vp as Viewport)
+		for vp in viewports:
+			RenderingServer.viewport_set_measure_render_time(vp.get_viewport_rid(), true)
+		for i in every:
+			await get_tree().process_frame
+		var rid := root.get_viewport_rid()
+		# The LIVE eye size, not the one XRInit logged at boot: with the runtime's
+		# dynamic resolution on, this is what shrinks under load.
+		var xr := XRServer.find_interface("OpenXR")
+		var eye: Vector2 = xr.get_render_target_size() if xr != null else Vector2.ZERO
+		print("[VRSProbe] eye %dx%d" % [int(eye.x), int(eye.y)])
+		print("[VRSProbe] gpu %.2f ms  render-cpu %.2f ms  process %.2f ms  physics %.2f ms  draws %d  prims %d  objects %d  subviewports %d" % [
+			RenderingServer.viewport_get_measured_render_time_gpu(rid),
+			RenderingServer.viewport_get_measured_render_time_cpu(rid),
+			float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0,
+			float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0,
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)),
+			viewports.size() - 1])
+		var rows: Array = []
+		for vp in viewports.slice(1):
+			if not is_instance_valid(vp):
+				continue
+			var sv := vp as SubViewport
+			rows.append([RenderingServer.viewport_get_measured_render_time_gpu(sv.get_viewport_rid()),
+				RenderingServer.viewport_get_measured_render_time_cpu(sv.get_viewport_rid()), sv])
+		rows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+		for i in mini(rows.size(), 12):
+			var sv: SubViewport = rows[i][2]
+			print("[VRSProbe]   sub gpu %5.2f ms  cpu %5.2f ms  %4dx%-4d  mode %d  %s" % [
+				rows[i][0], rows[i][1], sv.size.x, sv.size.y,
+				int(sv.render_target_update_mode), sv.get_path()])
 
 
 ## Hide all but the `keep` strongest Light3Ds in the tree. A probe knob only:
@@ -830,7 +1056,10 @@ func apply_post_aa() -> void:
 func apply_forced_quality() -> void:
 	var root := get_tree().root
 	root.use_debanding = true
-	root.anisotropic_filtering_level = Viewport.ANISOTROPY_8X
+	# 4x, not 8x: anisotropy is texture bandwidth, the one thing an Adreno is
+	# always short of, and at 8x the arcade's floor and walls paid for taps that
+	# a 1680-wide eye buffer cannot show.
+	root.anisotropic_filtering_level = Viewport.ANISOTROPY_4X
 
 
 ## Drive every tiered setting at once. `persist` is false only for the boot-time

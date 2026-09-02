@@ -120,6 +120,9 @@ func _ready() -> void:
 	_vb_light.spot_range = VB_LIGHT_RANGE
 	_vb_light.shadow_enabled = false
 	_vb_light.light_energy = 0.0
+	# Hidden, not merely dark: the mobile renderer shades a light for every pixel
+	# its range reaches whatever its energy (see ScreenCastLight._apply_energy).
+	_vb_light.visible = false
 	_vb_light.rotation_degrees = Vector3(180.0, 0.0, 0.0)   # spots emit down -Z
 	add_child(_vb_light)
 	_vb_light.position = _visor_glow_origin()
@@ -300,6 +303,7 @@ func _process(_delta: float) -> void:
 			m.set_shader_parameter("source_tex", tex)
 	# Visor glow tracks whether there's a picture (fixed red set at creation).
 	if _vb_light:
+		_vb_light.visible = tex != null
 		_vb_light.light_energy = VB_LIGHT_ENERGY if tex != null else 0.0
 
 
