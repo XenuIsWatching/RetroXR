@@ -49,6 +49,12 @@ uniform float diffuse_wrap : hint_range(0.0, 1.0) = 0.12;
 // wall's lighting with it. This is the level it falls back to instead.
 uniform vec3 outside_light : source_color = vec3(0.35, 0.33, 0.30);
 
+// How far inside the volume's face that fallback is fully faded out. A hand's
+// width: enough that a prop leaving the room does not pop, small enough that a
+// surface standing ON the boundary - which every wall in a room does, since the
+// volume is fitted to the shell - still reads its own baked lighting.
+const float GI_FADE_METRES = 0.125;
+
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
 varying vec3 v_world_tangent;
@@ -84,7 +90,14 @@ void fragment() {
 	// all. `inside` goes to 0 across the last texel rather than at the boundary,
 	// so a prop carried out of the room fades to the fallback instead of popping.
 	vec3 uvw = (v_world_pos - gi_min) / gi_size;
-	vec3 slack = clamp(min(uvw, vec3(1.0) - uvw) * 8.0, vec3(0.0), vec3(1.0));
+	// The fade band is a fixed DISTANCE, not a fraction of the volume. `* 8.0`
+	// made it an eighth of the room - 0.6 m in the bedroom, where every prop
+	// stands well clear of the walls, but 1.35 m in the arcade, wide enough that
+	// the walls themselves sat inside it and rendered as 70% of `outside_light`,
+	// a constant that has nothing to do with the room they are in. Measured: the
+	// arcade's walls came out about half the brightness of the desktop path.
+	vec3 slack = clamp(min(uvw, vec3(1.0) - uvw) * gi_size / GI_FADE_METRES,
+		vec3(0.0), vec3(1.0));
 	float inside = min(min(slack.x, slack.y), slack.z);
 
 	vec3 c = clamp(uvw, vec3(0.0), vec3(1.0));
