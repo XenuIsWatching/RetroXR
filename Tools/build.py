@@ -114,6 +114,8 @@ def scons_command(platform: str, arch: str, target: str, scons: str,
     cmd = [scons, f"platform={platform}", f"arch={arch}", f"target={target}", f"-j{jobs}"]
     if platform == "android":
         cmd.append("ANDROID_HOME=")
+        # Native TLS for the Quest: see Tools/scons_tools/android.py.
+        cmd.append(f"custom_tools={(REPO / 'Tools/scons_tools').as_posix()}")
     if platform == "macos":
         # Keep the default reproducible instead of inheriting the build host's
         # SDK version. Extra args are appended after this, so an intentional
