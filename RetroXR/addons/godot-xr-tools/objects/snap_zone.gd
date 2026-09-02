@@ -379,6 +379,9 @@ func drop_object() -> void:
 	_note_held(picked_up_object, null)
 	picked_up_object.let_go(self, Vector3.ZERO, Vector3.ZERO)
 	picked_up_object = null
+	# LOCAL PATCH (RetroXR): see pick_up_object. Bodies still inside re-enter
+	# on the next physics step.
+	monitoring = true
 	has_dropped.emit()
 	highlight_updated.emit(self, enabled)
 	# LOCAL PATCH (RetroXR): the ghost may come back now that the zone is free
@@ -539,6 +542,15 @@ func pick_up_object(target: Node3D) -> void:
 	if is_instance_valid(picked_up_object):
 		has_picked_up.emit(picked_up_object)
 		highlight_updated.emit(self, false)
+		# LOCAL PATCH (RetroXR): a full zone ignores every enter and drop until
+		# it lets go, so its Area3D need not monitor for the hold - a room's
+		# thirty-odd sockets and bays were a measurable slice of the physics
+		# step in overlap bookkeeping alone. The overlap list is flushed here
+		# and rebuilt by the entered callbacks when monitoring returns in
+		# drop_object.
+		for o in _object_in_grab_area.duplicate():
+			forget_object(o)
+		monitoring = false
 
 
 # Called when the enabled property has been modified
