@@ -34,6 +34,7 @@ func _ready():
 	if _pickup:
 		_pickup.has_picked_up.connect(_on_held_grabbed)
 		_pickup.has_dropped.connect(_on_held_dropped)
+		_pickup.has_transferred.connect(_on_held_transferred)
 
 	_art = ControllerArt.new()
 	_art.name = "ModelArt"
@@ -475,6 +476,20 @@ func _on_held_dropped() -> void:
 	_hide_device_hand()
 	_grab_suppressed = false
 	_refresh_fade_target()
+
+
+## A handoff between the ray and the hand emits neither has_picked_up nor
+## has_dropped — the object is never let go, so the pickup moves it across
+## without either signal. Without this the art tracked only the hand's FIRST
+## acquisition: an object reeled in off the ray sat inside opaque controller
+## geometry, and one pushed back out to the ray left the art faded with an
+## empty hand. (RetroController hid this for itself, and only for itself, by
+## fading from the pickable's own grabbed signal.)
+func _on_held_transferred(what: Node, to_ray: bool) -> void:
+	if to_ray:
+		_on_held_dropped()
+	else:
+		_on_held_grabbed(what)
 
 
 ## Draw the device's own hand for this tracker, if it authors one and the option
