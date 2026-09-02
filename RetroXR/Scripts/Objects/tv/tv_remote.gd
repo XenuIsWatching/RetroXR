@@ -188,6 +188,7 @@ func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
 
 func _on_dropped_signal(_pickable: Node3D) -> void:
 	if not _allow_drop and is_instance_valid(_saved_by):
+		PokeTip.begin_rehold(_holding_ctrl)
 		call_deferred("_rehold")
 	else:
 		if _hint:

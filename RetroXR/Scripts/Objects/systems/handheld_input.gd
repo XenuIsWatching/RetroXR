@@ -193,14 +193,17 @@ func _on_released_signal(_pickable: Node3D, by: Node3D) -> void:
 		if driver and driver.primary:
 			_holding_ctrl = driver.primary.controller
 			_saved_by = driver.primary.by
+			PokeTip.begin_rehold(ctrl)
 			call_deferred("_rehold_hand", by)
 	else:
+		PokeTip.begin_rehold(ctrl)
 		call_deferred("_rehold_hand", by)
 	_refresh_grip()
 
 
 func _on_dropped_signal(_pickable: Node3D) -> void:
 	if not _allow_drop and is_instance_valid(_saved_by):
+		PokeTip.begin_rehold(_holding_ctrl)
 		call_deferred("_rehold")
 	else:
 		if _hint:

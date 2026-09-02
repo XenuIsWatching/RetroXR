@@ -154,7 +154,43 @@ static func _is_poking_now(ctrl: Node3D) -> bool:
 		return true
 	if is_instance_valid(pk.get("picked_up_object")):
 		return false
+	if _rehold_pending(ctrl):
+		return false
 	if pk.has_method("is_ray_grabbing") and pk.is_ray_grabbing():
+		return false
+	return true
+
+
+## A holder whose grip is a device button rather than a release — a handheld, a
+## pad, a Wii Remote, a light gun, the TV remote — lets XR Tools drop the object
+## and re-grabs it on the next deferred call. `picked_up_object` is null across
+## that seam, so without this the hand reads as EMPTY for a frame: the Capsense
+## hand flashes on and every widget within reach becomes pokeable. The holder
+## latches its controller when it schedules the re-grab.
+static var _reholding: Dictionary = {}
+
+## The re-grab is one deferred call away, so a latch that outlives a few frames
+## means it never happened — the object was freed, or the drop was real. Expiring
+## keeps a failed re-grab from stranding a hand that can never poke again.
+const REHOLD_GRACE_FRAMES := 3
+
+
+static func begin_rehold(ctrl: Node3D) -> void:
+	if ctrl == null or not is_instance_valid(ctrl):
+		return
+	var id := ctrl.get_instance_id()
+	_reholding[id] = Engine.get_process_frames()
+	# The drop may land after this frame's answer was already cached.
+	_cache_for_frame()
+	_poking_cache.erase(id)
+
+
+static func _rehold_pending(ctrl: Node3D) -> bool:
+	var id := ctrl.get_instance_id()
+	if not _reholding.has(id):
+		return false
+	if Engine.get_process_frames() - int(_reholding[id]) > REHOLD_GRACE_FRAMES:
+		_reholding.erase(id)
 		return false
 	return true
 

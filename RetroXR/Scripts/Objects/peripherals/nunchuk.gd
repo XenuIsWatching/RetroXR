@@ -278,6 +278,7 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 	# losing tracking — arrives here and is undone by re-holding on the next
 	# frame. Only _drop_all, which the combo reaches, sets _allow_drop first.
 	if not _allow_drop and is_instance_valid(_saved_by):
+		PokeTip.begin_rehold(_holding_ctrl)
 		call_deferred("_rehold")
 		return
 	if _hint:
