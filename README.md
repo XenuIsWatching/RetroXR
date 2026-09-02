@@ -284,17 +284,21 @@ Each writes a `lib<name>.<platform>.<target>.<arch>.so`, `.dll` or `.dylib` next
 
 #### Exporting
 
-`RetroXR/export_presets.cfg` is committed, so the `Quest` and `Windows Desktop`
-presets come with the clone and a headless export works straight away:
+`RetroXR/export_presets.cfg` is committed, so the `Quest`, `Windows Desktop`, `Linux`
+and `macOS` presets come with the clone and a headless export works straight away:
 
 ```bash
 "$godot" --headless --path RetroXR --export-release "Quest" RetroXR.apk
+"$godot" --headless --path RetroXR --export-release "Windows Desktop" RetroXR.exe
+"$godot" --headless --path RetroXR --export-release "Linux" RetroXR.x86_64
+"$godot" --headless --path RetroXR --export-release "macOS" RetroXR.app
 ```
 
-There is not yet a committed macOS export/signing preset; the Mac work above supports
-editor/runtime development and produces both architectures' GDExtensions. A future
-hardened export must permit downloaded unsigned cores and executable callback trampolines;
-dynamic-recompiler cores may additionally need the JIT entitlement.
+The `macOS` preset is universal and signs with the committed
+`RetroXR/entitlements/macos.entitlements` (ad-hoc in CI). Those entitlements permit
+downloaded unsigned cores and executable callback trampolines; dynamic-recompiler
+cores may additionally need the JIT entitlement. The `Linux` preset is hardcoded to
+`x86_64`; CI flips it to `arm64` for the arm64 build.
 
 Signing is the one thing you have to supply yourself. Since Godot 4.5 the keystore
 path, user and password live in `RetroXR/.godot/export_credentials.cfg`, which is not
@@ -325,9 +329,10 @@ an export to see what actually landed.
 #### Releasing
 
 `.github/workflows/release.yml` does the whole thing on a `v*` tag: builds the six
-GDExtensions for Android and Windows, exports the signed `Quest` APK and the Windows
-desktop build, publishes a GitHub Release with both attached, and points the SideQuest
-listing at the new APK.
+GDExtensions for Android, Windows, Linux and macOS, exports the signed `Quest` APK,
+the Windows desktop build, a Linux AppImage (x86_64) and tarball (arm64), and a
+macOS universal `.app` zip, publishes a GitHub Release with all of them attached, and
+points the SideQuest listing at the new APK.
 
 ```bash
 # bump BOTH in RetroXR/export_presets.cfg, then commit
@@ -341,10 +346,15 @@ tag's — SideQuest refuses a build whose versionCode is not greater than the on
 listed. A `preflight` job checks both in seconds so a mismatch fails before the
 half-hour build rather than after it.
 
+The Linux jobs are blocking; the macOS job is **experimental** (`continue-on-error`),
+so a macOS packaging failure does not sink the release. Linux builds link the system
+libVLC, so the AppImage and tarball need the distro's `vlc-libs` package installed to
+play DVD/VHS content (see the build prerequisites above).
+
 Running it from the Actions tab instead (**Run workflow**) builds everything and
-uploads the APK and Windows zip as run artifacts, without creating a release or
-touching the listing. That is the way to test a build; tick `publish` / `notify` only
-when you mean it.
+uploads the APK, Windows zip, Linux AppImage/tarball and macOS zip as run artifacts,
+without creating a release or touching the listing. That is the way to test a build;
+tick `publish` / `notify` only when you mean it.
 
 Signing comes from three repo secrets — `ANDROID_KEYSTORE_BASE64` (the `.keystore`
 base64'd), `ANDROID_KEYSTORE_USER`, `ANDROID_KEYSTORE_PASSWORD` — which CI feeds to
