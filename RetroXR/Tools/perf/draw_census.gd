@@ -84,7 +84,12 @@ func _measure(kind: String, node: Node) -> void:
 			var mat := mi.get_active_material(s)
 			var key := mat.get_instance_id() if mat != null else 0
 			materials[key] = true
-			mats.append(key)
+			# Named by resource where the import gave it one, else by instance,
+			# so a merge plan can see which siblings already share a material.
+			var label := "-"
+			if mat != null:
+				label = mat.resource_name if not mat.resource_name.is_empty() else "#%d" % key
+			mats.append(label)
 		per_node.append([n, String(node.get_path_to(mi)), mats])
 	per_node.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
 	_rows.append({"kind": kind, "meshes": meshes.size(), "surfaces": surfaces,
@@ -122,5 +127,5 @@ func _report() -> void:
 			if shown >= 40:
 				print("[census]      ... %d more" % (r["nodes"].size() - shown))
 				break
-			print("[census]   %2d  %s" % [entry[0], entry[1]])
+			print("[census]   %2d  %s  [%s]" % [entry[0], entry[1], ", ".join(entry[2])])
 			shown += 1
