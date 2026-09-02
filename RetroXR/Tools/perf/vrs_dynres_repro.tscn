@@ -1,0 +1,23 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://Tools/perf/vrs_dynres_repro.gd" id="1_vrsrepro"]
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_vrsrepro"]
+sky_top_color = Color(0.2, 0.25, 0.4, 1)
+sky_horizon_color = Color(0.5, 0.45, 0.4, 1)
+ground_bottom_color = Color(0.1, 0.1, 0.1, 1)
+
+[sub_resource type="Sky" id="SkyRes_vrsrepro"]
+sky_material = SubResource("Sky_vrsrepro")
+
+[sub_resource type="Environment" id="Env_vrsrepro"]
+background_mode = 2
+sky = SubResource("SkyRes_vrsrepro")
+ambient_light_source = 2
+ambient_light_energy = 0.3
+
+[node name="VrsDynResRepro" type="Node3D"]
+script = ExtResource("1_vrsrepro")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_vrsrepro")
