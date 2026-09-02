@@ -241,7 +241,21 @@ var _led_lit: PackedInt32Array = PackedInt32Array()
 var _blink_clock := 0.0
 ## Last aim state printed, so the log speaks only on change. See _log_aim.
 var _last_aim_log: String = ""
+var _last_aim_counts := Vector2i(-1, -1)
 var _last_aim_value_ms: int = 0
+
+## The two slot orderings _update_aim sorts by, built once rather than as a
+## lambda per frame.
+var _sort_nearest_first: Callable = Callable(self, &"_nearer")
+var _sort_sensor_x_desc: Callable = Callable(self, &"_higher_x")
+
+
+static func _nearer(a: Vector3, b: Vector3) -> bool:
+	return a.z < b.z
+
+
+static func _higher_x(a: Vector3, b: Vector3) -> bool:
+	return a.x > b.x
 
 ## Half-field tangents of the emulated camera, filled in _ready. Dolphin passes
 ## the ratio of the FOV ANGLES as the projection's aspect, so the horizontal
@@ -272,6 +286,7 @@ const FACE_BUTTONS: Dictionary = {
 	"home":  "HomeButton",
 }
 var _face_buttons: Dictionary = {}   # control name -> VRButton
+var _face_latched: Dictionary = {}   # control name -> the latch last handed to it
 
 ## Seconds a finger must stay on POWER before the paired console shuts down.
 ##
@@ -1147,7 +1162,12 @@ func _update_leds(delta: float) -> void:
 ## it with the same travel a poke gets. One depress animation, two causes.
 func _animate_controls(pressed: Dictionary) -> void:
 	for key: String in _face_buttons:
-		(_face_buttons[key] as VRButton).set_latched_pressed(pressed.get(key, false))
+		var down: bool = pressed.get(key, false)
+		var was: Variant = _face_latched.get(key)
+		if was is bool and bool(was) == down:
+			continue
+		_face_latched[key] = down
+		(_face_buttons[key] as VRButton).set_latched_pressed(down)
 
 	if _trigger_pivot != null:
 		var pull := 1.0 if pressed.get("b", false) else 0.0
@@ -1209,7 +1229,18 @@ func _log_aim(state: String) -> void:
 	if state == _last_aim_log:
 		return
 	_last_aim_log = state
+	_last_aim_counts = Vector2i(-1, -1)
 	print("[Wiimote] aim: %s" % state)
+
+
+## The in-view count, formatted only when it moves; _log_aim would drop the
+## repeat anyway, and this saves building the string it would drop.
+func _log_aim_counts(in_view: int, lit: int) -> void:
+	var counts := Vector2i(in_view, lit)
+	if counts == _last_aim_counts:
+		return
+	_log_aim("%d of %d lit LEDs in view" % [in_view, lit])
+	_last_aim_counts = counts
 
 
 ## Twice a second, where the sensor bar's lights landed on the emulated sensor.
@@ -1265,6 +1296,53 @@ func _dpad_animation_stick() -> Vector2:
 ## squeeze reaches the core as two presses.
 var _latch := InputLatch.new()
 
+## The frame's read, reused: _pressed_now is consumed within the frame it ran.
+var _pressed_out: Dictionary = {}
+var _press_ctrls: Array[XRController3D] = []
+
+## A binding layer flattened for the per-frame read: one [input, control,
+## threshold, hand] per bound source, so no frame walks the map's prefixes.
+## Rebuilt when the layer object is swapped (see _load_bindings).
+const PRESS_HAND_ANY := 0
+const PRESS_HAND_LEFT := 1
+const PRESS_HAND_RIGHT := 2
+var _press_entries_upright: Array = []
+var _press_entries_upright_src: Dictionary = {}
+var _press_entries_sideways: Array = []
+var _press_entries_sideways_src: Dictionary = {}
+
+
+static func _build_press_entries(map: Dictionary) -> Array:
+	var entries: Array = []
+	for source: String in map:
+		if source == "stick":
+			continue
+		var control := str(map[source])
+		if control.is_empty() or control == "none":
+			continue
+		var input := source
+		var hand := PRESS_HAND_ANY
+		if source.begins_with("left_"):
+			input = source.substr(5)
+			hand = PRESS_HAND_LEFT
+		elif source.begins_with("right_"):
+			input = source.substr(6)
+			hand = PRESS_HAND_RIGHT
+		entries.append([input, control, float(INPUT_THRESHOLDS.get(input, 0.5)), hand])
+	return entries
+
+
+func _press_entries() -> Array:
+	if _is_sideways():
+		if not is_same(_press_entries_sideways_src, _wiimote_sideways_map):
+			_press_entries_sideways_src = _wiimote_sideways_map
+			_press_entries_sideways = _build_press_entries(_wiimote_sideways_map)
+		return _press_entries_sideways
+	if not is_same(_press_entries_upright_src, _wiimote_map):
+		_press_entries_upright_src = _wiimote_map
+		_press_entries_upright = _build_press_entries(_wiimote_map)
+	return _press_entries_upright
+
 
 ## Which PHYSICAL remote controls are down this frame, from the active upright
 ## or sideways binding layer plus a hand poking the shell. One read is shared by
@@ -1274,36 +1352,29 @@ var _latch := InputLatch.new()
 ## it, so a control with no binding still reports false rather than nothing —
 ## _button_mask and the animation both read it either way.
 func _pressed_now() -> Dictionary:
-	var out: Dictionary = {}
+	var out := _pressed_out
+	out.clear()
 	for key: String in FACE_BUTTONS:
 		out[key] = false
-	var active_map := _wiimote_sideways_map if _is_sideways() else _wiimote_map
-	var controllers: Array[XRController3D] = []
+	var controllers := _press_ctrls
+	controllers.clear()
 	if is_instance_valid(_holding_ctrl):
 		controllers.append(_holding_ctrl)
 	if _is_sideways():
 		var secondary_ctrl := _get_secondary_ctrl()
 		if is_instance_valid(secondary_ctrl):
 			controllers.append(secondary_ctrl)
-	for source: String in active_map:
-		if source == "stick":
-			continue
-		var control := str(active_map[source])
-		if control.is_empty() or control == "none":
-			continue
+	for entry: Array in _press_entries():
+		var input: String = entry[0]
+		var hand: int = entry[3]
 		for ctrl: XRController3D in controllers:
-			var input := source
-			if source.begins_with("left_"):
-				if ctrl.tracker != &"left_hand":
-					continue
-				input = source.substr(5)
-			elif source.begins_with("right_"):
-				if ctrl.tracker != &"right_hand":
-					continue
-				input = source.substr(6)
+			if hand == PRESS_HAND_LEFT and ctrl.tracker != &"left_hand":
+				continue
+			if hand == PRESS_HAND_RIGHT and ctrl.tracker != &"right_hand":
+				continue
 			var key := "%d:%s" % [ctrl.get_instance_id(), input]
-			if _latch.pressed(key, ctrl.get_float(input), float(INPUT_THRESHOLDS.get(input, 0.5))):
-				out[control] = true
+			if _latch.pressed(key, ctrl.get_float(input), entry[2]):
+				out[entry[1]] = true
 				break
 	# A poke is an OR, not an override: pressing 1 on the shell while the bound
 	# hand input is also down must not cancel it. The keyboard joins on the same
@@ -1570,13 +1641,13 @@ func _update_aim(libretro: Libretro) -> void:
 	# More lights than slots is possible — two bars is four dots, and the camera
 	# has four. Keep the NEAREST, because that is how the real sensor picks: it
 	# tracks blobs by size, and a closer light is a bigger one.
-	points.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.z < b.z)
+	points.sort_custom(_sort_nearest_first)
 	points.resize(mini(points.size(), IR_OBJECTS))
 	# Then into slot order: descending x, which is what Dolphin's own camera
 	# produces (its LED array starts at world -X, the end that lands HIGH in
 	# sensor x). Sorted rather than taken from the scene, because the bar is a
 	# pickable and a player can turn it round.
-	points.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.x > b.x)
+	points.sort_custom(_sort_sensor_x_desc)
 
 	for i in range(IR_OBJECTS):
 		var p: Vector3 = points[i] if i < points.size() else Vector3.ZERO
@@ -1588,7 +1659,7 @@ func _update_aim(libretro: Libretro) -> void:
 			int(p.y / (CAMERA_RES_Y - 1.0) * POINTER_SCALE),
 			p.z > 0.0)
 
-	_log_aim("%d of %d lit LEDs in view" % [points.size(), leds.size()])
+	_log_aim_counts(points.size(), leds.size())
 	if not points.is_empty():
 		_log_aim_points(points)
 	_update_laser_dot(pose)

@@ -113,6 +113,13 @@ const ANIM_WEIGHT := 0.4
 var _anim_btns: Array[Dictionary] = []   # {node, rest, lid}
 var _trigger_pivot: Node3D = null
 var _trigger_rest := Transform3D()
+## The press state each part was last animated toward (lid, or ANIM_TRIGGER_KEY
+## for the blade), and whether every part has reached it.
+const ANIM_TRIGGER_KEY := -1
+var _anim_last: Dictionary = {}
+var _anim_settled: bool = false
+## The frame's read, reused: _pressed_now is consumed within the frame it ran.
+var _pressed_out: Dictionary = {}
 
 
 ## The trigger fires the gun and the thumbstick is the lightgun d-pad, so the
@@ -339,7 +346,8 @@ var _latch := InputLatch.new()
 ## of the input, shared by the core and the shell animation. Every mapped id is
 ## present, so an unheld gun reports them all false rather than reporting nothing.
 func _pressed_now() -> Dictionary:
-	var out: Dictionary = {}
+	var out := _pressed_out
+	out.clear()
 	if _desktop_held:
 		for action_name: String in DESKTOP_LIGHTGUN_BUTTONS:
 			var lid: int = DESKTOP_LIGHTGUN_BUTTONS[action_name]
@@ -360,19 +368,52 @@ func _pressed_now() -> Dictionary:
 
 
 func _animate_controls(pressed: Dictionary) -> void:
+	# A press change restarts the blend; once every part has reached its target
+	# the frames until the next change write nothing.
+	var changed := false
+	for e: Dictionary in _anim_btns:
+		var lid: int = e["lid"]
+		var down_now: bool = pressed.get(lid, false)
+		var was: Variant = _anim_last.get(lid)
+		if not (was is bool) or bool(was) != down_now:
+			_anim_last[lid] = down_now
+			changed = true
+	var trigger_now: bool = pressed.get(ControllerBindings.LIGHTGUN_TRIGGER, false)
+	var trigger_was: Variant = _anim_last.get(ANIM_TRIGGER_KEY)
+	if not (trigger_was is bool) or bool(trigger_was) != trigger_now:
+		_anim_last[ANIM_TRIGGER_KEY] = trigger_now
+		changed = true
+	if changed:
+		_anim_settled = false
+	elif _anim_settled:
+		return
+
+	var at_target := true
 	for e: Dictionary in _anim_btns:
 		var node: MeshInstance3D = e["node"]
 		var rest: Transform3D = e["rest"]
 		var down := 1.0 if pressed.get(int(e["lid"]), false) else 0.0
 		var tgt := Transform3D(rest.basis, rest.origin + Vector3.DOWN * (BUTTON_PRESS * down))
-		node.transform = node.transform.interpolate_with(tgt, ANIM_WEIGHT)
+		var next := node.transform.interpolate_with(tgt, ANIM_WEIGHT)
+		if next.is_equal_approx(tgt):
+			next = tgt
+		else:
+			at_target = false
+		node.transform = next
 	if _trigger_pivot == null:
+		_anim_settled = at_target
 		return
-	var pull := 1.0 if pressed.get(ControllerBindings.LIGHTGUN_TRIGGER, false) else 0.0
+	var pull := 1.0 if trigger_now else 0.0
 	var tgt_x := Transform3D(
 		_trigger_rest.basis * Basis(Vector3.RIGHT, deg_to_rad(TRIGGER_PULL_DEG * pull)),
 		_trigger_rest.origin)
-	_trigger_pivot.transform = _trigger_pivot.transform.interpolate_with(tgt_x, ANIM_WEIGHT)
+	var next_x := _trigger_pivot.transform.interpolate_with(tgt_x, ANIM_WEIGHT)
+	if next_x.is_equal_approx(tgt_x):
+		next_x = tgt_x
+	else:
+		at_target = false
+	_trigger_pivot.transform = next_x
+	_anim_settled = at_target
 
 
 func _physics_process(_delta: float) -> void:

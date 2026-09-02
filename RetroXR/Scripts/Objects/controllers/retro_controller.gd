@@ -619,26 +619,75 @@ var _latch := InputLatch.new()
 # Only processes sources prefixed for the given hand.
 func _apply_buttons_for_ctrl(ctrl: XRController3D, left_hand: bool) -> int:
 	var bits: int = 0
+	_sync_button_lists()
+	for entry: Array in (_left_buttons if left_hand else _right_buttons):
+		var vr_input: String = entry[0]
+		var key := "%d:%s" % [ctrl.get_instance_id(), vr_input]
+		if _latch.pressed(key, ctrl.get_float(vr_input), entry[1]):
+			bits |= (1 << int(entry[2]))
+	return bits
+
+
+## _button_map flattened per hand into [vr_input, threshold, bit] entries, so the
+## per-frame read does no prefix parsing. Rebuilt whenever the map object changes
+## (_load_bindings, or a test assigning it directly).
+var _left_buttons: Array = []
+var _right_buttons: Array = []
+var _button_lists_src: Dictionary = {}
+
+
+func _sync_button_lists() -> void:
+	if is_same(_button_lists_src, _button_map):
+		return
+	_button_lists_src = _button_map
+	_left_buttons = []
+	_right_buttons = []
 	for full_source: String in _button_map:
 		var bit: int = _button_map[full_source]
 		if bit < 0:
 			continue
 		var vr_input: String
+		var left := true
+		var right := true
 		if full_source.begins_with("right_"):
-			if left_hand:
-				continue
 			vr_input = full_source.substr(6)
+			left = false
 		elif full_source.begins_with("left_"):
-			if not left_hand:
-				continue
 			vr_input = full_source.substr(5)
+			right = false
 		else:
 			vr_input = full_source
-		var threshold: float = INPUT_THRESHOLDS.get(vr_input, 0.5)
-		var key := "%d:%s" % [ctrl.get_instance_id(), vr_input]
-		if _latch.pressed(key, ctrl.get_float(vr_input), threshold):
-			bits |= (1 << bit)
-	return bits
+		var entry: Array = [vr_input, float(INPUT_THRESHOLDS.get(vr_input, 0.5)), bit]
+		if left:
+			_left_buttons.append(entry)
+		if right:
+			_right_buttons.append(entry)
+
+
+## The _stick_map targets resolved to flags once per map, not per frame.
+var _stick_flags_src: Dictionary = {}
+var _lt_left := false
+var _lt_right := false
+var _lt_dpad := false
+var _rt_left := false
+var _rt_right := false
+var _rt_dpad := false
+
+
+func _sync_stick_flags() -> void:
+	if is_same(_stick_flags_src, _stick_map):
+		return
+	_stick_flags_src = _stick_map
+	# Target strings: "left", "right", "dpad", "left+dpad", "right+dpad"
+	# Substring checks handle combined targets ("dpad" in "left+dpad" → true).
+	var lt: String = _stick_map.get("stick_left",  "left+dpad")
+	var rt: String = _stick_map.get("stick_right", "right")
+	_lt_left = "left" in lt
+	_lt_right = "right" in lt
+	_lt_dpad = "dpad" in lt
+	_rt_left = "left" in rt
+	_rt_right = "right" in rt
+	_rt_dpad = "dpad" in rt
 
 
 # ── Input forwarding ──────────────────────────────────────────────────────────
@@ -714,18 +763,15 @@ func _process(_delta: float) -> void:
 	var alx := 0; var aly := 0
 	var arx := 0; var ary := 0
 
-	# Target strings: "left", "right", "dpad", "left+dpad", "right+dpad"
-	# Substring checks handle combined targets ("dpad" in "left+dpad" → true).
-	var lt: String = _stick_map.get("stick_left",  "left+dpad")
-	var rt: String = _stick_map.get("stick_right", "right")
+	_sync_stick_flags()
 
-	if "left"  in lt: alx = int(lstick.x * ANALOG_SCALE); aly = int(-lstick.y * ANALOG_SCALE)
-	elif "right" in lt: arx = int(lstick.x * ANALOG_SCALE); ary = int(-lstick.y * ANALOG_SCALE)
-	if "dpad" in lt: btn |= _threshold_to_dpad(lstick)
+	if _lt_left: alx = int(lstick.x * ANALOG_SCALE); aly = int(-lstick.y * ANALOG_SCALE)
+	elif _lt_right: arx = int(lstick.x * ANALOG_SCALE); ary = int(-lstick.y * ANALOG_SCALE)
+	if _lt_dpad: btn |= _threshold_to_dpad(lstick)
 
-	if "right" in rt: arx = int(rstick.x * ANALOG_SCALE); ary = int(-rstick.y * ANALOG_SCALE)
-	elif "left" in rt: alx = int(rstick.x * ANALOG_SCALE); aly = int(-rstick.y * ANALOG_SCALE)
-	if "dpad" in rt: btn |= _threshold_to_dpad(rstick)
+	if _rt_right: arx = int(rstick.x * ANALOG_SCALE); ary = int(-rstick.y * ANALOG_SCALE)
+	elif _rt_left: alx = int(rstick.x * ANALOG_SCALE); aly = int(-rstick.y * ANALOG_SCALE)
+	if _rt_dpad: btn |= _threshold_to_dpad(rstick)
 
 	_send_joypad(btn, alx, aly, arx, ary)
 

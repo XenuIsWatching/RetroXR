@@ -46,6 +46,11 @@ const VOL_OSD_MAX_FONT_SIZE := 128
 var _osd_token: int = 0
 var _vol_osd_token: int = 0
 
+# What the last route() saw, so an idle OSD on unchanged glass costs nothing.
+var _routed: bool = false
+var _routed_active: bool = false
+var _routed_mat: Material = null
+
 
 func setup(tv: RetroTV) -> void:
 	_tv = tv
@@ -176,6 +181,13 @@ func route() -> void:
 	var main_active := _tv._osd_label.text != ""
 	var vol_active := _tv._vol_osd_label.text != ""
 	var mat := _tv._screen_mesh.get_surface_override_material(0)
+	# Idle on the same glass as last time: every write below would be a repeat.
+	var active := main_active or vol_active
+	if not active and _routed and not _routed_active and mat == _routed_mat:
+		return
+	_routed = true
+	_routed_active = active
+	_routed_mat = mat
 	var sm: ShaderMaterial = null
 	if mat is ShaderMaterial:
 		var candidate := mat as ShaderMaterial

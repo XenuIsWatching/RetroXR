@@ -369,13 +369,25 @@ func _ready() -> void:
 
 
 
+## The power state the display half of _process last ran for (-1 = never). The
+## half runs every frame while the set is on and once more after it goes off, so
+## the off frame still paints the dark glass, unlights it and douses the ambilight.
+var _display_ran_powered: int = -1
+
+
 func _process(_delta: float) -> void:
-	_display.update_screen_source()
-	_display.update_crt()
-	_display.refresh_crt_derived()
-	_display.update_phosphor()
+	var powered := 1 if _tv_enabled else 0
+	var run_display := _tv_enabled or _display_ran_powered != powered
+	if run_display:
+		_display_ran_powered = powered
+		_display.update_screen_source()
+		_display.update_crt()
+		_display.refresh_crt_derived()
+		_display.update_phosphor()
+		_osd.route()
+	# Ungated: the 3D key follows the SOURCE, which can stop being stereo while
+	# the set is off.
 	_display.update_stereo_button()
-	_osd.route()
 	_resize.revalidate_park()
 
 	# The tuner's sound comes out of this cabinet's own speakers, aimed the way
@@ -392,7 +404,9 @@ func _process(_delta: float) -> void:
 		if not scale.is_equal_approx(Vector3.ONE * scale_factor):
 			scale = Vector3.ONE * scale_factor
 
-	_display.tick_ambilight()
+	# An off set only has an ambilight to douse, and only while one is showing.
+	if run_display or (_ambilight != null and _ambilight.visible):
+		_display.tick_ambilight()
 
 
 
