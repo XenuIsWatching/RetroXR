@@ -113,16 +113,15 @@ func _init() -> void:
 	# Chamfer down to the collar so no gap shows where the metal emerges.
 	prof.append(Vector2(Z_COLLAR, COLLAR_OR + 0.0002))
 
+	# One SurfaceTool for the whole plug: each part is lathed after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.plastic_vertex(Color(0.95, 0.74, 0.02)))
 	_lathe(st, prof)
-	st.generate_normals()
-	var m_body := PlugMats.plastic(Color(0.95, 0.74, 0.02))
-	st.set_material(m_body)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_body)
 
-	# --- surface 1: collar + centre pin, one continuous profile --------------
+	# --- collar + centre pin, one continuous profile --------------------------
 	var mp := PackedVector2Array([
 		Vector2(Z_COLLAR, COLLAR_OR),          # up the outside of the collar
 		Vector2(Z_COLLAR_END, COLLAR_OR),
@@ -133,14 +132,14 @@ func _init() -> void:
 		Vector2(Z_PIN_END, PIN_TIP_R),         # tip taper
 		Vector2(Z_PIN_END, 0.0),               # cap
 	])
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.chrome_vertex())
 	_lathe(st, mp)
+
 	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
+	var mat := PlugMats.connector()
+	st.set_material(mat)
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
+	mesh.surface_set_material(0, mat)
 
 	var err := ResourceSaver.save(mesh, OUT_PATH)
 	var ab: AABB = mesh.get_aabb()

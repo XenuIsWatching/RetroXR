@@ -63,22 +63,12 @@ func _ready() -> void:
 ## _ready calls this again.
 func _apply_plug_color() -> void:
 	var tip := get_node_or_null("PlugTip") as MeshInstance3D
-	if tip == null or tip.mesh == null or tip.mesh.get_surface_count() == 0:
+	if tip == null:
 		return
-	var base := tip.mesh.surface_get_material(0) as StandardMaterial3D
-	if base == null:
-		return
-	# The bake is already this colour, so an override would be nothing but a second
-	# copy of it — and dropping it is also what returns a plug recoloured twice to
-	# the yellow it started as.
-	if base.albedo_color.is_equal_approx(plug_color):
-		tip.set_surface_override_material(0, null)
-		return
-	var mat := tip.get_surface_override_material(0) as StandardMaterial3D
-	if mat == null:
-		mat = base.duplicate() as StandardMaterial3D
-		tip.set_surface_override_material(0, mat)
-	mat.albedo_color = plug_color
+	# The bake wears Shaders/connector.gdshader, whose plastic takes its colour
+	# from this instance parameter - one shared material for every plug in the
+	# room, and no copy of it per colour. Same rule as RcaJack._apply_color.
+	tip.set_instance_shader_parameter(&"tint", plug_color)
 
 
 func _derive_cable_anchor() -> void:

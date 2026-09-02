@@ -76,5 +76,67 @@ static func chrome() -> StandardMaterial3D:
 	return metal(Color(0.82, 0.83, 0.86), 0.20)
 
 
+# ── The one-surface connector ────────────────────────────────────────────────
+#
+# Shaders/connector.gdshader draws every part of a connector from ONE material:
+# the part's look rides in the vertex colour (rgb the albedo, alpha the class)
+# and the channel colour is a per-instance parameter. A generator lathes each
+# part after set_color() with one of these and commits a single surface wearing
+# connector(). The recipes above are what the shader reproduces, and the colour
+# goes in linear because a vertex colour is not gamma-decoded the way an
+# albedo_color is.
+
+const CONNECTOR_MATERIAL := "res://Scenes/Objects/cables/connector_material.tres"
+## The classes the shader reads out of vertex alpha; see its header.
+const CLASS_TINTED := 1.0     # gloss, coloured by the instance tint
+const CLASS_GLOSS := 0.85     # gloss, its own colour - plastic() untinted
+const CLASS_MATTE := 0.7      # matte() in its own colour
+const CLASS_METAL := 0.5      # metal(): chrome, brass, any plating
+const CLASS_SOCKET := 0.0
+
+
+static func connector() -> Material:
+	return load(CONNECTOR_MATERIAL) as Material
+
+
+## Vertex colour for the tintable plastic. The rgb is the bake's own colour and
+## only matters where nothing sets the instance tint.
+static func plastic_vertex(albedo: Color) -> Color:
+	var c := albedo.srgb_to_linear()
+	c.a = CLASS_TINTED
+	return c
+
+
+## plastic() in a colour no instance parameter touches - a black coax body.
+static func gloss_vertex(albedo: Color) -> Color:
+	var c := albedo.srgb_to_linear()
+	c.a = CLASS_GLOSS
+	return c
+
+
+## matte() - a hood or a panel surround.
+static func matte_vertex(albedo: Color) -> Color:
+	var c := albedo.srgb_to_linear()
+	c.a = CLASS_MATTE
+	return c
+
+
+## metal() in any plating colour; brass() is metal_vertex(Color(0.86, 0.78, 0.48)).
+static func metal_vertex(albedo: Color) -> Color:
+	var c := albedo.srgb_to_linear()
+	c.a = CLASS_METAL
+	return c
+
+
+static func chrome_vertex() -> Color:
+	return metal_vertex(Color(0.82, 0.83, 0.86))
+
+
+static func socket_vertex() -> Color:
+	var c := Color(0.035, 0.035, 0.04).srgb_to_linear()
+	c.a = CLASS_SOCKET
+	return c
+
+
 static func brass() -> StandardMaterial3D:
 	return metal(Color(0.86, 0.78, 0.48), 0.26)

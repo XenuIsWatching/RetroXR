@@ -66,16 +66,15 @@ func _init() -> void:
 		Vector2(Z_PLASTIC_FACE, BORE_R),        # up the outside, inside the shell
 		Vector2(Z_PLASTIC_FACE, SOCKET_R),      # the visible ring, faces +Z
 	])
+	# One SurfaceTool for the whole jack: each part is lathed after set_color()
+	# with its class, and the lot commits as ONE surface on the shared connector
+	# material. See Shaders/connector.gdshader for why.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.plastic_vertex(Color(0.95, 0.74, 0.02)))
 	_lathe(st, ins)
-	st.generate_normals()
-	var m_body := PlugMats.plastic(Color(0.95, 0.74, 0.02))
-	st.set_material(m_body)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(0, m_body)
 
-	# --- surface 1: flange + barrel + bore, one continuous profile ------------
+	# --- flange + barrel + bore, one continuous profile -----------------------
 	# Open at the back: that end is against the cabinet, and closing it would only
 	# add triangles nobody can see. The bore meets the insulator's outer wall at
 	# BORE_R, so no gap shows at the join.
@@ -87,16 +86,10 @@ func _init() -> void:
 		Vector2(Z_RIM, BORE_R),                 # rim, faces +Z
 		Vector2(Z_FLOOR, BORE_R),               # back down the bore, faces inward
 	])
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.chrome_vertex())
 	_lathe(st, shell)
-	st.generate_normals()
-	var m_metal := PlugMats.chrome()
-	st.set_material(m_metal)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(1, m_metal)
 
-	# --- surface 2: the centre socket -----------------------------------------
+	# --- the centre socket ----------------------------------------------------
 	# Dark by MATERIAL, not by depth. These rooms light with a flat ambient colour
 	# and no radiance map, so nothing is shadowed for being 12 mm down a 4 mm hole:
 	# a bore given the insulator's own material renders as bright as the ring
@@ -107,14 +100,14 @@ func _init() -> void:
 		Vector2(Z_FLOOR, SOCKET_R),             # bore wall, faces inward
 		Vector2(Z_FLOOR, 0.0),                  # floor, faces +Z
 	])
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(PlugMats.socket_vertex())
 	_lathe(st, socket)
+
 	st.generate_normals()
-	var m_socket := PlugMats.metal(Color(0.035, 0.035, 0.04), 0.55)
-	st.set_material(m_socket)
+	var mat := PlugMats.connector()
+	st.set_material(mat)
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, st.commit_to_arrays())
-	mesh.surface_set_material(2, m_socket)
+	mesh.surface_set_material(0, mat)
 
 	var err := ResourceSaver.save(mesh, OUT_PATH)
 	var ab: AABB = mesh.get_aabb()

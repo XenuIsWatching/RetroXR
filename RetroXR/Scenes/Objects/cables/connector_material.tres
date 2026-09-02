@@ -1,0 +1,7 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://Shaders/connector.gdshader" id="1_connector"]
+
+[resource]
+resource_name = "connector"
+shader = ExtResource("1_connector")

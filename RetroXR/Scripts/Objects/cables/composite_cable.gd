@@ -245,14 +245,12 @@ func _cord_color(c: int) -> Color:
 ## by every plug in the room, so it is duplicated before a colour goes into it.
 func _tint_plug(plug: RcaPlug, col: Color) -> void:
 	var tip := plug.get_node_or_null("PlugTip") as MeshInstance3D
-	if tip == null or tip.mesh == null:
+	if tip == null:
 		return
-	var base := tip.mesh.surface_get_material(0) as StandardMaterial3D
-	if base == null:
-		return
-	var mat := base.duplicate() as StandardMaterial3D
-	mat.albedo_color = col
-	tip.set_surface_override_material(0, mat)
+	# The bake wears Shaders/connector.gdshader: the colour is an instance
+	# parameter on one shared material, not a copy of it. Same rule as
+	# RcaJack._apply_color and CablePlug._apply_plug_color.
+	tip.set_instance_shader_parameter(&"tint", col)
 
 
 ## Wire the ribbon to its six plugs. Both ends fray into one group per cord, so
