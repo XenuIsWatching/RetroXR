@@ -869,13 +869,18 @@ func supports_foveation() -> bool:
 
 ## Whether a stencil-based material may be drawn this session.
 ##
-## False while foveation is on, and that is a crash guard rather than a taste
-## call: with VRS active, drawing the outline_mask/outline stencil pair loses the
-## Vulkan device inside two seconds on a Quest 3 (a fault in the opaque pass,
-## two runs out of two, never once with VRS off). The highlight overlays ask this
-## and take the stencil-free outline_hull instead; see that shader for the trade.
+## Never on the mobile renderer, and that is a crash guard rather than a taste
+## call: with a VRS attachment bound, one draw of the outline_mask/outline stencil
+## pair loses the Vulkan device inside a second on a Quest 3 (a fault in the
+## opaque pass, five runs out of five in Tools/perf/vrs_dynres_repro, never once
+## with VRS off or with the pair swapped for the hull). Gating on the foveation
+## level alone left a hole: a highlight built while foveation was OFF kept its
+## stencil pair, and switching foveation on later - the GRAPHICS tab, a probe -
+## drew it under VRS on the next hover. So on mobile the answer does not depend
+## on when the highlight was built. The highlight overlays ask this and take the
+## stencil-free outline_hull instead; see that shader for the trade.
 func stencil_safe() -> bool:
-	return foveation_level == Foveation.OFF
+	return _is_forward_plus() and foveation_level == Foveation.OFF
 
 
 ## Takes effect on the current root viewport without changing the XR swapchain.
