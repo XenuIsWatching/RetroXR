@@ -36,10 +36,14 @@ constexpr double SLEEP_STRETCH_ERROR = 4.0;
 constexpr double SLEEP_CONTACT_ERROR = 0.05;
 constexpr double WAKE_ANCHOR_EPS_SQ = 0.0005 * 0.0005;
 // A sleeping rope has no CollisionObject3D of its own, so furniture cannot wake
-// it through a physics callback. Poll its cached contacts at a low cadence: six
-// times a second at the project's 90 Hz tick catches moved support without
-// turning every sleeping cable back into a per-frame physics cost.
-constexpr int SLEEP_ENVIRONMENT_INTERVAL = 15;
+// it through a physics callback. Poll its cached contacts at a low cadence:
+// three times a second at the project's 90 Hz tick catches moved support
+// without turning every sleeping cable back into a per-frame physics cost.
+// A poll is one shape query per segment and one point query per particle,
+// and with eight sleeping cables in a room the 15-tick cadence was 3% of a
+// Quest 3's main thread; two polls have to agree before a wake, so the worst
+// case from a removed support to the cord falling is 60 ticks.
+constexpr int SLEEP_ENVIRONMENT_INTERVAL = 30;
 // Further than an anchor can travel in one tick by being carried or thrown: 0.4 m
 // at 60 Hz is 24 m/s, where a hard throw is nearer 10. Every teleport a restore
 // performs is 0.7 m or more, so the gap is wide. See AnchorTeleported.
