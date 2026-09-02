@@ -69,6 +69,12 @@ var _preview_seed_pending : bool = true
 # slides it out to the mouth instead of flicking it there — the stand-off can be
 # tens of millimetres, which is a jump you would see.
 var _perch_ease : float = 1.0
+# LOCAL PATCH (RetroXR): `primary.by is XRToolsSnapZone`, resolved once per
+# Grab object instead of twice per physics tick. Keyed on the Grab itself so any
+# reassignment of `primary` (create_*, add_grab, remove_grab, or a release fired
+# from set_arrived mid-tick) refreshes it before the next use.
+var _primary_cached : Grab = null
+var _primary_by_zone : bool = false
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _physics_process(delta : float) -> void:
@@ -137,8 +143,11 @@ func _physics_process(delta : float) -> void:
 	# The engage test must use `destination` (where the hand wants the object),
 	# not the object's actual position: while previewing, the object sits AT
 	# the zone, so testing its own position could never disengage.
+	if primary != _primary_cached:
+		_primary_cached = primary
+		_primary_by_zone = primary.by is XRToolsSnapZone
 	if state == GrabState.SNAP and is_instance_valid(target) \
-			and not (primary.by is XRToolsSnapZone):
+			and not _primary_by_zone:
 		var r := _get_preview_radius()
 		var zone := XRToolsSnapZone.find_preview_zone(target, destination.origin, r)
 		# First frame of a grab that took the object out of a socket: it is still
@@ -194,7 +203,7 @@ func _physics_process(delta : float) -> void:
 	# that is the moment the cartridge's driver has to start running later than
 	# the 32X's. Rechecked only when the holder graph has actually changed, so
 	# the common case is one integer compare.
-	if primary and primary.by is XRToolsSnapZone:
+	if primary and _primary_by_zone:
 		var epoch := XRToolsSnapZone.holder_epoch()
 		if epoch != _priority_epoch:
 			_priority_epoch = epoch
@@ -267,7 +276,7 @@ func remove_grab(p_grab : Grab) -> void:
 
 
 # Discard the driver
-func discard():
+func discard() -> void:
 	# LOCAL PATCH (RetroXR): drop any preview collision exceptions we added.
 	# When a socket captures the previewed object this hand-driver is discarded
 	# and a new socket-driver takes over, so releasing here returns the object
@@ -289,9 +298,9 @@ func _get_preview_radius() -> float:
 	# separate child CollisionObject3D such as a wider pointer/ray proxy.
 	var body := target as CollisionObject3D
 	if body:
-		for owner_id in body.get_shape_owners():
+		for owner_id: int in body.get_shape_owners():
 			var off: float = body.shape_owner_get_transform(owner_id).origin.length()
-			for i in body.shape_owner_get_shape_count(owner_id):
+			for i: int in body.shape_owner_get_shape_count(owner_id):
 				var shape: Shape3D = body.shape_owner_get_shape(owner_id, i)
 				if shape:
 					_preview_radius = maxf(_preview_radius, off + _shape_extent(shape))
@@ -357,7 +366,7 @@ static func _body_rids(root: Node) -> Array[RID]:
 	var out: Array[RID] = []
 	if root is PhysicsBody3D:
 		out.push_back(root.get_rid())
-	for c in root.get_children():
+	for c: Node in root.get_children():
 		if c is Area3D:
 			continue
 		out.append_array(_body_rids(c))
@@ -461,7 +470,7 @@ static func _vote(a : float, b : float) -> float:
 
 
 # Update the weight on collision hands
-func _update_weight():
+func _update_weight() -> void:
 	if primary:
 		var weight : float = target.mass
 		if secondary:
@@ -479,7 +488,7 @@ func _update_weight():
 func _notify_snap_preview(on : bool) -> void:
 	if not is_instance_valid(target):
 		return
-	for child in target.get_children():
+	for child: Node in target.get_children():
 		if child.has_method("set_snap_preview"):
 			child.set_snap_preview(on)
 			return

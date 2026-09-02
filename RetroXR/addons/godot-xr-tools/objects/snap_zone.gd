@@ -203,11 +203,26 @@ func can_preview(obj: Node3D) -> bool:
 ## carries a 180-degree flip and an offset, so zone origins alone rank wrongly.
 func snap_pose_for(obj: Node3D) -> Transform3D:
 	var t := global_transform
-	if is_instance_valid(obj) and obj.has_method("_get_grab_point"):
+	# LOCAL PATCH (RetroXR): typed, not has_method + a dynamic call - this runs
+	# for every zone within reach on every physics tick a hand holds something.
+	var pickable := obj as XRToolsPickable
+	if pickable != null and is_instance_valid(pickable):
+		var gp: XRToolsGrabPoint = pickable._get_grab_point(self, null)
+		if gp:
+			t = t * gp.transform.affine_inverse()
+	elif is_instance_valid(obj) and obj.has_method("_get_grab_point"):
 		var gp: XRToolsGrabPoint = obj._get_grab_point(self, null)
 		if gp:
 			t = t * gp.transform.affine_inverse()
 	return t
+
+
+## LOCAL PATCH (RetroXR): how far a snapped pose can sit from its zone's origin
+## - a grab point's own offset, a few centimetres on a plug, a hand's width on
+## a cartridge. find_preview_zone rejects a zone by its origin at this slack
+## before asking anything of it, so a room's forty zones cost forty distance
+## checks per tick and not forty group tests and grab-point calls.
+const PREVIEW_ORIGIN_SLACK := 0.3
 
 
 ## LOCAL PATCH (RetroXR): where a held object is SHOWN before release, as an
@@ -263,7 +278,12 @@ static func find_preview_zone(obj: Node3D, at: Vector3, radius: float = 0.0) -> 
 	var best: XRToolsSnapZone = null
 	var best_d := INF
 	for z: XRToolsSnapZone in _live_zones:
-		if not is_instance_valid(z) or not z.can_preview(obj):
+		if not is_instance_valid(z):
+			continue
+		var reach: float = z.grab_distance + radius + PREVIEW_ORIGIN_SLACK
+		if z.global_position.distance_squared_to(at) > reach * reach:
+			continue
+		if not z.can_preview(obj):
 			continue
 		# Ranked by the pose the object would OCCUPY, the same measure
 		# _on_target_dropped uses. Ranking by zone origin here and by snapped pose

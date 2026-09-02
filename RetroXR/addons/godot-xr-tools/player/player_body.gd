@@ -83,12 +83,12 @@ const MAX_GROUND_VELOCITY := 5.0
 @export_range(0.0, 1.0) var body_forward_mix : float = 0.75
 
 ## Maximum distance the head may move away from the player body
-@export_range(0.0, 2.0, 0.01) var max_head_distance = 1.0
+@export_range(0.0, 2.0, 0.01) var max_head_distance : float = 1.0
 
 ## Behaviour mode when players head collides, or moves beyond [member max_head_distance].
 ## Push away, pushes the player body away.
 ## Fade, fades view to black.
-@export_enum("Push away", "Fade", "Disabled") var head_behavior_mode = 1
+@export_enum("Push away", "Fade", "Disabled") var head_behavior_mode : int = 1
 
 @export_group("Collisions")
 
@@ -147,7 +147,7 @@ var up_gravity := Vector3.UP
 var up_player := Vector3.UP
 
 # Array of [XRToolsMovementProvider] nodes for the player
-var _movement_providers := Array()
+var _movement_providers : Array[XRToolsMovementProvider] = []
 
 # Player height overrides
 var _player_height_overrides := { }
@@ -176,8 +176,15 @@ var _previous_ground_global : Vector3 = Vector3.ZERO
 # Player body Collision node
 var _collision_node : CollisionShape3D
 
+# The capsule inside it. Held typed so the per-tick height/radius writes
+# resolve statically instead of going through Shape3D's property table.
+var _capsule_shape : CapsuleShape3D
+
 # Player head shape cast
 var _head_shape_cast : ShapeCast3D
+
+# The sphere the head cast sweeps, typed for the same reason as the capsule.
+var _head_shape : SphereShape3D
 
 # True while we're handling physics
 var _in_physics_movement : bool = false
@@ -201,7 +208,7 @@ var _fade_value : float = 0.0
 @onready var right_hand_node : XRController3D = XRHelpers.get_right_controller(self)
 
 ## Default physics (if not specified by the user or the current ground)
-@onready var default_physics = _guaranteed_physics()
+@onready var default_physics : XRToolsGroundPhysicsSettings = _guaranteed_physics()
 
 
 ## Function to sort movement providers by order
@@ -229,11 +236,11 @@ func _ready():
 			global_transform = get_parent().global_transform
 
 	# Create our collision shape, height will be updated later
-	var capsule = CapsuleShape3D.new()
-	capsule.radius = player_radius
-	capsule.height = 1.4
+	_capsule_shape = CapsuleShape3D.new()
+	_capsule_shape.radius = player_radius
+	_capsule_shape.height = 1.4
 	_collision_node = CollisionShape3D.new()
-	_collision_node.shape = capsule
+	_collision_node.shape = _capsule_shape
 	_collision_node.transform.origin = Vector3(0.0, 0.8, 0.0)
 	add_child(_collision_node)
 
@@ -244,12 +251,13 @@ func _ready():
 	_head_shape_cast.margin = 0.01
 	_head_shape_cast.collision_mask = collision_mask
 	_head_shape_cast.max_results = 1
-	_head_shape_cast.shape = SphereShape3D.new()
-	_head_shape_cast.shape.radius = player_radius
+	_head_shape = SphereShape3D.new()
+	_head_shape.radius = player_radius
+	_head_shape_cast.shape = _head_shape
 	add_child(_head_shape_cast)
 
 	# Get the movement providers ordered by increasing order
-	_movement_providers = get_tree().get_nodes_in_group("movement_providers")
+	_movement_providers.assign(get_tree().get_nodes_in_group("movement_providers"))
 	_movement_providers.sort_custom(sort_by_order)
 
 	# Propagate defaults
@@ -289,7 +297,7 @@ func set_physics(new_value: XRToolsGroundPhysicsSettings) -> void:
 	default_physics = _guaranteed_physics()
 
 
-func _physics_process(delta: float):
+func _physics_process(delta: float) -> void:
 	# Do not run physics if in the editor
 	if Engine.is_editor_hint():
 		return
@@ -317,7 +325,7 @@ func _physics_process(delta: float):
 
 	# Allow the movement providers a chance to perform pre-movement updates. The providers can:
 	# - Adjust the gravity direction
-	for p in _movement_providers:
+	for p: XRToolsMovementProvider in _movement_providers:
 		if p.enabled:
 			p.physics_pre_movement(delta, self)
 
@@ -345,7 +353,7 @@ func _physics_process(delta: float):
 	# - Modify gravity direction
 	ground_control_velocity = Vector2.ZERO
 	var exclusive := false
-	for p in _movement_providers:
+	for p: XRToolsMovementProvider in _movement_providers:
 		if p.is_active or (p.enabled and not exclusive):
 			if p.physics_movement(delta, self, exclusive):
 				exclusive = true
@@ -470,26 +478,24 @@ func move_player(p_velocity: Vector3) -> Vector3:
 
 	# Check if we collided with rigid bodies and apply impulses to them to move them out of the way
 	if push_rigid_bodies:
-		for idx in range(get_slide_collision_count()):
-			var with = get_slide_collision(idx)
-			var obj = with.get_collider()
+		for idx: int in range(get_slide_collision_count()):
+			var with : KinematicCollision3D = get_slide_collision(idx)
+			var rb : RigidBody3D = with.get_collider() as RigidBody3D
 
-			if obj.is_class("RigidBody3D"):
-				var rb : RigidBody3D = obj
-
+			if rb:
 				# Get our relative impact velocity
-				var impact_velocity = p_velocity - rb.linear_velocity
+				var impact_velocity : Vector3 = p_velocity - rb.linear_velocity
 
 				# Determine the strength of the impulse we're about to give
-				var strength = impact_velocity.dot(-with.get_normal(0)) * push_strength_factor
+				var strength : float = impact_velocity.dot(-with.get_normal(0)) * push_strength_factor
 
 				# Our impulse is applied in the opposite direction
 				# of the normal of the surface we're hitting
-				var impulse = -with.get_normal(0) * strength
+				var impulse : Vector3 = -with.get_normal(0) * strength
 
 				# Determine the location at which we're hitting in the object local space
 				# but in global orientation
-				var pos = with.get_position(0) - rb.global_transform.origin
+				var pos : Vector3 = with.get_position(0) - rb.global_transform.origin
 
 				# And apply the impulse
 				rb.apply_impulse(impulse, pos)
@@ -497,7 +503,7 @@ func move_player(p_velocity: Vector3) -> Vector3:
 	return velocity
 
 ## This method rotates the player by rotating the [XROrigin3D] around the camera.
-func rotate_player(angle: float):
+func rotate_player(angle: float) -> void:
 	var inv_global_transform : Transform3D = global_transform.inverse()
 
 	var t1 := Transform3D()
@@ -542,9 +548,9 @@ func slew_up(up: Vector3, slew: float) -> void:
 
 ## This method calibrates the players height on the assumption
 ## the player is in rest position
-func calibrate_player_height():
-	var base_height = camera_node.transform.origin.y + (player_head_height * XRServer.world_scale)
-	var player_height = XRToolsUserSettings.player_height * XRServer.world_scale
+func calibrate_player_height() -> void:
+	var base_height : float = camera_node.transform.origin.y + (player_head_height * XRServer.world_scale)
+	var player_height : float = XRToolsUserSettings.player_height * XRServer.world_scale
 	player_height_offset = (player_height - base_height) / XRServer.world_scale
 
 
@@ -569,7 +575,7 @@ func override_player_height(key, value: float = -1.0):
 
 # Estimate body forward direction
 func _estimate_body_forward_dir() -> Vector3:
-	var forward = Vector3()
+	var forward : Vector3 = Vector3()
 	var camera_basis : Basis = camera_node.global_transform.basis
 	var camera_forward : Vector3 = -camera_basis.z
 
@@ -589,28 +595,28 @@ func _estimate_body_forward_dir() -> Vector3:
 		# See if we can mix in our estimated forward vector based on controller position
 		# Note, in Godot 4.0 we should check tracker confidence
 
-		var tangent = right_hand_node.global_transform.origin - left_hand_node.global_transform.origin
+		var tangent : Vector3 = right_hand_node.global_transform.origin - left_hand_node.global_transform.origin
 		tangent = tangent.slide(up_player).normalized()
-		var hands_forward = up_player.cross(tangent).normalized()
+		var hands_forward : Vector3 = up_player.cross(tangent).normalized()
 
 		# Rotate our forward towards our hand direction but not more than 60 degrees
-		var dot = forward.dot(hands_forward)
-		var cross = forward.cross(hands_forward).normalized()
-		var angle = clamp(acos(dot) * body_forward_mix, 0.0, 0.33 * PI)
+		var dot : float = forward.dot(hands_forward)
+		var cross : Vector3 = forward.cross(hands_forward).normalized()
+		var angle : float = clamp(acos(dot) * body_forward_mix, 0.0, 0.33 * PI)
 		forward = forward.rotated(cross, angle)
 
 	return forward
 
 
 # This method updates the player body to match the player position
-func _update_body_under_camera(delta : float):
+func _update_body_under_camera(delta : float) -> void:
 	# Initially calibration of player height
 	if player_calibrate_height:
 		calibrate_player_height()
 		player_calibrate_height = false
 
-	var adj_player_radius = player_radius * XRServer.world_scale
-	var adj_player_head_height = player_head_height * XRServer.world_scale
+	var adj_player_radius : float = player_radius * XRServer.world_scale
+	var adj_player_head_height : float = player_head_height * XRServer.world_scale
 
 	# Calculate the player height based on the camera position in the origin and the calibration
 	var player_height: float = clamp(
@@ -659,7 +665,7 @@ func _update_body_under_camera(delta : float):
 	player_height = max(player_height, adj_player_radius)
 
 	# Test if the player is trying to get taller
-	var current_height : float = _collision_node.shape.height
+	var current_height : float = _capsule_shape.height
 	if player_height > current_height:
 		# Calculate how tall we would like to get this frame
 		var target_height : float = min(
@@ -678,7 +684,7 @@ func _update_body_under_camera(delta : float):
 
 		# Cast the virtual head up from the reduced-height position up to the
 		# target height to check for ceiling collisions.
-		_head_shape_cast.shape.radius = adj_player_radius
+		_head_shape.radius = adj_player_radius
 		_head_shape_cast.transform.origin.y = reduced_height - adj_player_radius
 		_head_shape_cast.collision_mask = collision_mask
 		_head_shape_cast.target_position = Vector3.UP * grow
@@ -692,8 +698,8 @@ func _update_body_under_camera(delta : float):
 			current_height)
 
 	# Adjust the collision shape to match the player geometry
-	_collision_node.shape.radius = adj_player_radius
-	_collision_node.shape.height = player_height
+	_capsule_shape.radius = adj_player_radius
+	_capsule_shape.height = player_height
 	_collision_node.transform.origin.y = (player_height / 2.0)
 
 	# Center the kinematic body on the ground under the camera
@@ -721,30 +727,30 @@ func _update_body_under_camera(delta : float):
 	global_position += (target_transform.origin - global_position).project(global_basis.y)
 
 	# But do lateral movement with move and collide
-	var body_movement = target_transform.origin - global_position
+	var body_movement : Vector3 = target_transform.origin - global_position
 
 	var collision : KinematicCollision3D = move_and_collide(body_movement)
 	var fade : bool = false
 	if collision and collision.get_collision_count() > 0:
-		var camera_local_transform = global_transform.inverse() * camera_node.global_transform
-		var camera_local_position = camera_local_transform.origin
+		var camera_local_transform : Transform3D = global_transform.inverse() * camera_node.global_transform
+		var camera_local_position : Vector3 = camera_local_transform.origin
 
 		# Move it to our head center
 		camera_local_position += camera_local_transform.basis.z * eye_forward_offset * adj_player_radius
 
 		# If we can't move here, check if our head can move
-		_head_shape_cast.shape.radius = adj_player_head_height
+		_head_shape.radius = adj_player_head_height
 		_head_shape_cast.transform.origin.y = player_height - adj_player_head_height
 		_head_shape_cast.collision_mask = collision_mask
 		_head_shape_cast.target_position = (camera_local_position - _head_shape_cast.transform.origin) * Vector3(1.0, 0.0, 1.0)
 
-		var target_move_distance = _head_shape_cast.target_position.length()
+		var target_move_distance : float = _head_shape_cast.target_position.length()
 
 		# Cast shape
 		_head_shape_cast.force_shapecast_update()
 
 		# See how far we can move
-		var safe := min(_head_shape_cast.get_closest_collision_safe_fraction(), max_head_distance / target_move_distance)
+		var safe : float = min(_head_shape_cast.get_closest_collision_safe_fraction(), max_head_distance / target_move_distance)
 		if safe < 1.0:
 			# print("Attempted to move head from ", _head_shape_cast.transform.origin, " to ", camera_local_position, " => ", _head_shape_cast.target_position, ", safe: ", safe)
 
@@ -753,7 +759,7 @@ func _update_body_under_camera(delta : float):
 				# by the amount of movement left after the collision.
 				# Then in our actual move and slide we'll get pushed out.
 				# Do note that safe isn't super accurate.
-				var push_back_by = body_movement * (1.0 - safe)
+				var push_back_by : Vector3 = body_movement * (1.0 - safe)
 				global_position += push_back_by
 			else:
 				# Fade to black
@@ -790,7 +796,7 @@ func _exit_tree():
 
 
 # This method updates the information about the ground under the players feet
-func _update_ground_information(delta: float):
+func _update_ground_information(delta: float) -> void:
 	# Test how close we are to the ground
 	var ground_collision := move_and_collide(
 			up_gravity * -NEAR_GROUND_DISTANCE, true)
@@ -843,7 +849,7 @@ func _update_ground_information(delta: float):
 
 
 # This method applies the player velocity and ground-control velocity to the physical body
-func _apply_velocity_and_control(delta: float):
+func _apply_velocity_and_control(delta: float) -> void:
 	# Calculate local velocity
 	var local_velocity := velocity - ground_velocity
 
@@ -904,14 +910,14 @@ func _apply_velocity_and_control(delta: float):
 	if get_slide_collision_count():
 		# Get the collider the player collided with
 		var collision := get_slide_collision(0)
-		var collision_node := collision.get_collider()
+		var collision_node : Node3D = collision.get_collider() as Node3D
 
 		# Check for a GroundPhysics node attached to the collider
 		var collision_physics_node := \
 				collision_node.get_node_or_null("GroundPhysics") as XRToolsGroundPhysics
 
 		# Get the collision physics associated with the collider
-		var collision_physics = XRToolsGroundPhysics.get_physics(
+		var collision_physics : XRToolsGroundPhysicsSettings = XRToolsGroundPhysics.get_physics(
 				collision_physics_node, default_physics)
 
 		# Get the bounce parameters associated with the collider
@@ -950,7 +956,7 @@ func _can_apply_ground_control() -> bool:
 
 
 # Get a guaranteed-valid physics
-func _guaranteed_physics():
+func _guaranteed_physics() -> XRToolsGroundPhysicsSettings:
 	# Ensure we have a guaranteed-valid XRToolsGroundPhysicsSettings value
 	var valid_physics := physics as XRToolsGroundPhysicsSettings
 	if !valid_physics:
