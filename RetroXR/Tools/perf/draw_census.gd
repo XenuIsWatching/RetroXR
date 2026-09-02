@@ -76,12 +76,19 @@ func _measure(kind: String, node: Node) -> void:
 	var surfaces := 0
 	var materials: Dictionary = {}
 	var per_node: Array = []
-	for mi: MeshInstance3D in meshes:
-		var n := mi.mesh.get_surface_count()
+	for mi: Node3D in meshes:
+		var lbl := mi as Label3D
+		if lbl != null:
+			var n_l := 2 if lbl.outline_size > 0 else 1
+			surfaces += n_l
+			materials[lbl.get_instance_id()] = true
+			per_node.append([n_l, String(node.get_path_to(lbl)) + " (Label3D)", ["label"]])
+			continue
+		var n := (mi as MeshInstance3D).mesh.get_surface_count()
 		surfaces += n
 		var mats: Array = []
 		for s in n:
-			var mat := mi.get_active_material(s)
+			var mat := (mi as MeshInstance3D).get_active_material(s)
 			var key := mat.get_instance_id() if mat != null else 0
 			materials[key] = true
 			# Named by resource where the import gave it one, else by instance,
@@ -108,6 +115,12 @@ func _collect(node: Node, out: Array) -> void:
 	var mi := node as MeshInstance3D
 	if mi != null and mi.mesh != null and mi.is_visible_in_tree():
 		out.append(mi)
+	# A Label3D is not a MeshInstance3D but draws like one: one surface for
+	# the glyphs and another for an outline. Counted as a pseudo-mesh so a
+	# legend's labels are not invisible to the census.
+	var lbl := node as Label3D
+	if lbl != null and lbl.is_visible_in_tree() and not lbl.text.is_empty():
+		out.append(lbl)
 	for child in node.get_children():
 		_collect(child, out)
 

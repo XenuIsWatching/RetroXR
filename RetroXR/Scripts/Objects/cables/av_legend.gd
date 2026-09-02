@@ -197,20 +197,149 @@ func rebuild() -> void:
 		top = title_y + heading_height * 0.8 + plate_margin
 	var bottom := head_y - heading_height * 0.8 - plate_margin
 
+	# Everything printed, as (text, x, y, height) rows; the plate rect is the
+	# same whether the legend is baked or built from nodes.
+	var labels: Array = []
+	if not title.is_empty():
+		labels.append([title, 0.0, title_y, heading_height])
+	for i in word_text.size():
+		labels.append([word_text[i], word_x[i], word_y, word_height])
+	labels.append([heading, 0.0, head_y, heading_height])
+	var size := Vector2(half * 2.0, top - bottom)
+	var mid := (top + bottom) * 0.5
+
+	# On a real renderer the whole legend is ONE textured quad: rendered once
+	# into a small texture (shared by every legend that prints the same thing)
+	# instead of three quads and two or three Label3Ds, each a draw of its own
+	# every frame - with a television's five groups and a console's one that
+	# was about twenty-five draws a set on a Quest 3. Headless has no picture
+	# to bake, so it keeps the node build; nothing there reads the pixels.
+	if RenderingServer.get_rendering_device() != null:
+		_bake(labels, size, mid)
+		return
+
 	if show_plate:
-		var size := Vector2(half * 2.0, top - bottom)
-		var mid := (top + bottom) * 0.5
 		_add_quad(size + Vector2(border_width, border_width) * 2.0, mid, Z_BORDER, BORDER)
 		_add_quad(size, mid, Z_PLATE, PLATE)
 		if divider_left:
 			# Above the plate in the stack, or the plate it divides covers it.
 			_add_quad(Vector2(border_width, size.y), mid, Z_TEXT, DIVIDER, -half)
+	for row_l: Array in labels:
+		_add_label(row_l[0], row_l[1], row_l[2], row_l[3])
 
-	if not title.is_empty():
-		_add_label(title, 0.0, title_y, heading_height)
-	for i in word_text.size():
-		_add_label(word_text[i], word_x[i], word_y, word_height)
-	_add_label(heading, 0.0, head_y, heading_height)
+
+# ── The baked legend ─────────────────────────────────────────────────────────
+
+## Texels per metre for the bake. A 4.5 mm word comes out 32 px tall, which is
+## sharper than the 48-texel raster the Label3D path scales down from at the
+## distances a back panel is read from, and a 60 mm plate is 420 px across.
+const BAKE_PX_PER_M := 7000.0
+## Longest side of one legend texture, in texels.
+const BAKE_MAX_PX := 1024
+
+## Baked textures by what they print - a room's eight consoles all say
+## "AV OUT / VIDEO L-AUDIO-R" and share one.
+static var _bakes: Dictionary = {}
+
+
+func _bake(labels: Array, size: Vector2, mid: float) -> void:
+	var key := "%s|%s|%s|%s|%s|%s" % [show_plate, divider_left, border_width,
+		plate_margin, var_to_str(size), var_to_str(labels)]
+	# The border sits outside the plate, so the quad is the border's rect;
+	# without a plate the texture covers the same footprint, transparent.
+	var quad_size := size + Vector2(border_width, border_width) * 2.0
+	if _bakes.has(key):
+		_show_baked(_bakes[key], quad_size, mid)
+		return
+	var px := Vector2i((quad_size * BAKE_PX_PER_M).ceil())
+	var scale := 1.0
+	if maxi(px.x, px.y) > BAKE_MAX_PX:
+		scale = float(BAKE_MAX_PX) / float(maxi(px.x, px.y))
+		px = Vector2i((Vector2(px) * scale).ceil())
+	var ppm := BAKE_PX_PER_M * scale
+
+	var sv := SubViewport.new()
+	sv.size = px
+	sv.disable_3d = true
+	sv.transparent_bg = true
+	sv.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(sv)
+	# Legend frame -> texels: x right, y DOWN from the top of the quad. The
+	# quad's top-left corner is at (-quad_size.x / 2, mid + quad_size.y / 2)
+	# in the legend's frame.
+	var left := -quad_size.x * 0.5
+	var top_y := mid + quad_size.y * 0.5
+	if show_plate:
+		_bake_rect(sv, Rect2(Vector2.ZERO, Vector2(px)), BORDER)
+		var inset := border_width * ppm
+		_bake_rect(sv, Rect2(Vector2(inset, inset), Vector2(px) - Vector2(inset, inset) * 2.0), PLATE)
+		if divider_left:
+			_bake_rect(sv, Rect2(Vector2(inset, inset), Vector2(inset, float(px.y) - inset * 2.0)), DIVIDER)
+	for row_l: Array in labels:
+		var text: String = row_l[0]
+		var height: float = row_l[3]
+		var font_px := int(round(height * ppm))
+		var lbl := Label.new()
+		lbl.text = text
+		var settings := LabelSettings.new()
+		settings.font = ThemeDB.fallback_font
+		settings.font_size = font_px
+		settings.font_color = INK
+		if not show_plate:
+			settings.outline_size = int(round(float(OUTLINE_RASTER) * height / float(RASTER) * ppm))
+			settings.outline_color = OUTLINE
+		lbl.label_settings = settings
+		var w := _text_width(text, height) * ppm
+		# A Label3D centres its glyph box on the point; a Label's box is its
+		# full line height, so centre that on the same y.
+		var line_h := float(ThemeDB.fallback_font.get_height(font_px))
+		lbl.position = Vector2((float(row_l[1]) - left) * ppm - w * 0.5,
+			(top_y - float(row_l[2])) * ppm - line_h * 0.5)
+		lbl.size = Vector2(w + 4.0, line_h)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sv.add_child(lbl)
+
+	await RenderingServer.frame_post_draw
+	# A rebuild in the meantime - the television sets a group's title right
+	# after attaching it - has freed this viewport and started its own bake.
+	if not is_inside_tree() or not is_instance_valid(sv):
+		return
+	var img := sv.get_texture().get_image()
+	sv.queue_free()
+	if img == null or img.is_empty():
+		return
+	img.generate_mipmaps()
+	var tex := ImageTexture.create_from_image(img)
+	_bakes[key] = tex
+	_show_baked(tex, quad_size, mid)
+
+
+func _bake_rect(sv: SubViewport, rect: Rect2, colour: Color) -> void:
+	var r := ColorRect.new()
+	r.position = rect.position
+	r.size = rect.size
+	r.color = colour
+	sv.add_child(r)
+
+
+func _show_baked(tex: Texture2D, quad_size: Vector2, mid: float) -> void:
+	var mesh := QuadMesh.new()
+	mesh.size = quad_size
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# Scissor, not blend: the plate is opaque and the glyph edges crisp, and a
+	# blended quad would drop out of the depth write on the panel.
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	mat.alpha_scissor_threshold = 0.5
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	var mi := MeshInstance3D.new()
+	mi.name = "BakedLegend"
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.position = Vector3(0.0, mid, Z_PLATE)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
 
 
 ## The words under the jacks. An adjacent L/R pair is bracketed by ONE string spanning
