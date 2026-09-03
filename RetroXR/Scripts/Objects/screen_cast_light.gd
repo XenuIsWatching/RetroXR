@@ -42,20 +42,30 @@ var _right_light: SpotLight3D = null
 ## three cones cost its CRT shader hundreds of ALU per fragment for nothing.
 ## Measured on a Quest 3 at eye buffer 1.5: the screen draws were 1,400 to
 ## 1,700 ALU a fragment, a few hundred of it the picture. mark_screen puts a
-## screen on this layer alone; the ceiling lights still reach it, so the
-## glass keeps its reflections.
+## screen on this layer alone; the room lights still reach it, so the glass
+## keeps its reflections - a room light whose cull mask is narrowed to layer 1
+## (the bedroom's globe, window sun, floor bounce and string lights) has to
+## carry this bit as well, or its highlight vanishes from the glass.
+##
+## Mobile only. The desktop renderer has the headroom, and a screen there
+## stays on layer 1 exactly as it always did.
 const SCREEN_LAYER := 1 << 9
 
 
+static func screens_on_own_layer() -> bool:
+	return RenderingServer.get_current_rendering_method() == "mobile"
+
+
 static func mark_screen(mesh: MeshInstance3D) -> void:
-	if mesh != null:
+	if mesh != null and screens_on_own_layer():
 		mesh.layers = SCREEN_LAYER
 
 
 func _ready() -> void:
 	shadow_enabled = false
 	spot_angle = GLOW_ANGLE_DEG
-	light_cull_mask &= ~SCREEN_LAYER
+	if screens_on_own_layer():
+		light_cull_mask &= ~SCREEN_LAYER
 	_left_light = _make_region_light("LeftGlow")
 	_right_light = _make_region_light("RightGlow")
 	_refresh_frame = randi() % _refresh_interval()
@@ -140,7 +150,8 @@ func _make_region_light(light_name: String) -> SpotLight3D:
 	light.name = light_name
 	light.shadow_enabled = false
 	light.spot_angle = GLOW_ANGLE_DEG
-	light.light_cull_mask &= ~SCREEN_LAYER
+	if screens_on_own_layer():
+		light.light_cull_mask &= ~SCREEN_LAYER
 	add_child(light)
 	return light
 

@@ -247,6 +247,7 @@ func _build_wash(pts: PackedVector3Array) -> void:
 	light.light_color = bulb_color
 	light.light_energy = wash_energy if lit else 0.0
 	light.omni_range = wash_range
-	light.light_cull_mask = 1
+	# Interior only, plus the screens' own layer: see ScreenCastLight.SCREEN_LAYER.
+	light.light_cull_mask = 1 | ScreenCastLight.SCREEN_LAYER
 	light.add_to_group("no_shadow")
 	add_child(light)

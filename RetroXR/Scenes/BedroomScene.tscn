@@ -453,7 +453,7 @@ environment = SubResource("Env_bedroom")
 transform = Transform3D(0.94, -0.24, 0.24, 0, 0.7, 0.71, -0.34, -0.67, 0.66, 0, 2.2, -2.2)
 light_color = Color(1, 0.72, 0.5, 1)
 light_energy = 0.15
-light_cull_mask = 1
+light_cull_mask = 513
 sky_mode = 2
 
 [node name="ExteriorSun" type="DirectionalLight3D" parent="." unique_id=1993264936]
@@ -1037,14 +1037,14 @@ surface_material_override/0 = SubResource("Mat_trim")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.29, 0)
 light_color = Color(1, 0.85, 0.62, 1)
 light_energy = 1.2
-light_cull_mask = 1
+light_cull_mask = 513
 omni_range = 7.0
 
 [node name="FloorBounce" type="OmniLight3D" parent="FanGlobeLight" unique_id=1839153888 groups=["no_shadow", "shell_only_light"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.19, 0)
 light_color = Color(1, 0.88, 0.74, 1)
 light_energy = 0.18
-light_cull_mask = 1
+light_cull_mask = 513
 omni_range = 8.0
 omni_attenuation = 0.35
 
@@ -1052,7 +1052,7 @@ omni_attenuation = 0.35
 transform = Transform3D(-0.991, -0.057, 0.116, 0, 0.895, 0.444, -0.129, 0.44, -0.888, -0.6, 2.6, -4.5)
 light_color = Color(1, 0.83, 0.62, 1)
 light_energy = 3.6
-light_cull_mask = 1
+light_cull_mask = 513
 spot_range = 12.0
 spot_angle = 11.0
 spot_angle_attenuation = 0.55
