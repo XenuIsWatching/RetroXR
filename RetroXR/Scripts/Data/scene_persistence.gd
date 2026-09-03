@@ -47,7 +47,7 @@ const _BOOL_FIELDS := ["video_out", "ignore_gravity", "crt_enabled", "half_pages
 	"locked"]
 const _REFERENCE_FIELDS := [
 	"tv", "cartridge", "memcard", "tape", "disc", "media", "system",
-	"nunchuk", "motion_plus", "expansion_cover",
+	"nunchuk", "motion_plus", "expansion_cover", "pak", "gb_cart",
 ]
 ## Stamped on a mod prop when it spawns, so _serialize_node can recognise it
 ## without a class to test against. The value is the registered type string.
@@ -185,6 +185,9 @@ const RETRO_KEYBOARD_SCENE   := preload("res://Scenes/Objects/peripherals/retro_
 const WIIMOTE_SCENE          := preload("res://Scenes/Objects/controllers/wii/wiimote.tscn")
 const NUNCHUK_SCENE          := preload("res://Scenes/Objects/controllers/wii/nunchuk.tscn")
 const MOTION_PLUS_SCENE      := preload("res://Scenes/Objects/controllers/wii/motion_plus.tscn")
+const RUMBLE_PAK_SCENE       := preload("res://Scenes/Objects/controllers/n64/rumble_pak.tscn")
+const CONTROLLER_PAK_SCENE   := preload("res://Scenes/Objects/controllers/n64/controller_pak.tscn")
+const TRANSFER_PAK_SCENE     := preload("res://Scenes/Objects/controllers/n64/transfer_pak.tscn")
 const SENSOR_BAR_SCENE       := preload("res://Scenes/Objects/system_models/wii/sensor_bar.tscn")
 const RF_SWITCH_SCENE        := preload("res://Scenes/Objects/appliances/rf_switch.tscn")
 const PAD_RECEIVER_SCENE     := preload("res://Scenes/Objects/controllers/pad_receiver.tscn")
@@ -251,6 +254,13 @@ const PLAIN_SCENES := {
 	# Same arrangement for the dongle: a pose here, and the fact that it is seated
 	# in a particular remote restored from the REMOTE's entry.
 	"motion_plus": MOTION_PLUS_SCENE,
+	# The three N64 paks take the dongle's arrangement above: a pose here, and
+	# which controller each is seated in restored from that CONTROLLER's entry.
+	# The Controller Pak carries card fields on top of the pose, so it has a
+	# serialize branch of its own; all three are still instantiated from here.
+	"rumble_pak": RUMBLE_PAK_SCENE,
+	"controller_pak": CONTROLLER_PAK_SCENE,
+	"transfer_pak": TRANSFER_PAK_SCENE,
 	# The bar's own entry is a pose; which console it is plugged into is applied
 	# afterwards by _apply_references, like the remote's pairing.
 	"sensor_bar": SENSOR_BAR_SCENE,
@@ -1357,6 +1367,13 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		var own_b := _resolve_ref(root, spawned, d.get("media_b")) as Node3D
 		if own_b:
 			(obj as RetroExpansion).restore_media(own_b, 1)
+	elif obj is TransferPak:
+		# The Game Boy cartridge in the pak's roof, on the same terms as an
+		# expansion's own bay above: a pose relative to the pak, so it lands right
+		# whether or not the pak has been put back into a controller yet.
+		var gb := _resolve_ref(root, spawned, d.get("gb_cart")) as Node3D
+		if gb:
+			(obj as TransferPak).restore_cart(gb)
 	elif obj is RetroTV:
 		(obj as RetroTV).restore_control_state(d.get("controls", {}))
 	elif obj is VCRPlayer:
@@ -1417,6 +1434,12 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 				_resolve_ref(root, spawned, d.get("motion_plus")) as MotionPlus)
 			(obj as Wiimote).restore_nunchuk(
 				_resolve_ref(root, spawned, d.get("nunchuk")) as Nunchuk)
+		if obj is RetroController:
+			# The pak goes back whether or not the pad was plugged into anything —
+			# a loose N64 controller can still have one in it. A Transfer Pak
+			# re-seats its own cartridge from its own entry, so this is one call.
+			(obj as RetroController).restore_pak(
+				_resolve_ref(root, spawned, d.get("pak")) as N64Pak)
 		var port_idx := int(d.get("port_index", -1))
 		if port_idx < 0:
 			return
@@ -1676,6 +1699,24 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		# is only read when LOADING, so without a branch here it was never written
 		# and there was nothing to load back.
 		return _base(id, "nunchuk", n3d)
+	elif node is ControllerPak:
+		# Card fields as well as a pose: the pak IS its image on disk, and a pak
+		# that came back without its card_id would mint a new blank and read as a
+		# wiped set of notes. Which controller it is seated in is saved on that
+		# CONTROLLER, like the dongle below.
+		var cpak := node as ControllerPak
+		return _base(id, "controller_pak", n3d).merged({
+			"card_id": cpak.card_id,
+			"card_label": cpak.card_label,
+		})
+	elif node is TransferPak:
+		# The cartridge in its roof is a reference rather than a pose, so a pak put
+		# away with a game still in it comes back holding that same game.
+		return _base(id, "transfer_pak", n3d).merged({
+			"gb_cart": _ref(node_to_id, (node as TransferPak).get_cart()),
+		})
+	elif node is RumblePak:
+		return _base(id, "rumble_pak", n3d)
 	elif node is MotionPlus:
 		# Pose only, for the reason the Nunchuk above gives: which remote it is
 		# seated in is saved on that remote. It needs a branch here all the same,
@@ -1899,6 +1940,12 @@ func _serialize_peripheral(node: Node, id: int, n3d: Node3D, node_to_id: Diction
 		# scene of its own, so the type above maps the whole family back onto the
 		# generic grey pad. The scene is what tells them apart.
 		entry["scene"] = node.scene_file_path
+		# Which pak is in the back of this pad. Saved on the CONTROLLER for the
+		# reason the Wii Remote's dongle is: the port is the end that means
+		# something, and the pak's own entry is only where it is lying.
+		var pak: Node = (node as RetroController).get_pak()
+		if pak != null:
+			entry["pak"] = _ref(node_to_id, pak)
 	return entry
 
 
@@ -1991,6 +2038,7 @@ const CONTROLLER_SCENES := [
 	"res://Scenes/Objects/controllers/atari/atari_2600_cx40.tscn",
 	"res://Scenes/Objects/controllers/playstation/ps1_controller.tscn",
 	"res://Scenes/Objects/controllers/playstation/ps1_dualshock.tscn",
+	"res://Scenes/Objects/controllers/n64/n64_controller.tscn",
 ]
 
 
@@ -2098,6 +2146,14 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				obj = card
 			"expansion_cover":
 				obj = EXPANSION_COVER_SCENE.instantiate() as ExpansionCover
+			"controller_pak":
+				# Identity before the tree: card_id is the pak's file on disk, and
+				# a pak that reached _ready without one mints a fresh blank, which
+				# reads exactly like the notes were wiped.
+				var cpak := CONTROLLER_PAK_SCENE.instantiate() as ControllerPak
+				cpak.card_id = str(data.get("card_id", ""))
+				cpak.card_label = str(data.get("card_label", "CONTROLLER PAK"))
+				obj = cpak
 			"poster":
 				var poster := POSTER_SCENE.instantiate() as Poster
 				# Size and mode BEFORE the path: the image setter derives the

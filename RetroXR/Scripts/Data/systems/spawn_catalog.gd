@@ -52,6 +52,16 @@ const _PERIPHERALS: Dictionary = {
 	"gamecube": [
 		{"kind": "peripheral", "label": "Memory Card", "spawn": "memory_card"},
 	],
+	# The pad is named here because it is the only one with an expansion port, and
+	# all three paks are useless without it. The paks themselves are listed rather
+	# than left to the console's own card row: they go into a CONTROLLER, so none
+	# of the console-slot machinery that offers a memory card reaches them.
+	"nintendo_64": [
+		{"kind": "peripheral", "label": "Controller", "spawn": "n64_controller"},
+		{"kind": "peripheral", "label": "Rumble Pak", "spawn": "rumble_pak"},
+		{"kind": "peripheral", "label": "Controller Pak", "spawn": "controller_pak"},
+		{"kind": "peripheral", "label": "Transfer Pak", "spawn": "transfer_pak"},
+	],
 	# The remote is named here even though it fits no socket: it is the Wii's
 	# controller, and a player who spawns a Wii should be offered one without
 	# having to know it lives under Controllers. The Nunchuk comes with it because

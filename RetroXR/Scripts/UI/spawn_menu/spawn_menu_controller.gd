@@ -32,6 +32,11 @@ const PAD_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/pad_rec
 const KEYBOARD_RECEIVER_SCENE := preload("res://Scenes/Objects/controllers/keyboard_receiver.tscn")
 const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse_receiver.tscn")
 const LIGHT_GUN_SCENE       := preload("res://Scenes/Objects/peripherals/light_gun.tscn")
+const N64_PAD_SCENE         := preload("res://Scenes/Objects/controllers/n64/n64_controller.tscn")
+# The pak shelf spawns a Controller Pak beside the memory cards, so this one
+# scene is reached by _card_scene_for. The other two paks need no const here:
+# they are rows in ScenePersistence.PLAIN_SCENES and spawn from that table.
+const CONTROLLER_PAK_SCENE  := preload("res://Scenes/Objects/controllers/n64/controller_pak.tscn")
 const MEMCARD_SCENE         := preload("res://Scenes/Objects/media/memory_card.tscn")
 const GC_MEMCARD_SCENE      := preload("res://Scenes/Objects/media/gc_memory_card.tscn")
 const TAPE_SCENE            := preload("res://Scenes/Objects/media/vcr_tape.tscn")
@@ -889,6 +894,10 @@ func _give_to_grabber(grabber: Node, obj: XRToolsPickable) -> void:
 func _card_scene_for(family: String) -> PackedScene:
 	match family:
 		"gamecube": return GC_MEMCARD_SCENE
+		# Shelved like a memory card, and deliberately not one: a Controller Pak
+		# plugs into a CONTROLLER, so it is an N64Pak rather than a MemoryCard and
+		# every caller here reaches it by property name instead of by class.
+		"controller_pak": return CONTROLLER_PAK_SCENE
 		_:          return MEMCARD_SCENE
 
 
@@ -1076,17 +1085,20 @@ func _on_spawn_requested(type: String) -> void:
 		var rest := type.substr("memcard:".length())
 		var sep := rest.find(":")
 		var family := rest.substr(0, sep) if sep >= 0 else "playstation"
-		var card := _card_scene_for(family).instantiate() as MemoryCard
-		card.family = family
-		card.card_id = rest.substr(sep + 1) if sep >= 0 else rest
-		card.card_label = card.card_id
+		# By property rather than by class: this shelf serves both a MemoryCard
+		# and an N64 ControllerPak, which share these three fields and no ancestor.
+		var card := _card_scene_for(family).instantiate() as Node3D
+		var card_id := rest.substr(sep + 1) if sep >= 0 else rest
+		card.set("family", family)
+		card.set("card_id", card_id)
+		card.set("card_label", card_id)
 		_place_spawned(card, "%s_memory_card" % family)
 		return
 	# "<family>_memory_card" — a new blank card of that family.
 	if type.ends_with("_memory_card"):
 		var family := type.substr(0, type.length() - "_memory_card".length())
-		var card := _card_scene_for(family).instantiate() as MemoryCard
-		card.family = family
+		var card := _card_scene_for(family).instantiate() as Node3D
+		card.set("family", family)
 		_place_spawned(card, type)
 		return
 	# "pad_receiver:<guid>:<ordinal>" — a receiver for one physical gamepad.
@@ -1152,6 +1164,11 @@ func _on_spawn_requested(type: String) -> void:
 			obj = SNES_MOUSE_SCENE.instantiate() as Node3D
 		"retro_multitap":
 			obj = RETRO_MULTITAP_SCENE.instantiate() as Node3D
+		# The N64 pad. Its three paks are not here: they seat in a CONTROLLER
+		# rather than a console, carry no port to pick, and reach the room as
+		# PLAIN_SCENES rows through the ScenePersistence fallback below.
+		"n64_controller":
+			obj = N64_PAD_SCENE.instantiate() as Node3D
 		"keyboard_receiver":
 			obj = KEYBOARD_RECEIVER_SCENE.instantiate() as Node3D
 		"mouse_receiver":

@@ -18,11 +18,17 @@
 ##   lid/     a room saved with a disc lid UP comes back with the machine agreeing
 ##   seat/    the heading a disc keeps from the hand that put it in the well
 ##   other/   a deck with no push tray is untouched by any of it
+##   pak/     the expansion port on an N64 controller, and what each pak asks the
+##            running core to fit to that port
 extends Node
 
 const SYSTEM_SCENE := preload("res://Scenes/Objects/system.tscn")
 const CART_SCENE := preload("res://Scenes/Objects/media/cartridge.tscn")
 const PAD_SCENE := preload("res://Scenes/Objects/controllers/retro_controller.tscn")
+const N64_PAD_SCENE := preload("res://Scenes/Objects/controllers/n64/n64_controller.tscn")
+const RUMBLE_PAK_SCENE := preload("res://Scenes/Objects/controllers/n64/rumble_pak.tscn")
+const CONTROLLER_PAK_SCENE := preload("res://Scenes/Objects/controllers/n64/controller_pak.tscn")
+const TRANSFER_PAK_SCENE := preload("res://Scenes/Objects/controllers/n64/transfer_pak.tscn")
 
 var _checks := 0
 var _failed := 0
@@ -836,3 +842,137 @@ func _run() -> void:
 		await _group_seat()
 	if _want("other"):
 		await _group_other()
+	if _want("pak"):
+		await _group_pak()
+
+
+# --- pak/ : the expansion port on the back of an N64 controller ----------------
+
+func _n64_pad() -> Node3D:
+	var pad := N64_PAD_SCENE.instantiate() as Node3D
+	pad.position = Vector3(_spawned.size() * 2.0, 1, 0)
+	add_child(pad)
+	_spawned.append(pad)
+	return pad
+
+
+func _pak(scene: PackedScene) -> Node3D:
+	var pak := scene.instantiate() as Node3D
+	pak.position = Vector3(_spawned.size() * 2.0, 1.4, 0)
+	add_child(pak)
+	_spawned.append(pak)
+	return pak
+
+
+func _group_pak() -> void:
+	var pad := _n64_pad()
+	await _wait(4)
+	var port := pad.get_node_or_null("ExpansionPort") as XRToolsSnapZone
+	_ok(port != null, "pak/the pad has an expansion port")
+	if port == null:
+		return
+
+	# A pad that HAS a port and nothing in it says so. A pad with no port at all
+	# must stay silent instead, or it would pull out the Controller Pak
+	# mupen64plus-next fits to port 1 by default.
+	_ok(pad.pak_option_value() == "none", "pak/an empty port reports none")
+	var plain := PAD_SCENE.instantiate() as Node3D
+	add_child(plain)
+	_spawned.append(plain)
+	await _wait(4)
+	_ok(plain.pak_option_value() == "", "pak/a pad with no port reports nothing at all")
+
+	var rumble := _pak(RUMBLE_PAK_SCENE)
+	var cpak := _pak(CONTROLLER_PAK_SCENE)
+	var tpak := _pak(TRANSFER_PAK_SCENE)
+	await _wait(4)
+
+	_ok(port.snap_filter.call(rumble), "pak/the port takes a Rumble Pak")
+	_ok(port.snap_filter.call(cpak), "pak/and a Controller Pak")
+	_ok(port.snap_filter.call(tpak), "pak/and a Transfer Pak")
+
+	# snap_require alone would take any cable end — every ControllerPlug is in the
+	# same group. The pak group is what makes this socket the paks' and nothing
+	# else's.
+	var cart := CART_SCENE.instantiate() as Node3D
+	cart.systemid = "nintendo_64"
+	add_child(cart)
+	_spawned.append(cart)
+	await _wait(4)
+	_ok(not port.snap_filter.call(cart), "pak/but refuses a cartridge")
+
+	port.pick_up_object(rumble)
+	await _wait(6)
+	_ok(pad.get_pak() == rumble, "pak/a seated Rumble Pak is the pad's pak")
+	_ok(pad.pak_option_value() == "rumble", "pak/and asks the port for rumble")
+
+	port.drop_object()
+	await _wait(6)
+	_ok(pad.get_pak() == null, "pak/pulling it leaves the port empty")
+	_ok(pad.pak_option_value() == "none", "pak/reporting none again")
+
+	port.pick_up_object(cpak)
+	await _wait(6)
+	_ok(pad.pak_option_value() == "memory", "pak/a Controller Pak asks for memory")
+	port.drop_object()
+	await _wait(6)
+
+	port.pick_up_object(tpak)
+	await _wait(6)
+	_ok(pad.pak_option_value() == "transfer", "pak/a Transfer Pak asks for transfer")
+
+	# The Transfer Pak's own bay. A Game Boy cartridge and nothing else.
+	var bay := tpak.get_node_or_null("CartridgeBay") as XRToolsSnapZone
+	_ok(bay != null, "pak/the Transfer Pak has a cartridge bay")
+	if bay != null:
+		var gb := CART_SCENE.instantiate() as Node3D
+		gb.systemid = "game_boy"
+		add_child(gb)
+		_spawned.append(gb)
+		var snes := CART_SCENE.instantiate() as Node3D
+		snes.systemid = "super_nes"
+		add_child(snes)
+		_spawned.append(snes)
+		await _wait(4)
+		_ok(bay.snap_filter.call(gb), "pak/the bay takes a Game Boy cartridge")
+		_ok(not bay.snap_filter.call(snes), "pak/and refuses a Super Famicom one")
+
+		bay.pick_up_object(gb)
+		await _wait(6)
+		_ok(tpak.get_cart() == gb, "pak/a seated cartridge is the pak's cartridge")
+
+	# The decision itself, against both N64 cores' real vocabularies. A pak the
+	# running core cannot serve must leave the port alone rather than fit
+	# something the player did not ask for.
+	const MUPEN := ["none", "memory", "rumble", "transfer"]
+	const PARALLEL := ["none", "memory", "rumble", "biosensor"]
+	_ok(RetroSystem._decide_pak(MUPEN, "transfer", "memory") == "transfer",
+		"pak/mupen64plus takes a Transfer Pak")
+	_ok(RetroSystem._decide_pak(PARALLEL, "transfer", "memory") == "",
+		"pak/parallel_n64 has no transfer value, so the port is left alone")
+	_ok(RetroSystem._decide_pak(PARALLEL, "rumble", "none") == "rumble",
+		"pak/but it does take a Rumble Pak")
+	_ok(RetroSystem._decide_pak(MUPEN, "memory", "memory") == "",
+		"pak/an unchanged value is not rewritten")
+	_ok(RetroSystem._decide_pak(MUPEN, "", "memory") == "",
+		"pak/a pad with no port never writes the option")
+	_ok(RetroSystem._decide_pak([], "rumble", "") == "",
+		"pak/nor does a core that has no such option")
+
+	# Where each pak's 32 KiB sits inside the one SAVE_RAM block both N64 cores
+	# publish. Written as literals rather than recomputed from the consts: this is
+	# a measurement of somebody else's struct, and checking the arithmetic against
+	# the same constants it used would pass however wrong they are.
+	#
+	# A slip here does not error — it writes a perfectly valid pak image over the
+	# EEPROM, or over the pak next door.
+	_ok(RetroSystem.MEMPAK_BASE_OFFSET == 0x800, "pak/the paks begin after the eeprom")
+	_ok(RetroSystem.MEMPAK_SIZE == 0x8000, "pak/and are 32 KiB each")
+	var want := [0x00800, 0x08800, 0x10800, 0x18800]
+	var offsets_ok := true
+	for slot in 4:
+		if RetroSystem.MEMPAK_BASE_OFFSET + slot * RetroSystem.MEMPAK_SIZE != want[slot]:
+			offsets_ok = false
+	_ok(offsets_ok, "pak/so port N starts at 0x800 + N * 0x8000")
+	_ok(N64Card.CARD_SIZE == RetroSystem.MEMPAK_SIZE,
+		"pak/and a pak image is exactly one port's worth")

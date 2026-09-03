@@ -144,6 +144,12 @@ var _right_vr_ctrl: XRController3D = null
 ## pushed in from RetroSystem._on_rumble_state_changed, normalized 0.0..1.0.
 var _rumble := PadInputShared.Rumble.new(self)
 
+# The accessory port on the back of the pad, and what is in it. Null on every
+# controller whose scene does not author an ExpansionPort node, which is all of
+# them but the N64's.
+var _expansion_port: XRToolsSnapZone = null
+var _pak: N64Pak = null
+
 @onready var _cable_attach_point: Node3D = $CableAttachPoint
 
 
@@ -162,7 +168,99 @@ func _ready() -> void:
 	_hint = HeldHint.attach(self, true, HINT_HEIGHT)
 	_hint.add_row(&"capture", HeldHint.PLATFORM_DESKTOP,
 		["keyboard_scroll_lock_outline"], "or F3 — send keys here")
+	_wire_expansion_port()
 	call_deferred("_find_vr_nodes")
+
+
+# ── The expansion port ────────────────────────────────────────────────────────
+
+## An N64 controller has a port on its back that takes a Rumble Pak, a Controller
+## Pak or a Transfer Pak. Wired here rather than in a subclass, and gated on the
+## node existing, so a pad that has no port carries none of this and a scene that
+## adds one needs no script of its own — the same arrangement pad_type_pref has.
+func _wire_expansion_port() -> void:
+	_expansion_port = get_node_or_null("ExpansionPort") as XRToolsSnapZone
+	if _expansion_port == null:
+		return
+	# snap_require alone would also take a cable plug — every ControllerPlug is in
+	# that group. The pak group is what makes this socket the paks' and nothing
+	# else's, the mirror of the Wii Remote's own expansion port.
+	_expansion_port.snap_filter = _accepts_pak
+	_expansion_port.has_picked_up.connect(_on_pak_seated)
+	_expansion_port.has_dropped.connect(_on_pak_removed)
+
+
+func _accepts_pak(obj: Node3D) -> bool:
+	return obj != null and obj.is_in_group("n64_pak")
+
+
+func _on_pak_seated(obj: Node3D) -> void:
+	_pak = obj as N64Pak
+	if _pak != null:
+		add_collision_exception_with(_pak)
+		# A Transfer Pak's cartridge can change without the pak moving, and this
+		# pad cannot see that bay itself — it is two objects away. Follow the
+		# pak's own signal, the way a Wii Remote follows a chained Nunchuk's.
+		if _pak is TransferPak and not _pak.cart_changed.is_connected(_on_pak_cart_changed):
+			_pak.cart_changed.connect(_on_pak_cart_changed)
+	_announce_pak()
+
+
+func _on_pak_cart_changed(_cart: Node3D) -> void:
+	_announce_pak()
+
+
+## XRToolsSnapZone.has_dropped carries no argument: it says the zone is empty,
+## not what left. Which is enough — the port holds one thing and _pak is it.
+func _on_pak_removed() -> void:
+	if is_instance_valid(_pak):
+		remove_collision_exception_with(_pak)
+		if _pak is TransferPak and _pak.cart_changed.is_connected(_on_pak_cart_changed):
+			_pak.cart_changed.disconnect(_on_pak_cart_changed)
+	_pak = null
+	_announce_pak()
+
+
+func _announce_pak() -> void:
+	# A pak that is not plugged into anything is just an object on a shelf. The
+	# core only needs telling once this pad is on a port.
+	if is_instance_valid(_connected_system) and _connected_system.has_method("reapply_pak"):
+		_connected_system.reapply_pak(self)
+	# A pak pulled mid-buzz would otherwise keep the hand rumbling for as long as
+	# the core's last non-zero value stood. _apply_rumble owns that rule now, and
+	# zeroes an empty port's levels itself rather than having them cleared twice.
+	if _pak == null:
+		_apply_rumble()
+
+
+## The pak fitted to this controller, or null.
+func get_pak() -> N64Pak:
+	return _pak
+
+
+## Put a pak back into the port after a load.
+##
+## Synchronous, unlike the Wii Remote's equivalent: a pak is one body with no
+## cord to spawn on a deferred call, so there is nothing to wait for and no retry
+## to bound. A null is a pad that was saved with an empty port.
+func restore_pak(pak: N64Pak) -> void:
+	if _expansion_port == null or not is_instance_valid(pak):
+		return
+	_expansion_port.pick_up_object(pak)
+
+
+## The core option value this controller's port should take.
+##
+## "" means this pad has no expansion port AT ALL, which is not the same as an
+## empty one: mupen64plus-next fits a Controller Pak to port 1 by default, and
+## answering "none" for a pad that cannot take a pak would quietly pull out a pak
+## the player has been saving to.
+func pak_option_value() -> String:
+	if _expansion_port == null:
+		return ""
+	if not is_instance_valid(_pak):
+		return "none"
+	return _pak.pak_option_value()
 
 
 func _find_vr_nodes() -> void:
@@ -493,6 +591,14 @@ func set_rumble(weak: float, strong: float) -> void:
 ## Translate the current rumble state into real haptics. Called whenever the
 ## physical holder changes (grab/drop) so the new hand picks up ongoing rumble.
 func _apply_rumble() -> void:
+	# A pad with an empty expansion port has nothing to buzz with. The core stops
+	# writing to the pak bus on its own once the port reports no Rumble Pak, but
+	# the last non-zero value it sent would otherwise stand until something else
+	# cleared it, so a pak pulled mid-buzz leaves the hand humming.
+	if _expansion_port != null and not is_instance_valid(_pak):
+		_rumble.weak = 0.0
+		_rumble.strong = 0.0
+
 	_rumble.apply(_holders(), _desktop_held)
 
 

@@ -1,0 +1,110 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/peripherals/rumble_pak.gd" id="1_pakscript"]
+[ext_resource type="Script" uid="uid://myg1jnlsxhnm" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+[ext_resource type="Script" uid="uid://b8uwrf51jd5xm" path="res://addons/godot-xr-tools/objects/grab_points/grab_point.gd" id="3_grabpoint"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_right.tscn" id="4_rhand"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_left.tscn" id="5_lhand"]
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_pak"]
+friction = 0.8
+
+; 34 x 70 x 20 mm — noticeably longer and fatter than a Controller Pak, because
+; it is: the far end is a battery box holding two AAAs, and that bulge is the
+; whole silhouette of the thing.
+;
+; Same frame convention as the Controller Pak, with the mating face at y = +0.002
+; and the origin 2 mm behind it so the port seats the FACE and not the centre:
+;
+;   tongue    0.0020 ..  0.0090
+;   face                 0.0020
+;   neck     -0.0280 ..  0.0020   (34 x 30 x 14, the part the port sees)
+;   battery  -0.0680 .. -0.0280   (34 x 40 x 20, the bulge)
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(0.034, 0.07, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_neck"]
+size = Vector3(0.034, 0.03, 0.014)
+
+[sub_resource type="BoxMesh" id="BoxMesh_battery"]
+size = Vector3(0.034, 0.04, 0.02)
+
+[sub_resource type="StandardMaterial3D" id="Mat_shell"]
+albedo_color = Color(0.72, 0.71, 0.68, 1)
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_dark"]
+albedo_color = Color(0.1, 0.1, 0.11, 1)
+roughness = 0.62
+
+[sub_resource type="BoxMesh" id="BoxMesh_tongue"]
+size = Vector3(0.028, 0.007, 0.008)
+
+; The battery door, a shade darker so the bulge reads as a lid rather than as
+; more shell.
+[sub_resource type="BoxMesh" id="BoxMesh_door"]
+size = Vector3(0.026, 0.032, 0.001)
+
+[sub_resource type="StandardMaterial3D" id="Mat_door"]
+albedo_color = Color(0.63, 0.62, 0.6, 1)
+roughness = 0.6
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
+size = Vector3(0.044, 0.08, 0.03)
+
+[node name="RumblePak" type="RigidBody3D" groups=["hand_held_device"]]
+collision_layer = 4
+collision_mask = 196613
+mass = 0.07
+physics_material_override = SubResource("PhysMat_pak")
+freeze_mode = 1
+linear_damp = 5.0
+angular_damp = 8.0
+script = ExtResource("1_pakscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.033, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="Neck" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.013, 0)
+mesh = SubResource("BoxMesh_neck")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="Battery" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.048, 0)
+mesh = SubResource("BoxMesh_battery")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="Door" type="MeshInstance3D" parent="Battery"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.0102)
+mesh = SubResource("BoxMesh_door")
+surface_material_override/0 = SubResource("Mat_door")
+
+[node name="Tongue" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0055, 0)
+mesh = SubResource("BoxMesh_tongue")
+surface_material_override/0 = SubResource("Mat_dark")
+
+; IDENTITY. See the note in controller_pak.tscn — a snap zone composes the grab
+; point, so this is what the y-table above is measured from.
+[node name="GrabPoint" type="Marker3D" parent="."]
+visible = false
+script = ExtResource("3_grabpoint")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.033, 0)
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("BoxShape3D_pointer")
+
+[node name="HandRight" parent="." instance=ExtResource("4_rhand")]
+visible = false
+
+[node name="HandLeft" parent="." instance=ExtResource("5_lhand")]
+visible = false

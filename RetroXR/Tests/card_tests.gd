@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 156
+const EXPECTED_CASES := 199
 
 var _pass := 0
 var _fail := 0
@@ -43,6 +43,7 @@ func _ready() -> void:
 	_test_gc_chain()
 	_test_gc_pictures()
 	_test_ps1_contract()
+	_test_n64_contract()
 	_test_shared_contract()
 	_test_ops()
 	_test_format_registry()
@@ -448,6 +449,106 @@ func _test_ps1_contract() -> void:
 	_eq(img[64 * PS1Card.FRAME_SIZE - 1], 0x0E, "ps1/and its checksum")
 
 
+# --- The Controller Pak -------------------------------------------------------
+
+func _zero_serial() -> PackedByteArray:
+	var serial := PackedByteArray()
+	serial.resize(N64Card.SERIAL_SIZE)
+	return serial
+
+
+func _test_n64_contract() -> void:
+	var img := N64Card.blank_image(_zero_serial())
+	_ok(N64Card.is_card_image(img), "n64/the blank parses")
+	_eq(N64Card.free_blocks(img), 123, "n64/with 123 pages free")
+	_eq(N64Card.list_saves(img, false).size(), 0, "n64/holding nothing")
+	_ok(not N64Card.is_card_image(PS1Card.blank_image()), "n64/a PlayStation card is not a pak")
+	_ok(not N64Card.is_card_image(GCCard.blank_image()), "n64/a GameCube card is not a pak")
+
+	# The pak carries its ID block four times because the N64 reads whichever
+	# copy still checksums. Three of them agreeing with the first is what makes
+	# a scuffed pak recoverable rather than blank.
+	var first := img.slice(32, 32 + N64Card.NOTE_SIZE)
+	var copies_agree := true
+	for offset: int in N64Card.ID_BLOCK_OFFSETS:
+		if img.slice(offset, offset + N64Card.NOTE_SIZE) != first:
+			copies_agree = false
+	_ok(copies_agree, "n64/the ID block is copied four times")
+
+	var sum := (img[32 + 28] << 8) | img[32 + 29]
+	var isum := (img[32 + 30] << 8) | img[32 + 31]
+	# The literal, NOT N64Card.ID_SUM_BASE. Checking the code against the constant
+	# the code used passes however wrong the constant is; 0xFFF2 is the number the
+	# N64 actually wants, so that is the number written here.
+	_eq((sum + isum) & 0xFFFF, 0xFFF2, "n64/its two checksums sum to 0xFFF2")
+
+	var table := img.slice(N64Card.PAGE_SIZE, 2 * N64Card.PAGE_SIZE)
+	var backup := img.slice(2 * N64Card.PAGE_SIZE, 3 * N64Card.PAGE_SIZE)
+	_ok(table == backup, "n64/the index backup matches the table")
+
+	var running := 0
+	for i in range(N64Card.DATA_START_PAGE * 2, N64Card.PAGE_SIZE):
+		running += table[i]
+	_eq(table[1], running & 0xFF, "n64/the index checksum covers the usable pages")
+
+	_ok(N64Card.blank_image(_zero_serial()) == img, "n64/a fixed serial formats identically")
+
+	# A pak the player can fill, then empty again.
+	var payload := PackedByteArray()
+	payload.resize(N64Card.PAGE_SIZE * 2)
+	for i in payload.size():
+		payload[i] = i & 0xFF
+	var note := N64Card.make_note("MARIO KART", "NKTE", payload)
+
+	var filled := N64Card.insert_save(img, note)
+	_ok(not filled.is_empty(), "n64/a note goes on")
+	var saves := N64Card.list_saves(filled, false)
+	_eq(saves[0].get("name") if saves.size() > 0 else "", "MARIO KART", "n64/and is listed by name")
+	_eq(N64Card.free_blocks(filled), 121, "n64/costing its pages")
+	_ok(N64Card.extract_save(filled, N64Card.DATA_START_PAGE) == note, "n64/lifts off byte-for-byte")
+	_eq(N64Card.block_of(filled, "MARIO KART"), N64Card.DATA_START_PAGE, "n64/block_of finds it")
+	_eq(N64Card.block_of(filled, "ZELDA"), -1, "n64/block_of misses what is absent")
+	_ok(N64Card.insert_save(filled, note).is_empty(), "n64/the same name twice is refused")
+
+	var huge := PackedByteArray()
+	huge.resize(N64Card.PAGE_SIZE * 200)
+	_ok(N64Card.insert_save(img, N64Card.make_note("BIG", "NBGE", huge)).is_empty(), "n64/a note larger than the pak is refused")
+
+	var emptied := N64Card.delete_save(filled, N64Card.DATA_START_PAGE)
+	_eq(N64Card.free_blocks(emptied), 123, "n64/deleting it frees the pages")
+	_eq(N64Card.list_saves(emptied, false).size(), 0, "n64/and empties the list")
+
+	_ok(not N64Card.is_note(img), "n64/a pak image is not a note")
+	_ok(N64Card.is_note(note), "n64/but a lifted note is")
+
+	# A pak whose chain eats itself must list nothing rather than spin. This is
+	# the shape a half-written pak really takes, and the menu walks it.
+	var looped := filled.duplicate()
+	var entry := N64Card.PAGE_SIZE + N64Card.DATA_START_PAGE * 2
+	looped[entry] = 0x00
+	looped[entry + 1] = N64Card.DATA_START_PAGE
+	_eq(N64Card.list_saves(looped, false).size(), 0, "n64/a looping chain lists nothing")
+
+	# Lifting the four paks back out of a cartridge save. Every N64 played before
+	# the paks were objects wrote into one of these, and they are the only copy.
+	var srm := PackedByteArray()
+	srm.resize(0x48800)
+	for i in N64Card.CARD_SIZE:
+		srm[N64Card.srm_offset(2) + i] = filled[i]
+	for i in N64Card.CARD_SIZE:
+		srm[N64Card.srm_offset(0) + i] = img[i]
+
+	_eq(N64Card.srm_offset(2), 0x10800, "n64/port 3's pak begins at 0x10800")
+	_ok(N64Card.slice_srm(srm, 2) == filled, "n64/and lifts out whole")
+	_ok(N64Card.has_notes(N64Card.slice_srm(srm, 2)), "n64/carrying its note")
+	# A formatted-but-untouched pak is NOT worth rescuing, and is not all zeroes
+	# either — the core formats all four at every load whether a game touched them
+	# or not, so "is it blank" is the wrong question to ask of one.
+	_ok(not N64Card.has_notes(N64Card.slice_srm(srm, 0)), "n64/a formatted but unused pak is not worth keeping")
+	_ok(not N64Card.has_notes(N64Card.slice_srm(srm, 1)), "n64/nor is a port that was never formatted at all")
+	_ok(N64Card.slice_srm(PackedByteArray(), 0).is_empty(), "n64/a save file too short to hold a pak yields nothing")
+
+
 # --- What every format must do ------------------------------------------------
 
 func _test_shared_contract() -> void:
@@ -484,8 +585,9 @@ func _test_shared_contract() -> void:
 ## whatever header its single-save file carries.
 func _smallest_save_size(fmt: CardFormat) -> int:
 	match fmt.id():
-		"gamecube":    return GCCard.DENTRY_SIZE + GCCard.BLOCK_SIZE
-		"playstation": return PS1Card.FRAME_SIZE + PS1Card.BLOCK_SIZE
+		"gamecube":       return GCCard.DENTRY_SIZE + GCCard.BLOCK_SIZE
+		"playstation":    return PS1Card.FRAME_SIZE + PS1Card.BLOCK_SIZE
+		"controller_pak": return N64Card.NOTE_SIZE + N64Card.PAGE_SIZE
 	return 0
 
 

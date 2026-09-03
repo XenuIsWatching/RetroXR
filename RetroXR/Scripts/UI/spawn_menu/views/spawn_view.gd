@@ -575,7 +575,13 @@ func _populate_systems_detail(systemid: String, vbox: VBoxContainer) -> void:
 		# with no card_family gets the plain row, because browsing another
 		# console's cards from it would be a lie about what it can hold.
 		var card_fmt := CardFormats.for_system(systemid)
-		if token.ends_with("memory_card") and card_fmt != null:
+		# The N64's Controller Pak gets the same shelf. for_system cannot find it:
+		# it plugs into a CONTROLLER, so nintendo_64 declares no card_family on
+		# purpose — that field drives the console's own slots and would divert the
+		# cartridge save. Resolved by family instead.
+		if token == "controller_pak":
+			card_fmt = CardFormats.for_family(ControllerPak.FAMILY)
+		if (token.ends_with("memory_card") or token == "controller_pak") and card_fmt != null:
 			# This row does one of two different things, so it says which. With
 			# cards saved it opens the shelf and drops the +, because every other
 			# + on this page puts something in the room on the first press.

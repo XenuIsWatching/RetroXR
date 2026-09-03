@@ -1,0 +1,109 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/peripherals/controller_pak.gd" id="1_pakscript"]
+[ext_resource type="Script" uid="uid://myg1jnlsxhnm" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+[ext_resource type="Script" uid="uid://b8uwrf51jd5xm" path="res://addons/godot-xr-tools/objects/grab_points/grab_point.gd" id="3_grabpoint"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_right.tscn" id="4_rhand"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_left.tscn" id="5_lhand"]
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_pak"]
+friction = 0.8
+
+; 34 x 46 x 13 mm, inserted UPWARDS into the underside of the controller's centre
+; prong, so the long axis is Y and the pak hangs below the pad once seated.
+;
+; The ORIGIN is 2 mm behind the mating face, not on it — the same convention the
+; Wii Remote's accessories use, and for the same reason: XRToolsSnapZone puts the
+; object's ORIGIN on the zone, and the port's zone stands 2 mm proud of the shell
+; it seats against. Built with the origin on the face, the pak floats 2 mm off the
+; pad with only its tongue bridging the gap.
+;
+; In this frame, with the mating face at y = +0.002:
+;
+;   tongue    0.0020 ..  0.0090   (buried in the prong once seated)
+;   face                 0.0020
+;   body     -0.0440 ..  0.0020
+;   label               -0.0210   (on the wide face, readable in the hand)
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(0.034, 0.046, 0.013)
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.034, 0.046, 0.013)
+
+; N64 controller grey, a shade lighter than the pad so the pak reads as a
+; separate part rather than a lump of the same moulding.
+[sub_resource type="StandardMaterial3D" id="Mat_shell"]
+albedo_color = Color(0.72, 0.71, 0.68, 1)
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_dark"]
+albedo_color = Color(0.1, 0.1, 0.11, 1)
+roughness = 0.62
+
+[sub_resource type="BoxMesh" id="BoxMesh_tongue"]
+size = Vector3(0.028, 0.007, 0.008)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
+size = Vector3(0.044, 0.056, 0.023)
+
+[node name="ControllerPak" type="RigidBody3D" groups=["hand_held_device"]]
+collision_layer = 4
+collision_mask = 196613
+mass = 0.04
+physics_material_override = SubResource("PhysMat_pak")
+freeze_mode = 1
+linear_damp = 5.0
+angular_damp = 8.0
+script = ExtResource("1_pakscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("Mat_shell")
+
+; Points UP (+Y), into the prong. Buried once seated, which is right: it is only
+; visible while the pak is loose in a hand or on a shelf.
+[node name="Tongue" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0055, 0)
+mesh = SubResource("BoxMesh_tongue")
+surface_material_override/0 = SubResource("Mat_dark")
+
+; Every pak is the same grey brick and each holds a different set of notes, so
+; the name is on the face. controller_pak.gd finds this node by name.
+[node name="CardLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0.0068)
+pixel_size = 0.00016
+alpha_cut = 1
+text = "CONTROLLER PAK"
+font_size = 28
+width = 200
+autowrap_mode = 3
+
+; IDENTITY, and load-bearing rather than lazy: a snap zone seats an object by
+; composing its GRAB POINT, not its origin, so the whole y-table above is measured
+; from here. Given the body's own -0.021 offset it would seat the pak's CENTRE on
+; the port and bury half of it in the prong.
+[node name="GrabPoint" type="Marker3D" parent="."]
+visible = false
+script = ExtResource("3_grabpoint")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0)
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("BoxShape3D_pointer")
+
+[node name="HandRight" parent="." instance=ExtResource("4_rhand")]
+visible = false
+
+[node name="HandLeft" parent="." instance=ExtResource("5_lhand")]
+visible = false

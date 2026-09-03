@@ -313,6 +313,19 @@ var _tray_cartridge: Node3D = null
 ## replicated event that already refers to it, is untouched.
 const MEMCARD_SLOT_NODES := ["MemoryCardSlot", "MemoryCardSlot2"]
 
+## Where the four N64 Controller Paks sit inside the one SAVE_RAM block both N64
+## cores publish. Measured from libretro_memory.h's save_memory_data, which the
+## two cores lay out identically for these fields: eeprom (0x800), then four
+## 32 KiB paks, then sram and flashram. parallel_n64 appends a 64DD region after
+## those, which changes the block's total SIZE but not where a pak begins.
+##
+## Needed because neither core gives a pak a memory id or a file of its own: they
+## back all four with a storage backend whose save is a no-op and stub their own
+## mempak path helper to "". Offsets are the only handle there is.
+const MEMPAK_PORTS := N64Card.SRM_PORTS
+const MEMPAK_BASE_OFFSET := N64Card.SRM_BASE_OFFSET
+const MEMPAK_SIZE := N64Card.CARD_SIZE
+
 @onready var _memcard_slots: Array[XRToolsSnapZone] = [
 	$MemoryCardSlot, $MemoryCardSlot2,
 ]
@@ -3320,7 +3333,7 @@ func _apply_pad_type_option(lib_port: int, ctrl: Node) -> void:
 	if key.is_empty():
 		return
 	var desired: String = ctrl.get("pad_type_pref")
-	var allowed := _pad_type_values(key)
+	var allowed := _option_values(key)
 	var current := String(_options_values.get(key, ""))
 	var target := _decide_pad_type(allowed, desired, current)
 	if target.is_empty():
@@ -3342,6 +3355,100 @@ static func _decide_pad_type(allowed: Array, desired: String, current: String) -
 		else:
 			return ""
 	return "" if pick == current else pick
+
+
+## Auto-select the running core's per-port pak option to match what is fitted to
+## that controller's expansion port. An N64 controller takes a Rumble Pak, a
+## Controller Pak or a Transfer Pak, and each port answers for itself.
+##
+## Gated on the option existing, so it is a no-op on every core without one. It
+## is deliberately gated on the VALUE existing too: parallel_n64 offers a Bio
+## Sensor where mupen64plus-next offers a Transfer Pak, and a pak the running
+## core cannot serve must leave the port alone rather than silently fit
+## something else.
+func _apply_pak_option(lib_port: int, ctrl: Node) -> void:
+	if not is_instance_valid(ctrl) or not ctrl.has_method("pak_option_value"):
+		return
+	var key := _pak_option_key(lib_port)
+	if key.is_empty():
+		return
+	var seated: String = ctrl.call("pak_option_value")
+	# Bind the bytes BEFORE the option is set. Setting it first starts the core's
+	# delayed pak insert, and a Controller Pak that arrives before its file does
+	# reads whatever the cartridge's own .srm left at that offset.
+	_bind_pak_storage(lib_port, ctrl)
+	var allowed := _option_values(key)
+	var current := String(_options_values.get(key, ""))
+	var target := _decide_pak(allowed, seated, current)
+	if target.is_empty():
+		return
+	print("[RetroSystem] pak: port %d -> %s = '%s'" % [lib_port, key, target])
+	set_core_option(key, target)
+
+
+## Point a Controller Pak's own file at the slice of the core's save block that
+## port reads through.
+##
+## Both N64 cores keep all four paks inside the single SAVE_RAM block rather than
+## behind a memory id apiece, back them with a storage backend whose save is a
+## no-op, and stub their own mempak path helper to "" -- so nothing the core does
+## persists a pak, and the only way to address one is by offset. The layout is
+## the same in both (eeprom, then four paks, then sram, flashram); parallel_n64
+## appends a 64DD region after that, which changes the block's SIZE but not where
+## the paks begin.
+func _bind_pak_storage(lib_port: int, ctrl: Node) -> void:
+	if _libretro == null or lib_port < 0 or lib_port >= MEMPAK_PORTS:
+		return
+	var pak: Node = ctrl.call("get_pak") if ctrl.has_method("get_pak") else null
+
+	if _libretro.has_method("SetSramRegionPath"):
+		var path := ""
+		if is_instance_valid(pak) and pak is ControllerPak:
+			path = str(pak.call("image_path"))
+			# Only a pak this session invented may have its image created. One
+			# that came back from a saved room with its file missing runs
+			# unbacked, so a vanished set of notes does not return as a silent
+			# blank that reads exactly like a wipe.
+			if not path.is_empty() and bool(pak.get("minted")):
+				SramPaths.ensure_card(ControllerPak.FAMILY, str(pak.get("card_id")))
+		_libretro.SetSramRegionPath(lib_port, path,
+			MEMPAK_BASE_OFFSET + lib_port * MEMPAK_SIZE, MEMPAK_SIZE)
+
+	if _libretro.has_method("SetTransferPak"):
+		var rom := ""
+		var ram := ""
+		if is_instance_valid(pak) and pak is TransferPak:
+			rom = str(pak.call("cart_rom_path"))
+			ram = str(pak.call("cart_save_path", _resolve_core()))
+		_libretro.SetTransferPak(lib_port, rom, ram)
+
+
+## Re-announce the pak on one controller's port. Called when a pak is pushed into
+## or pulled out of an expansion port, which the system cannot see for itself —
+## the port belongs to the controller, two objects away.
+func reapply_pak(ctrl: Node) -> void:
+	for i in range(_port_controllers.size()):
+		if _port_controllers[i] != ctrl:
+			continue
+		var dev: int = ctrl.get("device_type") if "device_type" in ctrl else 1
+		_apply_pak_option(_libretro_port_for(dev, i), ctrl)
+		return
+
+
+## Pure pak decision: given the option's allowed values, the value the seated pak
+## asks for and the current value, return the value to set, or "" for no change.
+##
+## An empty `seated` means the controller has no expansion port at all, and that
+## is NOT the same as an empty port. mupen64plus-next fits a Controller Pak to
+## port 1 by default, so answering "none" for a pad that simply cannot take a pak
+## would quietly pull out a pak the player has been saving to. Only a controller
+## that HAS a port gets to say "none".
+static func _decide_pak(allowed: Array, seated: String, current: String) -> String:
+	if allowed.is_empty() or seated.is_empty():
+		return ""
+	if not (seated in allowed):
+		return ""
+	return "" if seated == current else seated
 
 
 ## Tell the core which device is on each occupied port, now that there is a core
@@ -3420,6 +3527,7 @@ func reapply_pad_types() -> void:
 			continue
 		var dev: int = ctrl.get("device_type") if "device_type" in ctrl else 1
 		_apply_pad_type_option(_libretro_port_for(dev, i), ctrl)
+		_apply_pak_option(_libretro_port_for(dev, i), ctrl)
 
 
 ## The core option key that controls the pad type on a given libretro port, or
@@ -3430,8 +3538,23 @@ func _pad_type_option_key(lib_port: int) -> String:
 	return key if _options_definitions.has(key) else ""
 
 
-## The list of allowed values for a pad-type option key (empty if unknown).
-func _pad_type_values(key: String) -> Array:
+## The core option key that fits a pak to a given libretro port, or "" if the
+## running core has none.
+##
+## FOUND rather than composed: mupen64plus-next's key prefix is whatever
+## CORE_NAME the buildbot compiled it with — the source only guarantees a
+## `-pakN` suffix — and parallel_n64's is `parallel-n64-`. Composing either one
+## would fit paks on one build and silently nothing on the next.
+func _pak_option_key(lib_port: int) -> String:
+	var suffix := "-pak%d" % (lib_port + 1)
+	for key: String in _options_definitions:
+		if key.ends_with(suffix):
+			return key
+	return ""
+
+
+## The list of allowed values for an option key (empty if unknown).
+func _option_values(key: String) -> Array:
 	var def: Object = _options_definitions.get(key)
 	if def == null:
 		return []
@@ -3671,6 +3794,7 @@ func _bind_port(lib_port: int, plug: Node3D, cabinet_index: int) -> void:
 	# Auto-select the core's per-port pad type (e.g. PCSX-ReARMed: DualShock vs
 	# the original digital pad). No-ops unless the core exposes such an option.
 	_apply_pad_type_option(lib_port, ctrl)
+	_apply_pak_option(lib_port, ctrl)
 	NetworkManager.report_event(NetEvents.Event.EV_PORT_PLUG,
 		{"sys": self, "ctrl": ctrl, "port": slot})
 

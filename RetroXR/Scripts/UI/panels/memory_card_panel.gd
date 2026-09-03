@@ -17,7 +17,12 @@ const FLOAT_HEIGHT := 0.32
 ## How long a delete stays armed. Matches the card shelf and the ROM rows.
 const ARM_SECONDS := 3.0
 
-var _card: MemoryCard = null
+## The card this panel is showing. Typed loosely because there are two unrelated
+## classes of card-shaped object now: a MemoryCard that seats in a console, and a
+## ControllerPak that seats in an N64 controller. Nothing below reads anything but
+## card_id, family, card_label, minted and the node's own position, which both
+## carry, so the narrower type bought nothing and cost the pak its script.
+var _card: Node3D = null
 ## Save slot whose delete has been armed and is waiting for a second press.
 var _armed_slot := ""
 ## The bars that float in front of this panel — the spawn menu's stack, hosted
@@ -30,7 +35,7 @@ var _toasts: MenuToasts = null
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-func show_for(card: MemoryCard, camera: Node3D) -> void:
+func show_for(card: Node3D, camera: Node3D) -> void:
 	_card = card
 	_camera = camera
 	if _card:

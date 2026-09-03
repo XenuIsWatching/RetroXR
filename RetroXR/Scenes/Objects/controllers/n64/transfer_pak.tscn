@@ -1,0 +1,111 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/peripherals/transfer_pak.gd" id="1_pakscript"]
+[ext_resource type="Script" uid="uid://myg1jnlsxhnm" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+[ext_resource type="Script" uid="uid://b8uwrf51jd5xm" path="res://addons/godot-xr-tools/objects/grab_points/grab_point.gd" id="3_grabpoint"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_right.tscn" id="4_rhand"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_left.tscn" id="5_lhand"]
+[ext_resource type="PackedScene" uid="uid://ce7vysyvondf8" path="res://addons/godot-xr-tools/objects/snap_zone.tscn" id="6_snapzone"]
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_pak"]
+friction = 0.8
+
+; 63 x 55 x 22 mm. WIDER than the other two paks and than the port it seats in,
+; which is not a mistake to tidy up: a Game Boy cartridge is 57 mm across and the
+; expansion port is 34, so the real accessory is a narrow tongue under a body
+; wide enough to swallow a cartridge. Trimming the body to the port's width would
+; leave the cartridge overhanging both sides.
+;
+; Same frame convention as the other paks — mating face at y = +0.002, origin 2 mm
+; behind it so the port seats the FACE and not the centre:
+;
+;   tongue    0.0020 ..  0.0090   (buried in the prong once seated)
+;   face                 0.0020
+;   body     -0.0530 ..  0.0020
+;   bay zone            -0.0450   (a cartridge's ORIGIN, so it stands half in)
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(0.063, 0.055, 0.022)
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.063, 0.055, 0.022)
+
+[sub_resource type="StandardMaterial3D" id="Mat_shell"]
+albedo_color = Color(0.72, 0.71, 0.68, 1)
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="Mat_dark"]
+albedo_color = Color(0.1, 0.1, 0.11, 1)
+roughness = 0.62
+
+[sub_resource type="BoxMesh" id="BoxMesh_tongue"]
+size = Vector3(0.028, 0.007, 0.008)
+
+; The slot a cartridge goes into, on the underside. Stood 1 mm proud of the face
+; rather than flush: a dark box set coplanar with the shell z-fights down to a
+; sliver, and one set fully inside a solid body cannot be seen at all.
+[sub_resource type="BoxMesh" id="BoxMesh_mouth"]
+size = Vector3(0.059, 0.002, 0.011)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
+size = Vector3(0.073, 0.065, 0.032)
+
+[node name="TransferPak" type="RigidBody3D" groups=["hand_held_device"]]
+collision_layer = 4
+collision_mask = 196613
+mass = 0.06
+physics_material_override = SubResource("PhysMat_pak")
+freeze_mode = 1
+linear_damp = 5.0
+angular_damp = 8.0
+script = ExtResource("1_pakscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0255, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0255, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("Mat_shell")
+
+[node name="Tongue" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0055, 0)
+mesh = SubResource("BoxMesh_tongue")
+surface_material_override/0 = SubResource("Mat_dark")
+
+[node name="WellMouth" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0525, 0)
+mesh = SubResource("BoxMesh_mouth")
+surface_material_override/0 = SubResource("Mat_dark")
+
+; The cartridge bay. A Game Boy cartridge enters from BELOW and stands upright in
+; the pak, which is the one orientation that needs no rotation: MediaDimensions
+; gives it as 57 x 65 x 8, already tall on Y.
+;
+; The zone is placed at the cartridge's ORIGIN, so seating it puts 40 mm of a
+; 65 mm cartridge inside the body with the labelled top edge still showing —
+; which is what makes a loaded pak readable at a glance.
+[node name="CartridgeBay" parent="." instance=ExtResource("6_snapzone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.045, 0)
+grab_distance = 0.04
+
+[node name="GrabPoint" type="Marker3D" parent="."]
+visible = false
+script = ExtResource("3_grabpoint")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0255, 0)
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("BoxShape3D_pointer")
+
+[node name="HandRight" parent="." instance=ExtResource("4_rhand")]
+visible = false
+
+[node name="HandLeft" parent="." instance=ExtResource("5_lhand")]
+visible = false
