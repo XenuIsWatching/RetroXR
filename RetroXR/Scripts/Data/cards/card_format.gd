@@ -49,6 +49,14 @@ func unit_noun() -> String:
 	return "block"
 
 
+## What the OBJECT is called, for the heading over its save list. Distinct from
+## label(), which names the console family — a panel headed "PlayStation" would
+## be naming the machine rather than the thing in your hand. Only the N64's
+## Controller Pak is not a memory card, so the default suits everything else.
+func device_noun() -> String:
+	return "Memory Card"
+
+
 ## How many units this card holds in total. Read from the IMAGE, because a
 ## GameCube card's size is a property of the card and not of the family — a 59
 ## and a 251 are both ordinary. Falls back to the family's usual size when the

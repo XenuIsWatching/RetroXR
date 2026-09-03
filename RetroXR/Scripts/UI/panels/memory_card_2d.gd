@@ -79,6 +79,7 @@ var _list: VBoxContainer = null
 var _scroll: ScrollContainer = null
 var _name_edit: LineEdit = null
 var _usage: Label = null
+var _title: Label = null
 var _restore_btn: Button = null
 
 # Each entry: {rect: TextureRect, frames: Array[ImageTexture]}
@@ -124,6 +125,11 @@ func _build_ui() -> void:
 	# and its ✕ are a second heading for the same thing.
 	var title_row := MenuStyle.title_row(vbox, "Memory Card")
 	title_row.visible = show_name_field
+	# Named from the FORMAT in populate(), because not every card in this room
+	# is a memory card: an N64 Controller Pak uses this same panel, and calling
+	# it a memory card is simply the wrong name for the thing in your hand.
+	# title_row builds the heading as its first child; this is that label.
+	_title = title_row.get_child(0) as Label
 	if show_name_field:
 		MenuStyle.close_button(title_row,
 			func() -> void: close_requested.emit(), false, 0.0, 0)
@@ -184,6 +190,8 @@ func populate(card_name: String, saves: Array, free: int, total: int,
 	_name_edit.text = card_name
 	_clear_list()
 	_fmt = fmt
+	if _title != null and fmt != null and not fmt.device_noun().is_empty():
+		_title.text = fmt.device_noun()
 
 	_usage.text = "%d of %d %ss used   ·   %d save%s" \
 		% [maxi(total - free, 0), total, fmt.unit_noun(),

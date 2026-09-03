@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 199
+const EXPECTED_CASES := 205
 
 var _pass := 0
 var _fail := 0
@@ -558,6 +558,13 @@ func _test_shared_contract() -> void:
 		_ok(not fmt.extension().is_empty(), "shared/%s/has an extension" % n)
 		_ok(not fmt.save_extension().is_empty(), "shared/%s/has a save extension" % n)
 		_ok(not fmt.unit_noun().is_empty(), "shared/%s/has a unit noun" % n)
+		# The heading over the save list. Deliberately NOT label(), which names the
+		# console family: heading the panel "PlayStation" names the machine rather
+		# than the object in your hand, and heading a Controller Pak "Memory Card"
+		# is simply the wrong name for it.
+		_ok(not fmt.device_noun().is_empty(), "shared/%s/has a device noun" % n)
+		_ok(fmt.device_noun() != fmt.label(),
+			"shared/%s/which is not the console's name" % n)
 		_ok(fmt.icon_fps() > 0.0, "shared/%s/animates above zero" % n)
 
 		var blank := fmt.blank_image()

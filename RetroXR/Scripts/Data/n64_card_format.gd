@@ -14,8 +14,10 @@ func id() -> String:
 	return "controller_pak"
 
 
+## The CONSOLE family, like every other format's label — "PlayStation",
+## "GameCube", "Nintendo 64". What the object itself is called is device_noun().
 func label() -> String:
-	return "Controller Pak"
+	return "Nintendo 64"
 
 
 func extension() -> String:
@@ -29,6 +31,10 @@ func save_extension() -> String:
 ## The N64 counted its pak in pages, and every game says so on screen.
 func unit_noun() -> String:
 	return "page"
+
+
+func device_noun() -> String:
+	return "Controller Pak"
 
 
 ## Fixed at 123 — pages 0 to 4 are the ID block, the index table, its backup and
