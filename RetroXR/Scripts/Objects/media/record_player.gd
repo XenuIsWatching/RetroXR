@@ -49,9 +49,18 @@ const PLATTER_SPIN_DOWN := 3.0
 ## Radius of the platter, for deciding whether a fingertip is on the record.
 @export var platter_radius: float = 0.152
 
-## A hand on the record has to be moving this fast (rad/s) to count as scrubbing
-## rather than braking it still.
-const SCRUB_MIN_OMEGA := 0.35
+## Below this rate the record is turning too slowly to be a note rather than a
+## rumble, and libVLC refuses a rate of 0 outright. The sound stops here and picks
+## up again when the platter does — which is what a record coasting to a halt does.
+const RATE_MIN := 0.25
+## A hand can spin a record absurdly fast. Past this the pitch is noise and there is
+## no point asking libVLC for it.
+const RATE_MAX := 2.5
+## The rate is pushed at 20 Hz rather than every frame, and only on a real change.
+## Each push strands whatever run-ahead libVLC has already decoded at the old rate
+## (see _update_rate), so pushing per-frame in VR would be 90 corrections a second.
+const RATE_PUSH_INTERVAL := 0.05
+const RATE_PUSH_EPSILON := 0.01
 ## Fingertip must be within this of the platter plane, and inside its radius, to be
 ## touching the record at all.
 const TOUCH_HEIGHT := 0.035
@@ -77,7 +86,11 @@ var _controllers: Array[XRController3D] = []
 var _touch_ctrl: XRController3D = null
 var _touch_angle := 0.0
 var _hand_omega := 0.0
-var _was_playing_before_touch := false
+var _rate_pushed := 1.0
+var _rate_accum := 0.0
+## Paused because the PLATTER stopped, as opposed to because someone pressed pause.
+## Only a stall resumes on its own.
+var _stalled := false
 
 
 func _ready() -> void:
@@ -247,6 +260,7 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	_update_touch(delta)
 	_update_platter(delta)
+	_update_rate(delta)
 
 
 func _target_omega() -> float:
@@ -264,20 +278,77 @@ func _on_speed_changed(value: float) -> void:
 	_update_status()
 
 
-## The rate this deck should be running at. Split out from _apply_rate so it can be
-## asserted headless, where VlcPlayer does not exist at all.
+## The rate the deck settles at for the selected speed — the platter's target
+## expressed as audio. Falls out of the two platter speeds rather than being a
+## second, independent number: SPEED_45 / SPEED_33 IS 1.35.
 func playback_rate() -> float:
-	return RATE_45 if _speed_45 else 1.0
+	return _target_omega() / SPEED_33
 
 
-## Pushed on every change AND after every play(), because open() builds a fresh
-## media player: a deck set to 45 before the needle went down would otherwise load
-## the next track back at 33 without anything saying so. This is also what carries
-## the setting through a room restore, where the slider is repositioned without a
-## hand ever touching it.
+## The rate the record is turning at RIGHT NOW, which is not the same thing while
+## the platter is spinning up, coasting down, or being held by a hand.
+func current_rate() -> float:
+	return _platter_omega / SPEED_33
+
+
+## Pushed after every play() because open() builds a fresh media player that starts
+## back at 1.0; _update_rate keeps it there afterwards.
 func _apply_rate() -> void:
 	if _vlc:
-		_vlc.set_rate(playback_rate())
+		_rate_pushed = clampf(current_rate(), RATE_MIN, RATE_MAX)
+		_vlc.set_rate(_rate_pushed)
+
+
+## THE PITCH FOLLOWS THE PLATTER. Not the switch — the platter, which is already
+## ramping toward the switch's speed, already coasting down after STOP, and already
+## being dragged by a hand on the record. One rule then covers all four: a deck
+## starting glides up to pitch, a stopped one sags away instead of cutting, the
+## 33/45 switch bends between speeds the way a real one does, and palming the record
+## drops the note as it slows.
+##
+## Gliding is also what keeps the switch from clicking. A rate change strands every
+## sample libVLC has already decoded at the old rate — around 1.15 s of run-ahead —
+## and read_audio's lead corrector then discards the difference in one go, measured
+## at 316 ms of audio for a straight 1.00 -> 1.35 jump. Ramped, each step strands a
+## few ms and the corrector trims that instead.
+##
+## Local on every peer, deliberately. The platter's spin has always been local, so
+## the pitch derived from it is too: a client palming its own record bends its own
+## note while the host keeps owning POSITION, and the base's drift correction reels
+## the position back afterwards.
+func _update_rate(delta: float) -> void:
+	if _vlc == null or not is_playing:
+		return
+	_rate_accum += delta
+	var want := current_rate()
+
+	# Turning too slowly to be a note. Stop the sound rather than ask libVLC for a
+	# rate it will refuse, and remember that it was the PLATTER that stopped it.
+	if want < RATE_MIN:
+		if not _paused:
+			_stalled = true
+			_vlc.set_paused(true)
+			_paused = true
+			_apply_volume()
+			_update_status()
+		return
+	if _stalled:
+		_stalled = false
+		_vlc.set_paused(false)
+		_paused = false
+		_apply_volume()
+		_update_status()
+	if _paused:
+		return   # someone pressed pause; leave it alone
+
+	if _rate_accum < RATE_PUSH_INTERVAL:
+		return
+	want = clampf(want, RATE_MIN, RATE_MAX)
+	if absf(want - _rate_pushed) < RATE_PUSH_EPSILON:
+		return
+	_rate_accum = 0.0
+	_rate_pushed = want
+	_vlc.set_rate(want)
 
 
 ## Spin the platter, and the seated record with it, from one angular velocity. The
@@ -308,17 +379,17 @@ func _update_platter(delta: float) -> void:
 
 # --- Touching the record ------------------------------------------------------
 #
-# Palm it to brake, drag it to scrub. Both go through machinery the base already
-# has: a scrub is exactly the muted, throttled position-jumping that FF/REW does
-# (_update_scan), with its rate and direction coming from the finger instead of a
-# button, so the sign of the hand's rotation is _scan_dir and its speed relative to
-# the platter's nominal speed is scan_speed.
+# A hand on the record drags the PLATTER, and nothing here touches the audio at all:
+# _update_rate derives the pitch from the platter afterwards, so palming it bends the
+# note down and letting go lets it climb back. That replaced a muted, seek-based
+# scrub that ran the base's FF/REW machinery from the fingertip — two mechanisms
+# reacting to one gesture, and the quieter of the two.
 #
-# What this deliberately does NOT do is pitch-bend or reverse the audio. That needs
-# per-sample resampling, and SpatialAudioEmitter records the measurement that a
-# per-sample GDScript loop over this buffer cannot keep the ring fed. A real scratch
-# is C++ work in vlc-godot. What is here reads as slowing, stopping and nudging a
-# physical object, which is the honest version of it.
+# BACKWARDS IS SILENT, and that is a real limitation rather than a choice. libVLC
+# has no negative rate, so a record dragged the wrong way falls under RATE_MIN and
+# stops rather than playing in reverse. Reverse, and a true scratch with it, needs
+# per-sample resampling — which SpatialAudioEmitter records as unaffordable in
+# GDScript, so it is C++ work in vlc-godot whenever it happens.
 
 func _cache_controllers() -> void:
 	for node in get_tree().root.find_children("*", "XRController3D", true, false):
@@ -369,66 +440,23 @@ func _update_touch(delta: float) -> void:
 	_touch_angle = angle
 	var raw := d / delta
 	_hand_omega = lerpf(_hand_omega, raw, clampf(OMEGA_LERP * delta, 0.0, 1.0))
-	_apply_scrub()
 
 
+## Taking hold of the record only starts MEASURING it. The hand's rotation becomes
+## the platter's in _update_platter, and the pitch follows from there — so there is
+## nothing to silence here, and no transport intent to forward.
 func _begin_touch(ctrl: XRController3D, angle: float) -> void:
 	_touch_ctrl = ctrl
 	_touch_angle = angle
 	_hand_omega = 0.0
-	_was_playing_before_touch = is_playing and not _paused
-	# A hand landing on a playing record silences it at once, before any scrub rate
-	# has been measured — that is what happens when you touch one.
-	if is_playing and not _net_forward_cmd("pause"):
-		_scan_dir = 0
-		if _vlc:
-			_vlc.set_paused(true)
-		_paused = true
-		_apply_volume()
-		_update_status()
 
 
-## Rate and direction of the scrub, handed to the base's scan loop. Local only on a
-## client: transport is the host's, and a per-frame position stream is not something
-## to put on the wire. A client still brakes the platter it can see, and its pause /
-## resume intent is forwarded, so the room stays together.
-func _apply_scrub() -> void:
-	if NetworkManager.is_client() or not is_playing:
-		return
-	var nominal := _target_omega()
-	if absf(_hand_omega) < SCRUB_MIN_OMEGA or is_zero_approx(nominal):
-		# Held still: braked, and silent.
-		_scan_dir = 0
-		_apply_volume()
-		return
-	# One turn of the record is one turn's worth of audio, so the seek rate is just
-	# how much faster or slower than the motor the hand is going.
-	scan_speed = absf(_hand_omega) / nominal
-	_scan_dir = 1 if _hand_omega > 0.0 else -1
-	if _vlc:
-		_vlc.set_paused(false)
-	_paused = false
-	_scan_accum = 0.0
-	_apply_volume()
-
-
+## Letting go hands the platter back to the motor, which spins it back up — and the
+## pitch climbs with it, because the pitch is DERIVED from the platter rather than
+## saved and restored around the gesture. Nothing to resume, nothing to forward.
 func _end_touch() -> void:
 	_touch_ctrl = null
 	_hand_omega = 0.0
-	_scan_dir = 0
-	if not _was_playing_before_touch:
-		_apply_volume()
-		_update_status()
-		return
-	# Let go of a record that was playing and it picks up from where you left it.
-	if _net_forward_cmd("play"):
-		return
-	if _vlc:
-		_vlc.set_paused(false)
-	_paused = false
-	_apply_volume()
-	_update_status()
-	_net_push_state()
 
 
 # --- Net ----------------------------------------------------------------------

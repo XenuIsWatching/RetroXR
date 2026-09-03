@@ -303,53 +303,58 @@ func _test_arm() -> void:
 
 # ── scrub/ ────────────────────────────────────────────────────────────────────
 
-## Palming the record to brake it, and dragging it to scrub. Both are handed to the
-## base's existing scan loop — the same muted, throttled seeking FF/REW does — with
-## the rate and direction coming from the hand instead of a button.
+## THE PITCH FOLLOWS THE PLATTER. Not the speed switch — the platter, which ramps
+## toward it, coasts down after STOP and is dragged by a hand on the record. So one
+## rule covers the start-up glide, the coast-down, the 33/45 bend and the hand
+## brake, and this asserts the rule rather than each of the four.
 ##
-## This covers the MAPPING only. Whether a real fingertip is found on the platter
-## needs an XRController3D and a tracked hand, neither of which exists headless, so
-## the contact side is not proven here; `is_playing` is forced for the same reason
-## (VlcPlayer is absent, so play() can never set it).
+## The rate the deck ASKS for is what is checked: VlcPlayer does not exist headless,
+## so nothing can be heard here. That the ask is honoured, and bends pitch rather
+## than preserving it, was measured separately against a real file (ZCR 0.04488 at
+## 1.00x against 0.06006 at 1.35x — a ratio of 1.338 for a requested 1.35).
 func _test_scrub() -> void:
 	var rp := await _deck(RECORD_PLAYER)
 	rp._tracks = PackedStringArray(["a.mp3", "b.mp3"])
-	rp.is_playing = true
 
-	# Dragged forward, faster than the motor: seek forward, faster than 1x.
-	rp._hand_omega = RecordPlayer.SPEED_33 * 2.0
-	rp._apply_scrub()
-	_eq(rp._scan_dir, 1, "scrub/dragged forward seeks forward")
-	_ok(absf(rp.scan_speed - 2.0) < 0.01,
-		"scrub/...at the hand's speed relative to the motor (got %.2f)" % rp.scan_speed)
+	# The two speeds are one relationship, not two numbers: 45 rpm over 33 1/3 IS
+	# the rate. A platter speed edited without the rate would be caught here.
+	_ok(absf(RecordPlayer.SPEED_45 / RecordPlayer.SPEED_33 - RecordPlayer.RATE_45) < 0.001,
+		"scrub/the platter speeds and the playback rate agree (%.3f)"
+			% (RecordPlayer.SPEED_45 / RecordPlayer.SPEED_33))
 
-	# Dragged backward.
-	rp._hand_omega = -RecordPlayer.SPEED_33
-	rp._apply_scrub()
-	_eq(rp._scan_dir, -1, "scrub/dragged backward seeks backward")
-
-	# Held still under a hand: braked, and silent. A scan_dir of 0 is what mutes it,
-	# via the base's _apply_volume.
-	rp._hand_omega = 0.05
-	rp._apply_scrub()
-	_eq(rp._scan_dir, 0, "scrub/a record held still is braked, not scrubbed")
-
-	# 45 rpm is a faster motor, so the same hand speed is a SLOWER scrub relative
-	# to it. This is the case that catches the nominal speed being hardcoded.
+	# At rest the deck settles at the selected speed.
+	rp._speed_45 = false
+	_ok(absf(rp.playback_rate() - 1.0) < 0.001, "scrub/33 settles at 1.00x")
 	rp._speed_45 = true
-	rp._hand_omega = RecordPlayer.SPEED_45 * 2.0
-	rp._apply_scrub()
-	_ok(absf(rp.scan_speed - 2.0) < 0.01,
-		"scrub/the scrub rate follows the selected speed (got %.2f)" % rp.scan_speed)
+	_ok(absf(rp.playback_rate() - RecordPlayer.RATE_45) < 0.001,
+		"scrub/45 settles at %.2fx" % RecordPlayer.RATE_45)
 	rp._speed_45 = false
 
-	# A client never seeks locally: transport is the host's, and a per-frame
-	# position stream does not belong on the wire.
-	rp._scan_dir = 0
-	rp.is_playing = false
-	rp._hand_omega = RecordPlayer.SPEED_33 * 2.0
-	rp._apply_scrub()
-	_eq(rp._scan_dir, 0, "scrub/a stopped deck is not scrubbed")
+	# ...but what is PLAYED is the platter's speed right now, which is a different
+	# number while it is spinning up, braked or dragged.
+	rp._platter_omega = RecordPlayer.SPEED_33
+	_ok(absf(rp.current_rate() - 1.0) < 0.001, "scrub/a platter at 33 plays at 1.00x")
+	rp._platter_omega = RecordPlayer.SPEED_45
+	_ok(absf(rp.current_rate() - RecordPlayer.RATE_45) < 0.001,
+		"scrub/a platter at 45 plays at %.2fx" % RecordPlayer.RATE_45)
+
+	# A hand dragging it faster than the motor bends the note UP...
+	rp._platter_omega = RecordPlayer.SPEED_33 * 1.5
+	_ok(rp.current_rate() > 1.4, "scrub/dragged fast, the note bends up (%.2fx)"
+		% rp.current_rate())
+	# ...and braking it drops the rate under the floor, which is where the sound
+	# stops rather than libVLC being asked for a rate of nothing.
+	rp._platter_omega = RecordPlayer.SPEED_33 * 0.05
+	_ok(rp.current_rate() < RecordPlayer.RATE_MIN,
+		"scrub/a braked record falls below the audible floor (%.2fx)" % rp.current_rate())
+	rp._platter_omega = 0.0
+	_ok(rp.current_rate() < RecordPlayer.RATE_MIN, "scrub/a stopped platter is silent")
+
+	# Spinning up from rest passes through the floor and comes out at speed, which
+	# is the glide that stops the switch from clicking.
+	rp._platter_omega = RecordPlayer.SPEED_33 * 0.5
+	_ok(rp.current_rate() > RecordPlayer.RATE_MIN and rp.current_rate() < 1.0,
+		"scrub/half speed is audible and low (%.2fx)" % rp.current_rate())
 
 
 # ── net/ ──────────────────────────────────────────────────────────────────────
