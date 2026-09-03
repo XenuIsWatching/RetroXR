@@ -303,37 +303,47 @@ func _panel() -> void:
 ## Reports the button's rect so the circle can be drawn over it afterwards from
 ## measured coordinates instead of eyeballed ones.
 func _menu_shelf() -> void:
+	var menu := SPAWN_MENU_SCENE.instantiate() as Control
+	# The menu ships at ui_scale 2.0, which is the 1100x900 design resolution
+	# doubled for a 2200x1800 VR viewport. At 1.0 it lays out at its design size
+	# and fits an ordinary window -- otherwise the shelf's toolbar, and the button
+	# on it, sit off the right of any screen you can render on.
+	menu.set("ui_scale", 1.0)
+	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	var back := ColorRect.new()
-	back.color = Color(0.07, 0.08, 0.13)
-	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layer.add_child(back)
-
-	var menu := SPAWN_MENU_SCENE.instantiate()
-	menu.visible = false
-	add_child(menu)
-	await _wait(30)
+	layer.add_child(menu)
+	await _wait(40)
 
 	var view: Variant = menu.get("_spawn_view")
 	if view == null:
 		push_error("the spawn menu built no spawn view")
 		return
 
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_top", 14)
-	margin.add_theme_constant_override("margin_bottom", 14)
-	layer.add_child(margin)
-	var vbox := VBoxContainer.new()
-	margin.add_child(vbox)
+	# The Games tab, by TITLE rather than by index -- the tab order is a build
+	# detail and a hardcoded number would silently open the wrong shelf.
+	var tabs: TabContainer = view.get("_spawn_tabs")
+	if tabs != null:
+		for i in tabs.get_tab_count():
+			if tabs.get_tab_title(i) == "Games":
+				tabs.current_tab = i
+				break
+	await _wait(20)
 
-	view.call("_populate_cartridges_detail", "satellaview", vbox)
-	await _wait(30)
+	# Drilling in through the browser's own entry point, which is what builds the
+	# detail toolbar. The populator adds the mint button to
+	# _cartridges_browser.detail_toolbar(), NOT to the vbox it is handed -- so
+	# calling the populator directly with a container of your own renders an
+	# empty page, which is exactly what it did.
+	var browser: Variant = view.get("_cartridges_browser")
+	if browser == null:
+		push_error("no games browser")
+		return
+	browser.call("open_system", "satellaview")
+	# The shelf reads the disk and the core database before it draws rows.
+	await _wait(120)
 
-	_report_button(vbox)
+	_report_button(menu)
 	await _grab()
 
 
