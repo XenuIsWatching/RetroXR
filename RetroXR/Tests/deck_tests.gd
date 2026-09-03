@@ -291,6 +291,15 @@ func _test_arm() -> void:
 		# And back again, so a working one-way flip cannot pass either.
 		_eq(_press_at(sw, _reach(sw, 1.0)), 1.0, "arm/the switch keeps flipping both ways")
 
+		# The switch now drives playback as well as the platter. VlcPlayer does not
+		# exist headless, so what is asserted is the rate the deck ASKS for — the
+		# push itself is one guarded call, and the binding was measured separately
+		# (ZCR 1.338 against this 1.35, i.e. the pitch really bends).
+		_ok(absf(rp.playback_rate() - RecordPlayer.RATE_45) < 0.001,
+			"arm/at 45 the deck asks for %.2fx" % RecordPlayer.RATE_45)
+		_press_at(sw, _reach(sw, -1.0))
+		_ok(absf(rp.playback_rate() - 1.0) < 0.001, "arm/at 33 it asks for 1.00x")
+
 
 # ── scrub/ ────────────────────────────────────────────────────────────────────
 

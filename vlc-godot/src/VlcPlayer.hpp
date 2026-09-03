@@ -122,6 +122,8 @@ public:
     int64_t get_length() const;    // ms
     int64_t get_time() const;      // ms
     void set_volume(int volume);   // 0..100 (libVLC internal gain)
+    void set_rate(float rate);     // 1.0 = the media's own speed
+    float get_rate() const;
 
     // Godot-routed audio: libVLC decodes to a PCM ring buffer here; the owner
     // pulls frames each _process into an AudioStreamGenerator on a 3D player, so
@@ -209,6 +211,10 @@ private:
     size_t m_audio_head = 0;
     size_t m_audio_tail = 0;
     size_t m_audio_count = 0;
+    // Playback rate, kept because open() builds a new media player that would
+    // otherwise start back at 1.0.
+    float m_rate = 1.0f;
+
     int m_audio_rate = 48000;
     int m_audio_channels = 2;
 

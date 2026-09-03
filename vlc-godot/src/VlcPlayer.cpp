@@ -160,6 +160,13 @@ void VlcPlayer::ensure_instance()
     const char *args[] = {
         "--no-video-title-show",
         "--no-snapshot-preview",
+        // Rate changes must bend PITCH, not preserve it. VLC's default is to
+        // time-stretch audio so a faster rate keeps the same note, which is
+        // right for watching a film at 1.5x and exactly backwards for a record
+        // played at the wrong speed -- the whole point of a 33 on a 45 is that
+        // it comes out high. Turning the stretcher off is what makes set_rate
+        // sound like a turntable rather than a fast-forward button.
+        "--no-audio-time-stretch",
 #ifdef __ANDROID__
         // Debug builds: full module/demux tracing to logcat (tag "VLC") — the
         // Android pipeline is young; keep failures diagnosable over adb.
@@ -318,6 +325,12 @@ bool VlcPlayer::open(const String &path, bool is_dvd)
     // buffer; the owner drains it into an AudioStreamGenerator on a 3D player.
     libvlc_audio_set_format(mp, "S16N", m_audio_rate, m_audio_channels);
     libvlc_audio_set_callbacks(mp, cb_audio_play, nullptr, nullptr, cb_audio_flush, nullptr, this);
+
+    // open() builds a NEW media player, which starts at 1.0 whatever the last one
+    // was doing. A deck that set its speed before loading would otherwise have the
+    // setting silently forgotten by the load.
+    if (m_rate != 1.0f)
+        libvlc_media_player_set_rate(mp, m_rate);
 
     attach_events();
     return true;
@@ -633,6 +646,31 @@ void VlcPlayer::set_volume(int volume)
         libvlc_audio_set_volume(static_cast<libvlc_media_player_t *>(m_mp), volume);
 }
 
+/// Playback rate, 1.0 being the media's own speed. Remembered rather than only
+/// pushed, because open() replaces the media player (see there).
+///
+/// libVLC refuses a rate a demux cannot serve and reports it; the stored value is
+/// still what a later open() re-applies, so a refusal does not leave the object
+/// disagreeing with the player about what it asked for.
+void VlcPlayer::set_rate(float rate)
+{
+    if (rate <= 0.0f)
+        return;
+    m_rate = rate;
+    if (m_mp)
+        libvlc_media_player_set_rate(static_cast<libvlc_media_player_t *>(m_mp), rate);
+}
+
+
+/// What the PLAYER reports, not what was asked for -- the two differ when a demux
+/// will not do the rate.
+float VlcPlayer::get_rate() const
+{
+    if (!m_mp)
+        return m_rate;
+    return libvlc_media_player_get_rate(static_cast<libvlc_media_player_t *>(m_mp));
+}
+
 // ── Godot-routed audio ───────────────────────────────────────────────────────
 
 int VlcPlayer::get_audio_rate() const { return m_audio_rate; }
@@ -890,6 +928,8 @@ void VlcPlayer::_bind_methods()
     ClassDB::bind_method(D_METHOD("stop"), &VlcPlayer::stop);
     ClassDB::bind_method(D_METHOD("shutdown", "budget_ms"), &VlcPlayer::shutdown, DEFVAL(2000));
     ClassDB::bind_method(D_METHOD("set_paused", "paused"), &VlcPlayer::set_paused);
+    ClassDB::bind_method(D_METHOD("set_rate", "rate"), &VlcPlayer::set_rate);
+    ClassDB::bind_method(D_METHOD("get_rate"), &VlcPlayer::get_rate);
     ClassDB::bind_method(D_METHOD("is_playing"), &VlcPlayer::is_playing);
     ClassDB::bind_method(D_METHOD("get_frame_count"), &VlcPlayer::get_frame_count);
 

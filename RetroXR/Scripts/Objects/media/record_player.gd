@@ -25,6 +25,12 @@ extends RetroAudioPlayer
 ## Platter speeds, rad/s. 33 1/3 rpm and 45 rpm.
 const SPEED_33 := 3.4907
 const SPEED_45 := 4.7124
+## What a 45 does to a record cut at 33 1/3: 45 / (100/3). The mesh IS a 12" LP, so
+## every record here is a 33 and the switch is the thing that can be wrong — play
+## one at 45 and it comes out a third faster and a fifth higher, which is the whole
+## joke of the control. VlcPlayer runs with --no-audio-time-stretch so the rate
+## bends pitch instead of preserving it; measured 1.338 against this 1.35.
+const RATE_45 := 1.35
 ## Ramp rates, rad/s². A real platter takes a moment to come up and coasts down.
 const PLATTER_SPIN_UP := 6.0
 const PLATTER_SPIN_DOWN := 3.0
@@ -234,6 +240,7 @@ func play() -> void:
 		return
 	_motor = true
 	super.play()
+	_apply_rate()
 
 
 func _process(delta: float) -> void:
@@ -246,9 +253,31 @@ func _target_omega() -> float:
 	return SPEED_45 if _speed_45 else SPEED_33
 
 
+## Deliberately NOT a net command. A speed is a control POSITION, not transport
+## state, and the switch already replicates through the articulated-control path
+## like every other knob and lever in the room — so each peer derives its own rate
+## from its own slider and they cannot disagree. Routing it through EV_AUDIO_CMD
+## as well would have two mechanisms driving one value.
 func _on_speed_changed(value: float) -> void:
 	_speed_45 = value > 0.5
+	_apply_rate()
 	_update_status()
+
+
+## The rate this deck should be running at. Split out from _apply_rate so it can be
+## asserted headless, where VlcPlayer does not exist at all.
+func playback_rate() -> float:
+	return RATE_45 if _speed_45 else 1.0
+
+
+## Pushed on every change AND after every play(), because open() builds a fresh
+## media player: a deck set to 45 before the needle went down would otherwise load
+## the next track back at 33 without anything saying so. This is also what carries
+## the setting through a room restore, where the slider is repositioned without a
+## hand ever touching it.
+func _apply_rate() -> void:
+	if _vlc:
+		_vlc.set_rate(playback_rate())
 
 
 ## Spin the platter, and the seated record with it, from one angular velocity. The
