@@ -756,8 +756,10 @@ function fmt(b){
 }
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function parent_of(p){var i=p.lastIndexOf('/');return i>0?p.substring(0,i):'';}
-function go(p){
+function go(p,push){
   cur=p;
+  if(push===false)history.replaceState({path:p},'',location.pathname);
+  else history.pushState({path:p},'',location.pathname);
   var bc=document.getElementById('bc');
   var parts=p?p.split('/').filter(Boolean):[];
   var h='<a data-nav="">root</a>';
@@ -769,6 +771,9 @@ function go(p){
     return r.json();
   }).then(function(d){if(d)draw(d);});
 }
+// The Back button should step up the file-nav path visited, not leave the
+// page — replay the path the browser stored instead of pushing a new entry.
+window.addEventListener('popstate',function(e){go(e.state?e.state.path:'',false);});
 function draw(d){
   var tb=document.getElementById('tb');
   var h='';
@@ -792,7 +797,7 @@ document.addEventListener('click',function(e){
   if(e.target.hasAttribute('data-del')){
 	var p=e.target.getAttribute('data-del');
 	if(confirm('Delete '+p.split('/').pop()+'?'))
-	  fetch('/api/delete?path='+encodeURIComponent(p),{method:'DELETE'}).then(function(){go(cur);});
+	  fetch('/api/delete?path='+encodeURIComponent(p),{method:'DELETE'}).then(function(){go(cur,false);});
   }
 });
 var dz=document.getElementById('dz');
@@ -806,7 +811,7 @@ function uploadItems(items){
   function next(){
 	if(i>=items.length){
 	  st.textContent='Done \u2014 uploaded '+items.length+' file(s).';
-	  pb.style.display='none';pf.style.width='0%';go(cur);return;
+	  pb.style.display='none';pf.style.width='0%';go(cur,false);return;
 	}
 	var it=items[i],nm=it.path||it.file.name;
 	st.textContent='Uploading '+(i+1)+' of '+items.length+': '+nm;
@@ -879,5 +884,5 @@ dz.addEventListener('drop',function(e){
   for(var k=0;k<files.length;k++)out.push({file:files[k],path:files[k].webkitRelativePath||files[k].name});
   uploadItems(out);
 });
-go('');
+go('',false);
 </script></body></html>"""
