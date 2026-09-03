@@ -1154,11 +1154,18 @@ func _restore_connections_async(root: Node, spawned: Dictionary, entries: Dictio
 ## Restore after pass 2 has seated every plug. The saved particles preserve the
 ## actual route round furniture; VerletRope validates topology immediately and
 ## validates the route against live collision geometry on its next physics tick.
-func _restore_rope_layouts(obj: Node, entry: Dictionary) -> void:
+##
+## obj is Variant on purpose, like _still_ours' root. The async pass yields
+## frames between the wiring pass and this one, so an object spawned earlier in
+## this very restore may already be freed by the time we get here — and binding
+## a freed instance to a Node-typed parameter throws at the call boundary,
+## before is_instance_valid below ever runs.
+func _restore_rope_layouts(obj: Variant, entry: Dictionary) -> void:
 	if not is_instance_valid(obj):
 		return
+	var node := obj as Node
 	for rec: Dictionary in entry.get("rope_layouts", []):
-		var rope := obj.get_node_or_null(NodePath(str(rec.get("path", "")))) as VerletRope
+		var rope := node.get_node_or_null(NodePath(str(rec.get("path", "")))) as VerletRope
 		if rope == null:
 			continue
 		var points := PackedVector3Array()
