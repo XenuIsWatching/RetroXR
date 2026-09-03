@@ -16,6 +16,8 @@ var _post_aa_opt: VRDropdown = null
 var _shadow_opt:  VRDropdown = null
 var _ao_opt:      VRDropdown = null
 var _glow_tog:    VRToggle = null
+var _screen_lights_tog: VRToggle = null
+var _syncing_screen_lights: bool = false
 ## A VRToggle's knob follows its own `toggled` signal, so _sync_rows has to move
 ## it loudly and the handler has to ignore the echo. set_pressed_no_signal would
 ## leave the switch and its state disagreeing.
@@ -356,6 +358,29 @@ func _build(vr_mode: bool) -> void:
 		+ "runs, and on a Quest it measured about a seventh of the frame, so turning "
 		+ "it off is the biggest single saving in the list."))
 
+	var sl_row := HBoxContainer.new()
+	sl_row.add_theme_constant_override("separation", 10)
+	sl_row.custom_minimum_size = Vector2(0, 68)
+	vbox.add_child(sl_row)
+
+	var sl_lbl := Label.new()
+	sl_lbl.text = "Screen Light"
+	sl_lbl.add_theme_font_size_override("font_size", 22)
+	sl_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_TITLE)
+	sl_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sl_row.add_child(sl_lbl)
+
+	_screen_lights_tog = VRToggle.create(QualityManager.screen_lights_enabled, func(on: bool) -> void:
+		if _syncing_screen_lights:
+			return
+		QualityManager.set_screen_lights_enabled(on)
+		_sync_rows())
+	sl_row.add_child(_screen_lights_tog)
+
+	vbox.add_child(MenuStyle.hint("A lit screen throws its picture into the room - the glow on "
+		+ "the console beside the set. Three lights per screen, shaded on everything "
+		+ "they reach, so on a headset it starts off; the desktop keeps it."))
+
 	vbox.add_child(HSeparator.new())
 
 
@@ -386,3 +411,7 @@ func _sync_rows() -> void:
 		_syncing_glow = true
 		_glow_tog.button_pressed = QualityManager.glow_enabled
 		_syncing_glow = false
+	if _screen_lights_tog:
+		_syncing_screen_lights = true
+		_screen_lights_tog.button_pressed = QualityManager.screen_lights_enabled
+		_syncing_screen_lights = false

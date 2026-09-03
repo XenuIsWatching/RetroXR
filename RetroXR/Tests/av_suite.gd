@@ -866,6 +866,18 @@ func _d_ambilight() -> void:
 	tv.remote_power_toggle()
 	await _wait(6)
 	_check(light.visible and light.light_energy > 0.0, "and lights the room again once it is back on")
+	# The graphics switch, without saving the player's prefs from a test.
+	var was := QualityManager.screen_lights_enabled
+	QualityManager.screen_lights_enabled = false
+	QualityManager.apply_screen_lights()
+	await _wait(2)
+	_check(not light.visible, "the Screen Light switch off douses it while the set stays on")
+	QualityManager.screen_lights_enabled = true
+	QualityManager.apply_screen_lights()
+	await _wait(2)
+	_check(light.visible and light.light_energy > 0.0, "and on lights the room again at once")
+	QualityManager.screen_lights_enabled = was
+	QualityManager.apply_screen_lights()
 
 
 func _d_empty() -> void:

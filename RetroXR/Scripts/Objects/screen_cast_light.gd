@@ -51,6 +51,9 @@ var _right_light: SpotLight3D = null
 ## stays on layer 1 exactly as it always did.
 const SCREEN_LAYER := 1 << 9
 
+## Every cast light, so QualityManager.apply_screen_lights can reach them.
+const GROUP := &"screen_cast_light"
+
 
 static func screens_on_own_layer() -> bool:
 	return RenderingServer.get_current_rendering_method() == "mobile"
@@ -62,6 +65,7 @@ static func mark_screen(mesh: MeshInstance3D) -> void:
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	shadow_enabled = false
 	spot_angle = GLOW_ANGLE_DEG
 	if screens_on_own_layer():
@@ -118,8 +122,17 @@ func turn_off() -> void:
 	_disable_sampler()
 
 
+## The switch changed: re-apply the same output with the new answer.
+func refresh_output() -> void:
+	_apply_energy()
+	if visible and _picture_active:
+		_request_refresh()
+
+
 func _process(_delta: float) -> void:
-	if not _picture_active or _sample_viewport == null:
+	# A switched-off light skips its sampling too - the tiny readback is the
+	# other thing this node costs, and nobody reads the colours.
+	if not _picture_active or _sample_viewport == null or not visible:
 		return
 	_refresh_frame += 1
 	if _refresh_frame < _refresh_interval():
@@ -162,7 +175,10 @@ func _apply_energy() -> void:
 	# or not — it only ranks lights by energy once an object is over its cap. Three
 	# spotlights per dark screen, reaching 4-8 m, put the whole floor's light list
 	# at the cap: measured 1.5 ms per switched-off Game Boy on a Quest 3.
-	visible = _output_active
+	# And gone when the player has the switch off (QualityManager
+	# .screen_lights_enabled, off by default on the mobile renderer): the
+	# picture is still tracked, so flipping the switch lights the room at once.
+	visible = _output_active and QualityManager.screen_lights_enabled
 	# The three shares add back to the configured physical output. The stronger
 	# centre wash prevents three visibly separate cones where they overlap. A
 	# solid colour has no left and right to tell apart, so it is one cone at the

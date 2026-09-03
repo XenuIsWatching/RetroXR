@@ -229,6 +229,13 @@ var _vrs_mode_override: String = ""
 ## because it is the only full-frame post-process the mobile backend still runs
 ## and it is what reads the eye buffer back.
 var glow_enabled: bool = true
+## The light a screen throws into the room (ScreenCastLight): three spotlights
+## per lit screen, reaching metres, shaded per pixel on everything they reach.
+## On a Quest 3 that put lit consoles and sets at 2-5 GPU clocks a fragment
+## against 0.2 for baked ones, so the mobile renderer starts without it; the
+## desktop keeps it. _ready sets the platform default before the saved
+## preference is read, so a player's choice on either wins.
+var screen_lights_enabled: bool = true
 ## Desktop window state. Empty resolution means "leave the window where it is".
 var window_mode: String = ""
 var resolution: String = ""
@@ -245,6 +252,7 @@ func _ready() -> void:
 	# Quest starts where it always was; desktop takes the tier these settings exist
 	# to provide. Applied before _load_prefs so a saved preset wins.
 	apply_preset(Preset.LOW if not _desktop else Preset.MEDIUM, false)
+	screen_lights_enabled = RenderingServer.get_current_rendering_method() != "mobile"
 	_load_prefs()
 	# _load_prefs restores the saved foveation, which would undo a boot override.
 	_read_vrs_overrides()
@@ -1181,6 +1189,19 @@ func set_glow_enabled(on: bool) -> void:
 	save_prefs()
 
 
+func set_screen_lights_enabled(on: bool) -> void:
+	screen_lights_enabled = on
+	apply_screen_lights()
+	_mark_custom()
+	save_prefs()
+
+
+## Every live ScreenCastLight re-reads the switch; a light born later reads it
+## on its own first output.
+func apply_screen_lights() -> void:
+	get_tree().call_group(ScreenCastLight.GROUP, "refresh_output")
+
+
 func configure_environment(world_env: WorldEnvironment) -> void:
 	if world_env == null or world_env.environment == null:
 		return
@@ -1249,6 +1270,9 @@ func _load_prefs() -> void:
 	var glow: Variant = data.get("glow_enabled")
 	if typeof(glow) == TYPE_BOOL:
 		glow_enabled = glow
+	var screen_lights: Variant = data.get("screen_lights_enabled")
+	if typeof(screen_lights) == TYPE_BOOL:
+		screen_lights_enabled = screen_lights
 
 
 func save_prefs() -> void:
@@ -1271,6 +1295,7 @@ func save_prefs() -> void:
 		"gpu_level": int(gpu_level),
 		"foveation_level": int(foveation_level),
 		"glow_enabled": glow_enabled,
+		"screen_lights_enabled": screen_lights_enabled,
 	}))
 	file.close()
 
