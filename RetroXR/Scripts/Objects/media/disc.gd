@@ -108,14 +108,27 @@ func _apply_system_size() -> void:
 		pointer_col.shape = pshape
 
 
-## Hand the scraped label scan to the shader, which composites it into the label
-## face's albedo — opaque, so unlike a transparent quad it sorts correctly, writes
-## depth and takes the pickable outline. The art's own alpha is the print mask,
-## including its centre hole, so nothing here masks or resizes it.
+## Hand the scraped label scan — or, on a Wii with none, WiiDiscLabel's print
+## template — to the shader, which composites it into the label face's albedo:
+## opaque, so unlike a transparent quad it sorts correctly, writes depth and
+## takes the pickable outline. The art's own alpha is the print mask, including
+## its centre hole, so nothing here masks or resizes it.
 func _apply_label_art() -> void:
 	var tex := MediaDimensions.load_label_texture(systemid, rom_path)
-	if tex == null:
+	var lbl := get_node_or_null("GameLabel") as Label3D
+	if tex != null:
+		_set_label_tex(tex)
+		if lbl:
+			lbl.visible = false
 		return
+	if systemid != "wii":
+		return
+	_set_label_tex(WiiDiscLabel.TEXTURE)
+	if lbl:
+		WiiDiscLabel.fit_title(lbl, MediaDimensions.disc_diameter(systemid))
+
+
+func _set_label_tex(tex: Texture2D) -> void:
 	var body := get_node_or_null("DiscMesh") as MeshInstance3D
 	if body == null:
 		return
@@ -123,10 +136,6 @@ func _apply_label_art() -> void:
 	if mat == null:
 		return
 	mat.set_shader_parameter("label_tex", tex)
-
-	var lbl := get_node_or_null("GameLabel") as Label3D
-	if lbl:
-		lbl.visible = false
 
 
 ## The world basis this disc had when the hand let go of it. A bay cannot read
