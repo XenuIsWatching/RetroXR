@@ -85,6 +85,24 @@ top_radius = 0.007
 bottom_radius = 0.009
 height = 0.03
 
+; The grab volumes. VRHinge/VRSlider engage a FINGERTIP by proximity to their own
+; origin and need no shape for that, which is why the arm works in VR without one —
+; but the desktop reticle is an intersect_ray against the pointable layer, and a ray
+; cannot hit a shapeless Area3D. Without these the arm and the speed switch are
+; simply not grabbable on desktop.
+[sub_resource type="SphereShape3D" id="Shape_armgrab"]
+radius = 0.028
+
+; Sized off the KNOB (16 x 12 x 22 mm) with the margin the authored switches use,
+; and — the load-bearing part — WIDER along the travel axis than the throw itself.
+; The shape rides the knob while the desktop drag maps the ray's hit ABSOLUTELY, so
+; a box narrower than the travel can only ever be hit at the end it already sits at:
+; the switch reaches 45 and there is no longer any point a ray can land on that maps
+; back to 33. Wider than the throw, the box still reaches across the mid-point from
+; either end, which is what lets a pointer flip it back.
+[sub_resource type="BoxShape3D" id="Shape_knobgrab"]
+size = Vector3(0.028, 0.018, 0.028)
+
 [sub_resource type="BoxMesh" id="Box_knob"]
 size = Vector3(0.016, 0.012, 0.022)
 
@@ -96,7 +114,7 @@ freeze_mode = 1
 linear_damp = 5.0
 angular_damp = 8.0
 script = ExtResource("1_rpscript")
-player_label = "TURNTABLE"
+player_label = "RECORD PLAYER"
 arm_park = 0.35
 arm_lead_in = 0.557
 arm_lead_out = 1.0
@@ -217,6 +235,9 @@ engage_radius = 0.05
 value_at_min = 1.0
 value_at_max = 0.0
 
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ArmMount/ArmPivot/TonearmLever"]
+shape = SubResource("Shape_armgrab")
+
 ; Where the arm sits at deg 0. A rest under the parked stylus, so "parked" reads as
 ; a place the arm belongs rather than as the arm stopping in mid-air.
 [node name="ArmRest" type="MeshInstance3D" parent="."]
@@ -224,11 +245,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.185, 0.038, 0.085)
 mesh = SubResource("Cyl_armrest")
 surface_material_override/0 = SubResource("Mat_arm")
 
+; The nameplate, flat on the plinth's FRONT face (+Z, the side the transport is on)
+; rather than floating over the deck. Identity basis because a Label3D already faces
+; +Z; 1 mm proud of the 0.2 m face so it cannot z-fight the plinth.
 [node name="NameLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09, 0.072, -0.205)
-pixel_size = 0.0008
-text = "TURNTABLE"
-font_size = 24
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.004, 0.2012)
+pixel_size = 0.001
+text = "RECORD PLAYER"
+font_size = 28
 outline_size = 6
 
 ; The transport runs along the FRONT edge (+Z, as on the CD player), clear of the
@@ -300,9 +324,14 @@ collision_mask = 0
 script = ExtResource("7_vrslider")
 target = NodePath(".")
 axis_local = Vector3(1, 0, 0)
-travel = 0.03
+travel = 0.016
 steps = 2
 engage_radius = 0.03
+
+; VRSlider._adopt_knob_collision takes the first CollisionShape3D child and makes it
+; ride the knob, so the player aims at the switch wherever it has slid to.
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SpeedSwitch"]
+shape = SubResource("Shape_knobgrab")
 
 [node name="KnobMesh" type="MeshInstance3D" parent="SpeedSwitch"]
 mesh = SubResource("Box_knob")

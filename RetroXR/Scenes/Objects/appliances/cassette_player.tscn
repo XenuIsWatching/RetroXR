@@ -54,6 +54,7 @@ freeze_mode = 1
 linear_damp = 5.0
 angular_damp = 8.0
 script = ExtResource("1_casscript")
+player_label = "CASSETTE PLAYER"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_body")
@@ -197,13 +198,14 @@ pixel_size = 0.001
 text = "EJECT"
 font_size = 7
 
+; The nameplate, flat on the front face. Below the slot rather than centred on it:
+; on a front loader the middle of that face is the tape mouth.
 [node name="NameLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.055, 0.04)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.024, 0.1012)
 pixel_size = 0.001
-billboard = 2
-font_size = 20
+font_size = 18
 outline_size = 4
-text = "TAPE"
+text = "CASSETTE PLAYER"
 
 [node name="PointerArea" type="StaticBody3D" parent="."]
 collision_layer = 1048576

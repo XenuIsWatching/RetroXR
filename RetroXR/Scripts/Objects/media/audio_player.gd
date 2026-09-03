@@ -464,22 +464,15 @@ func set_audio_volume(volume: float) -> void:
 		_apply_volume()
 
 
+## A NAMEPLATE, not a readout. This used to append the track number and a transport
+## caret, which made a piece of hi-fi wear a caption describing itself — and none of
+## it was information the deck was not already giving: the tape rides in or out, the
+## disc spins or it does not, a record's needle is down or parked. The label is still
+## driven from here rather than left to the scene so that a deck renamed at runtime,
+## and the download status below, both still land somewhere.
 func _update_status() -> void:
-	if _name_label == null:
-		return
-	var txt := player_label.to_upper()
-	if _tracks.size() > 1:
-		txt += "  %d/%d" % [_track_idx + 1, _tracks.size()]
-	if is_playing:
-		if _scan_dir > 0:
-			txt += "  ▶▶"
-		elif _scan_dir < 0:
-			txt += "  ◀◀"
-		elif _paused:
-			txt += "  ❙❙"
-		else:
-			txt += "  ▶"
-	_name_label.text = txt
+	if _name_label:
+		_name_label.text = player_label.to_upper()
 
 
 # ── Multiplayer sync ──────────────────────────────────────────────────────────

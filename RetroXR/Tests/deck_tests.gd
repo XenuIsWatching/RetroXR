@@ -258,6 +258,43 @@ func _test_arm() -> void:
 	await get_tree().process_frame
 	_ok(rp._tray.is_open(), "arm/parking the arm opens the platter")
 
+	# DESKTOP GRAB. In VR these widgets engage a fingertip by proximity to their own
+	# origin and need no collision shape at all — which is exactly why this shipped
+	# broken and neither a headless case nor a render could see it. The desktop
+	# reticle is an intersect_ray against the pointable layer, and a ray cannot hit a
+	# shapeless Area3D, so without a shape the arm simply cannot be grabbed on a
+	# desktop. Asserted on both widgets a hand has to reach.
+	for spec: Array in [[arm, "the tonearm"], [rp._speed_switch, "the 33/45 switch"]]:
+		var w: Area3D = spec[0]
+		var label: String = spec[1]
+		_ok(w != null and (w.collision_layer & (1 << 20)) != 0,
+			"arm/%s is on the pointable layer" % label)
+		var shaped := false
+		for child in w.get_children():
+			if child is CollisionShape3D and (child as CollisionShape3D).shape != null:
+				shaped = true
+		_ok(shaped, "arm/%s has a shape a desktop ray can hit" % label)
+
+	# A DETENT SWITCH MUST BE FLIPPABLE BOTH WAYS by a pointer, and that is a
+	# geometry rule rather than a preference. The grab shape rides the knob, while
+	# the desktop drag maps the ray's hit absolutely onto the travel axis — so a
+	# shape no wider than the throw sits entirely past the mid-point once thrown,
+	# and every ray that can reach it maps back to the end it is already at. The
+	# switch goes to 45 and never comes back. Wider than the throw, the box still
+	# reaches across the middle from either end.
+	var sw: VRSlider = rp._speed_switch
+	if sw != null and sw.steps >= 2:
+		var box: BoxShape3D = null
+		for child in sw.get_children():
+			if child is CollisionShape3D:
+				box = (child as CollisionShape3D).shape as BoxShape3D
+		var extent := 0.0
+		if box != null:
+			extent = absf(box.size.dot(sw.axis_local.normalized()))
+		_ok(extent > sw.travel,
+			"arm/the speed switch can be flipped BACK (grab %.0f mm > throw %.0f mm)"
+				% [extent * 1000.0, sw.travel * 1000.0])
+
 
 # ── scrub/ ────────────────────────────────────────────────────────────────────
 

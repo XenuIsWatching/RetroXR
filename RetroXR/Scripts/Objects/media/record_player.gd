@@ -412,10 +412,3 @@ func _net_forward_cmd_at(cmd: String, index: int) -> bool:
 			{"player": self, "cmd": cmd, "index": index})
 		return true
 	return false
-
-
-func _update_status() -> void:
-	super._update_status()
-	if _name_label == null:
-		return
-	_name_label.text += "  45" if _speed_45 else "  33"
