@@ -59,6 +59,9 @@ func _ready() -> void:
 			await _panel()
 		"menu":
 			await _menu_shelf()
+		"sufami":
+			_light()
+			await _sufami()
 		"pack":
 			_light()
 			await _pack()
@@ -205,6 +208,49 @@ func _stack() -> void:
 	for i in TURN_FRAMES:
 		var a: float = TAU * float(i) / float(TURN_FRAMES)
 		_look_from(STAGE + Vector3(cos(a) * 0.52, 0.28, sin(a) * 0.52), STAGE + Vector3(0, 0.11, 0))
+		await _wait(1)
+		await _grab()
+
+
+## A Super Famicom with a Sufami Turbo in its slot and a cartridge in each of the
+## adapter's two wells -- the only unit in the catalog with more than one bay.
+func _sufami() -> void:
+	var host := SYSTEM_SCENE.instantiate() as RetroSystem
+	host.systemid = "super_nes"
+	host.freeze = true
+	add_child(host)
+	host.global_position = STAGE
+	await _wait(24)
+
+	var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
+	unit.expansion_id = "sufami_turbo"
+	unit.freeze = true
+	add_child(unit)
+	unit.global_position = STAGE + Vector3(0.0, 0.22, 0.0)
+	await _wait(24)
+	host.restore_expansion(unit)
+	await _wait(12)
+
+	# One cartridge per well. The labels are left off: there is no Sufami Turbo
+	# dump on this machine, and a render carrying invented game names would be
+	# a picture of something that does not exist.
+	for i in 2:
+		var cart := CART_SCENE.instantiate() as RetroCartridge
+		cart.systemid = "sufami_turbo"
+		cart.game_label = ""
+		cart.freeze = true
+		add_child(cart)
+		cart.global_position = unit.global_position + Vector3(0.0, 0.18, 0.0)
+		await _wait(12)
+		var tag := cart.get_node_or_null("GameLabel") as Label3D
+		if tag != null:
+			tag.visible = false
+		unit.restore_media(cart, i)
+		await _wait(12)
+
+	for i in TURN_FRAMES:
+		var a: float = TAU * float(i) / float(TURN_FRAMES)
+		_look_from(STAGE + Vector3(cos(a) * 0.50, 0.25, sin(a) * 0.50), STAGE + Vector3(0, 0.12, 0))
 		await _wait(1)
 		await _grab()
 
