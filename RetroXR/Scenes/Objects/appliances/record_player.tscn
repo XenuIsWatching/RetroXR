@@ -93,15 +93,14 @@ height = 0.03
 [sub_resource type="SphereShape3D" id="Shape_armgrab"]
 radius = 0.028
 
-; Sized off the KNOB (16 x 12 x 22 mm) with the margin the authored switches use,
-; and — the load-bearing part — WIDER along the travel axis than the throw itself.
-; The shape rides the knob while the desktop drag maps the ray's hit ABSOLUTELY, so
-; a box narrower than the travel can only ever be hit at the end it already sits at:
-; the switch reaches 45 and there is no longer any point a ray can land on that maps
-; back to 33. Wider than the throw, the box still reaches across the mid-point from
-; either end, which is what lets a pointer flip it back.
+; The switch's grab box: the 16 x 12 x 22 mm cap plus 1 mm of margin, so it matches
+; the thing it is standing in for.
+;
+; It has to stay a little WIDER than the throw, and its node has to be offset to
+; -travel/2 — see the CollisionShape3D below. Those two together are what let a
+; pointer flip it back.
 [sub_resource type="BoxShape3D" id="Shape_knobgrab"]
-size = Vector3(0.028, 0.018, 0.028)
+size = Vector3(0.018, 0.014, 0.024)
 
 [sub_resource type="BoxMesh" id="Box_knob"]
 size = Vector3(0.016, 0.012, 0.022)
@@ -324,13 +323,20 @@ collision_mask = 0
 script = ExtResource("7_vrslider")
 target = NodePath(".")
 axis_local = Vector3(1, 0, 0)
-travel = 0.016
+travel = 0.01
 steps = 2
 engage_radius = 0.03
 
 ; VRSlider._adopt_knob_collision takes the first CollisionShape3D child and makes it
-; ride the knob, so the player aims at the switch wherever it has slid to.
+; ride the knob: _update_knob drives it to rest + axis * value * travel. So this
+; authored transform is the box's pose at VALUE 0, and that pose is -travel/2 along
+; the axis — the same -0.005 the Game Boy's power switch carries for its own 0.01
+; throw. Left at the node origin it describes value 0.5 instead, which puts the box
+; half a throw too far along: at 45 it spanned +2..+30 mm, every point of which maps
+; to 0.625 or more and rounds straight back to 45. The switch went over and there
+; was no point in space left that meant 33.
 [node name="CollisionShape3D" type="CollisionShape3D" parent="SpeedSwitch"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.005, 0, 0)
 shape = SubResource("Shape_knobgrab")
 
 [node name="KnobMesh" type="MeshInstance3D" parent="SpeedSwitch"]

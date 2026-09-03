@@ -275,25 +275,21 @@ func _test_arm() -> void:
 				shaped = true
 		_ok(shaped, "arm/%s has a shape a desktop ray can hit" % label)
 
-	# A DETENT SWITCH MUST BE FLIPPABLE BOTH WAYS by a pointer, and that is a
-	# geometry rule rather than a preference. The grab shape rides the knob, while
-	# the desktop drag maps the ray's hit absolutely onto the travel axis — so a
-	# shape no wider than the throw sits entirely past the mid-point once thrown,
-	# and every ray that can reach it maps back to the end it is already at. The
-	# switch goes to 45 and never comes back. Wider than the throw, the box still
-	# reaches across the middle from either end.
+	# A DETENT SWITCH MUST BE FLIPPABLE BOTH WAYS by a pointer, and this drives the
+	# real thing rather than asserting a proxy for it. An earlier version of this
+	# case checked only that the grab box was wider than the throw — which is
+	# necessary, is documented in _update_knob, and was TRUE of a switch that still
+	# could not be flipped back, because the box's REST POSE was also wrong. A
+	# precondition that holds while the feature is broken is not a test of the
+	# feature. So: press where a ray could actually land, and read the value.
 	var sw: VRSlider = rp._speed_switch
 	if sw != null and sw.steps >= 2:
-		var box: BoxShape3D = null
-		for child in sw.get_children():
-			if child is CollisionShape3D:
-				box = (child as CollisionShape3D).shape as BoxShape3D
-		var extent := 0.0
-		if box != null:
-			extent = absf(box.size.dot(sw.axis_local.normalized()))
-		_ok(extent > sw.travel,
-			"arm/the speed switch can be flipped BACK (grab %.0f mm > throw %.0f mm)"
-				% [extent * 1000.0, sw.travel * 1000.0])
+		sw.set_value_no_signal(0.0)
+		await get_tree().process_frame
+		_eq(_press_at(sw, _reach(sw, 1.0)), 1.0, "arm/a pointer can throw the speed switch to 45")
+		_eq(_press_at(sw, _reach(sw, -1.0)), 0.0, "arm/...and can throw it BACK to 33")
+		# And back again, so a working one-way flip cannot pass either.
+		_eq(_press_at(sw, _reach(sw, 1.0)), 1.0, "arm/the switch keeps flipping both ways")
 
 
 # ── scrub/ ────────────────────────────────────────────────────────────────────
@@ -437,6 +433,37 @@ func _seat(rp: Node) -> Node:
 ## unregistered the extension classes the emitter's backend belongs to. queue_free
 ## alone is not enough — it is deferred, so without the frames below the decks are
 ## still standing at quit and the run exits 139 with every case passed.
+## The furthest point along the travel axis, in the slider's own frame, that a ray
+## could actually hit RIGHT NOW — the grab box's leading face where it currently
+## sits. `dir` is +1 for the far end of the throw, -1 for the near one. This is the
+## whole point of the case: a pointer cannot aim at the slot, only at the box, so
+## the reachable set moves with the knob.
+func _reach(sw: VRSlider, dir: float) -> Vector3:
+	var axis := sw.axis_local.normalized()
+	var half := 0.0
+	var centre := Vector3.ZERO
+	for child in sw.get_children():
+		var cs := child as CollisionShape3D
+		if cs == null:
+			continue
+		centre = cs.position
+		var box := cs.shape as BoxShape3D
+		if box != null:
+			half = absf((box.size * 0.5).dot(axis))
+	return centre + axis * half * dir
+
+
+## Press the pointer at a point in the slider's local frame, and report the value it
+## settled on. Exactly what XRToolsPointerEvent.pressed delivers on a desktop click.
+func _press_at(sw: VRSlider, local_point: Vector3) -> float:
+	var at := sw.to_global(local_point)
+	sw.pointer_event(XRToolsPointerEvent.new(
+		XRToolsPointerEvent.Type.PRESSED, null, sw, at, at))
+	sw.pointer_event(XRToolsPointerEvent.new(
+		XRToolsPointerEvent.Type.RELEASED, null, sw, at, at))
+	return sw.value
+
+
 func _cleanup() -> void:
 	for n in _spawned:
 		if not is_instance_valid(n):
