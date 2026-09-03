@@ -285,7 +285,7 @@ const ROWS: Dictionary = {
 	# Model 1 and Model 2 both sat UNDER the Mega Drive, which is why the console
 	# ends up in the middle of the tower rather than at the bottom of it.
 	"sega_cd": {
-		"label": "Mega-CD",
+		"label": "Sega CD",
 		"host": "mega_drive",
 		"media": "sega_cd",
 		"mount": MOUNT_BELOW,

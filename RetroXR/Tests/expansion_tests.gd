@@ -230,7 +230,7 @@ func _group_tower() -> void:
 
 	_check(md.expansion_ids() == ["sega_cd", "sega_32x"],
 		"tower/ the Mega Drive reports both, in catalog order")
-	_check(md._display_name().ends_with("Mega-CD + 32X"),
+	_check(md._display_name().ends_with("Sega CD + 32X"),
 		"tower/ and names the machine it has become")
 	_check(md.resolve_core_name() == "picodrive",
 		"tower/ the full tower is a picodrive machine, not a genesis_plus_gx one")
@@ -549,7 +549,7 @@ func _group_launch() -> void:
 	var md := await _console("mega_drive")
 	await _bolt(md, cd)
 	_check(md.resolve_core_name() == "genesis_plus_gx",
-		"launch/ a Mega Drive on a Mega-CD resolves to the combination's core")
+		"launch/ a Mega Drive on a Sega CD resolves to the combination's core")
 	_check(md._all_forced_options("genesis_plus_gx") != null,
 		"launch/ and the forced-options path survives a combination with none")
 	await _clear()
