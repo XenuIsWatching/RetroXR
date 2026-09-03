@@ -125,6 +125,7 @@ func _run() -> void:
 		["display/coming back shows it again", _d_back],
 		["display/a source that stops is blue, not frozen", _d_stopped],
 		["display/a set switched off is dark", _d_off],
+		["display/a set that is on lights the room, and again after a power cycle", _d_ambilight],
 		["display/an empty input is blue", _d_empty],
 		["display/a host on the input that sends no picture is blue", _d_no_video_cord],
 		["display/the aerial input on the wrong channel is snow", _d_rf_untuned],
@@ -845,6 +846,26 @@ func _d_off() -> void:
 	_check_eq(_glass(tv), tv._display._dark_material, "it wears its own dark glass")
 	_check(_glass(tv) is ShaderMaterial, "the dark glass keeps the reflective shader")
 	_check_eq(_shown(tv), tv._display._dark_texture, "the phosphors behind it are black")
+
+
+## The cast light hides itself while it has nothing to show (92294bee), and
+## the display's tick used to return early on exactly that, so once a set had
+## been off - which every set is at _ready - nothing could light it again.
+func _d_ambilight() -> void:
+	var tv := _tv()
+	await _wait(30)
+	var light: ScreenCastLight = tv._ambilight
+	var src := StubSource.new()
+	src.texture = _a_texture()
+	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
+	await _wait(6)
+	_check(light.visible and light.light_energy > 0.0, "a set with a picture lights the room")
+	tv.remote_power_toggle()
+	await _wait(6)
+	_check(not light.visible, "a set switched off throws no light")
+	tv.remote_power_toggle()
+	await _wait(6)
+	_check(light.visible and light.light_energy > 0.0, "and lights the room again once it is back on")
 
 
 func _d_empty() -> void:

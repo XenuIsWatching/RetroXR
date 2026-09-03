@@ -774,7 +774,10 @@ func rf_static() -> ShaderMaterial:
 ## Static states do not run the tiny projector viewport: a live full-resolution
 ## picture stays on the GPU and only its already-blurred 12x8 result is transferred.
 func tick_ambilight() -> void:
-	if not _tv._ambilight or not _tv._ambilight.visible:
+	# Not gated on the light being visible: the light hides itself while off
+	# (ScreenCastLight._apply_energy), so that test would keep a doused set
+	# dark for ever - which is what it did between 92294bee and this line.
+	if not _tv._ambilight:
 		return
 	var override := _tv._screen_mesh.get_surface_override_material(0)
 	if not _tv._tv_enabled or override == _dark_material:
