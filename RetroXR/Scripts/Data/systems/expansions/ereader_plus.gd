@@ -19,6 +19,8 @@ const ROW := {
 	"mount": ExpansionDefs.MOUNT_CARTRIDGE,
 	"size": Vector3(0.090, 0.062, 0.023),
 	"loader": MediaDimensions.LOADER_SWIPE,
+	# See ereader.gd: the header code is what a library dump is recognised by.
+	"rom_code": "PSAJ",
 	"firmware": ["ereader_plus.gba"],
 	"rom_from_firmware": true,
 }

@@ -39,6 +39,11 @@ const ROW := {
 	"mount": ExpansionDefs.MOUNT_CARTRIDGE,
 	"size": Vector3(0.090, 0.062, 0.023),
 	"loader": MediaDimensions.LOADER_SWIPE,
+	# The game code in the dump's own header, which is what mGBA's override table
+	# matches to switch the reader hardware on. A dump sitting in the GBA library
+	# therefore spawns the reader rather than a cartridge, and the revision comes
+	# off the file the player picked rather than off a firmware install.
+	"rom_code": "PEAJ",
 	"firmware": ["ereader.gba"],
 	"rom_from_firmware": true,
 }

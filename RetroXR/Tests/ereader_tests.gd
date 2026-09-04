@@ -334,6 +334,25 @@ func _group_catalog() -> void:
 		_eq(str(ExpansionCatalog.boot_for("game_boy_advance", [rid]).get("core", "")), "mgba",
 			"catalog/ %s boots on mgba" % rid)
 
+	# A dump in the GBA library IS the reader, recognised by the game code at 0xAC
+	# the same way a Super Game Boy dump is recognised by its header title. Built
+	# here rather than read off disk so the case runs on a machine with no dumps.
+	for rev: Array in [["PEAJ", "ereader"], ["PSAJ", "ereader_plus"], ["PSAE", "ereader_usa"]]:
+		var made := _fake_gba(str(rev[0]), 0x96)
+		_eq(ExpansionCatalog.adapter_for_rom(made), str(rev[1]),
+			"catalog/ a %s dump spawns %s" % [str(rev[0]), str(rev[1])])
+		DirAccess.remove_absolute(made)
+
+	# An ordinary GBA game is still a cartridge, and the 0x96 at 0xB2 is what
+	# stops four bytes of some other machine's dump reading as a game code.
+	var plain := _fake_gba("AGBJ", 0x96)
+	_eq(ExpansionCatalog.adapter_for_rom(plain), "", "catalog/ an ordinary GBA dump is not a reader")
+	DirAccess.remove_absolute(plain)
+	var not_gba := _fake_gba("PSAE", 0x00)
+	_eq(ExpansionCatalog.adapter_for_rom(not_gba), "",
+		"catalog/ and a file without a GBA header is not one either")
+	DirAccess.remove_absolute(not_gba)
+
 	# And the two later revisions have no tile of their own: three tiles over one
 	# shelf of cards would be two empty libraries.
 	for rid: String in ["ereader_plus", "ereader_usa"]:
@@ -363,6 +382,21 @@ func _group_catalog() -> void:
 	_eq(ExpansionCatalog.card_systemid(ID), "ereader", "catalog/ it is carded on the e-Reader tile")
 	_check(SystemIcons.has_icon("ereader"), "catalog/ the e-Reader tile has its own art")
 	_check(SystemIcons.has_content_icon("ereader"), "catalog/ the card has its own art")
+
+
+## A file with a Game Boy Advance header and nothing else: the four-character
+## game code at 0xAC and the fixed byte at 0xB2. Returned as an absolute path.
+func _fake_gba(code: String, fixed: int) -> String:
+	var path := OS.get_user_data_dir().path_join("__ereader_%s_%d.gba" % [code, fixed])
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	var bytes := PackedByteArray()
+	bytes.resize(0x100)
+	for i in range(4):
+		bytes[0xAC + i] = code.unicode_at(i)
+	bytes[0xB2] = fixed
+	f.store_buffer(bytes)
+	f.close()
+	return path
 
 
 # ── swipe/ ───────────────────────────────────────────────────────────────────

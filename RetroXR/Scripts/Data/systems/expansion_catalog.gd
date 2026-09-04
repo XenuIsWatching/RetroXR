@@ -41,6 +41,10 @@
 ##   rom_title   the title in the internal header of a ROM that IS this unit, so
 ##               a dump sitting in the library spawns the adapter instead of a
 ##               cartridge. See adapter_for_rom.
+##   rom_code    the same thing for a Game Boy Advance dump, whose identity is the
+##               four-character game code at 0xAC rather than a title string --
+##               PEAJ, PSAJ and PSAE are the three e-Readers, and they are the
+##               same four codes mGBA switches the reader hardware on from.
 ##   rom_from_firmware
 ##               this unit's OWN program IS the firmware file above, rather than
 ##               something a player spawns out of the library. The BS-X cartridge
@@ -379,7 +383,7 @@ static func adapter_for_rom(path: String) -> String:
 		return ""
 	var wanted := false
 	for id: String in ROWS:
-		if not str(ROWS[id].get("rom_title", "")).is_empty():
+		if not str(ROWS[id].get("rom_title", "")).is_empty() 				or not str(ROWS[id].get("rom_code", "")).is_empty():
 			wanted = true
 			break
 	if not wanted:
@@ -396,12 +400,33 @@ static func adapter_for_rom(path: String) -> String:
 			continue
 		f.seek(at)
 		titles.append(f.get_buffer(21).get_string_from_ascii().strip_edges())
+	var code := _gba_game_code(f, length)
 	f.close()
 	for id: String in ROWS:
 		var title := str(ROWS[id].get("rom_title", ""))
 		if not title.is_empty() and titles.has(title):
 			return id
+		var want_code := str(ROWS[id].get("rom_code", ""))
+		if not want_code.is_empty() and want_code == code:
+			return id
 	return ""
+
+
+## The four-character game code at 0xAC, and "" for anything that is not a Game
+## Boy Advance ROM.
+##
+## Gated on the fixed 0x96 at 0xB2, which every GBA header carries and the BIOS
+## itself checks. Without it four bytes of a Super Famicom dump that happened to
+## read "PEAJ" would spawn an e-Reader in place of somebody's game -- unlikely,
+## but the check costs one byte and the failure would be baffling.
+static func _gba_game_code(f: FileAccess, length: int) -> String:
+	if length < 0xC0:
+		return ""
+	f.seek(0xB2)
+	if f.get_8() != 0x96:
+		return ""
+	f.seek(0xAC)
+	return f.get_buffer(4).get_string_from_ascii()
 
 
 ## Where this unit's own program lives when the unit IS its firmware.
