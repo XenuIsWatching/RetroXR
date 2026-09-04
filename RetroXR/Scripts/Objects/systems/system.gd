@@ -2266,10 +2266,9 @@ func _resolve_core() -> String:
 
 ## What this console alone would resolve to, ignoring anything bolted to it:
 ## the player's own per-instance pick if set, else the manager's per-systemid
-## default (CoreDefaults, set from the CORES panel). expansion_boot() also
-## reads this -- to honor a player's already-chosen core for a combination
-## that can't name one core outright (the 64DD's `core_without_host_capable`)
-## instead of silently overriding it.
+## default (CoreDefaults, set from the CORES panel). This is also what a stack
+## whose console slot is empty falls back to, since expansion_boot() names no
+## core for that case.
 func _bare_core_default() -> String:
 	var c := core_name
 	if c.is_empty() and not systemid.is_empty():
@@ -3009,20 +3008,15 @@ func expansion_boot() -> Dictionary:
 	var spec := ExpansionCatalog.boot_for(systemid, expansion_ids())
 	if spec.is_empty():
 		return spec
-	# A console with an empty cartridge slot is a different machine from one with
-	# a game in it: some cores need the cartridge and its disk together and
-	# refuse a lone disk outright. `core_without_host` is the safe baseline for
-	# that slot. But it is not the only core that can do it -- the 64DD's list
-	# also carries mupen64plus_next now -- so a player's own pick (their
-	# per-instance core, or the manager's per-systemid default) is honored
-	# when it is already one of the capable ones, rather than being silently
-	# switched to a core they may not have installed (Android's own
-	# recommended N64 core is mupen64plus_next_gles3, not the baseline here).
-	if _host_media_path().is_empty() and spec.has("core_without_host"):
+	# A row that pins its core only while the console's own slot is filled (the
+	# 64DD, and only it) drops that core for a lone disk, so the machine
+	# resolves one the way a bare console does -- the player's own pick, or the
+	# manager's default. Hardcoding one here switched a player off the core they
+	# were already on and onto one they may not even have installed. Every other
+	# row keeps its core whether or not a cartridge is in the console.
+	if spec.get("core_only_with_host", false) and _host_media_path().is_empty():
 		spec = spec.duplicate()
-		var capable: Array = spec.get("core_without_host_capable", [])
-		var preferred := _bare_core_default()
-		spec["core"] = preferred if capable.has(preferred) else spec["core_without_host"]
+		spec.erase("core")
 	return spec
 
 

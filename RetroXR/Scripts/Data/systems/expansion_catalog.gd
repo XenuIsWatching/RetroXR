@@ -339,18 +339,16 @@ const ROWS: Dictionary = {
 ##            console's own slot, "expansion:<id>" is that unit's bay. An entry
 ##            whose bay is EMPTY is skipped, and the first survivor is what the
 ##            core is actually given — see the note on subsystems below.
-##   core_without_host
-##            the core to fall back to when the console's own slot is empty AND
-##            the resolved core can't take a lone expansion disk at all. The
-##            64DD needs this baseline: some cores handle cart+disk only and
-##            refuse a bare disk outright.
-##   core_without_host_capable
-##            which cores CAN take a lone expansion disk, so a player's own
-##            pick (their per-instance core, or the manager's per-systemid
-##            default -- system.gd's `_bare_core_default()`) is honored
-##            instead of being forced onto `core_without_host` when it is
-##            already one of them. Absent means only `core_without_host`
-##            itself can.
+##   core_only_with_host
+##            `core` above applies only while the CONSOLE's own slot is filled.
+##            With it empty, expansion_boot() drops the core and the machine
+##            resolves one the way a bare console does -- the player's own
+##            pick, or the manager's default for the systemid. Only the 64DD
+##            sets this, and only because it is the one stack where an empty
+##            console slot is an ordinary way to play (a lone disk) AND every
+##            core the player could be on handles it. Every other row pins its
+##            core either way: a Mega Drive on a Sega CD is a genesis_plus_gx
+##            machine with or without a cartridge above it.
 ##   options  core options the combination pins, the same way BiosBoot pins the
 ##            BIOS ones.
 ##   sidecar  a file extension the CORE looks for beside the host cartridge,
@@ -415,36 +413,26 @@ const BOOT: Dictionary = {
 	#   and is the mechanism this wants.
 	#
 	#   DISK ONLY (Mario Artist, Kyojin no Doshin) — the core is handed the .ndd
-	#   and no cartridge. The stock mupen64plus-next rejects a bare .ndd: its
-	#   load path always issued M64CMD_ROM_OPEN, so is_valid_rom() refused a
-	#   disk and M64CMD_DISK_OPEN was never sent. parallel_n64 takes one today
-	#   and is what BiosBoot already pins parallel-n64-64dd-hardware for, so it
-	#   stays the baseline (`core_without_host`) — but as of the retroXR fork
-	#   vendored in core_sources.gd (tag retroxr-mupen64plus-next-libretro-v1,
-	#   both the plain and _gles3 builds) mupen64plus_next can take a bare disk
-	#   too, detecting one at load and issuing DISK_OPEN instead. That is why
-	#   `core_without_host_capable` below lists it alongside parallel_n64: a
-	#   player who already has mupen64plus_next (or, on Android, the
-	#   CoreRecommendations default mupen64plus_next_gles3) set as their own
-	#   pick keeps it for a bare disk instead of being switched to a core they
-	#   may not even have installed. NOT YET RUN against a real disk-only ROM
-	#   on either build — Tools/cores/n64dd_boot_probe exists for exactly that
-	#   and should be run before trusting this beyond "the core no longer
-	#   refuses to load".
+	#   and no cartridge. This row names no core for that case at all: with the
+	#   console's slot empty there is no combination, and the machine takes
+	#   whatever core the player is already on for a Nintendo 64. Both cores
+	#   they could be on can take a bare disk — parallel_n64 always could, and
+	#   as of the retroXR fork vendored in core_sources.gd (tag
+	#   retroxr-mupen64plus-next-libretro-v1, both the plain and _gles3 builds)
+	#   so can mupen64plus_next, which detects a disk at load and issues
+	#   DISK_OPEN instead of the M64CMD_ROM_OPEN that made is_valid_rom() refuse
+	#   one. This used to hardcode parallel_n64 here, which switched a player
+	#   off their own core — on Android, off the CoreRecommendations default
+	#   mupen64plus_next_gles3 — and onto one they may not have installed.
+	#   NOT YET RUN against a real disk-only ROM on the mupen64plus_next side —
+	#   Tools/cores/n64dd_boot_probe exists for exactly that and should be run
+	#   before trusting it beyond "the core no longer refuses to load".
 	#
 	# Either way the IPL is the core's business: it ignores any path handed to it
 	# and reads <system>/Mupen64plus/IPL.n64 unconditionally.
-	#
-	# The two-core split (`core` vs. `core_without_host`) stays correct even
-	# with mupen64plus_next disk-capable now: parallel_n64 remains a fine
-	# baseline for a bare disk, so this is a widened choice, not a collapse.
-	# Collapse it to one core only once mupen64plus_next's .info itself claims
-	# nintendo_64dd, rather than the frontend merely being willing to hand it
-	# one.
 	"nintendo_64|nintendo_64dd": {
 		"core": "mupen64plus_next",
-		"core_without_host_capable": ["parallel_n64", "mupen64plus_next", "mupen64plus_next_gles3"],
-		"core_without_host": "parallel_n64",
+		"core_only_with_host": true,
 		"roms": ["host", "expansion:nintendo_64dd"],
 		"sidecar": ".ndd",
 		# Verified at source: libretro.c declares dd_roms[] as { "Disk", "Cartridge" }
