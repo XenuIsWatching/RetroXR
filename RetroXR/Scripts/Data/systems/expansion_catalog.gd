@@ -61,35 +61,40 @@
 class_name ExpansionCatalog
 extends RefCounted
 
-## The console stands on the expansion — the expansion carries the top socket.
-const MOUNT_BELOW := 0
-## The expansion stands on the console — the console carries the top socket.
-const MOUNT_ABOVE := 1
+## Re-exported from ExpansionDefs, which owns them so a unit file can name one
+## without referencing this class -- see expansion_defs.gd. Callers keep saying
+## ExpansionCatalog.MOUNT_BELOW.
+const MOUNT_BELOW := ExpansionDefs.MOUNT_BELOW
+const MOUNT_ABOVE := ExpansionDefs.MOUNT_ABOVE
+const MOUNT_CARTRIDGE := ExpansionDefs.MOUNT_CARTRIDGE
+const SAVE_OWNER_MEDIA := ExpansionDefs.SAVE_OWNER_MEDIA
+const SAVE_OWNER_UNIT := ExpansionDefs.SAVE_OWNER_UNIT
 
-## The unit IS a cartridge: it goes into the console's own cartridge slot and
-## fills it, and whatever the unit runs then goes into a slot of its own. A 32X,
-## a Sufami Turbo and a Jaguar CD all attach this way, and none of the three
-## consoles they attach to has a port on its roof -- modelling them as boxes
-## that stand on top grew a socket on machines that never had one.
-const MOUNT_CARTRIDGE := 2
+
+## Every expansion is a file of its own under expansions/, holding its ROW, the
+## BOOT recipes only it takes part in, and the notes for both. This array is the
+## migration front: what is not here yet is still in _LEGACY_ROWS below.
+const _UNITS: Array = [
+	preload("res://Scripts/Data/systems/expansions/nintendo_64dd.gd"),
+]
+
+## The canonical order of the units, and it is LOAD-BEARING: sorted_ids() hands
+## back ids in this order and boot_for() builds its "host|id|id" key from that,
+## so a pair reordered here stops matching its BOOT row -- silently, since the
+## lookup just misses. Assembly walks this list rather than either source, so a
+## unit moving from _LEGACY_ROWS into _UNITS cannot change it.
+const _ORDER: Array = [
+	"nintendo_64dd", "fds", "satellaview", "bsx_cart", "sufami_turbo",
+	"super_game_boy", "super_game_boy_2", "sega_cd", "sega_32x",
+	"pc_engine_cd", "jaguar_cd",
+]
 
 
 ## Every expansion RetroXR models, keyed by its id. The id doubles as the media
 ## systemid wherever one exists, so the Games tab already spawns the right disks
 ## and carts for it with no second table.
-const ROWS: Dictionary = {
-	# The one that started this. It bolts to the N64's underside through the
-	# expansion port behind the hatch in the floor, and it is TALLER than the
-	# console it carries. Cartridge in the N64, disk in the drive, and the two
-	# are loaded together as one title.
-	"nintendo_64dd": {
-		"label": "Nintendo 64DD",
-		"host": "nintendo_64",
-		"media": "nintendo_64dd",
-		"mount": MOUNT_BELOW,
-		"size": Vector3(0.30, 0.11, 0.26),
-		"loader": MediaDimensions.LOADER_SLOT,
-	},
+const _LEGACY_ROWS: Dictionary = {
+
 	# The RAM adapter goes into the Famicom's cartridge slot and the drive sits
 	# under the console. Modelled as one unit, because you cannot use either half
 	# on its own and RetroXR has no cable between them to draw.
@@ -387,53 +392,8 @@ const ROWS: Dictionary = {
 ##
 ## UNVERIFIED marks a row nobody has checked against the core's source or run.
 ## The core names on those are informed guesses and nothing more.
-const BOOT: Dictionary = {
-	# VERIFIED against mupen64plus-libretro-nx source. Two quite different cases,
-	# which is why this row is the only one with a second core:
-	#
-	#   CART + EXPANSION DISK (F-Zero X Expansion Kit) — NOT PROPERLY SUPPORTED
-	#   YET, and the reason the `subsystem` entry below exists. The core is handed
-	#   the CARTRIDGE and looks for the disk itself, by the cart's FULL filename
-	#   plus ".ndd" in the SAME directory ("F-Zero X (Japan).z64.ndd", not
-	#   "F-Zero X (Japan).ndd"). That only works if the two files were arranged
-	#   for it in advance. A real library has the cart in the n64 roms dir and the
-	#   disk in the n64dd one, under its own name, and no arrangement of physical
-	#   objects in the room can change where a file lives. Staging a copy is not
-	#   the answer either: the rule needs file A and file A+".ndd" side by side,
-	#   so whichever directory you pick, a 64 MB disk gets copied per launch — on
-	#   Quest, before the game starts — and DirAccess has no hardlink API to make
-	#   it free. The core's own comment calls the sidecar "Workaround for broken
-	#   subsystem on static platforms"; a second workaround stacked on it is the
-	#   wrong direction. So this case boots the cartridge and RetroSystem WARNS,
-	#   by name, that the drive will be ignored — which beats a cart that boots
-	#   fine and looks correct, where the only tell is a missing 64DD line on the
-	#   title screen. retro_load_game_special is sound in the core for num_info==2
-	#   and is the mechanism this wants.
-	#
-	#   DISK ONLY (Mario Artist, Kyojin no Doshin) — the core is handed the .ndd
-	#   and no cartridge. The row names no core for that case (see
-	#   core_only_with_host): the machine takes whichever N64 core the player is
-	#   on, and both take a bare disk. parallel_n64 always could; mupen64plus_next
-	#   does as of the retroXR fork in core_sources.gd (tag
-	#   retroxr-mupen64plus-next-libretro-v1, plain and _gles3), which detects a
-	#   disk at load and issues DISK_OPEN rather than the M64CMD_ROM_OPEN that
-	#   made is_valid_rom() refuse one. Measured on the fork 2026-09-03 with
-	#   Mario Artist - Paint Studio: 1222 frames, IPL animation to 64DD logo to
-	#   title to gallery. The stock build refuses the same disk at 0 frames.
-	#
-	# Either way the IPL is the core's business: it ignores any path handed to it
-	# and reads <system>/Mupen64plus/IPL.n64 unconditionally.
-	"nintendo_64|nintendo_64dd": {
-		"core": "mupen64plus_next",
-		"core_only_with_host": true,
-		"roms": ["host", "expansion:nintendo_64dd"],
-		"sidecar": ".ndd",
-		# Verified at source: libretro.c declares dd_roms[] as { "Disk", "Cartridge" }
-		# with ident "ndd" (the desc is "N64 Disk Drive"). Disk FIRST — the reverse
-		# of `roms` above, which is a preference order and not a pairing.
-		"subsystem": {"ident": "ndd",
-			"roms": ["expansion:nintendo_64dd", "host"]},
-	},
+const _LEGACY_BOOT: Dictionary = {
+
 	# VERIFIED against snes9x source. The core is handed the .bs ALONE — not the
 	# host cartridge — auto-detects BS-X from the content header, and sources
 	# BS-X.bin itself from the ROM dir or the system dir. There is no subsystem to
@@ -606,6 +566,32 @@ const BOOT: Dictionary = {
 	},
 }
 
+
+## The assembled tables. Public because callers read ExpansionCatalog.ROWS
+## directly, and a Dictionary built here reads exactly like the const it
+## replaced.
+##
+## Assembled in _static_init rather than lazily: it runs once when the class is
+## first loaded, so no accessor has to remember to prime the table first, and
+## there is no state where ROWS is half built.
+static var ROWS: Dictionary = {}
+static var BOOT: Dictionary = {}
+
+
+static func _static_init() -> void:
+	var by_id: Dictionary = {}
+	for unit: Script in _UNITS:
+		by_id[unit.ID] = unit
+	# _ORDER, not either source: insertion order IS sorted_ids' order, so it must
+	# not depend on how far the migration has got.
+	for id: String in _ORDER:
+		if by_id.has(id):
+			ROWS[id] = (by_id[id] as Script).ROW
+		elif _LEGACY_ROWS.has(id):
+			ROWS[id] = _LEGACY_ROWS[id]
+	for unit: Script in _UNITS:
+		BOOT.merge(unit.BOOT)
+	BOOT.merge(_LEGACY_BOOT)
 
 ## The row for an id, or an empty Dictionary.
 static func row(id: String) -> Dictionary:
@@ -931,24 +917,12 @@ static func sorted_ids(ids: Array) -> Array[String]:
 	return out
 
 
+static func save_owner_of(id: String) -> String:
+	return str(row(id).get("save_owner", SAVE_OWNER_MEDIA))
+
+
 ## The launch recipe for a console with these expansions attached, or an empty
 ## Dictionary when the combination has none. `ids` need not be sorted.
-## Which object holds the battery for a stack: the medium that was loaded, or
-## the UNIT itself.
-##
-## Nearly always the medium -- a 64DD disk is magnetic and saves onto itself. The
-## exception is a unit with its own battery behind the slot, where the save
-## survives every medium passing through it. The BS-X cartridge is that: its
-## 32 KB is the player's name and town, and keying it to the memory pack made a
-## new pack look like a new BS-X.
-const SAVE_OWNER_MEDIA := "media"
-const SAVE_OWNER_UNIT := "unit"
-
-static func save_owner_of(id: String) -> String:
-	var row: Dictionary = ROWS.get(id, {})
-	return str(row.get("save_owner", SAVE_OWNER_MEDIA))
-
-
 static func boot_for(host: String, ids: Array) -> Dictionary:
 	var key := host
 	for id in sorted_ids(ids):
