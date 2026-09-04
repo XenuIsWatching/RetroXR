@@ -1263,6 +1263,23 @@ func _build_blank_rom_row() -> Control:
 	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(main)
 
+	# What a dotcode card's strips are — "L", "S", "L+S", "L+L" — under the title
+	# it belongs to, in the description grey so it reads as an annotation rather
+	# than part of the name. A child of the title button for the same reason Pct
+	# is a child of State: a Control's children draw over it, where a prefix put
+	# in the text would scroll away with the marquee.
+	var strips := Label.new()
+	strips.name = "Strips"
+	strips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strips.add_theme_font_size_override("font_size", 15)
+	strips.add_theme_color_override("font_color", MenuStyle.COLOR_DESC)
+	strips.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	strips.offset_left = 10
+	strips.offset_top = -30
+	strips.offset_bottom = -10
+	strips.visible = false
+	main.add_child(strips)
+
 	# "Pack" is last and shows only for a .bs: what is written on a Satellaview
 	# memory pack, which the row itself can only summarise.
 	for n: String in ["Detail", "Saves", "Manual", "Scrape", "Pack"]:
@@ -1322,6 +1339,13 @@ func _bind_rom_row(row: Control, index: int) -> void:
 	var pack_mark := row.get_node("PackMark") as Label
 	pack_mark.visible = BsxPack.is_own_pack_path(local_path)
 	pack_mark.tooltip_text = "A memory pack made here — the Satellaview writes downloads to this one"
+
+	# Set on every bind for the same reason, and off any platform but the cards.
+	var strips := main.get_node("Strips") as Label
+	strips.text = ""
+	if systemid == EReaderCards.SYSTEMID and not local_path.is_empty():
+		strips.text = EReaderCards.strip_summary(EReaderCards.card_for_path(local_path))
+	strips.visible = not strips.text.is_empty()
 
 	# A scraped wheel logo replaces the title text entirely; otherwise the title
 	# scrolls. MarqueeButton extends Button, so it carries the icon itself.

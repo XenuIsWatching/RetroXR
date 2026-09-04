@@ -689,6 +689,13 @@ func _group_library() -> void:
 	DirAccess.remove_absolute(dir.path_join("media"))
 	EReaderCards.invalidate()
 
+	# The strip summary a card's row shows under its title.
+	_eq(EReaderCards.strip_summary(from_long), "L+S", "library/ a long+short card summarises as L+S")
+	_eq(EReaderCards.strip_summary(EReaderCards.card_for_path(solo, dir)), "L",
+		"library/ a single long card summarises as L")
+	_eq(EReaderCards.strip_summary(EReaderCards.card_for_path(bad, dir)), "",
+		"library/ a broken card summarises as nothing, since it cannot be swiped")
+
 	# The broken dump is grouped, so it can be reported, but must never be spawned.
 	var broken := EReaderCards.card_for_path(bad, dir)
 	_eq(str(broken.get("shape", "")), EReaderCards.SHAPE_BROKEN,

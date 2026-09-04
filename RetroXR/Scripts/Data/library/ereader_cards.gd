@@ -413,6 +413,21 @@ static func _size_of(path: String) -> int:
 	return int(n)
 
 
+## The card's strips in one or three characters — "L", "S", "L+S", "L+L".
+##
+## What a player wants off a row is how many passes the card takes and whether
+## the second one is the short edge, which the label cannot say and the shape
+## name is too long to. A broken card summarises as nothing: it is not swipeable,
+## and naming its strips would read as an offer.
+static func strip_summary(card: Dictionary) -> String:
+	if str(card.get("shape", SHAPE_BROKEN)) == SHAPE_BROKEN:
+		return ""
+	var out: Array[String] = []
+	for s: Dictionary in card.get("strips", []):
+		out.append("L" if str(s.get("kind", "")) == KIND_LONG else "S")
+	return "+".join(out)
+
+
 ## Edges of this card that carry a dotcode.
 static func coded_edges(card: Dictionary) -> Array[String]:
 	var out: Array[String] = []
