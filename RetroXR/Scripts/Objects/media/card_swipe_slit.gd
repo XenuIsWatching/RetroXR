@@ -70,6 +70,11 @@ const SCAN_MAGNITUDE := 0.5
 const SCAN_MS := 10
 const HAPTIC_KEY := &"card_swipe"
 
+## How far the card has to actually MOVE along the groove before the pass has a
+## direction. Until then neither end is "the way it came in", so neither
+## completing nor backing out can be judged.
+const DIRECTION_MM := 0.006
+
 var _card: Node3D = null
 var _edge: String = ""
 var _face_up: bool = false
@@ -79,6 +84,14 @@ var _snap: float = 0.0
 var _seated_basis: Basis = Basis.IDENTITY
 ## False while the card is still being lined up — see is_presenting.
 var _armed: bool = false
+## Where along the groove the card armed, and true once it has moved far enough
+## from there to say which way it is going.
+var _arm_travel: float = 0.0
+var _have_direction: bool = false
+## Set by an abort, cleared when the card stops being offered. Without it an
+## aborted card re-arms on the very next frame, still presenting, and the pass
+## flaps in and out under the hand.
+var _rearm_block: bool = false
 ## The card's own dimensions, read once when it arrives.
 var _size: Vector3 = Vector3.ZERO
 ## The body the groove is cut into, exempted from colliding with the card for the
@@ -271,19 +284,30 @@ func _on_body_exited(body: Node3D) -> void:
 	if body != _card:
 		return
 	_finish(false)
+	_card = null
+	_rearm_block = false
 
 
 func _physics_process(delta: float) -> void:
 	if _card == null:
 		return
 	if not is_instance_valid(_card) or not _is_held(_card):
+		# Dropped or freed: the card is gone as far as this groove is concerned,
+		# and _finish alone would leave it watched -- which is a second abort on
+		# the very next frame, and every frame after.
 		_finish(false)
+		_card = null
+		_rearm_block = false
 		return
 
 	# Still being lined up: watch, take nothing, and do not move the card. The
 	# hand owns it entirely until it is offering an edge.
 	if not _armed:
 		if not is_presenting(_card.global_transform, _size, global_transform):
+			# Offered, refused, and now taken away again: it may be offered afresh.
+			_rearm_block = false
+			return
+		if _rearm_block:
 			return
 		_arm()
 
@@ -311,6 +335,26 @@ func _physics_process(delta: float) -> void:
 	_card.global_transform = Transform3D(
 		held.basis.slerp(target.basis, _snap),
 		held.origin.lerp(target.origin, _snap))
+
+	# Which end the card came in by is LEARNED, not guessed.
+	#
+	# It used to be read off the card's position the instant it armed, falling
+	# back to "the +X end" when that position was near the middle. Arming happens
+	# on the card's pose now, so it can happen anywhere along the groove -- and a
+	# card armed near the middle was given a direction by a coin toss, then judged
+	# to have backed out the moment the hand pushed it the other way. That is the
+	# snap-in-snap-out: abort, the hand carries it clear, it presents again, and
+	# the same coin comes up.
+	#
+	# So until the card has actually travelled, the pass has no direction and
+	# neither ending can be judged.
+	if not _have_direction:
+		var moved := t - _arm_travel
+		if absf(moved) < DIRECTION_MM:
+			return
+		_have_direction = true
+		_entry_sign = -signf(moved)
+		_extreme = _arm_travel
 
 	var half := travel * 0.5
 	# Travelled far enough, and out the far end rather than the near one.
@@ -340,9 +384,10 @@ func _arm() -> void:
 	_seated_basis = seated_basis(_edge, _face_up, global_transform)
 	_stand_half = stand_half(_edge, _size)
 	_snap = 0.0
-	var t := travel_of(xform, global_transform)
-	_entry_sign = signf(t) if not is_zero_approx(t) else 1.0
-	_extreme = t
+	_arm_travel = travel_of(xform, global_transform)
+	_extreme = _arm_travel
+	_entry_sign = 0.0
+	_have_direction = false
 	_armed = true
 
 	# The card and the machine are on the same collision layer, and a swiped card
@@ -366,10 +411,19 @@ func _finish(complete: bool) -> void:
 	var body := card as PhysicsBody3D
 	if body != null and is_instance_valid(body) and _host != null:
 		body.remove_collision_exception_with(_host)
-	_card = null
+	# The card is KEPT when a pass ends inside the groove -- it is still in the
+	# trigger volume, and body_entered will not fire again until it leaves. What
+	# is dropped is the pass. Only _on_body_exited forgets the card itself.
 	_edge = ""
 	_snap = 0.0
 	_armed = false
+	_have_direction = false
+	# Any ended pass blocks the next one until the card is taken away and offered
+	# again -- a completed one as much as an abort. A card that has just been
+	# drawn out of the far end is still inside the trigger volume and still
+	# standing square, so without this it starts a second pass on the next frame
+	# and reads the same strip again.
+	_rearm_block = armed
 	if card == null:
 		return
 	# A card that was never offered to the groove did not abort a pass; it was

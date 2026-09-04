@@ -715,6 +715,47 @@ func _group_swipe() -> void:
 	slit.queue_free()
 	await _wait(2)
 
+	# A pass presented in the MIDDLE of the groove goes where the hand takes it.
+	#
+	# The direction used to be read off the card's position the instant it armed,
+	# falling back to "the +X end" near the middle -- so a card offered mid-groove
+	# was given a direction by a coin toss and judged to have backed out the
+	# moment the hand pushed the other way. Snap in, abort, snap in again: the
+	# flapping is what this case is here for.
+	slit = _make_slit()
+	card = _make_card(long_short)
+	_reset_signals()
+	slit.swiped.connect(_on_swiped)
+	slit.aborted.connect(_on_aborted)
+	card.global_transform = Transform3D(Basis(Vector3.UP, PI),
+		slit.global_transform * Vector3(0.0, stand, 0.0))
+	await _wait(2)
+	# Out through the +X end, having started at zero — the direction the old code
+	# called "backing out".
+	await _drag(card, slit, 0.0, 0.05, 10, stand)
+	await _wait(2)
+	_eq(_aborts, 0, "swipe/ a pass from the middle does not abort as it moves off")
+	_eq(_swipes, 1, "swipe/ and it completes when it leaves the far end")
+	card.queue_free()
+	slit.queue_free()
+	await _wait(2)
+
+	# And a pass that HAS ended does not start another while the card is still
+	# standing in the groove: it would read the same strip again, every frame.
+	slit = _make_slit()
+	card = _make_card(long_short)
+	_reset_signals()
+	slit.swiped.connect(_on_swiped)
+	card.global_transform = Transform3D(Basis(Vector3.UP, PI),
+		slit.global_transform * Vector3(-0.05, stand, 0.0))
+	await _wait(2)
+	await _drag(card, slit, -0.05, 0.05, 12, stand)
+	await _wait(20)
+	_eq(_swipes, 1, "swipe/ one pass reads once, however long the card is left there")
+	card.queue_free()
+	slit.queue_free()
+	await _wait(2)
+
 	# The unit builds a groove and NO snap zone: one would grab the card mid-pass.
 	var unit := preload("res://Scenes/Objects/expansion.tscn").instantiate() as RetroExpansion
 	unit.expansion_id = "ereader"
