@@ -532,14 +532,6 @@ func _on_media_download_completed(media_type: String, result: int,
 			media_download_failed.emit(media_type, "File too small (likely error response)")
 			return
 
-	# A dotcode card's ORIENTATION is read off its label art, and the grouping
-	# that decides it is cached for the life of the process. So art that arrives
-	# after the first scan reaches a card already built without it: the Wario
-	# card was scraped mid-session and stayed a landscape body with an upright
-	# portrait scan letterboxed into the middle of it until the room restarted.
-	if media_type == "label":
-		EReaderCards.invalidate()
-
 	media_download_completed.emit(media_type, dest_path)
 
 

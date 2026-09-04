@@ -13,8 +13,12 @@
 ## is what GBACartEReaderScan itself branches on. Strip EDGE is not recorded
 ## anywhere: not in the dotcode (a card's per-block headers are byte-identical
 ## between its strips), not in mGBA (which renders both to the same address and
-## queues them FIFO), and not in No-Intro's card scans (cropped to the art).
-## EDGES below is therefore authored, and is the only place it is stated.
+## queues them FIFO), and not reliably in a scan. EDGES below is therefore
+## authored, and is the only place it is stated.
+##
+## Every e-Reader card is the same portrait trading card, so there is no card
+## SHAPE to resolve -- only which of its edges are coded. See
+## MediaDimensions.CARD_SIZE_EREADER for what was tried before that was settled.
 class_name EReaderCards
 extends RefCounted
 
@@ -31,45 +35,44 @@ const KIND_SHORT := "short"
 const EDGE_SIDE := "side"
 const EDGE_BOTTOM := "bottom"
 const EDGE_TOP := "top"
-## The card's fourth edge. Only a portrait two-strip card puts a dotcode here, so
-## for everything else presenting it reads nothing — which is what a card offered
+## The card's second long edge. Only a two-long card puts a dotcode here, so for
+## every other shape presenting it reads nothing — which is what a card offered
 ## the wrong way round should do.
 const EDGE_SIDE_FAR := "side_far"
 
-## Single long strip, landscape card.
+## Single long strip, on one of the two side edges.
 const SHAPE_LONG := "long"
 ## Single short strip; a long+short card whose long strip was never dumped.
 const SHAPE_SHORT := "short"
 ## Long on the side edge, short on the bottom — the Pokemon-e TCG layout.
 const SHAPE_LONG_SHORT := "long_short"
-## Two long strips, landscape card.
+## Two long strips, one on each side edge.
 const SHAPE_TWO_LONG := "two_long"
 ## Wrong size, or a (Strip N) with no partner.
 const SHAPE_BROKEN := "broken"
 
-## Which edge each strip of a shape is printed on, in strip order — by shape and
-## then by ORIENTATION, since which edge is the long one is the whole question.
+## Which edge each strip of a shape is printed on, in strip order.
 ##
 ## Every row says the same thing: a long strip goes on a long edge and a short
-## strip on a short one, because a 2912-byte dotcode does not fit on 54 mm of
-## card. That is a physical fact rather than a choice, and it is the one thing
+## strip on a short one, because a 2912-byte dotcode does not fit across 63 mm of
+## card. That is a physical fact rather than a choice, and it is what
 ## ereader_tests checks this table against.
+##
+## An e-Reader card is a portrait trading card, so its long edges are the two
+## SIDES and its short ones the top and bottom. There is no landscape card and
+## no orientation to resolve; a card whose art was scanned on its side is a badly
+## framed scan, not a differently shaped card.
 ##
 ## SHAPE_TWO_LONG is unconfirmed: the two coded edges may be the two long edges of
 ## one face, as here, or one edge per face. Only the 295 two-long cards depend on
-## it and changing it is these two rows.
+## it and changing it is this one row.
 const EDGES: Dictionary = {
-	SHAPE_LONG: {false: [EDGE_BOTTOM], true: [EDGE_SIDE]},
-	SHAPE_SHORT: {false: [EDGE_SIDE], true: [EDGE_BOTTOM]},
-	SHAPE_LONG_SHORT: {false: [EDGE_BOTTOM, EDGE_SIDE], true: [EDGE_SIDE, EDGE_BOTTOM]},
-	SHAPE_TWO_LONG: {false: [EDGE_BOTTOM, EDGE_TOP], true: [EDGE_SIDE, EDGE_SIDE_FAR]},
+	SHAPE_LONG: [EDGE_SIDE],
+	SHAPE_SHORT: [EDGE_BOTTOM],
+	SHAPE_LONG_SHORT: [EDGE_SIDE, EDGE_BOTTOM],
+	SHAPE_TWO_LONG: [EDGE_SIDE, EDGE_SIDE_FAR],
 }
 
-
-## The edges of one shape at one orientation, in strip order.
-static func edges_for(shape: String, portrait: bool) -> Array:
-	var by_orientation: Dictionary = EDGES.get(shape, {})
-	return (by_orientation.get(portrait, []) as Array).duplicate()
 
 const _TAG_LONG := " (Long Strip)"
 const _TAG_SHORT := " (Short Strip)"
@@ -158,8 +161,7 @@ static func _build_card(key: String, entries: Array) -> Dictionary:
 	if usable:
 		shape = _shape_of(strips, entries)
 
-	var portrait := _portrait_for(shape, strips)
-	var edges := edges_for(shape, portrait)
+	var edges: Array = EDGES.get(shape, [])
 	for i in strips.size():
 		if i < edges.size():
 			strips[i]["edge"] = str(edges[i])
@@ -168,135 +170,8 @@ static func _build_card(key: String, entries: Array) -> Dictionary:
 		"key": key,
 		"label": key,
 		"shape": shape,
-		"portrait": portrait,
 		"strips": strips,
 	}
-
-
-## Is this card taller than it is wide?
-##
-## The card's own ART is the ground truth and is asked first: a scan of the card
-## is the card's proportions, and the strip layout is not. Inferring it from the
-## shape alone said every single-strip card was landscape, which is what stood an
-## Animal Crossing-e card -- a portrait card with one long strip down its side --
-## in a landscape body, with the art letterboxed into the middle of it and white
-## card showing either side.
-##
-## The shape remains the answer for a card with no art, where it is the only
-## evidence there is: the Pokemon-e TCG layout (a long strip and a short one) is
-## a portrait trading card, and so is a card that is the short half of one.
-static func _portrait_for(shape: String, strips: Array[Dictionary]) -> bool:
-	for s: Dictionary in strips:
-		var art := art_size_for_strip(str(s.get("path", "")))
-		if art.x > 0 and art.y > 0:
-			return art.y > art.x
-	return shape == SHAPE_LONG_SHORT or shape == SHAPE_SHORT
-
-
-## The pixel size of the label art scraped for one strip, or a zero vector.
-##
-## Same file convention MediaDimensions.load_label_texture reads, and derived
-## from the strip's own folder rather than from RomLibrary, so a scan pointed at
-## a directory finds the art beside it.
-static func art_size_for_strip(strip_path: String) -> Vector2i:
-	if strip_path.is_empty():
-		return Vector2i.ZERO
-	var base := strip_path.get_file().get_basename()
-	if base.is_empty():
-		return Vector2i.ZERO
-	var dir := strip_path.get_base_dir().path_join("media").path_join("label")
-	for ext: String in [".png", ".jpg", ".jpeg", ".webp"]:
-		var path := dir.path_join(base + ext)
-		if FileAccess.file_exists(path):
-			var wh := _image_size(path)
-			if wh.x > 0 and wh.y > 0:
-				return wh
-	return Vector2i.ZERO
-
-
-## An image's pixel size read from its HEADER, without decoding it.
-##
-## Grouping asks this once per card over a library of 3217, and decoding four
-## thousand photographic scans to learn which way up they are would put seconds
-## on a scan that currently costs a stat each.
-static func _image_size(path: String) -> Vector2i:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return Vector2i.ZERO
-	var wh := Vector2i.ZERO
-	var magic := f.get_buffer(4)
-	if magic.size() == 4:
-		if magic[0] == 0x89 and magic[1] == 0x50:
-			# PNG: the IHDR width and height are two big-endian longs at 16.
-			f.seek(16)
-			wh = Vector2i(_be32(f), _be32(f))
-		elif magic[0] == 0xFF and magic[1] == 0xD8:
-			wh = _jpeg_size(f)
-		elif magic.get_string_from_ascii() == "RIFF":
-			wh = _webp_size(f)
-	f.close()
-	return wh
-
-
-static func _be32(f: FileAccess) -> int:
-	var b := f.get_buffer(4)
-	if b.size() < 4:
-		return 0
-	return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]
-
-
-## Walk the JPEG marker chain to the frame header, whose height and width are the
-## two big-endian shorts after its one-byte sample precision.
-##
-## The size is not at a fixed offset in a JPEG: any number of application, quant
-## and comment segments come first, and their count varies by encoder.
-static func _jpeg_size(f: FileAccess) -> Vector2i:
-	f.seek(2)
-	var length := f.get_length()
-	while f.get_position() + 4 <= length:
-		if f.get_8() != 0xFF:
-			continue
-		var marker := f.get_8()
-		while marker == 0xFF:
-			marker = f.get_8()
-		# SOF0..SOF15, less the four that are not frame headers.
-		if marker >= 0xC0 and marker <= 0xCF \
-				and marker != 0xC4 and marker != 0xC8 and marker != 0xCC:
-			f.get_16()
-			f.get_8()
-			var h := ((f.get_8() << 8) | f.get_8())
-			var w := ((f.get_8() << 8) | f.get_8())
-			return Vector2i(w, h)
-		if marker == 0xD8 or marker == 0xD9 or (marker >= 0xD0 and marker <= 0xD7):
-			continue
-		var seg := (f.get_8() << 8) | f.get_8()
-		if seg < 2:
-			break
-		f.seek(f.get_position() + seg - 2)
-	return Vector2i.ZERO
-
-
-## WebP, in the three container forms: plain VP8, lossless VP8L, extended VP8X.
-static func _webp_size(f: FileAccess) -> Vector2i:
-	f.seek(8)
-	if f.get_buffer(4).get_string_from_ascii() != "WEBP":
-		return Vector2i.ZERO
-	var fourcc := f.get_buffer(4).get_string_from_ascii()
-	f.get_32()
-	if fourcc == "VP8X":
-		f.get_32()
-		# Three-byte little-endian, and each is one less than the real size.
-		var w := (f.get_8() | (f.get_8() << 8) | (f.get_8() << 16)) + 1
-		var h := (f.get_8() | (f.get_8() << 8) | (f.get_8() << 16)) + 1
-		return Vector2i(w, h)
-	if fourcc == "VP8L":
-		f.get_8()
-		var bits := f.get_32()
-		return Vector2i((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
-	if fourcc == "VP8 ":
-		f.seek(f.get_position() + 6)
-		return Vector2i(f.get_16() & 0x3FFF, f.get_16() & 0x3FFF)
-	return Vector2i.ZERO
 
 
 static func _shape_of(strips: Array[Dictionary], entries: Array) -> String:

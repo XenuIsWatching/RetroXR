@@ -146,9 +146,8 @@ func _group_data() -> void:
 	_eq(str(strips[0]["edge"]), EReaderCards.EDGE_SIDE, "data/ the long strip is on the side")
 	_eq(str(strips[1]["kind"]), EReaderCards.KIND_SHORT, "data/ short strip is second")
 	_eq(str(strips[1]["edge"]), EReaderCards.EDGE_BOTTOM, "data/ the short strip is on the bottom")
-	_check(bool(hoppip["portrait"]), "data/ a long+short card is a portrait TCG card")
-	_check(not bool((by_key["Mario Party-e (USA)"] as Dictionary)["portrait"]),
-		"data/ a single-long card is landscape")
+	_eq(str(((by_key["Mario Party-e (USA)"] as Dictionary)["strips"][0] as Dictionary)["edge"]),
+		EReaderCards.EDGE_SIDE, "data/ a single long strip is on a side edge too")
 
 	# strip_for is the whole point: which strip a presented edge reads.
 	_eq(EReaderCards.strip_for(hoppip, EReaderCards.EDGE_SIDE, true), 0,
@@ -165,10 +164,12 @@ func _group_data() -> void:
 		"data/ a broken card reads nothing")
 
 	var two_long: Dictionary = by_key["Boy 1 (USA)"]
-	_eq(EReaderCards.strip_for(two_long, EReaderCards.EDGE_BOTTOM, true), 0,
-		"data/ two-long: bottom edge is strip 1")
-	_eq(EReaderCards.strip_for(two_long, EReaderCards.EDGE_TOP, true), 1,
-		"data/ two-long: top edge is strip 2")
+	_eq(EReaderCards.strip_for(two_long, EReaderCards.EDGE_SIDE, true), 0,
+		"data/ two-long: the near side edge is strip 1")
+	_eq(EReaderCards.strip_for(two_long, EReaderCards.EDGE_SIDE_FAR, true), 1,
+		"data/ two-long: the far side edge is strip 2")
+	_eq(EReaderCards.strip_for(two_long, EReaderCards.EDGE_BOTTOM, true), -1,
+		"data/ two-long: and its short edges carry nothing")
 	_eq(EReaderCards.coded_edges(two_long).size(), 2, "data/ a two-strip card has two coded edges")
 	_eq(EReaderCards.coded_edges(by_key["Tom Nook (USA)"]).size(), 0,
 		"data/ a broken card has no coded edges")
@@ -182,32 +183,25 @@ func _group_data() -> void:
 		EReaderCards.SHAPE_LONG_SHORT: [EReaderCards.KIND_LONG, EReaderCards.KIND_SHORT],
 		EReaderCards.SHAPE_TWO_LONG: [EReaderCards.KIND_LONG, EReaderCards.KIND_LONG],
 	}
-	# Both orientations, because which edge is the long one is the whole question:
-	# a card the art proved portrait reads its long strip off a side edge, and the
-	# same shape laid landscape reads it off the bottom.
 	for shape: String in EReaderCards.EDGES:
 		var kinds: Array = shape_kinds[shape]
-		for portrait: bool in [false, true]:
-			var csize := MediaDimensions.ereader_card_size(portrait)
-			var shape_edges := EReaderCards.edges_for(shape, portrait)
-			_eq(shape_edges.size(), kinds.size(),
-				"data/ %s: every strip has an edge, %s" % [shape, "portrait" if portrait else "landscape"])
-			for i in shape_edges.size():
-				var edge := str(shape_edges[i])
-				var horizontal: bool = edge == EReaderCards.EDGE_BOTTOM or edge == EReaderCards.EDGE_TOP
-				var span: float = csize.x if horizontal else csize.y
-				var other: float = csize.y if horizontal else csize.x
-				if str(kinds[i]) == EReaderCards.KIND_LONG:
-					_check(span > other,
-						"data/ %s: the long strip is on the card's longer edge" % shape)
-				else:
-					_check(span < other,
-						"data/ %s: the short strip is on the card's shorter edge" % shape)
-			# Two strips never share an edge, or the second is unreachable.
-			var seen: Dictionary = {}
-			for e: Variant in shape_edges:
-				seen[str(e)] = true
-			_eq(seen.size(), shape_edges.size(), "data/ %s: its strips are on different edges" % shape)
+		var csize := MediaDimensions.CARD_SIZE_EREADER
+		var shape_edges: Array = EReaderCards.EDGES[shape]
+		_eq(shape_edges.size(), kinds.size(), "data/ %s: every strip has an edge" % shape)
+		for i in shape_edges.size():
+			var edge := str(shape_edges[i])
+			var horizontal: bool = edge == EReaderCards.EDGE_BOTTOM or edge == EReaderCards.EDGE_TOP
+			var span: float = csize.x if horizontal else csize.y
+			var other: float = csize.y if horizontal else csize.x
+			if str(kinds[i]) == EReaderCards.KIND_LONG:
+				_check(span > other, "data/ %s: the long strip is on the card's longer edge" % shape)
+			else:
+				_check(span < other, "data/ %s: the short strip is on the card's shorter edge" % shape)
+		# Two strips never share an edge, or the second is unreachable.
+		var seen: Dictionary = {}
+		for e: Variant in shape_edges:
+			seen[str(e)] = true
+		_eq(seen.size(), shape_edges.size(), "data/ %s: its strips are on different edges" % shape)
 
 	# Sizes, against what GBACartEReaderScan actually decodes.
 	_check(EReaderCards.is_scannable_size(1872), "data/ 1872 is a short strip")
@@ -231,7 +225,7 @@ func _group_data() -> void:
 
 func _group_geom() -> void:
 	var slit := Transform3D.IDENTITY
-	var size := MediaDimensions.CARD_SIZE_EREADER_TCG
+	var size := MediaDimensions.CARD_SIZE_EREADER
 	var half_h := size.y * 0.5
 	var half_w := size.x * 0.5
 
@@ -426,17 +420,6 @@ func _fake_gba(code: String, fixed: int) -> String:
 	return path
 
 
-## A label-art PNG of a given pixel size, written where the scraper puts one.
-func _write_label_art(dir: String, base: String, w: int, h: int) -> String:
-	var art_dir := dir.path_join("media").path_join("label")
-	DirAccess.make_dir_recursive_absolute(art_dir)
-	var path := art_dir.path_join(base + ".png")
-	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
-	img.fill(Color.WHITE)
-	img.save_png(path)
-	return path
-
-
 # ── swipe/ ───────────────────────────────────────────────────────────────────
 
 ## A card double: a real body a real Area3D detects, reporting only what comes
@@ -446,7 +429,7 @@ class CardDouble:
 
 	var card_data: Dictionary = {}
 	var held: bool = true
-	var card_size: Vector3 = MediaDimensions.CARD_SIZE_EREADER_TCG
+	var card_size: Vector3 = MediaDimensions.CARD_SIZE_EREADER
 
 	func is_picked_up() -> bool:
 		return held
@@ -510,7 +493,7 @@ func _group_swipe() -> void:
 		_f("Hoppip (USA) (Long Strip)", EReaderCards.SIZE_LONG),
 		_f("Hoppip (USA) (Short Strip)", EReaderCards.SIZE_SHORT),
 	])[0]
-	var stand: float = MediaDimensions.CARD_SIZE_EREADER_TCG.y * 0.5
+	var stand: float = MediaDimensions.CARD_SIZE_EREADER.y * 0.5
 
 	# A full pass with the BOTTOM edge in the groove reads the short strip.
 	var slit := _make_slit()
@@ -539,7 +522,7 @@ func _group_swipe() -> void:
 	card = _make_card(long_short)
 	_reset_signals()
 	slit.swiped.connect(_on_swiped)
-	var side_stand: float = MediaDimensions.CARD_SIZE_EREADER_TCG.x * 0.5
+	var side_stand: float = MediaDimensions.CARD_SIZE_EREADER.x * 0.5
 	card.global_transform = Transform3D(Basis(Vector3.BACK, PI * 0.5),
 		slit.global_transform * Vector3(-0.05, side_stand, 0.0))
 	await _wait(2)
@@ -663,46 +646,14 @@ func _group_library() -> void:
 	_check(EReaderCards.card_for_path(dir.path_join("nothing.raw"), dir).is_empty(),
 		"library/ a path not in the library finds no card")
 
-	# Sizing follows the card's shape, not the systemid: both are "ereader".
-	_check(MediaDimensions.ereader_card_size(true) == MediaDimensions.CARD_SIZE_EREADER_TCG,
-		"library/ a portrait card is TCG sized")
-	_check(MediaDimensions.ereader_card_size(false) == MediaDimensions.CARD_SIZE_EREADER,
-		"library/ a landscape card is e-Reader sized")
-	_check(MediaDimensions.CARD_SIZE_EREADER_TCG.y > MediaDimensions.CARD_SIZE_EREADER_TCG.x,
-		"library/ the TCG card is taller than it is wide")
-	_check(MediaDimensions.CARD_SIZE_EREADER.x > MediaDimensions.CARD_SIZE_EREADER.y,
-		"library/ the e-Reader card is wider than it is tall")
-
-	_check(bool(EReaderCards.card_for_path(solo, dir).get("portrait", true)) == false,
-		"library/ a single-long card is not portrait")
-
-	# ART BEATS THE SHAPE. An Animal Crossing-e card is a portrait card with one
-	# long strip down its side, which the shape alone reads as landscape -- and
-	# the room drew it as one, letterboxing the art into a body of the wrong
-	# proportions. A scan of the card IS the card's proportions, so where there is
-	# one it decides, and the long strip moves to the edge long enough to hold it.
-	var art := _write_label_art(dir, "Mario Party-e (USA)", 320, 448)
-	EReaderCards.invalidate()
-	var tall := EReaderCards.card_for_path(solo, dir)
-	_check(bool(tall.get("portrait", false)),
-		"library/ portrait art makes a single-long card portrait")
-	_eq(str((tall["strips"][0] as Dictionary).get("edge", "")), EReaderCards.EDGE_SIDE,
-		"library/ and its long strip moves to the side edge")
-
-	# And the same file laid the other way round is landscape again, so the case
-	# above cannot be passing on anything but the art.
-	DirAccess.remove_absolute(art)
-	art = _write_label_art(dir, "Mario Party-e (USA)", 448, 320)
-	EReaderCards.invalidate()
-	var wide := EReaderCards.card_for_path(solo, dir)
-	_check(not bool(wide.get("portrait", true)),
-		"library/ landscape art keeps it landscape")
-	_eq(str((wide["strips"][0] as Dictionary).get("edge", "")), EReaderCards.EDGE_BOTTOM,
-		"library/ and its long strip stays on the bottom edge")
-	DirAccess.remove_absolute(art)
-	DirAccess.remove_absolute(dir.path_join("media").path_join("label"))
-	DirAccess.remove_absolute(dir.path_join("media"))
-	EReaderCards.invalidate()
+	# Every card is the same portrait trading card, whatever its strips are: the
+	# size is a constant, and the shape says only which edges are coded.
+	_check(MediaDimensions.CARD_SIZE_EREADER.y > MediaDimensions.CARD_SIZE_EREADER.x,
+		"library/ a card is taller than it is wide")
+	_check(MediaDimensions.cart_size("ereader", solo) == MediaDimensions.CARD_SIZE_EREADER,
+		"library/ a single-long card is that size")
+	_check(MediaDimensions.cart_size("ereader", long_a) == MediaDimensions.CARD_SIZE_EREADER,
+		"library/ and so is a long+short one")
 
 	# The strip summary a card's row shows under its title.
 	_eq(EReaderCards.strip_summary(from_long), "L+S", "library/ a long+short card summarises as L+S")
@@ -740,8 +691,8 @@ func _group_library() -> void:
 		"library/ a card object finds its card from rom_path alone")
 	_eq(str(cart.get_card_data().get("shape", "")), EReaderCards.SHAPE_LONG_SHORT,
 		"library/ and it sees both of its strips")
-	_check(cart.get_card_size() == MediaDimensions.CARD_SIZE_EREADER_TCG,
-		"library/ a long+short card is sized as a portrait TCG card")
+	_check(cart.get_card_size() == MediaDimensions.CARD_SIZE_EREADER,
+		"library/ a long+short card is sized as a trading card")
 	cart.systemid = "nes"
 	_check(cart.get_card_data().is_empty(),
 		"library/ an ordinary cartridge is not a card")
