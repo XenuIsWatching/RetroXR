@@ -93,8 +93,17 @@ static func presented_edge(card: Transform3D, card_size: Vector3,
 
 
 ## Whether the card's printed face is the one presented to the reader.
+##
+## THE SCANNER LOOKS ALONG THE UNIT'S -Z, so a card reads when its art faces the
+## player rather than away. The slit takes the unit's own basis, and the unit's
+## -Z is the side its name plate is on -- the side you read the reader from once
+## it is socketed in the Game Boy, which is the side you feed a card from too.
+##
+## Nothing in mGBA has an opinion here: it scans whatever was queued and has no
+## concept of a face, so this sign IS the decision. Its partner is the branch in
+## seated_basis, which has to turn the same way.
 static func is_face_up(card: Transform3D, slit: Transform3D) -> bool:
-	return card.basis.z.dot(slit.basis.z) > 0.0
+	return card.basis.z.dot(slit.basis.z) < 0.0
 
 
 ## How far along the groove the card currently sits, in metres from the centre.
@@ -113,8 +122,8 @@ static func stand_half(edge: String, card_size: Vector3) -> float:
 
 ## The pose a card is held at once it is square in the groove.
 static func seated_basis(edge: String, face_up: bool, slit: Transform3D) -> Basis:
-	# Bring the presented edge to the groove (card -Y) and the printed face to
-	# the read side (card +Z), then express that in the slit's frame.
+	# Bring the presented edge to the groove (card -Y) and leave the printed face
+	# where the hand is holding it, then express that in the slit's frame.
 	var yaw := Basis.IDENTITY
 	match edge:
 		EReaderCards.EDGE_TOP:
@@ -125,7 +134,11 @@ static func seated_basis(edge: String, face_up: bool, slit: Transform3D) -> Basi
 			yaw = Basis(Vector3.FORWARD, PI * 0.5)
 		_:
 			yaw = Basis.IDENTITY
-	if not face_up:
+	# The yaws above leave the card's art along the slit's +Z, which is the side
+	# the scanner does NOT look at -- so it is the FACE-UP card that needs the
+	# half turn, not the face-down one. See is_face_up: the two signs are one
+	# decision and flipping either alone seats every card backwards.
+	if face_up:
 		yaw = Basis(Vector3.UP, PI) * yaw
 	return slit.basis * yaw
 

@@ -254,9 +254,13 @@ func _group_geom() -> void:
 	_eq(CardSwipeSlit.presented_edge(moved, size, slit), EReaderCards.EDGE_BOTTOM,
 		"geom/ travelling along the groove does not change the presented edge")
 
-	_check(CardSwipeSlit.is_face_up(upright, slit), "geom/ printed face towards the reader is face up")
-	var face_down := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h, 0.0))
-	_check(not CardSwipeSlit.is_face_up(face_down, slit), "geom/ turned over is face down")
+	# The scanner looks along the unit's -Z, so a card reads with its art towards
+	# the player -- the same side the reader wears its name on.
+	var face_up := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h, 0.0))
+	_check(CardSwipeSlit.is_face_up(face_up, slit),
+		"geom/ art towards the player is face up")
+	_check(not CardSwipeSlit.is_face_up(upright, slit),
+		"geom/ art turned away from the player is face down")
 
 	_check(is_equal_approx(CardSwipeSlit.travel_of(moved, slit), 0.04), "geom/ travel is measured along the groove")
 	_check(is_zero_approx(CardSwipeSlit.travel_of(upright, slit)), "geom/ a centred card is at travel zero")
@@ -502,7 +506,9 @@ func _group_swipe() -> void:
 	slit.swiped.connect(_on_swiped)
 	slit.aborted.connect(_on_aborted)
 	slit.body_entered.connect(_on_entered)
-	card.global_transform = Transform3D(Basis.IDENTITY,
+	# Art towards the player, which is the side the scanner looks from. A half
+	# turn about Y flips the face and leaves the bottom edge in the groove.
+	card.global_transform = Transform3D(Basis(Vector3.UP, PI),
 		slit.global_transform * Vector3(-0.05, stand, 0.0))
 	await _wait(2)
 	await _drag(card, slit, -0.05, 0.05, 12, stand)
@@ -523,7 +529,7 @@ func _group_swipe() -> void:
 	_reset_signals()
 	slit.swiped.connect(_on_swiped)
 	var side_stand: float = MediaDimensions.CARD_SIZE_EREADER.x * 0.5
-	card.global_transform = Transform3D(Basis(Vector3.BACK, PI * 0.5),
+	card.global_transform = Transform3D(Basis(Vector3.UP, PI) * Basis(Vector3.BACK, PI * 0.5),
 		slit.global_transform * Vector3(-0.05, side_stand, 0.0))
 	await _wait(2)
 	await _drag(card, slit, -0.05, 0.05, 12, side_stand)
@@ -574,7 +580,7 @@ func _group_swipe() -> void:
 	card = _make_card(long_short)
 	_reset_signals()
 	slit.swiped.connect(_on_swiped)
-	card.global_transform = Transform3D(Basis(Vector3.UP, PI),
+	card.global_transform = Transform3D(Basis.IDENTITY,
 		slit.global_transform * Vector3(-0.05, stand, 0.0))
 	await _wait(2)
 	await _drag(card, slit, -0.05, 0.05, 12, stand)
