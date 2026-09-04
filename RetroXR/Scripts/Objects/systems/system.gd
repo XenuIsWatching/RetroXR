@@ -3015,6 +3015,17 @@ func expansion_boot() -> Dictionary:
 	if spec.get("core_only_with_host", false) and _host_media_path().is_empty():
 		spec = spec.duplicate()
 		spec.erase("core")
+		return spec
+	# `core` is a desktop core_name, and the buildbot does not publish every core
+	# under one name on every platform -- mupen64plus_next is plain on Windows and
+	# only _gles2/_gles3 on Android. A row naming one of those carries an
+	# `android` override, read here the way CoreRecommendations reads its own:
+	# without it a Quest resolved to a core that cannot be installed there, and
+	# the machine reported the core missing when it was asked to start.
+	var resolved := ExpansionCatalog.core_of(spec, OS.get_name() == "Android")
+	if resolved != str(spec.get("core", "")):
+		spec = spec.duplicate()
+		spec["core"] = resolved
 	return spec
 
 

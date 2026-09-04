@@ -93,21 +93,12 @@ const _UNITS: Array = [
 ## back ids in this order and boot_for() builds its "host|id|id" key from that,
 ## so a pair reordered here stops matching its BOOT row -- silently, since the
 ## lookup just misses. Assembly walks this list rather than either source, so a
-## unit moving from _LEGACY_ROWS into _UNITS cannot change it.
+## unit file reordered in _UNITS cannot change it.
 const _ORDER: Array = [
 	"nintendo_64dd", "fds", "satellaview", "bsx_cart", "sufami_turbo",
 	"super_game_boy", "super_game_boy_2", "sega_cd", "sega_32x",
 	"pc_engine_cd", "jaguar_cd",
 ]
-
-
-## Every expansion RetroXR models, keyed by its id. The id doubles as the media
-## systemid wherever one exists, so the Games tab already spawns the right disks
-## and carts for it with no second table.
-const _LEGACY_ROWS: Dictionary = {
-
-
-}
 
 
 ## How a host+expansion combination is actually launched, keyed by the host
@@ -167,12 +158,6 @@ const _LEGACY_ROWS: Dictionary = {
 ##
 ## UNVERIFIED marks a row nobody has checked against the core's source or run.
 ## The core names on those are informed guesses and nothing more.
-const _LEGACY_BOOT: Dictionary = {
-
-
-}
-
-
 ## The assembled tables. Public because callers read ExpansionCatalog.ROWS
 ## directly, and a Dictionary built here reads exactly like the const it
 ## replaced.
@@ -195,6 +180,21 @@ static func _static_init() -> void:
 		ROWS[id] = (by_id[id] as Script).ROW
 	for unit: Script in _UNITS:
 		BOOT.merge(unit.BOOT)
+
+
+## The core a recipe names on this platform: `android` when there is one and we
+## are on it, else `core`.
+##
+## Split out and given `mobile` rather than asking the OS itself, because the
+## branch that matters cannot be reached from a desktop test run -- and it is
+## the branch that shipped broken. A Quest resolved to "mupen64plus_next", a
+## name the buildbot publishes for Windows only, and reported the core missing.
+static func core_of(spec: Dictionary, mobile: bool) -> String:
+	if mobile:
+		var over := str(spec.get("android", ""))
+		if not over.is_empty():
+			return over
+	return str(spec.get("core", ""))
 
 ## The row for an id, or an empty Dictionary.
 static func row(id: String) -> Dictionary:

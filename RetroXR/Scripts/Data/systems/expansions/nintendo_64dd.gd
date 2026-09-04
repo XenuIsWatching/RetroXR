@@ -58,6 +58,11 @@ const ROW := {
 const BOOT := {
 	"nintendo_64|nintendo_64dd": {
 	"core": "mupen64plus_next",
+	# The buildbot names this core differently per platform -- plain for Windows,
+	# only _gles2/_gles3 for Android -- so the desktop name does not exist on a
+	# Quest at all, and pinning it there resolved a machine to a core that could
+	# never be installed. Same `android` override CoreRecommendations uses.
+	"android": "mupen64plus_next_gles3",
 	"core_only_with_host": true,
 	"roms": ["host", "expansion:nintendo_64dd"],
 	"sidecar": ".ndd",

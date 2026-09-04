@@ -578,6 +578,24 @@ func _group_launch() -> void:
 	n64._apply_expansion_launch()
 	_check(n64.rom_path == "/roms/n64dd/disk.ndd", "launch/ and boots from the disk")
 
+	# The cart+disk core is named per platform, because the buildbot publishes it
+	# under one name on Windows and another on Android. The row must carry both,
+	# and they must be the names the buildbot actually uses -- a desktop run
+	# cannot exercise the Android branch of expansion_boot(), so assert the DATA
+	# the branch reads. Without the override a Quest resolved to a core that
+	# cannot exist there, and the machine reported it missing on power-on.
+	var dd_boot: Dictionary = ExpansionCatalog.BOOT["nintendo_64|nintendo_64dd"]
+	_check(ExpansionCatalog.core_of(dd_boot, false) == "mupen64plus_next",
+		"launch/ the 64DD resolves its desktop core")
+	_check(ExpansionCatalog.core_of(dd_boot, true) == "mupen64plus_next_gles3",
+		"launch/ and on Android the name the buildbot publishes there")
+	# A row with no override is the same core either way, which is every other
+	# row: the substitution must not fire where nothing asked for it.
+	var tower: Dictionary = ExpansionCatalog.BOOT["mega_drive|sega_cd|sega_32x"]
+	_check(ExpansionCatalog.core_of(tower, false) == "picodrive"
+		and ExpansionCatalog.core_of(tower, true) == "picodrive",
+		"launch/ while a row with no override is the same core on both")
+
 	# Put a cartridge in and the SAME hardware becomes a different machine: the
 	# core that takes a cart and finds the disk beside it.
 	var cart := await _cart("nintendo_64", "/roms/n64/game.z64")
