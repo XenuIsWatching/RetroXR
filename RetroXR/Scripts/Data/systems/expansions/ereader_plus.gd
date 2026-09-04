@@ -24,8 +24,6 @@ const ROW := {
 	"loader": MediaDimensions.LOADER_SWIPE,
 	# See ereader.gd: the header code is what a library dump is recognised by.
 	"rom_code": "PSAJ",
-	"firmware": ["ereader_plus.gba"],
-	"rom_from_firmware": true,
 }
 
 

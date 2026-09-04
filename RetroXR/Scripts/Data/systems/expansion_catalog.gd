@@ -429,22 +429,39 @@ static func _gba_game_code(f: FileAccess, length: int) -> String:
 	return f.get_buffer(4).get_string_from_ascii()
 
 
-## Where this unit's own program lives when the unit IS its firmware.
+## Where this unit's own program lives when the unit IS its program.
 ##
-## Empty for every unit that does not set `rom_from_firmware`, which is all of
-## them but the two Super Game Boys — a BS-X cartridge carries a shell a player
-## spawned it from, and answering with BS-X.bin here would quietly swap the
-## cartridge in their hand for the one in the system directory.
+## TWO SOURCES, and which one a unit uses is a fact about the hardware.
 ##
-## The FIRST firmware name, not any that happens to be present. firmware_of is a
-## list of alternatives for the gate, but a unit runs one program: the Super Game
-## Boy 2 names SGB2.sfc and must not fall back to SGB1.sfc, or a player with both
-## dumps would build one machine and be handed the other.
+## A reader's cartridge dump is an ordinary Game Boy Advance ROM, so it comes out
+## of the LIBRARY, found by the header code in `rom_code`. Nothing has to be
+## installed and nothing has to be renamed; the copy the player already owns is
+## the one that runs.
 ##
-## Returns the path whether or not the file is there. Existence is
-## firmware_present's question, and it is asked before the unit can be spawned at
-## all.
+## The Super Game Boys still come from the core's system directory, because their
+## dumps are declared as firmware in the VENDORED bsnes .info and there is no
+## bsnes overlay to remove them from -- an overlay replaces an entry wholesale, so
+## dropping two rows would mean forking an upstream file that keeps gaining them.
+## The two adapters therefore work differently on purpose. Do not tidy one branch
+## into the other; ereader_tests holds both.
+##
+## The firmware branch takes the FIRST name, not any that happens to be present.
+## firmware_of is a list of alternatives for the gate, but a unit runs one
+## program: the Super Game Boy 2 names SGB2.sfc and must not fall back to
+## SGB1.sfc, or a player with both dumps would build one machine and be handed
+## the other.
+##
+## Empty for a unit that is not its own program at all -- a BS-X cartridge
+## carries a shell the player spawned it from, and answering with BS-X.bin here
+## would quietly swap the cartridge in their hand for the one in the system
+## directory.
+##
+## The firmware branch returns its path whether or not the file is there, since
+## existence is firmware_present's question. The library branch cannot: it has
+## nothing to name until it has found something.
 static func firmware_rom_path(id: String) -> String:
+	if not str(row(id).get("rom_code", "")).is_empty():
+		return AdapterRoms.path_for(id)
 	if not bool(row(id).get("rom_from_firmware", false)):
 		return ""
 	var wanted := firmware_of(id)
@@ -456,9 +473,16 @@ static func firmware_rom_path(id: String) -> String:
 	return FirmwareRequirements.destination(core, str(wanted[0]))
 
 
-## Is this unit's firmware actually installed?
+## Can this unit actually be built -- is the program it runs on this machine?
 ##
-## True for a unit that names none, which is all of them but one. Otherwise ANY
+## A unit whose program is a LIBRARY dump is present when a dump carrying its
+## header code is on a shelf. That is the whole gate for the readers: no install,
+## no BIOS row, no second copy under a name of ours.
+##
+## Everything below is the firmware branch, unchanged, and still the answer for
+## the BS-X cartridge and the two Super Game Boys.
+##
+## True for a unit that names neither, which is most of them. Otherwise ANY
 ## of the group being on disk satisfies it -- alternatives, not a checklist.
 ##
 ## ON DISK, not verified, and this is where it parts company with BiosBoot. That
@@ -475,6 +499,8 @@ static func firmware_rom_path(id: String) -> String:
 ## core is already written down above. A unit with no recipe cannot say whose
 ## system directory to look in, so it is not gated at all.
 static func firmware_present(id: String) -> bool:
+	if not str(row(id).get("rom_code", "")).is_empty():
+		return not AdapterRoms.path_for(id).is_empty()
 	var wanted := firmware_of(id)
 	if wanted.is_empty():
 		return true

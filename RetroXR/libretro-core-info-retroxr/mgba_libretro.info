@@ -44,7 +44,7 @@ disk_control = "false"
 is_experimental = "false"
 
 # Firmware / BIOS
-firmware_count = 7
+firmware_count = 4
 firmware0_desc = "gba_bios.bin (Game Boy Advance BIOS)"
 firmware0_path = "gba_bios.bin"
 firmware0_opt = "true"
@@ -57,15 +57,6 @@ firmware2_opt = "true"
 firmware3_desc = "sgb_bios.bin (Super Game Boy BIOS)"
 firmware3_path = "sgb_bios.bin"
 firmware3_opt = "true"
-firmware4_desc = "ereader.gba (Nintendo e-Reader cartridge)"
-firmware4_path = "ereader.gba"
-firmware4_opt = "true"
-firmware5_desc = "ereader_plus.gba (Nintendo Card e-Reader+ cartridge)"
-firmware5_path = "ereader_plus.gba"
-firmware5_opt = "true"
-firmware6_desc = "ereader_usa.gba (Nintendo e-Reader cartridge, USA)"
-firmware6_path = "ereader_usa.gba"
-firmware6_opt = "true"
 notes = "(!) gba_bios.bin (md5): a860e8c0b6d573d191e4ec7db1b1e4f6|(!) gb_bios.bin (md5): 32fbbd84168d3482956eb3c5051637f5|(!) gbc_bios.bin (md5): dbfce9db9deaa2567f6a84fde55f9680|(!) Installs over the buildbot's mGBA under the same name, so saves and core options carry across.|(!) A link cable is a real cable in this room — plug one in and the machine at the far end joins the same bus."
 
 description = "mGBA for Game Boy, Game Boy Color and Game Boy Advance, built from retroXR's fork. It is the stock libretro mGBA plus the far end of a link cable. mGBA has carried its own lockstep coordinator for years and it was simply unreachable: nothing in libretro can express a cable, and every core instance is loaded from its own copy of the library, so two Game Boy Advances in one process share no globals and have exactly one thing in common, which is the frontend. This build talks to a link bus the frontend hosts instead — which is what makes two handhelds in one room able to play together, single-cartridge play work, and a GameCube lead reach a handheld at all. The Game Boy driver is a separate core from the GBA one, with its own serial port, and it gained one too, in the same wire format gambatte's uses — so a gambatte Game Boy and an mGBA one join the SAME cable. With no bus, or a bus with nothing cabled to it, the port reads back the 0xFF of an open line, exactly as the stock build does, so an uncabled player is unaffected. Everything else is upstream mGBA. Source and binaries: github.com/XenuIsWatching/mgba/releases/latest & the tag it points at."

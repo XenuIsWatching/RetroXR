@@ -515,11 +515,38 @@ func refresh_after_core_change() -> void:
 
 ## Rebuild the Systems home grid: one tile per system that has a default core.
 ## Spawnable items are listed lazily, only when a system tile is opened.
+## Systemids that earn a tile from something other than a persisted default core.
+##
+## A tile normally exists because the Cores panel wrote a default for it, which
+## for the e-Reader happens the moment mGBA is installed — it is one of mGBA's
+## secondary_systemids. This is the safeguard for the case where it did not: a
+## reader dump on the shelf is a machine the player owns, and it should have its
+## shelf whether or not core_defaults happens to name it.
+##
+## Reads AdapterRoms' cached probe, so it is one directory scan per session at
+## worst and nothing at all on a machine with no dump.
+func _extra_systemids(seen: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for id: String in ["ereader"]:
+		if seen.has(id):
+			continue
+		if not ExpansionCatalog.firmware_rom_path(id).is_empty():
+			out.append(id)
+			seen[id] = true
+	return out
+
+
 func _populate_systems_tab() -> void:
 	if not _systems_browser:
 		return
 	var systems: Array = []
+	var seen: Dictionary = {}
+	var ids: Array[String] = []
 	for systemid: String in core_defaults.all_defaults():
+		ids.append(systemid)
+		seen[systemid] = true
+	ids.append_array(_extra_systemids(seen))
+	for systemid: String in ids:
 		var sysname: String = core_db.get_systemname_for_id(systemid)
 		var entry := {"systemid": systemid, "name": sysname}
 		var n := SpawnCatalog.items_for(systemid, sysname).size()
@@ -621,6 +648,9 @@ func _populate_cartridges_tab() -> void:
 	for systemid: String in core_defaults.all_defaults():
 		seen[systemid] = true
 		systems.append({"systemid": systemid, "name": core_db.get_systemname_for_id(systemid)})
+
+	for systemid: String in _extra_systemids(seen):
+		systems.append({"systemid": systemid, "name": _system_label(systemid)})
 
 	for systemid: String in _romm_platforms:
 		if not seen.has(systemid):
@@ -1140,6 +1170,10 @@ func _invalidate_local_scan(systemid: String = "") -> void:
 		_local_scan_cache.clear()
 	else:
 		_local_scan_cache.erase(systemid)
+	# The adapter probe is a scan of the same folders and goes stale with them:
+	# a reader dump copied in has to stop being a game and start being a machine
+	# on the same refresh, not on the next launch.
+	AdapterRoms.invalidate()
 
 
 func _romm_row_passes(source: String, regions: PackedStringArray) -> bool:

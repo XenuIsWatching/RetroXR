@@ -97,6 +97,20 @@ static func scan_roms(systemid: String, extensions: Array[String]) -> Array[Dict
 		if not extensions.is_empty() and ext not in extensions:
 			continue
 		var full_path := dir_path.path_join(file)   # original case preserved
+		# An adapter's dump is HARDWARE, not a game. A reader's cartridge dump is
+		# an ordinary Game Boy Advance ROM and lives on this shelf, but it is the
+		# machine the e-Reader tile spawns -- listing it here too offers it as
+		# something to play, and a player who deletes it from the list has
+		# deleted their reader.
+		#
+		# Asked here rather than in the browser because a dump matched to a RomM
+		# entry becomes a "both" row: filtering the local-only pass would leave it
+		# showing anyway. This hides it from every consumer at once.
+		#
+		# Costs nothing on a platform with no adapter, and one cached directory
+		# probe on one that has -- see AdapterRoms, which exists for that reason.
+		if AdapterRoms.is_adapter_rom(systemid, full_path):
+			continue
 		results.append({"path": full_path, "label": file.get_basename()})
 
 	var info := SystemInfo.for_system(systemid)

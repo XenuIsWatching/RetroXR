@@ -3,10 +3,8 @@
 ## One of three revisions, one unit each, because a reader IS its dump and the
 ## dumps are not interchangeable: cards are region-locked and the reader answers
 ## a foreign card with its own Region Error screen. See ereader_plus.gd and
-## ereader_usa.gd, which differ from this file only in their label and their
-## firmware. Splitting them is also what makes the gate honest -- a player with
-## only the US dump was offered no reader at all, because firmware_present only
-## ever asked about this one.
+## ereader_usa.gd, which differ from this file only in their label and their game
+## code.
 ##
 ## See ExpansionCatalog for how a unit file is assembled into the catalog, and
 ## expansion_defs.gd for the MOUNT_* values.
@@ -26,10 +24,13 @@ const ID := "ereader"
 # The other two revisions have no card of their own and are therefore carded
 # HERE, which is where a player picking a reader is already standing.
 #
-# Its program is the e-Reader cartridge dump, read from mGBA's system dir like
-# the Super Game Boy's -- the unit is spawned from a menu and has no library
-# file, so without rom_from_firmware its rom_path stays empty and the launch
-# degrades to a plain load silently.
+# Its program is the e-Reader cartridge dump, and it comes out of the LIBRARY --
+# AdapterRoms finds it by the header code below, on the Game Boy Advance shelf or
+# beside the cards in the e-Reader one. It is not firmware: it is an ordinary GBA
+# ROM, and asking a player to install a second copy of it into the core's system
+# directory, under a name of ours, was the room inventing a BIOS the hardware
+# does not have. The Super Game Boy still works the older way -- see
+# ExpansionCatalog.firmware_rom_path for why the two differ.
 #
 # Size is nominal, proportioned against the GBA cart it dwarfs; not measured.
 const ROW := {
@@ -48,12 +49,11 @@ const ROW := {
 	"size": Vector3(0.090, 0.062, 0.023),
 	"loader": MediaDimensions.LOADER_SWIPE,
 	# The game code in the dump's own header, which is what mGBA's override table
-	# matches to switch the reader hardware on. A dump sitting in the GBA library
-	# therefore spawns the reader rather than a cartridge, and the revision comes
-	# off the file the player picked rather than off a firmware install.
+	# matches to switch the reader hardware on, and what AdapterRoms matches to
+	# find the program. It does three jobs from one fact: a dump in the library
+	# spawns the reader rather than a cartridge, the revision follows the file
+	# rather than a filename, and the dump stops being offered as a game.
 	"rom_code": "PEAJ",
-	"firmware": ["ereader.gba"],
-	"rom_from_firmware": true,
 }
 
 

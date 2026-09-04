@@ -94,6 +94,8 @@ func _run() -> void:
 		_group_catalog()
 	if _want("library"):
 		_group_library()
+	if _want("program"):
+		_group_program()
 	if _want("swipe"):
 		await _group_swipe()
 
@@ -404,20 +406,19 @@ func _group_catalog() -> void:
 		_check(str(item.get("spawn", "")) in readers,
 			"catalog/ its tile offers only readers, not %s" % str(item.get("label", "")))
 
-	# One unit per reader revision, because a reader IS its dump: cards are
-	# region-locked, and firmware_rom_path deliberately takes the FIRST name
-	# rather than any that happens to be on disk. Naming all three as
-	# alternatives on one row would gate correctly and then hand every player
-	# the Japanese program.
-	for rev: Array in [["ereader", "ereader.gba"], ["ereader_plus", "ereader_plus.gba"],
-			["ereader_usa", "ereader_usa.gba"]]:
+	# One unit per reader revision, because a reader IS its dump and the dumps are
+	# not interchangeable: cards are region-locked.
+	for rev: Array in [["ereader", "PEAJ"], ["ereader_plus", "PSAJ"],
+			["ereader_usa", "PSAE"]]:
 		var rid := str(rev[0])
-		var dump := str(rev[1])
+		var code := str(rev[1])
 		_check(ExpansionCatalog.ROWS.has(rid), "catalog/ %s has a row" % rid)
-		_eq(ExpansionCatalog.firmware_of(rid), [dump] as Array,
-			"catalog/ %s wants %s and only that" % [rid, dump])
-		_check(ExpansionCatalog.firmware_rom_path(rid).ends_with(dump),
-			"catalog/ %s runs %s" % [rid, dump])
+		_eq(str(ExpansionCatalog.ROWS[rid].get("rom_code", "")), code,
+			"catalog/ %s is the %s dump" % [rid, code])
+		# Its program is a LIBRARY file now, so the row names no firmware at all
+		# and asks for no install. See ExpansionCatalog.firmware_rom_path.
+		_eq(ExpansionCatalog.firmware_of(rid), [] as Array,
+			"catalog/ %s names no firmware" % rid)
 		_eq(ExpansionCatalog.media_of(rid), "ereader", "catalog/ %s reads the same cards" % rid)
 		_eq(ExpansionCatalog.card_systemid(rid), "ereader",
 			"catalog/ %s is offered from the e-Reader tile" % rid)
@@ -478,15 +479,40 @@ func _group_catalog() -> void:
 	_check(not boot.has("subsystem"),
 		"catalog/ no subsystem — mgba's retro_load_game_special is a stub")
 
-	_eq(ExpansionCatalog.firmware_of(ID), ["ereader.gba"] as Array,
-		"catalog/ it wants the e-Reader cartridge dump")
-	_check(ExpansionCatalog.firmware_rom_path(ID).ends_with("ereader.gba"),
-		"catalog/ its own program comes from the firmware dir")
+	# The Super Game Boy still resolves through the core's system directory, and
+	# must keep doing so: its dumps are declared in the VENDORED bsnes .info,
+	# which there is no overlay to remove them from. The two adapters work
+	# differently on purpose -- this case is here so nobody tidies one branch of
+	# firmware_rom_path into the other.
+	_eq(ExpansionCatalog.firmware_of("super_game_boy"), ["SGB1.sfc"] as Array,
+		"catalog/ a Super Game Boy still names its firmware")
+	_check(ExpansionCatalog.firmware_rom_path("super_game_boy").ends_with("SGB1.sfc"),
+		"catalog/ and still runs it out of the system directory")
 
 	# The card systemid is where the unit is offered, and it must be the media's.
 	_eq(ExpansionCatalog.card_systemid(ID), "ereader", "catalog/ it is carded on the e-Reader tile")
 	_check(SystemIcons.has_icon("ereader"), "catalog/ the e-Reader tile has its own art")
 	_check(SystemIcons.has_content_icon("ereader"), "catalog/ the card has its own art")
+
+
+## Write a fake GBA dump into a system's real ROM folder and hand back its path.
+##
+## The real folder, because AdapterRoms derives it from the systemid and there is
+## nowhere else production would look. Named so a dead run is obvious.
+func _plant_dump(systemid: String, name: String, code: String) -> String:
+	var dir := RomLibrary.rom_dir_for_system(systemid)
+	DirAccess.make_dir_recursive_absolute(dir)
+	var path := dir.path_join(name)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	var bytes := PackedByteArray()
+	bytes.resize(0x100)
+	for i in range(4):
+		bytes[0xAC + i] = code.unicode_at(i)
+	bytes[0xB2] = 0x96
+	f.store_buffer(bytes)
+	f.close()
+	AdapterRoms.invalidate()
+	return path
 
 
 ## A file with a Game Boy Advance header and nothing else: the four-character
@@ -513,6 +539,83 @@ func _offered(deg: float, size: Vector3) -> Transform3D:
 			Vector3(size.x, -size.y, 0.0) * 0.5, Vector3(-size.x, -size.y, 0.0) * 0.5]:
 		lowest = minf(lowest, (b * c).y)
 	return Transform3D(b, Vector3(0.0, -lowest, 0.0))
+
+
+# ── library dumps ─────────────────────────────────────────────────────────────
+
+## The reader's program is an ordinary ROM on the Game Boy Advance shelf.
+##
+## Every case plants a real file in the real folder and takes it away again,
+## because AdapterRoms derives both folders from the systemid and production
+## looks nowhere else. Nothing here assumes the shelf is EMPTY: this machine has
+## three real reader dumps on it, and a case that only passes on a bare library
+## is a case that fails for the person most likely to run it.
+func _group_program() -> void:
+	const GBA := "game_boy_advance"
+	const PLANTED := "__ereader_selftest PEAJ.gba"
+	const ORDINARY := "__ereader_selftest ordinary.gba"
+
+	var dump := _plant_dump(GBA, PLANTED, "PEAJ")
+	var plain := _plant_dump(GBA, ORDINARY, "AGBJ")
+
+	# Recognised by its header, and the ordinary ROM beside it is not.
+	_check(AdapterRoms.is_adapter_rom(GBA, dump),
+		"program/ a PEAJ dump on the GBA shelf is a reader")
+	_check(not AdapterRoms.is_adapter_rom(GBA, plain),
+		"program/ an ordinary GBA ROM is not")
+
+	# The gate and the program both come off a file, with no install anywhere.
+	_check(ExpansionCatalog.firmware_present("ereader"),
+		"program/ a dump on the shelf makes the reader spawnable")
+	var program := ExpansionCatalog.firmware_rom_path("ereader")
+	_check(not program.is_empty(), "program/ and names a program to run")
+	_eq(ExpansionCatalog.adapter_for_rom(program), "ereader",
+		"program/ which is itself a Card e-Reader dump")
+	_check(not program.contains("system"),
+		"program/ out of the library, not the core's system directory")
+
+	# The tile offers the reader it has a dump for -- the point of the gate.
+	var offered := false
+	for item: Dictionary in SpawnCatalog.items_for("ereader"):
+		if str(item.get("spawn", "")) == "expansion:ereader":
+			offered = true
+	_check(offered, "program/ the e-Reader tile offers that reader")
+
+	# A dump is HARDWARE and must not be listed as a game; the ordinary ROM
+	# beside it must be, or the exclusion is just a broken scan.
+	var listed: Dictionary = {}
+	for r: Dictionary in RomLibrary.scan_roms(GBA, ["gba"] as Array[String]):
+		listed[str(r["path"])] = true
+	_check(not listed.has(dump), "program/ the dump is not offered as a game")
+	_check(listed.has(plain), "program/ while the ordinary ROM beside it still is")
+
+	# The probe is memoised. This is a promise about COST: scan_roms opens no
+	# files at all without it, and it runs on the main thread every time a
+	# platform is opened, over libraries of ten thousand entries.
+	AdapterRoms.invalidate()
+	RomLibrary.scan_roms(GBA, ["gba"] as Array[String])
+	AdapterRoms.reset_probe_count()
+	RomLibrary.scan_roms(GBA, ["gba"] as Array[String])
+	RomLibrary.scan_roms(GBA, ["gba"] as Array[String])
+	_eq(AdapterRoms.probe_count, 0, "program/ a cached scan opens no files at all")
+
+	DirAccess.remove_absolute(dump)
+	DirAccess.remove_absolute(plain)
+	AdapterRoms.invalidate()
+
+	# A dump filed beside the cards is found too, and is not a card: that folder
+	# is grouped by EReaderCards, which only ever looks at .raw.
+	var beside := _plant_dump(EReaderCards.SYSTEMID, PLANTED, "PEAJ")
+	EReaderCards.invalidate()
+	_eq(ExpansionCatalog.adapter_for_rom(ExpansionCatalog.firmware_rom_path("ereader")),
+		"ereader", "program/ a dump filed with the cards still names a reader")
+	var card_paths: Dictionary = {}
+	for r: Dictionary in RomLibrary.scan_roms(EReaderCards.SYSTEMID, [] as Array[String]):
+		card_paths[str(r["path"])] = true
+	_check(not card_paths.has(beside), "program/ a dump filed with the cards is not a card")
+	DirAccess.remove_absolute(beside)
+	AdapterRoms.invalidate()
+	EReaderCards.invalidate()
 
 
 # ── swipe/ ───────────────────────────────────────────────────────────────────
