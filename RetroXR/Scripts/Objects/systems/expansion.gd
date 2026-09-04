@@ -76,6 +76,14 @@ var _media: Array[Node3D] = []
 var _body: MeshInstance3D = null
 var _label: Label3D = null
 
+## The glyph height expansion.tscn was authored at (font_size x pixel_size =
+## 20 x 0.001). _fit_label never exceeds it, so it is also the ceiling.
+const _LABEL_MAX_GLYPH := 0.02
+
+## The top plate a row's cap_color paints — see _build_cap.
+const _CAP_THICKNESS := 0.003
+const _CAP_PROUD := 0.0002
+
 func _ready() -> void:
 	super._ready()
 	add_to_group(ExpansionPort.GROUP_EXPANSION)
@@ -108,6 +116,7 @@ func _build_body() -> void:
 	mat.albedo_color = Color(0.38, 0.38, 0.40)
 	mat.roughness = 0.7
 	_body.set_surface_override_material(0, mat)
+	_build_cap(s)
 
 	var shape := $CollisionShape3D as CollisionShape3D
 	var box := BoxShape3D.new()
@@ -138,6 +147,39 @@ func _build_body() -> void:
 	_label.rotation = Vector3(0.0, PI, 0.0) if cartridge else Vector3.ZERO
 
 
+## The coloured plate across a unit's top face, for a row that names one. The
+## Expansion Pak's red top is the only one so far, and it earns its keep: in a
+## bay where it and the Jumper Pak are the same size and the same shape, colour
+## is the only thing that says which of the two is currently installed.
+##
+## Sunk so its top finishes level with the shell rather than standing proud of
+## it -- the pak lives in a 24 mm well with a lid 5 mm above it, and a plate
+## that added height would foul the lid. The fifth of a millimetre it does
+## stand is the same trick ExpansionPort uses on its connector: two coplanar
+## faces have no depth order and shimmer, and 0.2 mm is far too small to read.
+func _build_cap(s: Vector3) -> void:
+	var cap := _body.get_node_or_null("CapPlate") as MeshInstance3D
+	var colour := ExpansionCatalog.cap_color_of(expansion_id)
+	if colour.a <= 0.0:
+		if cap != null:
+			cap.queue_free()
+		return
+	if cap == null:
+		cap = MeshInstance3D.new()
+		cap.name = "CapPlate"
+		_body.add_child(cap)
+	var mesh := BoxMesh.new()
+	# Inset a hair on both spans so the sides never land in the shell's own
+	# planes either.
+	mesh.size = Vector3(s.x * 0.98, _CAP_THICKNESS, s.z * 0.98)
+	cap.mesh = mesh
+	cap.position = Vector3(0.0, s.y * 0.5 - _CAP_THICKNESS * 0.5 + _CAP_PROUD, 0.0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = colour
+	mat.roughness = 0.55
+	cap.set_surface_override_material(0, mat)
+
+
 ## The front face some units wear -- the Satellaview's POWER and ACCESS lamps are
 ## the only one so far. The scene is named by the catalog row rather than by an
 ## id test here, the same way every other per-unit fact in this file is, and the
@@ -160,6 +202,30 @@ func _update_label() -> void:
 	if _label == null:
 		return
 	_label.text = ExpansionCatalog.label_of(expansion_id)
+	_fit_label()
+
+
+## Shrink the plate until it fits the case it is printed on.
+##
+## The authored pixel_size gives a fixed ~20 mm of glyph height whatever the
+## unit is, which is right for the boxes this file was written for -- a 64DD is
+## 300 mm wide -- and absurd on a 75 mm Jumper Pak, where "Expansion Pak" came
+## out wider than the whole module and read as a floating banner beside the
+## console rather than a name printed on it.
+##
+## Both bounds only ever REDUCE the authored size (the min against
+## _LABEL_MAX_GLYPH), so every unit that already looked right is untouched and
+## only the small ones move.
+func _fit_label() -> void:
+	var s := ExpansionCatalog.size_of(expansion_id)
+	if s.x <= 0.0 or _label.font_size <= 0:
+		return
+	var chars := maxi(_label.text.length(), 1)
+	# ~0.55 em per character is close enough for a proportional face; this only
+	# has to stop the text overrunning the case, not typeset it.
+	var by_width := (s.x * 0.9) / (float(chars) * 0.55)
+	var glyph := minf(_LABEL_MAX_GLYPH, minf(by_width, s.y * 0.45))
+	_label.pixel_size = glyph / float(_label.font_size)
 
 
 # ── the connector ─────────────────────────────────────────────────────────────

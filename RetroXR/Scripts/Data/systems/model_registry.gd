@@ -88,6 +88,8 @@ const _ROWS: Dictionary = {
 	# Wii cannot run correctly without.
 	"wii":                  {"platform": "wii", "label": "Wii",
 		"scene": _SCENES + "wii_primitive.tscn"},
+	"nintendo_64":          {"platform": "nintendo_64", "label": "Nintendo 64",
+		"scene": _SCENES + "nintendo_64_primitive.tscn"},
 	# --- computers ------------------------------------------------------------
 	# One row across every computer platform rather than eighteen near-identical
 	# ones. The tower is a single model that happens to fit them all; copies would

@@ -1,0 +1,53 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/expansion_cover.gd" id="1_cover"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+
+; Sized to FILL the mouth of the N64's bay well (60 x 50 mm) rather than to sit
+; on top of it: the real lid is flush with the case, so the panel is the size of
+; the opening and 5 mm thick, which drops its top face level with the rim.
+[sub_resource type="BoxShape3D" id="BoxShape3D_cover"]
+size = Vector3(0.06, 0.005, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_cover"]
+size = Vector3(0.06, 0.005, 0.05)
+
+; The LOOSE pointer target: the lid plus a margin on every face, so a small flat
+; thing is still findable once it has been put down on a shelf somewhere. Same
+; reasoning as memory_card.tscn's.
+[sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
+size = Vector3(0.08, 0.028, 0.07)
+
+[sub_resource type="StandardMaterial3D" id="Mat_cover"]
+albedo_color = Color(0.44, 0.45, 0.48, 1)
+roughness = 0.55
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_cover"]
+bounce = 0.0
+friction = 0.8
+
+[node name="ExpansionCover" type="RigidBody3D" groups=["expansion_cover"]]
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_cover")
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("1_cover")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_cover")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_cover")
+surface_material_override/0 = SubResource("Mat_cover")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("BoxShape3D_pointer")

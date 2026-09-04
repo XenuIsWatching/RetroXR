@@ -117,6 +117,7 @@ func _ready() -> void:
 	_test_bios_seed()
 	_test_bios_boot_table()
 	_test_neo_geo_cd_cores()
+	_test_supergrafx_core()
 	_test_bios_pinned_options()
 	_test_bios_pins_reach_the_opt_file()
 	_test_power_on_verdict()
@@ -1172,6 +1173,33 @@ func _test_neo_geo_cd_cores() -> void:
 	_ok("neogeocd/reads chd", exts.has("chd"))
 	# Geolith contributes only its declared subset, never its whole list.
 	_ok("neogeocd/does not inherit the cartridge .neo", not exts.has("neo"))
+
+
+## SuperGrafx is not an ExpansionCatalog accessory: it is the PC Engine's own
+## enhanced hardware variant, reached the same way Game Gear/Sega CD/32X are —
+## a core declares it as a secondary systemid, and the generic Cores > Manager
+## scan (cores_view.gd, over the installed core library) and SystemInfo pick it
+## up with no code of their own naming it. There was no gap to close here; this
+## is the regression guard for the mechanism that already closed it.
+func _test_supergrafx_core() -> void:
+	var db := CoreInfoDatabase.shared()
+	var entry: Dictionary = db.get_by_core_name("mednafen_supergrafx")
+	_ok("supergrafx/mednafen_supergrafx is a known core", not entry.is_empty())
+	_ok("supergrafx/and declares the supergrafx systemid",
+		CoreInfoDatabase.systemids_of(entry).has("supergrafx"))
+	_ok("supergrafx/which is reached only through that declaration",
+		db.is_secondary_systemid("supergrafx"))
+	_ok("supergrafx/mednafen_pce_fast does not declare it — why the recommendation "
+			+ "is mednafen_supergrafx and not the lighter core",
+		not CoreInfoDatabase.systemids_of(db.get_by_core_name("mednafen_pce_fast"))
+			.has("supergrafx"))
+
+	var info := SystemInfo.for_system("supergrafx")
+	_ok("supergrafx/has its own SystemInfo descriptor", info != null)
+	_ok("supergrafx/named distinctly from the plain PC Engine",
+		info != null and info.display_name == "PC Engine SuperGrafx")
+	_eq("supergrafx/and that name is what the core scan would show a player",
+		db.get_systemname_for_id("supergrafx"), "PC Engine SuperGrafx")
 
 
 func _test_bios_boot_table() -> void:

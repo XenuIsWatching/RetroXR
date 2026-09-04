@@ -643,6 +643,24 @@ func configure_cartridge_slot(_slot: Node3D) -> void:
 	pass
 
 
+## Reposition the roof-top-centred ExpansionSocket RetroSystem just built (see
+## _build_expansion_hardware) to wherever this model's real port actually is.
+## Default: leave it where the generic placement put it -- correct for every
+## shape that genuinely stacks an external box on top, which is everything
+## that has shipped so far. The N64 is the first override, because its
+## Expansion/Jumper Pak port is inside the body behind a cover, not on the roof.
+func configure_expansion_socket(_socket: Node3D) -> void:
+	pass
+
+
+## The slot this model's expansion-bay cover goes into, or null on a model with
+## no such bay — which is every model but the N64, whose Jumper Pak sits under a
+## lid that pulls off. RetroSystem asks so a save can record whether the lid is
+## on the console or lying on a table, without persistence knowing the geometry.
+func expansion_cover_slot() -> XRToolsSnapZone:
+	return null
+
+
 ## The world-space direction a cartridge travels when being inserted.
 ## Returned as a unit vector; the animation moves FROM final_pos - dir*depth TO final_pos.
 func get_cartridge_insert_direction() -> Vector3:

@@ -7,15 +7,23 @@ extends RefCounted
 const ID := "nintendo_64dd"
 
 # The one that started this. It bolts to the N64's underside through the
-# expansion port behind the hatch in the floor, and it is TALLER than the
-# console it carries. Cartridge in the N64, disk in the drive, and the two
-# are loaded together as one title.
+# expansion port behind the hatch in the floor. Cartridge in the N64, disk in
+# the drive, and the two are loaded together as one title.
+#
+# 260 x 190 mm — the SAME footprint as the console, which is the point: the
+# drive was built to disappear under an N64 and read as one machine, so a
+# flush stack is right and an overhang is not. 78.7 mm tall, a little more
+# than the console's own 73.
+#
+# It was 300 x 110 x 260 before, sized against the 300 x 100 x 250 placeholder
+# box every console used to wear. Once the N64 got a case of its own the drive
+# was suddenly 40 mm wider and 70 mm deeper than the thing standing on it.
 const ROW := {
 	"label": "Nintendo 64DD",
 	"host": "nintendo_64",
 	"media": "nintendo_64dd",
 	"mount": ExpansionDefs.MOUNT_BELOW,
-	"size": Vector3(0.30, 0.11, 0.26),
+	"size": Vector3(0.26, 0.0787, 0.19),
 	"loader": MediaDimensions.LOADER_SLOT,
 }
 

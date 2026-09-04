@@ -69,6 +69,14 @@ var _video_out_from_save: int = -1
 # Clamshell (DS/3DS) lid open angle restored by persistence (deg, 0 shut … 180
 # flat; set before _ready; -1 = keep the model default).
 var _lid_angle_from_save: float = -1.0
+# Set before _ready by the deserializer, and only there — a menu-spawned
+# console never sets this, so it defaults false. Read once, by
+# _build_expansion_hardware, to decide whether a default-occupant accessory
+# (the N64's Jumper Pak) should seed itself: a restored console's own
+# "expansions" list (restore_expansion, driven by the save) is always the
+# whole truth about what is bolted on, whether that is the default occupant,
+# a real upgrade, or nothing at all, and seeding on top of that would double it.
+var _restoring_from_save: bool = false
 
 ## Ignore gravity: the system freezes exactly where it's dropped and floats
 ## there. Toggled from the options panel's System tab; default off.
@@ -136,6 +144,10 @@ var _av_cord_summary: String = "none"
 
 # Cable scene to instantiate
 const CABLE_SCENE := preload("res://Scenes/Objects/cables/cable.tscn")
+# The generic expansion-unit scene — see _seed_default_occupant.
+const EXPANSION_SCENE := preload("res://Scenes/Objects/expansion.tscn")
+# The lid over an expansion bay — see _seed_expansion_cover.
+const EXPANSION_COVER_SCENE := preload("res://Scenes/Objects/expansion_cover.tscn")
 # Window material for TVs on multi-output hardware (dual-screen handhelds).
 const SCREEN_WINDOW_SHADER := preload("res://Shaders/screen_window.gdshader")
 
@@ -2801,6 +2813,8 @@ func _all_forced_options(core: String) -> Dictionary:
 	var out: Dictionary = _model.get_forced_core_options() if _model != null else {}
 	out.merge(_removable_media_options(core), true)
 	out.merge(_disk_drive_options(core), true)
+	out.merge(_expansion_pak_options(core), true)
+	out.merge(_fm_sound_unit_options(core), true)
 	out.merge(_bios_pinned_options(core), true)
 	return out
 
@@ -2896,12 +2910,74 @@ func _build_expansion_hardware() -> void:
 			ExpansionPort.GROUP_EXPANSION, _accepts_expansion)
 		socket.has_picked_up.connect(_on_expansion_seated)
 		socket.has_dropped.connect(_on_expansion_lifted)
+		# Roof-top-centred is only right for a unit that genuinely stacks
+		# externally — nothing ships yet. The N64's Expansion Pak/Jumper Pak
+		# port is inside the body, so its model relocates the socket behind a
+		# cover; every other model's override is a no-op and leaves it here.
+		_model.configure_expansion_socket(socket)
+		if not _restoring_from_save:
+			# Pak first, then the cover over it — the order the factory used.
+			_seed_default_occupant(socket)
+			_seed_expansion_cover()
 
 	if ExpansionCatalog.host_stands_on_unit(systemid) \
 			and get_node_or_null("ExpansionFoot") == null:
 		# Registered by hand: XRToolsPickable collects grab points in its own
 		# _ready, which ran long before the model was measured.
 		_grab_points.push_back(ExpansionPort.build_foot(self, aabb.position.y, span))
+
+
+## Seats the console's default-occupant expansion (a Jumper Pak) the moment a
+## FRESH socket is built for it -- never on a restore, which is why the caller
+## already checked _restoring_from_save. A restored console's own
+## "expansions" list (scene_persistence -> restore_expansion) is the whole
+## truth about what is bolted on there, whether that is this same unit, a real
+## Expansion Pak the player installed, or nothing; seeding on top of that would
+## leave a second Jumper Pak with nowhere to go, since the socket holds one
+## object and the save's own restore_expansion call would simply evict this one
+## un-tracked.
+func _seed_default_occupant(socket: XRToolsSnapZone) -> void:
+	var default_id := ExpansionCatalog.default_occupant_for(systemid)
+	if default_id.is_empty():
+		return
+	var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
+	unit.expansion_id = default_id
+	get_tree().current_scene.add_child(unit)
+	unit.add_to_group("spawned")
+	unit.global_position = global_position
+	socket.pick_up_object(unit)
+
+
+## Puts the lid on a fresh console's expansion bay, for a model that has one.
+## Same restore rule as the pak underneath it: never on a restore, where the
+## save's own record — lid on the console, or lid left on a table across the
+## room — is the whole truth. A player who lost theirs stays without one.
+func _seed_expansion_cover() -> void:
+	var zone := _model.expansion_cover_slot() if _model != null else null
+	if zone == null or zone.has_snapped_object():
+		return
+	var cover := EXPANSION_COVER_SCENE.instantiate() as ExpansionCover
+	get_tree().current_scene.add_child(cover)
+	cover.add_to_group("spawned")
+	cover.global_position = global_position
+	zone.pick_up_object(cover)
+
+
+## The lid seated on this console's expansion bay, or null when it is off —
+## what a save records. Null on every console whose model has no such bay.
+func get_expansion_cover() -> Node3D:
+	var zone := _model.expansion_cover_slot() if _model != null else null
+	if zone == null:
+		return null
+	return zone.picked_up_object as Node3D
+
+
+## Put a saved lid back on. The counterpart of get_expansion_cover, called from
+## the restore's second pass the way restore_memory_card is.
+func restore_expansion_cover(cover: Node3D) -> void:
+	var zone := _model.expansion_cover_slot() if _model != null else null
+	if zone != null and cover != null:
+		zone.pick_up_object(cover)
 
 
 ## Roof-socket gate: is this a unit that mounts on THIS console?
@@ -3349,6 +3425,47 @@ func _disk_drive_options(core: String) -> Dictionary:
 		var api := AppPrefs.hw_render_for(core)
 		return {"mupen64plus-rdp-plugin": "parallel" if api == "vulkan" else "angrylion"}
 	return {}
+
+
+## The Expansion Pak is a physical RAM module with no media of its own -- unlike
+## the 64DD above, there is no launch recipe for it, so this is the only thing
+## it does at all.
+##
+## Both cores were measured (Tools/cores/core_options_probe.gd) rather than
+## guessed, and both already emulate WITH the pak installed by default:
+## mupen64plus_next's mupen64plus-ForceDisableExtraMem defaults to False (the
+## description reads "Disable Expansion Pak", so False means the pak stays in),
+## and parallel_n64's parallel-n64-disable_expmem defaults to "enabled" (its own
+## description is "Enable Expansion Pak RAM", so "enabled" names the RAM, not
+## the disabling). That is why this pins BOTH directions and not only the
+## attached one, unlike _disk_drive_options above -- a bare console has to be
+## pushed OFF the core's own default, or every Nintendo 64 in the room would
+## already have 8 MB whether or not a player ever placed the pack.
+func _expansion_pak_options(core: String) -> Dictionary:
+	var attached := expansion_ids().has("expansion_pak")
+	if core == "mupen64plus_next":
+		return {"mupen64plus-ForceDisableExtraMem": "False" if attached else "True"}
+	if core == "parallel_n64":
+		return {"parallel-n64-disable_expmem": "enabled" if attached else "disabled"}
+	return {}
+
+
+## The FM Sound Unit adds a YM2413 chip an export Master System never had.
+## genesis_plus_gx_ym2413 (measured, Tools/cores/core_options_probe.gd) defaults
+## to "auto", which follows the ROM's own region byte -- a fact about the
+## cartridge, not about whether this room's player ever placed the accessory.
+## So "auto" is left alone for nothing: pinned "enabled" with the unit on and
+## "disabled" with it off, the same both-directions shape as the Expansion Pak
+## above and for the same reason.
+##
+## Gated on systemid rather than only on expansion_ids(), unlike the Pak: this
+## core also runs the Mega Drive, Game Gear and SG-1000, none of which this key
+## means anything for, and expansion_ids() is empty on all of them regardless --
+## without the gate every one of those machines would be pinned "disabled" too.
+func _fm_sound_unit_options(core: String) -> Dictionary:
+	if systemid != "master_system" or core != "genesis_plus_gx":
+		return {}
+	return {"genesis_plus_gx_ym2413": "enabled" if expansion_ids().has("fm_sound_unit") else "disabled"}
 
 
 ## The measured options that make this machine show its own boot screen, unless

@@ -78,6 +78,23 @@ func _console(systemid: String) -> RetroSystem:
 	return sys
 
 
+## A console built the way a save restore builds one — the flag set before
+## add_child, exactly like scene_persistence.gd sets it, so a default-occupant
+## accessory (the N64's Jumper Pak) does not seed itself on top of whatever the
+## save's own restore_expansion call is about to seat.
+func _restored_console(systemid: String) -> RetroSystem:
+	var sys := SYSTEM_SCENE.instantiate() as RetroSystem
+	sys.systemid = systemid
+	sys._restoring_from_save = true
+	sys.position = Vector3(_spawned.size() * 2.0, 1, 0)
+	sys.freeze = true
+	add_child(sys)
+	sys.add_to_group("spawned")
+	_spawned.append(sys)
+	await _wait(30)
+	return sys
+
+
 func _unit(expansion_id: String) -> RetroExpansion:
 	var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
 	unit.expansion_id = expansion_id
@@ -170,12 +187,105 @@ func _group_fit() -> void:
 	_check(not md._accepts_media(dd),
 		"fit/ and refuses a 64DD, which belongs to another console entirely")
 
-	# A console nothing mounts above must not grow a socket — an empty one would
-	# still light a snap ghost and offer a join that does not exist.
-	_check(n64.get_node_or_null("ExpansionSocket") == null,
-		"fit/ a Nintendo 64 has nothing standing on it, so no roof socket")
+	# The Power Base Converter is shaped the same way: it IS a cartridge, so it
+	# grows no socket or foot of its own either.
+	var pbc := await _unit("power_base_converter")
+	_check(pbc.get_socket() == null, "fit/ the converter has no socket")
+	_check(pbc.get_node_or_null("ExpansionFoot") == null, "fit/ and no foot")
+	_check(md._accepts_media(pbc), "fit/ the Mega Drive's slot takes the converter")
+	_check(pbc.get_node_or_null("MediaBay") != null,
+		"fit/ but unlike a 32X it has a bay of its own, for the Master System cartridge")
+
+	# The FM unit is shaped the same way, but host and media are the same
+	# systemid rather than two different ones.
+	var fm := await _unit("fm_sound_unit")
+	var sms := await _console("master_system")
+	_check(fm.get_socket() == null, "fit/ the FM unit has no socket")
+	_check(fm.get_node_or_null("ExpansionFoot") == null, "fit/ and no foot")
+	_check(sms._accepts_media(fm), "fit/ a Master System's slot takes the FM unit")
+	_check(fm.get_node_or_null("MediaBay") != null,
+		"fit/ and it has a bay of its own, for the game cartridge that passes through")
+
+	# The Expansion Pak is the first MOUNT_ABOVE row: the console grows a socket
+	# of its own, on its roof by default (the N64 model relocates it forward
+	# onto its own deck — see model tests), entirely separate from the
+	# cartridge slot — unlike the Mega Drive above (nothing mounts above IT),
+	# a Nintendo 64 now DOES grow one, whether or not a player has ever put
+	# anything in it.
+	var pak := await _unit("expansion_pak")
+	var pak_socket := n64.get_node_or_null("ExpansionSocket") as XRToolsSnapZone
+	_check(pak_socket != null,
+		"fit/ the Nintendo 64 grows an ExpansionSocket for the Expansion Pak")
+	_check(n64.expansion_ids() == ["jumper_pak"],
+		"fit/ and a Jumper Pak seats itself there the moment the socket is built")
+	_check(pak_socket != null and pak_socket.snap_filter.call(pak),
+		"fit/ the socket takes an Expansion Pak")
+	_check(pak_socket != null and not pak_socket.snap_filter.call(dd),
+		"fit/ and refuses a 64DD, which mounts the other way round")
+	_check(pak.get_socket() == null, "fit/ the pak itself wears no socket")
+	_check(pak.get_node_or_null("ExpansionFoot") != null,
+		"fit/ it wears the foot instead, on its underside")
+	_check(pak.get_node_or_null("MediaBay") == null,
+		"fit/ and no bay — it carries no media of its own")
 	_check(n64.get_node_or_null("ExpansionFoot") != null,
-		"fit/ but it does stand on something, so it has a foot")
+		"fit/ the console still stands on the 64DD too, independent of the pak's socket")
+
+	# The N64's own model relocates that socket forward, off the cartridge
+	# deck and onto the top surface in front of the cart slot, under a
+	# lift-off cover — configure_expansion_socket, RetroSystemModelNintendo64.
+	var cart_seat := n64._model.get_node_or_null("CartSeat") as Node3D
+	_check(pak_socket != null and cart_seat != null
+			and pak_socket.position.z > cart_seat.position.z,
+		"fit/ and the N64 model moves it in front of the cart slot, not centred over it")
+
+	# A fresh console comes with the lid ON, which shuts the bay: no hand can
+	# reach the pak and the pak is out of sight, exactly what the lid is for.
+	var cover_slot := (n64._model as RetroSystemModelNintendo64).expansion_cover_slot()
+	_check(cover_slot != null and cover_slot.has_snapped_object(),
+		"fit/ and a fresh console wears its bay lid")
+	_check(n64.get_expansion_cover() != null,
+		"fit/ which the console reports, so a save can record it")
+	_check(pak_socket != null and not pak_socket.enabled,
+		"fit/ covered, the socket refuses a hand")
+	_check(pak_socket != null and not pak_socket.visible,
+		"fit/ and stays out of sight — which is what hides the Jumper Pak inside")
+
+	# Pull the lid OFF, the way a hand does: it is a separate pickable, so this
+	# is an ordinary unsnap, and it leaves the lid loose in the room.
+	var lid := n64.get_expansion_cover()
+	await _unbolt(cover_slot, lid)
+	_check(n64.get_expansion_cover() == null, "fit/ pulled off, the console has no lid on it")
+	_check(is_instance_valid(lid), "fit/ and the lid still exists, loose, to be put back")
+	_check(pak_socket != null and pak_socket.enabled,
+		"fit/ uncovered, the socket takes a hand again")
+	_check(pak_socket != null and pak_socket.visible,
+		"fit/ and the Jumper Pak inside is visible")
+
+	# The upgrade itself: seating the Expansion Pak into the SAME occupied
+	# socket evicts the Jumper Pak — XRToolsSnapZone.pick_up_object drops
+	# whatever it is already holding before it takes the new object. This is
+	# the whole mechanism behind "pull the Jumper Pak, put the Expansion Pak
+	# in its place": no bespoke swap code, just one socket that holds one thing.
+	await _bolt(n64, pak)
+	_check(n64.expansion_ids() == ["expansion_pak"],
+		"fit/ seating the Expansion Pak evicts the Jumper Pak from the same socket")
+	_check(pak.get_host() == n64, "fit/ and the Expansion Pak is now what's bolted on")
+
+	# And the lid goes back on over the upgrade, shutting the bay again.
+	n64.restore_expansion_cover(lid)
+	await _wait(5)
+	_check(n64.get_expansion_cover() == lid, "fit/ the lid goes back on over the new pak")
+	_check(pak_socket != null and not pak_socket.enabled,
+		"fit/ shutting the bay once more")
+	await _clear()
+
+	# A console being RESTORED must not seed one at all — the save's own
+	# restore_expansion call (driven by whatever it actually recorded: a
+	# Jumper Pak, a real Expansion Pak, or nothing) is the only source of
+	# truth there.
+	var restored := await _restored_console("nintendo_64")
+	_check(restored.expansion_ids().is_empty(),
+		"fit/ a console flagged as restoring seeds no default occupant of its own")
 	await _clear()
 
 
@@ -187,7 +297,12 @@ func _group_join() -> void:
 	var n64 := await _console("nintendo_64")
 	await _bolt(n64, dd)
 
-	_check(n64.expansion_ids() == ["nintendo_64dd"], "join/ the console knows what is under it")
+	# The Jumper Pak seats itself in the roof socket the moment that socket is
+	# built (see fit/), entirely independent of the 64DD underneath — the two
+	# use different sockets and coexist without either test needing to know
+	# about the other.
+	_check(n64.expansion_ids() == ["nintendo_64dd", "jumper_pak"],
+		"join/ the console knows what is under it, and its own Jumper Pak too")
 	_check(dd.get_host() == n64, "join/ and the unit knows what is on it")
 	_check("Nintendo 64DD" in n64._display_name(),
 		"join/ the assembled machine says what it has become")
@@ -201,7 +316,8 @@ func _group_join() -> void:
 		"join/ the console travels with the base it is standing on")
 
 	await _unbolt(dd.get_socket(), n64)
-	_check(n64.expansion_ids().is_empty(), "join/ lifting the console off unbolts it")
+	_check(n64.expansion_ids() == ["jumper_pak"],
+		"join/ lifting the console off unbolts it, leaving only its own Jumper Pak")
 	_check(dd.get_host() == null, "join/ from the unit's side too")
 	await _clear()
 
@@ -213,6 +329,38 @@ func _group_join() -> void:
 	_check(thirty_two_x.get_host() == md, "join/ and knows which console it is on")
 	await _unbolt(md._cartridge_slot, thirty_two_x)
 	_check(md.expansion_ids().is_empty(), "join/ taking it out of the slot unbolts it")
+	await _clear()
+
+	var md2 := await _console("mega_drive")
+	var pbc := await _unit("power_base_converter")
+	await _bolt(md2, pbc)
+	_check(md2.expansion_ids() == ["power_base_converter"],
+		"join/ the converter in the cartridge slot is bolted on")
+	_check(pbc.get_host() == md2, "join/ and knows which console it is on")
+	await _unbolt(md2._cartridge_slot, pbc)
+	_check(md2.expansion_ids().is_empty(), "join/ taking it out of the slot unbolts it")
+	await _clear()
+
+	var sms := await _console("master_system")
+	var fm := await _unit("fm_sound_unit")
+	await _bolt(sms, fm)
+	_check(sms.expansion_ids() == ["fm_sound_unit"],
+		"join/ the FM unit in the cartridge slot is bolted on")
+	_check(fm.get_host() == sms, "join/ and knows which console it is on")
+	await _unbolt(sms._cartridge_slot, fm)
+	_check(sms.expansion_ids().is_empty(), "join/ taking it out of the slot unbolts it")
+	await _clear()
+
+	# The third direction: the console owns the socket, same as a 64DD, but the
+	# UNIT is what stands on top rather than what the console stands on.
+	var n64b := await _console("nintendo_64")
+	var pak := await _unit("expansion_pak")
+	await _bolt(n64b, pak)
+	_check(n64b.expansion_ids() == ["expansion_pak"], "join/ the pak in the roof socket is bolted on")
+	_check(pak.get_host() == n64b, "join/ and knows which console it is on")
+	await _unbolt(n64b.get_node("ExpansionSocket") as XRToolsSnapZone, pak)
+	_check(n64b.expansion_ids().is_empty(), "join/ taking it off the roof unbolts it")
+	_check(pak.get_host() == null, "join/ from the unit's side too")
 	await _clear()
 
 
@@ -534,6 +682,50 @@ func _group_media() -> void:
 		"media/ and fits a Super Famicom with no base station under it")
 	await _clear()
 
+	# The Power Base Converter's own bay takes a Master System cartridge, and
+	# the assembled machine boots from IT — the converter passes the cartridge
+	# through, so the core is handed the converter's bay, not the empty Genesis
+	# slot underneath.
+	var pbc := await _unit("power_base_converter")
+	var genesis := await _console("mega_drive")
+	await _bolt(genesis, pbc)
+
+	var sms_cart := await _cart("master_system", "/roms/master_system/game.sms")
+	var not_sms := await _cart("mega_drive", "/roms/mega_drive/other.md")
+	_check(pbc.get_node_or_null("MediaBay") != null, "media/ the converter has a bay of its own")
+	_check(pbc._accepts_media(sms_cart),
+		"media/ which takes a Master System cartridge")
+	_check(not pbc._accepts_media(not_sms), "media/ and refuses a Genesis cartridge")
+
+	pbc.restore_media(sms_cart)
+	await _wait(5)
+	var pbc_boot := genesis.expansion_boot()
+	_check(str(pbc_boot.get("core", "")) == "genesis_plus_gx",
+		"media/ the converter stacks a genesis_plus_gx machine")
+	_check(genesis._expansion_roms(pbc_boot) == ["/roms/master_system/game.sms"],
+		"media/ and boots from the converter's bay")
+	await _clear()
+
+	# The FM Sound Unit is the same pass-through, on a console whose own media
+	# systemid is the same as the unit's.
+	var fm := await _unit("fm_sound_unit")
+	var sms := await _console("master_system")
+	await _bolt(sms, fm)
+
+	var sms_cart2 := await _cart("master_system", "/roms/master_system/other.sms")
+	_check(fm._accepts_media(sms_cart2), "media/ the FM unit's bay takes a Master System cartridge")
+	_check(not fm._accepts_media(await _cart("mega_drive", "/roms/mega_drive/x.md")),
+		"media/ and refuses a Genesis cartridge")
+
+	fm.restore_media(sms_cart2)
+	await _wait(5)
+	var fm_boot := sms.expansion_boot()
+	_check(str(fm_boot.get("core", "")) == "genesis_plus_gx",
+		"media/ the FM unit stacks a genesis_plus_gx machine")
+	_check(sms._expansion_roms(fm_boot) == ["/roms/master_system/other.sms"],
+		"media/ and boots from the FM unit's bay")
+	await _clear()
+
 
 # ── launch ────────────────────────────────────────────────────────────────────
 
@@ -608,6 +800,70 @@ func _group_launch() -> void:
 		"launch/ and the core is handed the cartridge, not the disk")
 	_check(not n64._all_forced_options("mupen64plus_next").has("mupen64plus-64dd-hardware"),
 		"launch/ and pins no 64dd option, because that core has none")
+	await _clear()
+
+	var pbc := await _unit("power_base_converter")
+	var pbc_host := await _console("mega_drive")
+	var bare_options := (await _console("mega_drive"))._all_forced_options("genesis_plus_gx")
+	await _bolt(pbc_host, pbc)
+	_check(pbc_host.resolve_core_name() == "genesis_plus_gx",
+		"launch/ a Mega Drive with a converter on it is still a genesis_plus_gx machine")
+	_check(pbc_host._all_forced_options("genesis_plus_gx") == bare_options,
+		"launch/ and the converter pins no option beyond what a bare console already pins — "
+		+ "the core sees the cartridge as-is")
+	await _clear()
+
+	# The FM Sound Unit: genesis_plus_gx_ym2413 defaults to "auto", which follows
+	# the ROM's own region byte and knows nothing about this room, so a bare
+	# Master System is pinned "disabled" rather than left on the core's default.
+	var sms_bare := await _console("master_system")
+	_check(sms_bare._all_forced_options("genesis_plus_gx")
+			.get("genesis_plus_gx_ym2413", "") == "disabled",
+		"launch/ a bare Master System pins FM off rather than trusting auto")
+	await _clear()
+
+	var sms_fm := await _console("master_system")
+	var fm := await _unit("fm_sound_unit")
+	await _bolt(sms_fm, fm)
+	_check(sms_fm.resolve_core_name() == "genesis_plus_gx",
+		"launch/ a Master System with an FM unit on it is still a genesis_plus_gx machine")
+	_check(sms_fm._all_forced_options("genesis_plus_gx")
+			.get("genesis_plus_gx_ym2413", "") == "enabled",
+		"launch/ and with the unit on, FM is pinned on")
+
+	# The key is Master System-specific: a Mega Drive on the very same core must
+	# not be pinned by it, or every Genesis in the room would show a meaningless
+	# "pinned" FM option in its options panel.
+	var md_check := await _console("mega_drive")
+	_check(not md_check._all_forced_options("genesis_plus_gx").has("genesis_plus_gx_ym2413"),
+		"launch/ and a Mega Drive on the same core is not pinned at all")
+	await _clear()
+
+	# The Expansion Pak has no BOOT row at all — it changes no core and carries
+	# no media, so the forced-option pin is the only thing it does. Both cores
+	# were measured (Tools/cores/core_options_probe.gd) to already emulate WITH
+	# the pak installed by default, so a BARE console is what needs pushing off
+	# the core's own default, not the attached one.
+	var n64_bare := await _console("nintendo_64")
+	_check(ExpansionCatalog.boot_for("nintendo_64", ["expansion_pak"]).is_empty(),
+		"launch/ the pak alone has no launch recipe")
+	_check(n64_bare._all_forced_options("mupen64plus_next")
+			.get("mupen64plus-ForceDisableExtraMem", "") == "True",
+		"launch/ a bare N64 is pushed off mupen64plus_next's own pak-enabled default")
+	_check(n64_bare._all_forced_options("parallel_n64")
+			.get("parallel-n64-disable_expmem", "") == "disabled",
+		"launch/ and off parallel_n64's own default the same way")
+	await _clear()
+
+	var n64_pak := await _console("nintendo_64")
+	var epak := await _unit("expansion_pak")
+	await _bolt(n64_pak, epak)
+	_check(n64_pak._all_forced_options("mupen64plus_next")
+			.get("mupen64plus-ForceDisableExtraMem", "") == "False",
+		"launch/ with a pak bolted on, mupen64plus_next is pinned back to its own default")
+	_check(n64_pak._all_forced_options("parallel_n64")
+			.get("parallel-n64-disable_expmem", "") == "enabled",
+		"launch/ and parallel_n64 is pinned to match")
 	await _clear()
 
 

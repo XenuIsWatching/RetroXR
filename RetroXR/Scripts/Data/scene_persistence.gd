@@ -47,7 +47,7 @@ const _BOOL_FIELDS := ["video_out", "ignore_gravity", "crt_enabled", "half_pages
 	"locked"]
 const _REFERENCE_FIELDS := [
 	"tv", "cartridge", "memcard", "tape", "disc", "media", "system",
-	"nunchuk", "motion_plus",
+	"nunchuk", "motion_plus", "expansion_cover",
 ]
 ## Stamped on a mod prop when it spawns, so _serialize_node can recognise it
 ## without a class to test against. The value is the registered type string.
@@ -111,6 +111,10 @@ const _SPECIALIZED_TYPES := [
 	# it is and what is in its bay; which console it is attached to is restored
 	# from the CONSOLE's entry, the way a memory card's slot is.
 	"expansion",
+	# The lid over an expansion bay. Its own entry is just "a lid exists, here";
+	# whether it is ON a console or lying where a player put it down comes from
+	# that console's entry, same as the units above.
+	"expansion_cover",
 ]
 
 ## Bumped by every async restore as it starts. Because those yield frames, a
@@ -122,6 +126,7 @@ static var _restore_generation := 0
 
 const SYSTEM_SCENE           := preload("res://Scenes/Objects/system.tscn")
 const EXPANSION_SCENE        := preload("res://Scenes/Objects/expansion.tscn")
+const EXPANSION_COVER_SCENE  := preload("res://Scenes/Objects/expansion_cover.tscn")
 const TV_SCENE               := preload("res://Scenes/Objects/tv.tscn")
 const CART_SCENE             := preload("res://Scenes/Objects/media/cartridge.tscn")
 const DISC_SCENE             := preload("res://Scenes/Objects/media/disc.tscn")
@@ -1250,6 +1255,12 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		var memcard_b := _resolve_ref(root, spawned, d.get("memcard_b")) as MemoryCard
 		if memcard_b:
 			sys.restore_memory_card(memcard_b, 1)
+		# The expansion-bay lid, if this save had it ON the console. A save with
+		# none leaves the bay open, which is a real state: the lid is then a
+		# loose object restored from its own entry, wherever it was put down.
+		var cover := _resolve_ref(root, spawned, d.get("expansion_cover")) as ExpansionCover
+		if cover:
+			sys.restore_expansion_cover(cover)
 		# After the media, and deferred: seating a cartridge swings the bay open (the
 		# NES flap) and tweens it there, either of which would otherwise win over the
 		# pose the system restored when its model loaded.
@@ -1504,6 +1515,10 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 			"cartridge": _ref(node_to_id, sys.get_snapped_cartridge()),
 			"memcard": _ref(node_to_id, sys.get_snapped_memcard(0)),
 			"memcard_b": _ref(node_to_id, sys.get_snapped_memcard(1)),
+			# Null once a player has pulled the lid off and put it down — a
+			# state worth keeping, since the pak under it is only reachable
+			# while the lid stays off.
+			"expansion_cover": _ref(node_to_id, sys.get_expansion_cover()),
 			"video_out": sys.video_out_enabled,
 			"ignore_gravity": sys.ignore_gravity,
 		})
@@ -1617,6 +1632,11 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 			"card_id": card.card_id,
 			"card_label": card.card_label,
 		})
+	elif node is ExpansionCover:
+		# Nothing to record but its existence and where it is: a lid is
+		# interchangeable, and which console it belongs on comes from that
+		# console's own "expansion_cover" reference.
+		return _base(id, "expansion_cover", n3d)
 	elif node is Poster:
 		var poster := node as Poster
 		return _base(id, "poster", n3d).merged({
@@ -1945,6 +1965,8 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				card.card_id = data.get("card_id", "")
 				card.card_label = data.get("card_label", "MEMORY CARD")
 				obj = card
+			"expansion_cover":
+				obj = EXPANSION_COVER_SCENE.instantiate() as ExpansionCover
 			"poster":
 				var poster := POSTER_SCENE.instantiate() as Poster
 				# Size and mode BEFORE the path: the image setter derives the

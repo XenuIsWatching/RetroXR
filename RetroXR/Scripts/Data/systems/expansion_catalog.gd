@@ -54,6 +54,19 @@
 ##               without this its rom_path stays empty and a pairing that needs
 ##               it degrades to a plain load without saying so. See
 ##               RetroSystem._expansion_roms.
+##   cap_color   a coloured plate across the unit's top face, for a unit whose
+##               real shell is not all one colour. The Expansion Pak's red top
+##               is the one that needs it — it is how a player tells the
+##               upgrade from the Jumper Pak it replaces at a glance, in a bay
+##               where both are the same size and shape. Absent means plain.
+##   default_occupant
+##               this unit comes pre-installed on a bare console — a Jumper
+##               Pak, not something a player goes looking for. RetroSystem
+##               seats one automatically the first time a fresh console of the
+##               matching host is built, and never on a restore, where
+##               whatever the save recorded (this unit, a real upgrade, or
+##               nothing) always wins. See default_occupant_for and
+##               RetroSystem._seed_default_occupant.
 ##
 ## Which way a unit mounts is the whole of the geometry: the LOWER object always
 ## wears the socket (a snap zone on its top face) and the UPPER object always
@@ -81,6 +94,8 @@ const SAVE_OWNER_UNIT := ExpansionDefs.SAVE_OWNER_UNIT
 ## picodrive because of the 32X, so it lives in sega_32x.gd.
 const _UNITS: Array = [
 	preload("res://Scripts/Data/systems/expansions/nintendo_64dd.gd"),
+	preload("res://Scripts/Data/systems/expansions/expansion_pak.gd"),
+	preload("res://Scripts/Data/systems/expansions/jumper_pak.gd"),
 	preload("res://Scripts/Data/systems/expansions/fds.gd"),
 	preload("res://Scripts/Data/systems/expansions/satellaview.gd"),
 	preload("res://Scripts/Data/systems/expansions/bsx_cart.gd"),
@@ -89,6 +104,8 @@ const _UNITS: Array = [
 	preload("res://Scripts/Data/systems/expansions/super_game_boy_2.gd"),
 	preload("res://Scripts/Data/systems/expansions/sega_cd.gd"),
 	preload("res://Scripts/Data/systems/expansions/sega_32x.gd"),
+	preload("res://Scripts/Data/systems/expansions/power_base_converter.gd"),
+	preload("res://Scripts/Data/systems/expansions/fm_sound_unit.gd"),
 	preload("res://Scripts/Data/systems/expansions/pc_engine_cd.gd"),
 	preload("res://Scripts/Data/systems/expansions/jaguar_cd.gd"),
 	preload("res://Scripts/Data/systems/expansions/ereader.gd"),
@@ -102,8 +119,9 @@ const _UNITS: Array = [
 ## lookup just misses. Assembly walks this list rather than either source, so a
 ## unit file reordered in _UNITS cannot change it.
 const _ORDER: Array = [
-	"nintendo_64dd", "fds", "satellaview", "bsx_cart", "sufami_turbo",
-	"super_game_boy", "super_game_boy_2", "sega_cd", "sega_32x",
+	"nintendo_64dd", "expansion_pak", "jumper_pak", "fds", "satellaview",
+	"bsx_cart", "sufami_turbo", "super_game_boy", "super_game_boy_2",
+	"sega_cd", "sega_32x", "power_base_converter", "fm_sound_unit",
 	"pc_engine_cd", "jaguar_cd", "ereader", "ereader_plus", "ereader_usa",
 ]
 
@@ -539,6 +557,26 @@ static func ids_for_host(host: String) -> Array[String]:
 	return out
 
 
+## The colour of this unit's top plate, or a fully transparent colour when the
+## row names none — which is every unit but the Expansion Pak. Alpha is the
+## "has one" test rather than a second field, since a plate you cannot see is
+## the same thing as no plate.
+static func cap_color_of(id: String) -> Color:
+	return row(id).get("cap_color", Color(0, 0, 0, 0))
+
+
+## The id of the unit that comes pre-installed on a bare `host` console, or ""
+## if the host has none. There is never more than one per host — a console
+## with two rows both marked default_occupant would be a data error, not a
+## real machine — so the first match wins rather than asserting, the same
+## tolerance every other lookup here extends to a malformed row.
+static func default_occupant_for(host: String) -> String:
+	for id: String in ids_for_host(host):
+		if bool((ROWS[id] as Dictionary).get("default_occupant", false)):
+			return id
+	return ""
+
+
 ## True when this console has anything at all to bolt to it — what the console
 ## asks before growing an expansion port on its floor.
 static func host_has_expansions(host: String) -> bool:
@@ -582,16 +620,32 @@ static func save_owner_of(id: String) -> String:
 ## Dictionary when the combination has none. `ids` need not be sorted.
 static func boot_for(host: String, ids: Array) -> Dictionary:
 	var key := host
-	for id in sorted_ids(ids):
+	for id in _sorted_ids_excluding_defaults(ids):
 		key += "|" + id
 	return BOOT.get(key, {})
 
 
+## sorted_ids with any default_occupant id (a Jumper Pak) filtered back out.
+## A default occupant is functionally inert by definition — it exists so a
+## socket is never empty on a fresh console, not so its mere presence changes
+## which recipe a stack resolves to or what its nameplate reads. Without this,
+## the N64's Jumper Pak would silently need every existing "nintendo_64|..."
+## BOOT key rewritten to include it, and would still need rewriting again the
+## day a second default-occupant row exists elsewhere.
+static func _sorted_ids_excluding_defaults(ids: Array) -> Array[String]:
+	var out: Array[String] = []
+	for id in sorted_ids(ids):
+		if not bool((ROWS[id] as Dictionary).get("default_occupant", false)):
+			out.append(id)
+	return out
+
+
 ## The name a stack goes by — "Mega Drive + Mega-CD + 32X". Printed on the
 ## console's nameplate while anything is attached, so a player can see at a
-## glance which machine they have actually built.
+## glance which machine they have actually built. A default occupant (a
+## Jumper Pak) never appears here — see _sorted_ids_excluding_defaults.
 static func stack_label(host_label: String, ids: Array) -> String:
 	var parts := PackedStringArray([host_label])
-	for id in sorted_ids(ids):
+	for id in _sorted_ids_excluding_defaults(ids):
 		parts.append(label_of(id))
 	return " + ".join(parts)
