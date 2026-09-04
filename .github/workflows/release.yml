@@ -219,12 +219,30 @@ jobs:
         shell: pwsh
         run: |
           & $env:GODOT --headless --path RetroXR --install-android-build-template --quit
+          # This command is allowed to fail, and does: it usually installs
+          # nothing, and on 4.7 it segfaults on the way out - exit 139, with no
+          # GDExtension teardown, so the absence of "PDFium library destroyed"
+          # in the log is the tell. The unpack below is the real install path,
+          # which is why the failure has always been tolerated. What was NOT
+          # tolerated is its exit code: GitHub's pwsh wrapper ends the script
+          # with `exit $LASTEXITCODE`, and a native command's code survives
+          # every cmdlet after it, so the crash failed this step with the
+          # template sitting correctly installed. That is what killed v0.5.1.
+          $global:LASTEXITCODE = 0
           if (-not (Test-Path RetroXR/android/build/build.gradle)) {
             Write-Host "CLI install produced nothing - unpacking android_source.zip"
             New-Item -ItemType Directory -Force RetroXR/android/build | Out-Null
             $src = "$env:APPDATA\Godot\export_templates\$env:GODOT_TEMPLATE_DIR\android_source.zip"
             Expand-Archive $src -DestinationPath RetroXR/android/build -Force
             Set-Content RetroXR/android/.build_version $env:GODOT_TEMPLATE_DIR
+          }
+          # Now assert what the step is actually for. Either path may fail on
+          # its own; between them producing no template is the real failure,
+          # and it belongs here rather than surfacing as a confusing
+          # Add-Content error further down.
+          if (-not (Test-Path RetroXR/android/build/build.gradle)) {
+            Write-Host "::error::no Android build template after both the CLI install and android_source.zip"
+            exit 1
           }
           # A cached gradle dir can re-serve a stale .gdc; the assets staging
           # dirs are never worth keeping between runs.
