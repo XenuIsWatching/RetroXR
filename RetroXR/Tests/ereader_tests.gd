@@ -308,10 +308,39 @@ func _group_catalog() -> void:
 			entry_exts.append(e.strip_edges().to_lower())
 	_check("raw" not in entry_exts,
 		"catalog/ and its core's own entry does not carry it")
-	var tile := SpawnCatalog.items_for(ID)
-	for item: Dictionary in tile:
-		_eq(str(item.get("spawn", "")), "expansion:ereader",
-			"catalog/ its tile offers only the reader, not %s" % str(item.get("label", "")))
+	# Readers and nothing else on the tile -- whichever revisions are installed.
+	var readers := ["expansion:ereader", "expansion:ereader_plus", "expansion:ereader_usa"]
+	for item: Dictionary in SpawnCatalog.items_for(ID):
+		_check(str(item.get("spawn", "")) in readers,
+			"catalog/ its tile offers only readers, not %s" % str(item.get("label", "")))
+
+	# One unit per reader revision, because a reader IS its dump: cards are
+	# region-locked, and firmware_rom_path deliberately takes the FIRST name
+	# rather than any that happens to be on disk. Naming all three as
+	# alternatives on one row would gate correctly and then hand every player
+	# the Japanese program.
+	for rev: Array in [["ereader", "ereader.gba"], ["ereader_plus", "ereader_plus.gba"],
+			["ereader_usa", "ereader_usa.gba"]]:
+		var rid := str(rev[0])
+		var dump := str(rev[1])
+		_check(ExpansionCatalog.ROWS.has(rid), "catalog/ %s has a row" % rid)
+		_eq(ExpansionCatalog.firmware_of(rid), [dump] as Array,
+			"catalog/ %s wants %s and only that" % [rid, dump])
+		_check(ExpansionCatalog.firmware_rom_path(rid).ends_with(dump),
+			"catalog/ %s runs %s" % [rid, dump])
+		_eq(ExpansionCatalog.media_of(rid), "ereader", "catalog/ %s reads the same cards" % rid)
+		_eq(ExpansionCatalog.card_systemid(rid), "ereader",
+			"catalog/ %s is offered from the e-Reader tile" % rid)
+		_eq(str(ExpansionCatalog.boot_for("game_boy_advance", [rid]).get("core", "")), "mgba",
+			"catalog/ %s boots on mgba" % rid)
+
+	# And the two later revisions have no tile of their own: three tiles over one
+	# shelf of cards would be two empty libraries.
+	for rid: String in ["ereader_plus", "ereader_usa"]:
+		_check(not ExpansionCatalog.has_own_card(rid),
+			"catalog/ %s does not claim a card of its own" % rid)
+		_check(ExpansionCatalog.ids_carded_on("ereader").has(rid),
+			"catalog/ %s is carded on the e-Reader" % rid)
 
 	# LOADER_SWIPE must be its own value: sharing one with LOADER_NONE would build
 	# the well bay this unit must not have.

@@ -1,7 +1,15 @@
-## Card e-Reader — a Game Boy Advance cartridge that reads printed dotcode cards.
+## Card e-Reader (Japan, PEAJ) — the original 4 MB reader.
 ##
-## One of the twelve expansion units; see ExpansionCatalog for how a unit file
-## is assembled into the catalog, and expansion_defs.gd for the MOUNT_* values.
+## One of three revisions, one unit each, because a reader IS its dump and the
+## dumps are not interchangeable: cards are region-locked and the reader answers
+## a foreign card with its own Region Error screen. See ereader_plus.gd and
+## ereader_usa.gd, which differ from this file only in their label and their
+## firmware. Splitting them is also what makes the gate honest -- a player with
+## only the US dump was offered no reader at all, because firmware_present only
+## ever asked about this one.
+##
+## See ExpansionCatalog for how a unit file is assembled into the catalog, and
+## expansion_defs.gd for the MOUNT_* values.
 extends RefCounted
 
 const ID := "ereader"
@@ -15,6 +23,8 @@ const ID := "ereader"
 # tile carries the reader and its cards and nothing else. An id that differed
 # from the media put the tile back on the generic console path, which offered a
 # Primitive System, a Primitive Controller and a composite lead for a cartridge.
+# The other two revisions have no card of their own and are therefore carded
+# HERE, which is where a player picking a reader is already standing.
 #
 # Its program is the e-Reader cartridge dump, read from mGBA's system dir like
 # the Super Game Boy's -- the unit is spawned from a menu and has no library
@@ -23,7 +33,7 @@ const ID := "ereader"
 #
 # Size is nominal, proportioned against the GBA cart it dwarfs; not measured.
 const ROW := {
-	"label": "e-Reader",
+	"label": "Card e-Reader",
 	"host": "game_boy_advance",
 	"media": "ereader",
 	"mount": ExpansionDefs.MOUNT_CARTRIDGE,
