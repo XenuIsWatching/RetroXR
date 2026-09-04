@@ -557,10 +557,8 @@ func _group_launch() -> void:
 	var dd := await _unit("nintendo_64dd")
 	var n64 := await _console("nintendo_64")
 	await _bolt(n64, dd)
-	# With the console's slot empty there is no combination, so the recipe names
-	# no core and the machine takes the player's own -- whatever they are already
-	# on for a Nintendo 64, which both N64 cores can take a bare disk with. It
-	# used to hardcode parallel_n64 here and switch them off it.
+	# With the console's slot empty the recipe names no core, so the machine takes
+	# the player's own -- either N64 core, both of which take a bare disk.
 	_check(not n64.expansion_boot().has("core"),
 		"launch/ a 64DD with nothing in the console names no core of its own")
 	n64.core_name = "parallel_n64"

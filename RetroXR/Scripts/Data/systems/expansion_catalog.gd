@@ -343,12 +343,10 @@ const ROWS: Dictionary = {
 ##            `core` above applies only while the CONSOLE's own slot is filled.
 ##            With it empty, expansion_boot() drops the core and the machine
 ##            resolves one the way a bare console does -- the player's own
-##            pick, or the manager's default for the systemid. Only the 64DD
-##            sets this, and only because it is the one stack where an empty
-##            console slot is an ordinary way to play (a lone disk) AND every
-##            core the player could be on handles it. Every other row pins its
-##            core either way: a Mega Drive on a Sega CD is a genesis_plus_gx
-##            machine with or without a cartridge above it.
+##            pick, or the manager's default for the systemid. Set it only for
+##            a stack whose empty-slot boot is an ordinary way to play AND
+##            whose every candidate core handles it; without it a row pins its
+##            core either way, which is what the other rows need.
 ##   options  core options the combination pins, the same way BiosBoot pins the
 ##            BIOS ones.
 ##   sidecar  a file extension the CORE looks for beside the host cartridge,
@@ -413,20 +411,15 @@ const BOOT: Dictionary = {
 	#   and is the mechanism this wants.
 	#
 	#   DISK ONLY (Mario Artist, Kyojin no Doshin) — the core is handed the .ndd
-	#   and no cartridge. This row names no core for that case at all: with the
-	#   console's slot empty there is no combination, and the machine takes
-	#   whatever core the player is already on for a Nintendo 64. Both cores
-	#   they could be on can take a bare disk — parallel_n64 always could, and
-	#   as of the retroXR fork vendored in core_sources.gd (tag
-	#   retroxr-mupen64plus-next-libretro-v1, both the plain and _gles3 builds)
-	#   so can mupen64plus_next, which detects a disk at load and issues
-	#   DISK_OPEN instead of the M64CMD_ROM_OPEN that made is_valid_rom() refuse
-	#   one. This used to hardcode parallel_n64 here, which switched a player
-	#   off their own core — on Android, off the CoreRecommendations default
-	#   mupen64plus_next_gles3 — and onto one they may not have installed.
-	#   NOT YET RUN against a real disk-only ROM on the mupen64plus_next side —
-	#   Tools/cores/n64dd_boot_probe exists for exactly that and should be run
-	#   before trusting it beyond "the core no longer refuses to load".
+	#   and no cartridge. The row names no core for that case (see
+	#   core_only_with_host): the machine takes whichever N64 core the player is
+	#   on, and both take a bare disk. parallel_n64 always could; mupen64plus_next
+	#   does as of the retroXR fork in core_sources.gd (tag
+	#   retroxr-mupen64plus-next-libretro-v1, plain and _gles3), which detects a
+	#   disk at load and issues DISK_OPEN rather than the M64CMD_ROM_OPEN that
+	#   made is_valid_rom() refuse one. Measured on the fork 2026-09-03 with
+	#   Mario Artist - Paint Studio: 1222 frames, IPL animation to 64DD logo to
+	#   title to gallery. The stock build refuses the same disk at 0 frames.
 	#
 	# Either way the IPL is the core's business: it ignores any path handed to it
 	# and reads <system>/Mupen64plus/IPL.n64 unconditionally.

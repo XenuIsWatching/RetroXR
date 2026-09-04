@@ -3008,12 +3008,10 @@ func expansion_boot() -> Dictionary:
 	var spec := ExpansionCatalog.boot_for(systemid, expansion_ids())
 	if spec.is_empty():
 		return spec
-	# A row that pins its core only while the console's own slot is filled (the
-	# 64DD, and only it) drops that core for a lone disk, so the machine
-	# resolves one the way a bare console does -- the player's own pick, or the
-	# manager's default. Hardcoding one here switched a player off the core they
-	# were already on and onto one they may not even have installed. Every other
-	# row keeps its core whether or not a cartridge is in the console.
+	# A row that pins its core only while the console's own slot is filled drops
+	# that core for a lone disk, so the machine resolves one the way a bare
+	# console does -- the player's own pick, or the manager's default. Every
+	# other row keeps its core whether or not a cartridge is in the console.
 	if spec.get("core_only_with_host", false) and _host_media_path().is_empty():
 		spec = spec.duplicate()
 		spec.erase("core")
