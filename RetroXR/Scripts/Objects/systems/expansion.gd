@@ -434,9 +434,21 @@ func _build_swipe_slit(s: Vector3, media: String) -> void:
 
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	# Deep enough in Y to catch a card whose edge is in the groove, tight in Z so
-	# a card held flat above the case does not arm it.
-	box.size = Vector3(s.x, card.y * 0.5, card.z + 0.006)
+	# The volume that WATCHES for a card, and it is deliberately generous.
+	#
+	# It was cut to the card's own thickness, 6.8 mm deep, so a card had to be
+	# lined up to within 3.4 mm of the groove plane before the groove would so
+	# much as notice it -- while being 22 mm forgiving in height. That is an
+	# invisible tolerance a hand cannot find, and it reads as the slot ignoring
+	# the card.
+	#
+	# It could not be any bigger while ENTRY was also the decision, since a pose
+	# sampled anywhere in here decided the whole pass. It is not any more:
+	# CardSwipeSlit.is_presenting arms on the card's own pose, so this box only
+	# has to answer "there is a card near the slot", and the sloppier it is the
+	# sooner a hand gets picked up. Wider than the case as well, because a pass
+	# has to clear both ends and can start beyond one.
+	box.size = Vector3(s.x + 0.03, card.y, 0.05)
 	shape.shape = box
 	_slit.add_child(shape)
 

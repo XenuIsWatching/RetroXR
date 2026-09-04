@@ -729,6 +729,23 @@ func _group_swipe() -> void:
 			grooves += 1
 	_eq(zones, 0, "swipe/ a swipe unit builds no snap zone")
 	_eq(grooves, 1, "swipe/ a swipe unit builds one groove")
+
+	# The volume that WATCHES for a card has to be findable by a hand. Cut to the
+	# card's own thickness it was 6.8 mm deep, so a card had to be within 3.4 mm
+	# of the groove plane before the groove noticed it at all -- an invisible
+	# tolerance, and it read as the slot ignoring the card. It can be sloppy now
+	# that is_presenting, not entry, decides when a pass starts.
+	var groove := unit.find_child("SwipeSlit", true, false) as CardSwipeSlit
+	var card_size := MediaDimensions.CARD_SIZE_EREADER
+	if groove != null:
+		var gshape := groove.get_child(0) as CollisionShape3D
+		var gbox := gshape.shape as BoxShape3D
+		_check(gbox.size.z >= card_size.z * 10.0,
+			"swipe/ the groove watches well clear of its own plane")
+		_check(gbox.size.y >= card_size.y * 0.9,
+			"swipe/ and up the height of a card")
+		_check(gbox.size.x > unit.size().x,
+			"swipe/ and past both ends, which a pass has to clear")
 	unit.queue_free()
 	await _wait(2)
 
