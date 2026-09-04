@@ -72,10 +72,21 @@ const SAVE_OWNER_UNIT := ExpansionDefs.SAVE_OWNER_UNIT
 
 
 ## Every expansion is a file of its own under expansions/, holding its ROW, the
-## BOOT recipes only it takes part in, and the notes for both. This array is the
-## migration front: what is not here yet is still in _LEGACY_ROWS below.
+## BOOT recipes only it takes part in, and the notes for both. A combination
+## recipe belongs to the unit that decides its core -- the Tower of Power is
+## picodrive because of the 32X, so it lives in sega_32x.gd.
 const _UNITS: Array = [
 	preload("res://Scripts/Data/systems/expansions/nintendo_64dd.gd"),
+	preload("res://Scripts/Data/systems/expansions/fds.gd"),
+	preload("res://Scripts/Data/systems/expansions/satellaview.gd"),
+	preload("res://Scripts/Data/systems/expansions/bsx_cart.gd"),
+	preload("res://Scripts/Data/systems/expansions/sufami_turbo.gd"),
+	preload("res://Scripts/Data/systems/expansions/super_game_boy.gd"),
+	preload("res://Scripts/Data/systems/expansions/super_game_boy_2.gd"),
+	preload("res://Scripts/Data/systems/expansions/sega_cd.gd"),
+	preload("res://Scripts/Data/systems/expansions/sega_32x.gd"),
+	preload("res://Scripts/Data/systems/expansions/pc_engine_cd.gd"),
+	preload("res://Scripts/Data/systems/expansions/jaguar_cd.gd"),
 ]
 
 ## The canonical order of the units, and it is LOAD-BEARING: sorted_ids() hands
@@ -95,243 +106,7 @@ const _ORDER: Array = [
 ## and carts for it with no second table.
 const _LEGACY_ROWS: Dictionary = {
 
-	# The RAM adapter goes into the Famicom's cartridge slot and the drive sits
-	# under the console. Modelled as one unit, because you cannot use either half
-	# on its own and RetroXR has no cable between them to draw.
-	"fds": {
-		"label": "Famicom Disk System",
-		"host": "nes",
-		"media": "fds",
-		"mount": MOUNT_BELOW,
-		"size": Vector3(0.28, 0.06, 0.22),
-		"loader": MediaDimensions.LOADER_SLOT,
-	},
-	# The BS-X unit clips under the Super Famicom. Its "media" is the 8M memory
-	# pack; the broadcast that filled it is gone, so what a player has is the
-	# dumps of it — which is exactly what the satellaview systemid already holds.
-	#
-	# And that media does NOT go into this unit. The base station is a tuner and a
-	# modem, with no mouth of any kind on it: what a player pushes in is the BS-X
-	# cartridge, and it goes into the SUPER FAMICOM's slot, on top. media_in_host
-	# says so, and it is the only row here that needs to — every other expansion
-	# really does have a bay of its own.
-	#
-	# Modelled with a bay it produced the one arrangement that cannot work. A unit
-	# the console stands ON puts its bay on its ROOF, and its roof is underneath
-	# the Super Famicom, so the pack went into a well sandwiched between the two
-	# machines and disappeared. It was invisible even unstacked: a plain snap zone
-	# seats an object by its ORIGIN, so the cartridge's middle landed on the roof
-	# plane with half of it inside a 70 mm box.
-	"satellaview": {
-		"label": "Satellaview",
-		"host": "super_nes",
-		"media": "satellaview",
-		"mount": MOUNT_BELOW,
-		"size": Vector3(0.29, 0.07, 0.24),
-		"loader": MediaDimensions.LOADER_NONE,
-		"media_in_host": true,
-		"panel": "res://Scenes/Objects/satellaview_panel.tscn",
-	},
-	# The BS-X cartridge: the thing the 8M Memory Pack actually goes into.
-	#
-	# Real hardware is three layers, and this is the middle one. The base station
-	# above is a tuner with no mouth on it; what a player holds is this cartridge,
-	# which goes into the Super Famicom's own slot and carries the pack in a slot
-	# of its own — the same nesting the 32X and the Sufami Turbo already model.
-	#
-	# It runs in a bare Super Famicom, without the base station bolted on, exactly
-	# as the hardware does: the shell boots and the town is there, only nothing is
-	# being broadcast at it. So the boot recipes below cover the cartridge alone as
-	# well as the full stack, rather than refusing a machine a player can build.
-	#
-	# What the core is handed is the PACK, never this cartridge: snes9x takes the
-	# .bs as content and sources BS-X.bin itself from the system directory.
-	#
-	# Sized as a Super Famicom cartridge, because that is what it is -- the same
-	# footprint CART_SIZES gives super_nes, thickened to 24 mm so the pack's well
-	# has a wall either side of it. A cartridge-mounting unit stands upright in
-	# the slot (Y is the insert axis), so a flat slab here read as a low box lying
-	# on the console rather than a cart standing in it.
-	#
-	# The only row that names `firmware`. The shell this cartridge runs is not
-	# ours and is not in the pack: it is BS-X.bin in the core's system directory,
-	# which snes9x sources itself. Without that file the unit is a prop -- it goes
-	# into the slot, the machine starts, and there is no town on the other side --
-	# so the menu does not offer it until the file is installed.
-	"bsx_cart": {
-		"label": "BS-X",
-		"host": "super_nes",
-		"media": "satellaview",
-		"mount": MOUNT_CARTRIDGE,
-		"save_owner": SAVE_OWNER_UNIT,
-		"size": Vector3(0.137, 0.088, 0.024),
-		"loader": MediaDimensions.LOADER_NONE,
-		"firmware": ["BS-X.bin"],
-	},
-	# Sufami Turbo is the other thing that goes in a Super Famicom slot — on TOP,
-	# like the 32X — and it is the only unit here that takes TWO cartridges.
-	#
-	# That is not decoration. Nine of its thirteen games link the cartridge in the
-	# second slot into the game in the first: the six SD Gundam Generation titles
-	# lend each other their fighters, and SD Ultra Battle lends its characters
-	# across the pair. A one-slot Sufami Turbo would be the wrong machine, not a
-	# simplified one.
-	#
-	# 140 mm wide rather than the 120 it carried while it had one implicit well.
-	# Two wells cut for a 55 mm cartridge are 59 mm each, so two of them plus a
-	# wall between and a wall either side do not fit in 120 -- the box was sized
-	# for the bay it had, and it grows for the bay it should always have had.
-	#
-	# And SHALLOW: 38 mm front to back, not 100. The real adapter is a wide flat
-	# bar, and the wells cut into it are only `cart.z + 4` = 16 mm deep, so a
-	# 100 mm box was 84 mm of nothing behind them -- it read as a chunky console
-	# in its own right rather than the thin tray a cartridge stands out of.
-	# 30 mm tall for the same reason.
-	#
-	# 38 is close to the floor. The well needs 16, and the walls in front of and
-	# behind it are 11 mm each at this depth; much less and the mouth starts
-	# eating the front face the nameplate is printed on.
-	#
-	# Nothing here depends on either figure: the wells sit on the roof at
-	# s.y * 0.5, spread along X by _build_well_bay's own arithmetic, and the
-	# nameplate hangs below the join. Only the WIDTH is load-bearing, and only
-	# because two wells have to fit across it.
-	#
-	# The firmware is the adapter's own shell program, which snes9x loads itself
-	# from its system directory. Without it the unit is a prop, so the menu does
-	# not offer it -- the same contract the BS-X cartridge has, and NOT
-	# rom_from_firmware: STBIOS.bin is deliberately built to FAIL the core's
-	# is_SufamiTurbo_Cart test (it carries the "SFC-ADX BACKUP" marker that a
-	# cartridge must not have), which is how the core tells its BIOS from a game.
-	# Handed over as content it would load as a plain Super Famicom ROM.
-	#
-	# No save_owner: a Sufami Turbo has no battery. The cartridges do.
-	"sufami_turbo": {
-		"label": "Sufami Turbo",
-		"host": "super_nes",
-		"media": "sufami_turbo",
-		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.14, 0.03, 0.038),
-		"loader": MediaDimensions.LOADER_NONE,
-		"bays": 2,
-		"firmware": ["STBIOS.bin"],
-	},
-	# The Super Game Boy: a Super Famicom cartridge with a Game Boy slot in its
-	# roof, which runs the handheld's game on a television inside a border.
-	#
-	# The same three layers as the BS-X cartridge, and modelled the same way: a
-	# cartridge to the console it goes into, a console to the cartridge that goes
-	# into it. What differs is where its own program comes from -- the BS-X
-	# cartridge is a .sfc a player spawns out of the library, and this one is a
-	# BIOS the core reads from its system directory, which is what
-	# `rom_from_firmware` is for.
-	#
-	# `media` is game_boy, an existing system, so the handheld library already
-	# fills this bay: no new roms folder and no new content routing, and a Game
-	# Boy cartridge a player already owns is the same object either way.
-	#
-	# No save_owner. The BS-X cartridge names SAVE_OWNER_UNIT because it has a
-	# battery of its own, holding the town and the player's name. A Super Game Boy
-	# has none -- the battery is in the cartridge seated in it -- so the default,
-	# which is the media, is the right one.
-	#
-	# Sized as the Super Famicom cartridge it is: the same footprint as the BS-X
-	# cartridge above.
-	"super_game_boy": {
-		"label": "Super Game Boy",
-		"host": "super_nes",
-		"media": "game_boy",
-		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.137, 0.088, 0.024),
-		"loader": MediaDimensions.LOADER_NONE,
-		"card": "super_nes",
-		"rom_title": "Super GAMEBOY",
-		"firmware": ["SGB1.sfc"],
-		"rom_from_firmware": true,
-	},
-	# The 1998 revision, and a different machine rather than a reskin: the original
-	# derives its clock from the SNES and runs the Game Boy about 2.4% fast, where
-	# this one carries its own crystal and runs at true handheld speed.
-	#
-	# That difference costs nothing to model because the cartridge IS the program
-	# the console runs, so handing the core a different dump is the whole of the
-	# change. A core that emulated the adapter internally would have wanted an
-	# option toggled here instead.
-	#
-	# The dump's own SNES HEADER decides which machine it is, NOT the filename
-	# below. Checked at source and against both files: the titles at 0x7FC0 read
-	# "Super GAMEBOY" and "Super GAMEBOY2", bsnes matches those against its bundled
-	# board database, and Cartridge::loadICD takes the ICD's oscillator out of the
-	# board it picked. icd.cpp branches on that one number -- zero is an SGB1 on
-	# the SNES's own clock, running the handheld ~2.4% fast; non-zero is an SGB2
-	# with a dedicated crystal at true handheld speed -- and picks the SameBoy
-	# model and the boot ROM to match. Both boot ROMs are compiled into bsnes,
-	# which is why nothing here wants the sgb1.boot.rom that higan asks for.
-	#
-	# So the names below are only where RetroXR LOOKS. An SGB1 dump installed under
-	# the other name gives two adapters that are both an SGB1, and nothing here
-	# catches that: firmware_present accepts a MISMATCH deliberately, for the
-	# reason written out on BS-X.bin. The BIOS tab is where the md5 verdict shows.
-	#
-	# Gated on its OWN file, so a player who has one dump and not the other is
-	# offered exactly the machine they can build.
-	"super_game_boy_2": {
-		"label": "Super Game Boy 2",
-		"host": "super_nes",
-		"media": "game_boy",
-		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.137, 0.088, 0.024),
-		"loader": MediaDimensions.LOADER_NONE,
-		"card": "super_nes",
-		"rom_title": "Super GAMEBOY2",
-		"firmware": ["SGB2.sfc"],
-		"rom_from_firmware": true,
-	},
-	# Model 1 and Model 2 both sat UNDER the Mega Drive, which is why the console
-	# ends up in the middle of the tower rather than at the bottom of it.
-	"sega_cd": {
-		"label": "Sega CD",
-		"host": "mega_drive",
-		"media": "sega_cd",
-		"mount": MOUNT_BELOW,
-		"size": Vector3(0.32, 0.08, 0.28),
-		"loader": MediaDimensions.LOADER_TRAY,
-	},
-	# Into the cartridge slot, on top, with its own cartridge slot on top of that.
-	# The only expansion here that a game cartridge goes INTO rather than past.
-	"sega_32x": {
-		"label": "32X",
-		"host": "mega_drive",
-		"media": "sega_32x",
-		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.15, 0.07, 0.14),
-		"loader": MediaDimensions.LOADER_NONE,
-	},
-	# The Interface Unit the console docks into sideways. Drawn as a base here
-	# for the same reason everything else is: one relation, one direction.
-	"pc_engine_cd": {
-		"label": "CD-ROM²",
-		"host": "pc_engine",
-		"media": "pc_engine_cd",
-		"mount": MOUNT_BELOW,
-		"size": Vector3(0.26, 0.09, 0.22),
-		"loader": MediaDimensions.LOADER_TRAY,
-	},
-	# It clamps to the cartridge slot and hangs over the console's back like a
-	# toilet seat, which is what everybody called it. Its discs are its own
-	# media: virtualjaguar names jaguar_cd in secondary_systemids, so the CD half
-	# is a system in its own right and the unit is spawned from its own card.
-	"jaguar_cd": {
-		"label": "Jaguar CD",
-		"host": "atari_jaguar",
-		"media": "jaguar_cd",
-		"mount": MOUNT_CARTRIDGE,
-		"size": Vector3(0.20, 0.09, 0.18),
-		"loader": MediaDimensions.LOADER_TRAY,
-		# A lid, not a drawer. The Jaguar CD opens upward the way a PlayStation or
-		# a GameCube does; the Mega-CD and the CD-ROM2 we model slide a tray out.
-		"lid": true,
-	},
+
 }
 
 
@@ -394,176 +169,7 @@ const _LEGACY_ROWS: Dictionary = {
 ## The core names on those are informed guesses and nothing more.
 const _LEGACY_BOOT: Dictionary = {
 
-	# VERIFIED against snes9x source. The core is handed the .bs ALONE — not the
-	# host cartridge — auto-detects BS-X from the content header, and sources
-	# BS-X.bin itself from the ROM dir or the system dir. There is no subsystem to
-	# name; the RETRO_GAME_TYPE_BSX path exists in the core but is never
-	# advertised, so a frontend cannot reach it.
-	#
-	# This row is for a STANDALONE .bs dump of an already-downloaded programme.
-	#
-	# A BS-SLOTTED cartridge (Itoi Bass Fishing) plus a pack is the one case that
-	# genuinely wants snes9x's "multicart_addon" subsystem, host cart first. It is
-	# not written here because no subsystem path exists to carry it.
-	#
-	# "host", not "expansion:satellaview": the Satellaview has no bay (see
-	# media_in_host on its ROWS entry), so the .bs is in the Super Famicom's own
-	# slot. Same file either way — this row exists to pin the core, not to find it.
-	"super_nes|satellaview": {
-		"core": "snes9x",
-		"roms": ["host"],
-	},
-	# The BS-X cartridge, with or without the base station under the console. Both
-	# boot from the pack in the CARTRIDGE's own slot, because that is the medium:
-	# snes9x is handed the .bs and finds BS-X.bin in the system directory itself.
-	"super_nes|bsx_cart": {
-		"core": "snes9x",
-		"roms": ["expansion:bsx_cart"],
-		# Shell + pack as a PAIR. Without it the core sources the shell from
-		# BS-X.bin in the system directory, so a translated BS-X in the cartridge
-		# was ignored the moment a pack went into it -- the same machine booted
-		# in two different languages depending on whether its bay was full.
-		# Order is the core's: bsx_roms[] is { "BS-X Shell", "Memory Pack" }.
-		"subsystem": {"ident": "bsx",
-			"roms": ["expansion_rom:bsx_cart", "expansion_media:bsx_cart"],
-			# The pack is flash, and the .bs IS that flash -- a download is
-			# written back over the medium the player inserted, not to a save
-			# file beside it.
-			"writable": 1},
-	},
-	"super_nes|satellaview|bsx_cart": {
-		"core": "snes9x",
-		"roms": ["expansion:bsx_cart"],
-		# Shell + pack as a PAIR. Without it the core sources the shell from
-		# BS-X.bin in the system directory, so a translated BS-X in the cartridge
-		# was ignored the moment a pack went into it -- the same machine booted
-		# in two different languages depending on whether its bay was full.
-		# Order is the core's: bsx_roms[] is { "BS-X Shell", "Memory Pack" }.
-		"subsystem": {"ident": "bsx",
-			"roms": ["expansion_rom:bsx_cart", "expansion_media:bsx_cart"],
-			# The pack is flash, and the .bs IS that flash -- a download is
-			# written back over the medium the player inserted, not to a save
-			# file beside it.
-			"writable": 1},
-	},
-	# VERIFIED against snes9x source, and it is the second row here whose core has
-	# a dead constant for the machine it is meant to run.
-	# RETRO_GAME_TYPE_SUFAMI_TURBO is #defined AND has a working case in
-	# retro_load_game_special -- and is registered in no subsystem, so no
-	# frontend can reach it. Do not be fooled by the grep hit; the same trap sits
-	# in this core for the Super Game Boy.
-	#
-	# What IS reachable is the Multi-Cart Link, which is the Sufami Turbo path in
-	# all but name. Its case sniffs the FIRST cartridge --
-	# is_SufamiTurbo_Cart(romptr[0]) -- and on a hit loads STBIOS.bin and calls
-	# LoadMultiCartMem(A, B, bios). A cartridge that is NOT one takes a generic
-	# no-BIOS multi-cart branch instead.
-	#
-	# Measured, because the obvious guess is wrong: a Sufami cartridge with no
-	# STBIOS.bin installed does not fall through to that generic branch. The load
-	# is simply refused -- rom_loaded stays false, no frames, and the machine
-	# says so. Which is why `firmware` above is a gate on offering the unit at
-	# all rather than a hope.
-	#
-	# One cartridge is a first-class configuration rather than a tolerated one:
-	# retro_load_game auto-detects a lone cart from its "BANDAI SFC-ADX" header
-	# and maps slot B empty. So the ordinary preference list below IS the
-	# single-cart machine, and the pairing completes only when both wells are
-	# full -- _start_subsystem_content falls back to the plain load on a count
-	# mismatch, so the split needs no branch of its own.
-	#
-	# expansion_media: rather than the plain expansion: form, because the plain
-	# one falls back to the unit's own ROM and there is none. An empty Sufami
-	# Turbo must say its slots are empty, not try to boot its BIOS as a game.
-	#
-	# BOTH cartridges keep their saves, and that took a bridge change rather than
-	# a data one. snes9x lays slot A's SRAM at the start of one block and slot B's
-	# 0x10000 into it, and retro_get_memory_size answers RETRO_MEMORY_SAVE_RAM and
-	# RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM from the SAME case -- slot A alone, so
-	# a frontend reading only SAVE_RAM keeps half a linked pair's progress. Slot B
-	# lives under _B_RAM and is now read and written through Libretro.SetSramBPath,
-	# to a file of its own.
-	#
-	# It is keyed off the CARTRIDGE, not the slot: a game carries its save between
-	# the two wells, and lending it to a different pairing does not overwrite it.
-	# See RetroSystem._slot_b_save_path.
-	"super_nes|sufami_turbo": {
-		"core": "snes9x",
-		"roms": ["expansion_media:sufami_turbo", "expansion_media_b:sufami_turbo"],
-		"subsystem": {"ident": "multicart_addon",
-			"roms": ["expansion_media:sufami_turbo", "expansion_media_b:sufami_turbo"]},
-	},
-	# VERIFIED against bsnes-libretro, bsnes/target-libretro/libretro.cpp:
-	#
-	#   sgb_roms[]  = { "Game Boy ROM" (gb|gbc), "Super Game Boy ROM" (smc|sfc) }
-	#   subsystems[] = { "Super Game Boy", "sgb", sgb_roms, 2, RETRO_GAME_TYPE_SGB }
-	#
-	# and retro_load_game_special assigns gameBoy.location = info[0] and
-	# superFamicom.location = info[1]. So the HANDHELD's cartridge goes first and
-	# the adapter's own cartridge second -- the reverse of the BS-X rows above,
-	# which are shell-first, and the reason the two orders are written out per row
-	# rather than assumed to be the same.
-	#
-	# The core is NOT the platform default, and cannot be. snes9x defines
-	# RETRO_GAME_TYPE_SUPER_GAME_BOY and then never puts it in the subsystems[] it
-	# publishes, so a frontend cannot reach it; retro_load_game_special drops that
-	# game type into its default case and reports the load failed. The constant is
-	# vestigial. Naming snes9x here would give a machine that refuses to start.
-	#
-	# No `writable`. That key exists for the BS-X pack, which is flash the core
-	# writes a download back onto, and SetPackPath is bound to the SNES pack memory
-	# region specifically. A Game Boy cartridge's save is an ordinary SRAM and
-	# belongs on the ordinary path.
-	"super_nes|super_game_boy": {
-		"core": "bsnes",
-		"roms": ["expansion:super_game_boy"],
-		"subsystem": {"ident": "sgb",
-			"roms": ["expansion_media:super_game_boy", "expansion_rom:super_game_boy"]},
-	},
-	# A row of its own rather than a shared one, and not for tidiness: firmware_present
-	# finds a unit's core through the unit's OWN recipe, so a unit with no recipe is
-	# not gated at all -- which would offer a Super Game Boy 2 to a player who has no
-	# dump of one. Both are MOUNT_CARTRIDGE and a Super Famicom has one slot, so no
-	# combined row can arise.
-	"super_nes|super_game_boy_2": {
-		"core": "bsnes",
-		"roms": ["expansion:super_game_boy_2"],
-		"subsystem": {"ident": "sgb",
-			"roms": ["expansion_media:super_game_boy_2", "expansion_rom:super_game_boy_2"]},
-	},
-	# UNVERIFIED.
-	"nes|fds": {
-		"core": "fceumm",
-		"roms": ["expansion:fds"],
-	},
-	# UNVERIFIED. The CD is the game; the cartridge slot is empty on a Mega-CD
-	# title.
-	"mega_drive|sega_cd": {
-		"core": "genesis_plus_gx",
-		"roms": ["expansion:sega_cd"],
-	},
-	# UNVERIFIED. A 32X cartridge is the game and picodrive is the core that is
-	# both halves at once.
-	"mega_drive|sega_32x": {
-		"core": "picodrive",
-		"roms": ["expansion:sega_32x"],
-	},
-	# UNVERIFIED. The full tower, where the disc is still what boots.
-	"mega_drive|sega_cd|sega_32x": {
-		"core": "picodrive",
-		"roms": ["expansion:sega_cd"],
-	},
-	# UNVERIFIED. The System Card goes in the console's own slot and the game is
-	# on the CD.
-	"pc_engine|pc_engine_cd": {
-		"core": "mednafen_pce",
-		"roms": ["expansion:pc_engine_cd"],
-	},
-	# UNVERIFIED.
-	"atari_jaguar|jaguar_cd": {
-		"core": "virtualjaguar",
-		"roms": ["expansion:jaguar_cd"],
-	},
+
 }
 
 
@@ -582,16 +188,13 @@ static func _static_init() -> void:
 	var by_id: Dictionary = {}
 	for unit: Script in _UNITS:
 		by_id[unit.ID] = unit
-	# _ORDER, not either source: insertion order IS sorted_ids' order, so it must
-	# not depend on how far the migration has got.
+	# Walked in _ORDER rather than in _UNITS order: insertion order IS
+	# sorted_ids' order, so it must be stated once here and not be a property of
+	# how the preloads happen to be listed.
 	for id: String in _ORDER:
-		if by_id.has(id):
-			ROWS[id] = (by_id[id] as Script).ROW
-		elif _LEGACY_ROWS.has(id):
-			ROWS[id] = _LEGACY_ROWS[id]
+		ROWS[id] = (by_id[id] as Script).ROW
 	for unit: Script in _UNITS:
 		BOOT.merge(unit.BOOT)
-	BOOT.merge(_LEGACY_BOOT)
 
 ## The row for an id, or an empty Dictionary.
 static func row(id: String) -> Dictionary:
