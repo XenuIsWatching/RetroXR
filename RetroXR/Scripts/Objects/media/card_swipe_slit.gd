@@ -62,6 +62,14 @@ const ARM_DISTANCE := 0.008
 ## about ten degrees around that, and takes everything else.
 const ARM_MARGIN := 0.006
 
+## The tick a card gives back when a strip is actually read. Sized off
+## Haptics.CLICK_DOWN, since that is the weight of a control latching, and one
+## frame for the reason the click constants give: the manager re-drives the
+## hardware every frame an event is alive, so two frames is already a buzz.
+const SCAN_MAGNITUDE := 0.5
+const SCAN_MS := 10
+const HAPTIC_KEY := &"card_swipe"
+
 var _card: Node3D = null
 var _edge: String = ""
 var _face_up: bool = false
@@ -94,13 +102,15 @@ func _ready() -> void:
 
 # ── Geometry, pure so it can be tested without a hand or a physics step ───────
 
-## How far each of the card's four edges is from the groove's centre line.
+## How far DOWN the groove each of the card's four edges sits, in the slit's own
+## frame — lower is further into the slot.
 ##
-## Distance from the LINE (the slit's own X axis), so travel along the groove
-## does not change the answer. Midpoint distance rather than how nearly an edge
-## points along the groove: that second test cannot separate an edge lying in the
-## groove from the parallel one at the top of the card, which is equally parallel.
-static func edge_distances(card: Transform3D, card_size: Vector3,
+## The slit runs along its X and takes a card down its -Y, so the edge going in
+## is simply the lowest one. Depth along -Y rather than distance from the groove
+## LINE, which was the old rule: distance also counts displacement in Z, so a
+## card held a little in front of or behind the slot could have its answer
+## changed by where the hand was rather than by how the card was turned.
+static func edge_depths(card: Transform3D, card_size: Vector3,
 		slit: Transform3D) -> Dictionary:
 	var half_w := card_size.x * 0.5
 	var half_h := card_size.y * 0.5
@@ -113,8 +123,7 @@ static func edge_distances(card: Transform3D, card_size: Vector3,
 	var to_slit := slit.affine_inverse()
 	var out: Dictionary = {}
 	for name: String in candidates:
-		var local: Vector3 = to_slit * (card * (candidates[name] as Vector3))
-		out[name] = Vector2(local.y, local.z).length()
+		out[name] = (to_slit * (card * (candidates[name] as Vector3))).y
 	return out
 
 
@@ -139,7 +148,7 @@ static func corner_distance(card: Transform3D, card_size: Vector3,
 ## Which of the card's four edges is sitting in the groove.
 static func presented_edge(card: Transform3D, card_size: Vector3,
 		slit: Transform3D) -> String:
-	var d := edge_distances(card, card_size, slit)
+	var d := edge_depths(card, card_size, slit)
 	var best := ""
 	var best_d := INF
 	for name: String in d:
@@ -177,7 +186,7 @@ static func is_presenting(card: Transform3D, card_size: Vector3,
 		return false
 	if corner_distance(card, card_size, slit) > ARM_DISTANCE:
 		return false
-	var d := edge_distances(card, card_size, slit)
+	var d := edge_depths(card, card_size, slit)
 	var best := INF
 	var runner_up := INF
 	for name: String in d:
@@ -368,10 +377,24 @@ func _finish(complete: bool) -> void:
 	# their card over the machine.
 	if not armed:
 		return
-	if complete:
-		swiped.emit(card, edge, _strip_index(card, edge))
-	else:
+	if not complete:
 		aborted.emit(card)
+		return
+	var strip := _strip_index(card, edge)
+	if strip >= 0:
+		# The one moment the hand has no other way of knowing it worked: the
+		# reader's own answer is a screen away, and a swipe that read nothing
+		# looks exactly like a swipe that read something until you look up.
+		# A single short tick, at the weight of a control latching rather than a
+		# buzz -- a card passing a scanner head is a click, not an event.
+		#
+		# Only on a READ. A completed pass that took nothing (wrong edge, wrong
+		# way up) must feel like nothing, or the tick stops meaning anything.
+		# Null-safe by design in Haptics.pulse, which is what makes this correct
+		# on the desktop hand as well: it has no controller and must not rumble.
+		Haptics.pulse(card.get_picked_up_by_controller() if card.has_method(
+			"get_picked_up_by_controller") else null, SCAN_MAGNITUDE, SCAN_MS, HAPTIC_KEY)
+	swiped.emit(card, edge, strip)
 
 
 func _strip_index(card: Node3D, edge: String) -> int:

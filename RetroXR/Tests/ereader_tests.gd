@@ -280,8 +280,19 @@ func _group_geom() -> void:
 	_check(is_zero_approx(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)),
 		"geom/ a tilted card resting on the groove is at zero distance")
 	_check(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)
-			< CardSwipeSlit.edge_distances(_offered(45.0, size), size, slit)[EReaderCards.EDGE_BOTTOM],
-		"geom/ and its nearest midpoint is further off than its corner")
+			< CardSwipeSlit.edge_depths(_offered(45.0, size), size, slit)[EReaderCards.EDGE_BOTTOM],
+		"geom/ and its nearest midpoint sits higher than its corner")
+
+	# Which edge is going in is about how the card is TURNED, not where the hand
+	# is holding it. The old rule scored an edge by its distance from the groove
+	# line, which counts displacement in Z as well, so a card offered from a
+	# little in front of or behind the slot could have its edge decided by the
+	# hand's position. Depth along -Y is the slot's own direction and cannot.
+	for mm: float in [0.0, 10.0, 20.0, 30.0]:
+		var shifted := _offered(0.0, size)
+		shifted.origin += Vector3(0.0, 0.0, mm / 1000.0)
+		_eq(CardSwipeSlit.presented_edge(shifted, size, slit), EReaderCards.EDGE_BOTTOM,
+			"geom/ an upright card %d mm to one side still offers its bottom edge" % int(mm))
 
 	# The case only the flatness test catches: a flat card slid sideways until one
 	# side edge lies along the line. Its opposite edge is then a whole card width
