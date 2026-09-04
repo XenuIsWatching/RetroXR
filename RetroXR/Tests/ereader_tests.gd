@@ -275,6 +275,14 @@ func _group_geom() -> void:
 	_check(not CardSwipeSlit.is_presenting(flat_turned, size, slit),
 		"geom/ nor is the same card turned in its own plane")
 
+	# Nearness is the card's CORNER, not an edge midpoint, so a card resting on
+	# the groove counts however it is turned.
+	_check(is_zero_approx(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)),
+		"geom/ a tilted card resting on the groove is at zero distance")
+	_check(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)
+			< CardSwipeSlit.edge_distances(_offered(45.0, size), size, slit)[EReaderCards.EDGE_BOTTOM],
+		"geom/ and its nearest midpoint is further off than its corner")
+
 	# The case only the flatness test catches: a flat card slid sideways until one
 	# side edge lies along the line. Its opposite edge is then a whole card width
 	# away, so the distance and margin tests are both satisfied by a card lying
@@ -286,22 +294,29 @@ func _group_geom() -> void:
 
 	# Corner-first is a tie between two edges, and whichever the table listed
 	# first would win it. It waits instead.
-	# Lowered until the corner is ON the line, so distance cannot be what rejects
-	# it -- only the margin between the two edges meeting at that corner can.
-	var diag := (Basis(Vector3.BACK, PI * 0.25) * Vector3(0.0, -half_h, 0.0)).length()
-	var corner := Transform3D(Basis(Vector3.UP, PI) * Basis(Vector3.BACK, PI * 0.25),
-		slit * Vector3(0.0, diag * 0.72, 0.0))
-	_check(not CardSwipeSlit.is_presenting(corner, size, slit),
+	# Lowered until its lowest corner is ON the line, so nearness cannot be what
+	# rejects it -- only the gap between the two edges meeting at that corner can.
+	# 55 degrees is where a 63 x 88 card is genuinely diagonal: measured, its two
+	# nearest edge midpoints are 0.6 mm apart there.
+	_check(not CardSwipeSlit.is_presenting(_offered(55.0, size), size, slit),
 		"geom/ a card offered corner-first waits rather than guessing")
 
 	# But an ordinary imperfect hand is not a diagonal, and must not be made to
-	# wait: 25 degrees off upright still reads as the bottom edge.
-	var tilted := Transform3D(Basis(Vector3.UP, PI) * Basis(Vector3.BACK, deg_to_rad(25)),
-		slit * Vector3(0.0, half_h * cos(deg_to_rad(25)) + half_w * sin(deg_to_rad(25)), 0.0))
-	_check(CardSwipeSlit.is_presenting(tilted, size, slit),
-		"geom/ a card offered a little off upright still presents")
-	_eq(CardSwipeSlit.presented_edge(tilted, size, slit), EReaderCards.EDGE_BOTTOM,
-		"geom/ and it is the bottom edge it presents")
+	# wait. This is the case that was silently broken: nearness was measured to
+	# the edge MIDPOINT, which climbs as the card tilts, so everything past about
+	# 28 degrees was refused -- a 40-degree hole a hand falls into constantly.
+	for deg: float in [10.0, 25.0, 40.0, 45.0]:
+		var pose := _offered(deg, size)
+		_check(CardSwipeSlit.is_presenting(pose, size, slit),
+			"geom/ a card %d degrees off upright still presents" % int(deg))
+		_eq(CardSwipeSlit.presented_edge(pose, size, slit), EReaderCards.EDGE_BOTTOM,
+			"geom/ and at %d degrees it is still the bottom edge" % int(deg))
+	for deg: float in [70.0, 90.0]:
+		var pose := _offered(deg, size)
+		_check(CardSwipeSlit.is_presenting(pose, size, slit),
+			"geom/ a card %d degrees over presents too" % int(deg))
+		_eq(CardSwipeSlit.presented_edge(pose, size, slit), EReaderCards.EDGE_SIDE,
+			"geom/ and by %d degrees it is the side edge" % int(deg))
 
 	# What a real presentation looks like: upright, edge on the line.
 	var offered := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h, 0.0))
@@ -476,6 +491,17 @@ func _fake_gba(code: String, fixed: int) -> String:
 	f.store_buffer(bytes)
 	f.close()
 	return path
+
+
+## A card held `deg` off upright in its own plane, lowered until its lowest
+## corner rests on the groove line — what a hand does when it offers a card.
+func _offered(deg: float, size: Vector3) -> Transform3D:
+	var b := Basis(Vector3.UP, PI) * Basis(Vector3.BACK, deg_to_rad(deg))
+	var lowest := INF
+	for c: Vector3 in [Vector3(size.x, size.y, 0.0) * 0.5, Vector3(-size.x, size.y, 0.0) * 0.5,
+			Vector3(size.x, -size.y, 0.0) * 0.5, Vector3(-size.x, -size.y, 0.0) * 0.5]:
+		lowest = minf(lowest, (b * c).y)
+	return Transform3D(b, Vector3(0.0, -lowest, 0.0))
 
 
 # ── swipe/ ───────────────────────────────────────────────────────────────────

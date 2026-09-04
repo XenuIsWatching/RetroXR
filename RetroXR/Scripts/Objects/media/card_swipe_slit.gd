@@ -44,15 +44,23 @@ const REVERSE_FRACTION := 0.12
 ## roof, not a card held at a slight angle.
 const FLAT_LIMIT := 0.5
 
-## How near the groove's centre line the leading edge has to be, in metres, and
-## how far the runner-up has to be behind it. The margin is what makes a card
-## offered corner-first WAIT instead of guessing: at 45 degrees two edges are
-## equidistant, and whichever the dictionary happened to list first would win.
-const ARM_DISTANCE := 0.015
-## 12 mm, which is what it takes to actually reject a diagonal: at 45 degrees a
-## 63 x 88 card's bottom and side midpoints differ by only (h - w) / 2 / sqrt(2),
-## just under 9 mm. A smaller margin looks like a check and arms anyway.
-const ARM_MARGIN := 0.012
+## How near the groove's centre line the card has to actually BE, in metres.
+##
+## Measured to the nearest CORNER, not to the nearest edge midpoint. A midpoint
+## climbs as the card tilts even though the card is touching the groove -- at 30
+## degrees it is 15.7 mm up and at 45 degrees 22.3 mm -- so a threshold on it
+## rejects every card that is not nearly square, which is a 40-degree hole a hand
+## falls into constantly. The corner is on the line whenever the card is.
+const ARM_DISTANCE := 0.008
+
+## How far the runner-up edge must be behind the leading one, in metres, judged
+## on midpoints -- which is what actually distinguishes the four edges.
+##
+## Measured over an in-plane sweep of a 63 x 88 card: the gap is 44 mm upright,
+## 22 mm at 30 degrees, and collapses to 0.6 mm at 55 degrees, where the card
+## really is diagonal and neither edge is being offered. 6 mm leaves a wait of
+## about ten degrees around that, and takes everything else.
+const ARM_MARGIN := 0.006
 
 var _card: Node3D = null
 var _edge: String = ""
@@ -110,6 +118,24 @@ static func edge_distances(card: Transform3D, card_size: Vector3,
 	return out
 
 
+## How far the card's nearest CORNER is from the groove's centre line.
+##
+## What "the card is at the groove" means, and the only one of the three arming
+## tests that is about position rather than pose: a corner is on the line
+## whenever any part of the card is, at any tilt.
+static func corner_distance(card: Transform3D, card_size: Vector3,
+		slit: Transform3D) -> float:
+	var half_w := card_size.x * 0.5
+	var half_h := card_size.y * 0.5
+	var to_slit := slit.affine_inverse()
+	var best := INF
+	for corner: Vector3 in [Vector3(half_w, half_h, 0.0), Vector3(-half_w, half_h, 0.0),
+			Vector3(half_w, -half_h, 0.0), Vector3(-half_w, -half_h, 0.0)]:
+		var local: Vector3 = to_slit * (card * corner)
+		best = minf(best, Vector2(local.y, local.z).length())
+	return best
+
+
 ## Which of the card's four edges is sitting in the groove.
 static func presented_edge(card: Transform3D, card_size: Vector3,
 		slit: Transform3D) -> String:
@@ -136,12 +162,20 @@ static func presented_edge(card: Transform3D, card_size: Vector3,
 ##   - the card stands ACROSS the groove rather than lying over it. Its face
 ##     normal has to be within 60 degrees of horizontal, so a card being carried
 ##     in flat is refused however close it gets.
-##   - some edge is genuinely near the line, not merely inside the trigger box.
-##   - and it beats the runner-up by a clear margin, so a card offered at 45
-##     degrees waits rather than guessing between two edges.
+##   - the card is genuinely AT the groove, measured to its nearest corner, not
+##     merely inside the trigger box.
+##   - and one edge beats the runner-up by a clear margin, so a card held
+##     diagonally waits rather than guessing between the two that meet at the
+##     corner it is resting on.
+##
+## The three are deliberately measured on three different things. Asking the
+## midpoint how near the card is conflates "not close" with "not square", and
+## cost a hand every offer past 28 degrees off upright.
 static func is_presenting(card: Transform3D, card_size: Vector3,
 		slit: Transform3D) -> bool:
 	if absf(card.basis.z.normalized().dot(slit.basis.y.normalized())) > FLAT_LIMIT:
+		return false
+	if corner_distance(card, card_size, slit) > ARM_DISTANCE:
 		return false
 	var d := edge_distances(card, card_size, slit)
 	var best := INF
@@ -153,7 +187,7 @@ static func is_presenting(card: Transform3D, card_size: Vector3,
 			best = v
 		elif v < runner_up:
 			runner_up = v
-	return best <= ARM_DISTANCE and (runner_up - best) >= ARM_MARGIN
+	return (runner_up - best) >= ARM_MARGIN
 
 
 ## Whether the card's printed face is the one presented to the reader.
