@@ -2955,7 +2955,16 @@ func detach_expansion(unit: RetroExpansion) -> void:
 ## for a frontend driving this from a disk menu instead.
 func _on_expansion_card_swiped(card: Node3D, edge: String, strip: int) -> void:
 	if strip < 0:
-		print("[RetroSystem] card presented %s: no dotcode on that edge" % edge)
+		# Two different refusals, and one message for both left a player with no
+		# way to tell them apart: a card presented on an uncoded edge needs
+		# TURNING, a card presented face-down needs FLIPPING, and doing the second
+		# when you needed the first reads nothing either way.
+		var data: Dictionary = card.get_card_data() if card.has_method("get_card_data") else {}
+		if EReaderCards.coded_edges(data).has(edge):
+			print("[RetroSystem] card presented %s face-down: a dotcode is printed on one side only" % edge)
+		else:
+			print("[RetroSystem] card presented %s: no dotcode on that edge; this card is coded on %s"
+				% [edge, ", ".join(EReaderCards.coded_edges(data))])
 		return
 	var path := _swiped_strip_path(card, strip)
 	if path.is_empty():
