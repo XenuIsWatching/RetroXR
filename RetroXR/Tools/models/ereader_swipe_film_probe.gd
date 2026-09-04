@@ -112,7 +112,7 @@ func _hold(n: int) -> void:
 func _film() -> void:
 	# The reader IS a cartridge: it goes into the handheld's own slot.
 	var unit := EXPANSION_SCENE.instantiate() as RetroExpansion
-	unit.expansion_id = "card_e_reader"
+	unit.expansion_id = "ereader"
 	unit.freeze = true
 	add_child(unit)
 	unit.global_position = STAGE

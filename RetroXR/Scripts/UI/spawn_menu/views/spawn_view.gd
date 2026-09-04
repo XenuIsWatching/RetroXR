@@ -804,13 +804,15 @@ func _populate_cartridges_detail(systemid: String, vbox: VBoxContainer) -> void:
 	_invalidate_local_scan(systemid)
 
 	# Collect all supported extensions for this system across all its cores.
-	var exts: Array[String] = []
-	for entry: Dictionary in core_db.get_by_systemid(systemid):
-		for ext: String in entry.get("supported_extensions", "").split("|"):
-			var e := ext.strip_edges().to_lower()
-			if not e.is_empty() and e not in exts:
-				exts.append(e)
-	_romm_detail_exts = exts
+	#
+	# Through CoreInfoDatabase rather than by walking get_by_systemid here: a
+	# SECONDARY platform is indexed under its parent core's entry, whose own
+	# extension list is the parent's. Walking it gave the e-Reader mGBA's
+	# gba|gbc|gb, none of which a dotcode strip is, so every one of the 3217
+	# cards on disk was filtered out of its own page and the platform looked
+	# empty. extensions_for_systemid adds the secondary extensions the .info
+	# declared, which is where "raw" lives.
+	_romm_detail_exts = CoreInfoDatabase.extensions_for_systemid(systemid)
 
 	# Search and filters live in the browser's pinned toolbar, not in the scroll
 	# area — they must stay reachable however far down the list you are.

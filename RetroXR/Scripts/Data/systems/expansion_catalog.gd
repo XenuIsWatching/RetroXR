@@ -87,7 +87,7 @@ const _UNITS: Array = [
 	preload("res://Scripts/Data/systems/expansions/sega_32x.gd"),
 	preload("res://Scripts/Data/systems/expansions/pc_engine_cd.gd"),
 	preload("res://Scripts/Data/systems/expansions/jaguar_cd.gd"),
-	preload("res://Scripts/Data/systems/expansions/card_e_reader.gd"),
+	preload("res://Scripts/Data/systems/expansions/ereader.gd"),
 ]
 
 ## The canonical order of the units, and it is LOAD-BEARING: sorted_ids() hands
@@ -98,7 +98,7 @@ const _UNITS: Array = [
 const _ORDER: Array = [
 	"nintendo_64dd", "fds", "satellaview", "bsx_cart", "sufami_turbo",
 	"super_game_boy", "super_game_boy_2", "sega_cd", "sega_32x",
-	"pc_engine_cd", "jaguar_cd", "card_e_reader",
+	"pc_engine_cd", "jaguar_cd", "ereader",
 ]
 
 

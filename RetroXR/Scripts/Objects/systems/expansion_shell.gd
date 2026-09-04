@@ -47,21 +47,55 @@ static func build_slit(body: Node3D, s: Vector3, media: String) -> void:
 ## a pocket cut into one face. Cut to the card's THICKNESS, not its height — only
 ## the coded edge is down in the groove and the body of the card stands proud.
 ##
+## It is cut INTO the case rather than laid on top of it. A box the colour of a
+## mouth, sitting on the roof, reads as a black block glued to the lid however
+## dark it is painted — there is no shadow, because nothing is recessed. So the
+## body loses the depth of the channel off its own height and the roof comes back
+## as two slabs either side, which leaves a real trench with real walls between
+## them, open at both ends where the card enters and leaves.
+##
 ## Returns the groove's centre in `body` space, which is where the slit's Area3D
 ## and its travel axis are anchored.
 static func build_through_slot(body: Node3D, s: Vector3, card: Vector3) -> Vector3:
-	var groove := MeshInstance3D.new()
-	groove.name = "SwipeGroove"
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(s.x, 0.006, card.z + 0.003)
-	groove.mesh = mesh
+	const DEPTH := 0.006
+	var width := card.z + 0.003
+	var roof_y := s.y * 0.5
+
+	# The case, shortened by the channel's depth. Its new top face IS the floor
+	# of the trench, so nothing has to be drawn there.
+	var shrunk := body.mesh as BoxMesh
+	if shrunk != null:
+		shrunk.size = Vector3(s.x, s.y - DEPTH, s.z)
+	body.position.y -= DEPTH * 0.5
+
+	# The roof, in two slabs. Their inner faces are the trench walls.
+	var slab_z := (s.z - width) * 0.5
+	for sign_z: float in [-1.0, 1.0]:
+		var slab := MeshInstance3D.new()
+		slab.name = "Roof%s" % ("Back" if sign_z < 0.0 else "Front")
+		var slab_mesh := BoxMesh.new()
+		slab_mesh.size = Vector3(s.x, DEPTH, slab_z)
+		slab.mesh = slab_mesh
+		body.add_child(slab)
+		# In the SHORTENED body's frame, whose top is the trench floor.
+		slab.position = Vector3(0.0, (s.y - DEPTH) * 0.5 + DEPTH * 0.5,
+			sign_z * (width + slab_z) * 0.5)
+
+	# The floor itself, darkened: a machined slot is not the colour of the case.
+	var floor_plate := MeshInstance3D.new()
+	floor_plate.name = "SwipeGroove"
+	var floor_mesh := BoxMesh.new()
+	floor_mesh.size = Vector3(s.x, 0.001, width)
+	floor_plate.mesh = floor_mesh
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = MOUTH_COLOUR
-	groove.set_surface_override_material(0, mat)
-	body.add_child(groove)
-	var centre := Vector3(0.0, s.y * 0.5 - 0.003, 0.0)
-	groove.position = centre
-	return centre
+	floor_plate.set_surface_override_material(0, mat)
+	body.add_child(floor_plate)
+	floor_plate.position = Vector3(0.0, (s.y - DEPTH) * 0.5 - 0.0005, 0.0)
+
+	# In the UNSHRUNK unit's frame, which is what the caller anchors in: mid-way
+	# down the trench.
+	return Vector3(0.0, roof_y - DEPTH * 0.5, 0.0)
 
 
 ## The mouth in the roof that media drops into.

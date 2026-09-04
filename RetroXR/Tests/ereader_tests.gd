@@ -284,12 +284,34 @@ func _group_geom() -> void:
 # ── catalog/ ─────────────────────────────────────────────────────────────────
 
 func _group_catalog() -> void:
-	const ID := "card_e_reader"
+	const ID := "ereader"
 	_check(ExpansionCatalog.ROWS.has(ID), "catalog/ the e-Reader has a row")
 	_eq(ExpansionCatalog.host_of(ID), "game_boy_advance", "catalog/ it bolts to a GBA")
 	_eq(ExpansionCatalog.media_of(ID), "ereader", "catalog/ its media is the card")
 	_eq(ExpansionCatalog.loader_of(ID), MediaDimensions.LOADER_SWIPE, "catalog/ it is a swipe loader")
 	_eq(ExpansionCatalog.mount_of(ID), ExpansionCatalog.MOUNT_CARTRIDGE, "catalog/ it is a cartridge")
+
+	# The unit id is the media systemid, which is what makes the e-Reader tile its
+	# own card. With them apart, items_for falls through to the generic console
+	# path and the tile offers a Primitive System, a pad and a composite lead.
+	_check(ExpansionCatalog.has_own_card(ID), "catalog/ the reader owns its card")
+
+	# The card page filters its rows by extension, and "raw" is declared as a
+	# SECONDARY extension on mGBA's entry -- the entry's own supported_extensions
+	# is the GBA's. A page that asked the entry rather than the database saw no
+	# extension a card could have and listed none of the 3217 on disk.
+	_check("raw" in CoreInfoDatabase.extensions_for_systemid("ereader"),
+		"catalog/ a dotcode strip is an extension the platform accepts")
+	var entry_exts: Array[String] = []
+	for entry: Dictionary in CoreInfoDatabase.shared().get_by_systemid("ereader"):
+		for e: String in str(entry.get("supported_extensions", "")).split("|"):
+			entry_exts.append(e.strip_edges().to_lower())
+	_check("raw" not in entry_exts,
+		"catalog/ and its core's own entry does not carry it")
+	var tile := SpawnCatalog.items_for(ID)
+	for item: Dictionary in tile:
+		_eq(str(item.get("spawn", "")), "expansion:ereader",
+			"catalog/ its tile offers only the reader, not %s" % str(item.get("label", "")))
 
 	# LOADER_SWIPE must be its own value: sharing one with LOADER_NONE would build
 	# the well bay this unit must not have.
@@ -481,7 +503,7 @@ func _group_swipe() -> void:
 
 	# The unit builds a groove and NO snap zone: one would grab the card mid-pass.
 	var unit := preload("res://Scenes/Objects/expansion.tscn").instantiate() as RetroExpansion
-	unit.expansion_id = "card_e_reader"
+	unit.expansion_id = "ereader"
 	add_child(unit)
 	await _wait(30)
 	var zones := 0

@@ -125,9 +125,17 @@ func _build_body() -> void:
 	# Above the slit on a front-loading unit and below the join on a top-mounting
 	# one, so the name never lands on the mouth the media goes into (it did: the
 	# 64DD's plate sat across its own slit) and never on the console it stands on.
-	var front_loading := ExpansionCatalog.mount_of(expansion_id) == ExpansionCatalog.MOUNT_BELOW
+	var mount := ExpansionCatalog.mount_of(expansion_id)
+	var front_loading := mount == ExpansionCatalog.MOUNT_BELOW
 	var label_y := (s.y * 0.5 - 0.014) if front_loading else (-s.y * 0.5 + 0.010)
-	_label.position = Vector3(0.0, label_y, s.z * 0.5 + 0.001)
+	# A unit that stands in the room is read from +Z, but a unit that IS a
+	# cartridge is swallowed by a console and read from the other side: the
+	# console's slot seats it facing away, so a name on +Z is the face nobody can
+	# see, printed backwards through the shell.
+	var cartridge := mount == ExpansionCatalog.MOUNT_CARTRIDGE
+	var label_z := (-s.z * 0.5 - 0.001) if cartridge else (s.z * 0.5 + 0.001)
+	_label.position = Vector3(0.0, label_y, label_z)
+	_label.rotation = Vector3(0.0, PI, 0.0) if cartridge else Vector3.ZERO
 
 
 ## The front face some units wear -- the Satellaview's POWER and ACCESS lamps are

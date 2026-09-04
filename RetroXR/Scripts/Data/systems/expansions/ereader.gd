@@ -4,20 +4,17 @@
 ## is assembled into the catalog, and expansion_defs.gd for the MOUNT_* values.
 extends RefCounted
 
-const ID := "card_e_reader"
+const ID := "ereader"
 
 # A Game Boy Advance cartridge with a slit through its roof that a printed card
 # is SLID through, dotcode edge first. LOADER_SWIPE, so it builds a through-slot
 # and no bay at all -- the card is never seated, and a snap zone would capture it
 # mid-swipe.
 #
-# `card_e_reader` rather than `e_reader` because the media systemid is `ereader`:
-# two identifiers a single underscore apart is a typo waiting to happen. It is
-# also the product's own name in Japan.
-#
-# `card` is stated even though card_systemid derives the same answer, because
-# has_own_card is false here (media_of != id) and the routing is worth reading
-# off the row rather than re-deriving.
+# The unit id IS the media systemid, so has_own_card is true and the e-Reader
+# tile carries the reader and its cards and nothing else. An id that differed
+# from the media put the tile back on the generic console path, which offered a
+# Primitive System, a Primitive Controller and a composite lead for a cartridge.
 #
 # Its program is the e-Reader cartridge dump, read from mGBA's system dir like
 # the Super Game Boy's -- the unit is spawned from a menu and has no library
@@ -32,7 +29,6 @@ const ROW := {
 	"mount": ExpansionDefs.MOUNT_CARTRIDGE,
 	"size": Vector3(0.090, 0.062, 0.023),
 	"loader": MediaDimensions.LOADER_SWIPE,
-	"card": "ereader",
 	"firmware": ["ereader.gba"],
 	"rom_from_firmware": true,
 }
@@ -48,8 +44,8 @@ const BOOT := {
 	# No `subsystem`. mGBA's retro_load_game_special is a stub that returns false
 	# and its .info says load_subsystem = "false", so there is no ident to name and
 	# inventing one would be worse than leaving it blank.
-	"game_boy_advance|card_e_reader": {
+	"game_boy_advance|ereader": {
 		"core": "mgba",
-		"roms": ["expansion:card_e_reader"],
+		"roms": ["expansion:ereader"],
 	},
 }
