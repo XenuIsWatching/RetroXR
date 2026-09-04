@@ -182,20 +182,32 @@ func _group_data() -> void:
 		EReaderCards.SHAPE_LONG_SHORT: [EReaderCards.KIND_LONG, EReaderCards.KIND_SHORT],
 		EReaderCards.SHAPE_TWO_LONG: [EReaderCards.KIND_LONG, EReaderCards.KIND_LONG],
 	}
+	# Both orientations, because which edge is the long one is the whole question:
+	# a card the art proved portrait reads its long strip off a side edge, and the
+	# same shape laid landscape reads it off the bottom.
 	for shape: String in EReaderCards.EDGES:
 		var kinds: Array = shape_kinds[shape]
-		var portrait: bool = shape == EReaderCards.SHAPE_LONG_SHORT or shape == EReaderCards.SHAPE_SHORT
-		var csize := MediaDimensions.ereader_card_size(portrait)
-		var shape_edges: Array = EReaderCards.EDGES[shape]
-		for i in shape_edges.size():
-			var edge := str(shape_edges[i])
-			var horizontal: bool = edge == EReaderCards.EDGE_BOTTOM or edge == EReaderCards.EDGE_TOP
-			var span: float = csize.x if horizontal else csize.y
-			var other: float = csize.y if horizontal else csize.x
-			if str(kinds[i]) == EReaderCards.KIND_LONG:
-				_check(span > other, "data/ %s: the long strip is on the card's longer edge" % shape)
-			else:
-				_check(span < other, "data/ %s: the short strip is on the card's shorter edge" % shape)
+		for portrait: bool in [false, true]:
+			var csize := MediaDimensions.ereader_card_size(portrait)
+			var shape_edges := EReaderCards.edges_for(shape, portrait)
+			_eq(shape_edges.size(), kinds.size(),
+				"data/ %s: every strip has an edge, %s" % [shape, "portrait" if portrait else "landscape"])
+			for i in shape_edges.size():
+				var edge := str(shape_edges[i])
+				var horizontal: bool = edge == EReaderCards.EDGE_BOTTOM or edge == EReaderCards.EDGE_TOP
+				var span: float = csize.x if horizontal else csize.y
+				var other: float = csize.y if horizontal else csize.x
+				if str(kinds[i]) == EReaderCards.KIND_LONG:
+					_check(span > other,
+						"data/ %s: the long strip is on the card's longer edge" % shape)
+				else:
+					_check(span < other,
+						"data/ %s: the short strip is on the card's shorter edge" % shape)
+			# Two strips never share an edge, or the second is unreachable.
+			var seen: Dictionary = {}
+			for e: Variant in shape_edges:
+				seen[str(e)] = true
+			_eq(seen.size(), shape_edges.size(), "data/ %s: its strips are on different edges" % shape)
 
 	# Sizes, against what GBACartEReaderScan actually decodes.
 	_check(EReaderCards.is_scannable_size(1872), "data/ 1872 is a short strip")
@@ -396,6 +408,17 @@ func _fake_gba(code: String, fixed: int) -> String:
 	bytes[0xB2] = fixed
 	f.store_buffer(bytes)
 	f.close()
+	return path
+
+
+## A label-art PNG of a given pixel size, written where the scraper puts one.
+func _write_label_art(dir: String, base: String, w: int, h: int) -> String:
+	var art_dir := dir.path_join("media").path_join("label")
+	DirAccess.make_dir_recursive_absolute(art_dir)
+	var path := art_dir.path_join(base + ".png")
+	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
+	img.fill(Color.WHITE)
+	img.save_png(path)
 	return path
 
 
@@ -637,6 +660,34 @@ func _group_library() -> void:
 
 	_check(bool(EReaderCards.card_for_path(solo, dir).get("portrait", true)) == false,
 		"library/ a single-long card is not portrait")
+
+	# ART BEATS THE SHAPE. An Animal Crossing-e card is a portrait card with one
+	# long strip down its side, which the shape alone reads as landscape -- and
+	# the room drew it as one, letterboxing the art into a body of the wrong
+	# proportions. A scan of the card IS the card's proportions, so where there is
+	# one it decides, and the long strip moves to the edge long enough to hold it.
+	var art := _write_label_art(dir, "Mario Party-e (USA)", 320, 448)
+	EReaderCards.invalidate()
+	var tall := EReaderCards.card_for_path(solo, dir)
+	_check(bool(tall.get("portrait", false)),
+		"library/ portrait art makes a single-long card portrait")
+	_eq(str((tall["strips"][0] as Dictionary).get("edge", "")), EReaderCards.EDGE_SIDE,
+		"library/ and its long strip moves to the side edge")
+
+	# And the same file laid the other way round is landscape again, so the case
+	# above cannot be passing on anything but the art.
+	DirAccess.remove_absolute(art)
+	art = _write_label_art(dir, "Mario Party-e (USA)", 448, 320)
+	EReaderCards.invalidate()
+	var wide := EReaderCards.card_for_path(solo, dir)
+	_check(not bool(wide.get("portrait", true)),
+		"library/ landscape art keeps it landscape")
+	_eq(str((wide["strips"][0] as Dictionary).get("edge", "")), EReaderCards.EDGE_BOTTOM,
+		"library/ and its long strip stays on the bottom edge")
+	DirAccess.remove_absolute(art)
+	DirAccess.remove_absolute(dir.path_join("media").path_join("label"))
+	DirAccess.remove_absolute(dir.path_join("media"))
+	EReaderCards.invalidate()
 
 	# The broken dump is grouped, so it can be reported, but must never be spawned.
 	var broken := EReaderCards.card_for_path(bad, dir)
