@@ -38,6 +38,22 @@ const COMPLETE_FRACTION := 0.92
 ## Without a band, hand tremor at the entry threshold aborts every attempt.
 const REVERSE_FRACTION := 0.12
 
+## How square to the groove a card has to be before it counts as presented: the
+## cosine between its face normal and the groove's up axis, so 0.5 is 60 degrees
+## off flat. Generous on purpose — this rejects a card being carried in over the
+## roof, not a card held at a slight angle.
+const FLAT_LIMIT := 0.5
+
+## How near the groove's centre line the leading edge has to be, in metres, and
+## how far the runner-up has to be behind it. The margin is what makes a card
+## offered corner-first WAIT instead of guessing: at 45 degrees two edges are
+## equidistant, and whichever the dictionary happened to list first would win.
+const ARM_DISTANCE := 0.015
+## 12 mm, which is what it takes to actually reject a diagonal: at 45 degrees a
+## 63 x 88 card's bottom and side midpoints differ by only (h - w) / 2 / sqrt(2),
+## just under 9 mm. A smaller margin looks like a check and arms anyway.
+const ARM_MARGIN := 0.012
+
 var _card: Node3D = null
 var _edge: String = ""
 var _face_up: bool = false
@@ -45,6 +61,10 @@ var _entry_sign: float = 0.0
 var _extreme: float = 0.0
 var _snap: float = 0.0
 var _seated_basis: Basis = Basis.IDENTITY
+## False while the card is still being lined up — see is_presenting.
+var _armed: bool = false
+## The card's own dimensions, read once when it arrives.
+var _size: Vector3 = Vector3.ZERO
 ## Half the card dimension that stands up out of the groove. Which one that is
 ## depends on the edge presented: an edge on X leaves the card's WIDTH standing.
 var _stand_half: float = 0.0
@@ -62,14 +82,14 @@ func _ready() -> void:
 
 # ── Geometry, pure so it can be tested without a hand or a physics step ───────
 
-## Which of the card's four edges is sitting in the groove.
+## How far each of the card's four edges is from the groove's centre line.
 ##
-## The coded edge is the one lying along the groove, so it is the edge whose
-## midpoint is nearest the groove's centre line — not the one pointing most
-## nearly along it, which cannot separate an edge in the groove from the
-## parallel one at the top of the card.
-static func presented_edge(card: Transform3D, card_size: Vector3,
-		slit: Transform3D) -> String:
+## Distance from the LINE (the slit's own X axis), so travel along the groove
+## does not change the answer. Midpoint distance rather than how nearly an edge
+## points along the groove: that second test cannot separate an edge lying in the
+## groove from the parallel one at the top of the card, which is equally parallel.
+static func edge_distances(card: Transform3D, card_size: Vector3,
+		slit: Transform3D) -> Dictionary:
 	var half_w := card_size.x * 0.5
 	var half_h := card_size.y * 0.5
 	var candidates := {
@@ -79,17 +99,57 @@ static func presented_edge(card: Transform3D, card_size: Vector3,
 		EReaderCards.EDGE_SIDE_FAR: Vector3(half_w, 0.0, 0.0),
 	}
 	var to_slit := slit.affine_inverse()
-	var best := ""
-	var best_d := INF
+	var out: Dictionary = {}
 	for name: String in candidates:
 		var local: Vector3 = to_slit * (card * (candidates[name] as Vector3))
-		# Distance from the groove line (the slit's own X axis), so travel along
-		# the groove does not change which edge is judged to be in it.
-		var d := Vector2(local.y, local.z).length()
-		if d < best_d:
-			best_d = d
+		out[name] = Vector2(local.y, local.z).length()
+	return out
+
+
+## Which of the card's four edges is sitting in the groove.
+static func presented_edge(card: Transform3D, card_size: Vector3,
+		slit: Transform3D) -> String:
+	var d := edge_distances(card, card_size, slit)
+	var best := ""
+	var best_d := INF
+	for name: String in d:
+		if float(d[name]) < best_d:
+			best_d = float(d[name])
 			best = name
 	return best
+
+
+## Is the card being PRESENTED to the groove, rather than merely overlapping it?
+##
+## The Area3D fires the moment a corner touches, which for a hand carrying a card
+## in flat over the roof is long before any edge has been offered — and the pose
+## latched there decided the strip for the whole pass. Measured: a card held flat
+## a millimetre above the groove answers "side", and the same card rotated in its
+## own plane answers "bottom", neither of which the player has presented.
+##
+## Three tests, all of which a real presentation passes easily:
+##
+##   - the card stands ACROSS the groove rather than lying over it. Its face
+##     normal has to be within 60 degrees of horizontal, so a card being carried
+##     in flat is refused however close it gets.
+##   - some edge is genuinely near the line, not merely inside the trigger box.
+##   - and it beats the runner-up by a clear margin, so a card offered at 45
+##     degrees waits rather than guessing between two edges.
+static func is_presenting(card: Transform3D, card_size: Vector3,
+		slit: Transform3D) -> bool:
+	if absf(card.basis.z.normalized().dot(slit.basis.y.normalized())) > FLAT_LIMIT:
+		return false
+	var d := edge_distances(card, card_size, slit)
+	var best := INF
+	var runner_up := INF
+	for name: String in d:
+		var v: float = d[name]
+		if v < best:
+			runner_up = best
+			best = v
+		elif v < runner_up:
+			runner_up = v
+	return best <= ARM_DISTANCE and (runner_up - best) >= ARM_MARGIN
 
 
 ## Whether the card's printed face is the one presented to the reader.
@@ -152,17 +212,12 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 	if not _is_held(body):
 		return
-	var size := _card_size(body)
-	var xform := body.global_transform
+	# Watched, not latched. What the card is doing at first touch is not what it
+	# is being offered as -- see is_presenting.
 	_card = body
-	_edge = presented_edge(xform, size, global_transform)
-	_face_up = is_face_up(xform, global_transform)
-	_seated_basis = seated_basis(_edge, _face_up, global_transform)
-	_stand_half = stand_half(_edge, size)
+	_size = _card_size(body)
+	_armed = false
 	_snap = 0.0
-	var t := travel_of(xform, global_transform)
-	_entry_sign = signf(t) if not is_zero_approx(t) else 1.0
-	_extreme = t
 
 
 func _on_body_exited(body: Node3D) -> void:
@@ -177,6 +232,13 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(_card) or not _is_held(_card):
 		_finish(false)
 		return
+
+	# Still being lined up: watch, take nothing, and do not move the card. The
+	# hand owns it entirely until it is offering an edge.
+	if not _armed:
+		if not is_presenting(_card.global_transform, _size, global_transform):
+			return
+		_arm()
 
 	var t := travel_of(_card.global_transform, global_transform)
 
@@ -208,13 +270,41 @@ func _physics_process(delta: float) -> void:
 		_extreme = t
 
 
+## Take the pose the card is being offered at, and hold it to that for the rest
+## of the pass.
+##
+## Latched ONCE. A wrist rolls during a swipe, and recomputing the edge per frame
+## flips the choice halfway and reads the other strip; recomputing the face would
+## make a card blink between readable and not. The pass is also measured from
+## here rather than from first touch, so backing out is judged against where the
+## card actually entered the groove.
+func _arm() -> void:
+	var xform := _card.global_transform
+	_edge = presented_edge(xform, _size, global_transform)
+	_face_up = is_face_up(xform, global_transform)
+	_seated_basis = seated_basis(_edge, _face_up, global_transform)
+	_stand_half = stand_half(_edge, _size)
+	_snap = 0.0
+	var t := travel_of(xform, global_transform)
+	_entry_sign = signf(t) if not is_zero_approx(t) else 1.0
+	_extreme = t
+	_armed = true
+
+
 func _finish(complete: bool) -> void:
 	var card := _card
 	var edge := _edge
+	var armed := _armed
 	_card = null
 	_edge = ""
 	_snap = 0.0
+	_armed = false
 	if card == null:
+		return
+	# A card that was never offered to the groove did not abort a pass; it was
+	# carried past. Reporting that as an abort would toast the player for walking
+	# their card over the machine.
+	if not armed:
 		return
 	if complete:
 		swiped.emit(card, edge, _strip_index(card, edge))

@@ -262,6 +262,60 @@ func _group_geom() -> void:
 	_check(not CardSwipeSlit.is_face_up(upright, slit),
 		"geom/ art turned away from the player is face down")
 
+	# A card is PRESENTED before it is read, and the Area3D fires long before
+	# that: a hand carrying a card in flat over the roof trips it while offering
+	# nothing. Latching there picked an edge off a pose the player never chose --
+	# measured, a card held flat a millimetre above the groove answers "side",
+	# and the same card turned in its own plane answers "bottom".
+	var flat := Transform3D(Basis(Vector3.RIGHT, PI * 0.5), slit * Vector3(0.0, 0.001, 0.0))
+	_check(not CardSwipeSlit.is_presenting(flat, size, slit),
+		"geom/ a card carried in flat is not presenting")
+	var flat_turned := Transform3D(Basis(Vector3.RIGHT, PI * 0.5) * Basis(Vector3.BACK, PI * 0.5),
+		slit * Vector3(0.0, 0.001, 0.0))
+	_check(not CardSwipeSlit.is_presenting(flat_turned, size, slit),
+		"geom/ nor is the same card turned in its own plane")
+
+	# The case only the flatness test catches: a flat card slid sideways until one
+	# side edge lies along the line. Its opposite edge is then a whole card width
+	# away, so the distance and margin tests are both satisfied by a card lying
+	# face-down across the roof, offering nothing.
+	var flat_offset := Transform3D(Basis(Vector3.RIGHT, PI * 0.5),
+		slit * Vector3(0.0, 0.001, half_w))
+	_check(not CardSwipeSlit.is_presenting(flat_offset, size, slit),
+		"geom/ a flat card with one edge on the line is still not presenting")
+
+	# Corner-first is a tie between two edges, and whichever the table listed
+	# first would win it. It waits instead.
+	# Lowered until the corner is ON the line, so distance cannot be what rejects
+	# it -- only the margin between the two edges meeting at that corner can.
+	var diag := (Basis(Vector3.BACK, PI * 0.25) * Vector3(0.0, -half_h, 0.0)).length()
+	var corner := Transform3D(Basis(Vector3.UP, PI) * Basis(Vector3.BACK, PI * 0.25),
+		slit * Vector3(0.0, diag * 0.72, 0.0))
+	_check(not CardSwipeSlit.is_presenting(corner, size, slit),
+		"geom/ a card offered corner-first waits rather than guessing")
+
+	# But an ordinary imperfect hand is not a diagonal, and must not be made to
+	# wait: 25 degrees off upright still reads as the bottom edge.
+	var tilted := Transform3D(Basis(Vector3.UP, PI) * Basis(Vector3.BACK, deg_to_rad(25)),
+		slit * Vector3(0.0, half_h * cos(deg_to_rad(25)) + half_w * sin(deg_to_rad(25)), 0.0))
+	_check(CardSwipeSlit.is_presenting(tilted, size, slit),
+		"geom/ a card offered a little off upright still presents")
+	_eq(CardSwipeSlit.presented_edge(tilted, size, slit), EReaderCards.EDGE_BOTTOM,
+		"geom/ and it is the bottom edge it presents")
+
+	# What a real presentation looks like: upright, edge on the line.
+	var offered := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h, 0.0))
+	_check(CardSwipeSlit.is_presenting(offered, size, slit),
+		"geom/ an upright card with its edge on the groove is presenting")
+	var offered_side := Transform3D(Basis(Vector3.UP, PI) * Basis(Vector3.BACK, PI * 0.5),
+		Vector3(0.0, half_w, 0.0))
+	_check(CardSwipeSlit.is_presenting(offered_side, size, slit),
+		"geom/ and so is one offered side edge down")
+	# Still inside the trigger box, but a whole card away from the line.
+	var high := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h + 0.02, 0.0))
+	_check(not CardSwipeSlit.is_presenting(high, size, slit),
+		"geom/ merely overlapping the groove is not presenting")
+
 	_check(is_equal_approx(CardSwipeSlit.travel_of(moved, slit), 0.04), "geom/ travel is measured along the groove")
 	_check(is_zero_approx(CardSwipeSlit.travel_of(upright, slit)), "geom/ a centred card is at travel zero")
 
