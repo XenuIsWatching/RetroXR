@@ -37,6 +37,14 @@ const ROW := {
 	"host": "game_boy_advance",
 	"media": "ereader",
 	"mount": ExpansionDefs.MOUNT_CARTRIDGE,
+	# The battery is in the READER, not in anything it reads. Its 128 KiB of
+	# flash holds the scanner calibration and the cards it has already taken --
+	# the "Access saved data" row on its menu is that flash -- and a card is a
+	# sheet of printed paper with no memory in it at all. Without this the unit
+	# owns no save: it is not a cartridge with a save_id and it has no bay, so
+	# every other route in _compose_sram_path answers "", the core is handed an
+	# empty SRAM path, and each launch starts from blank flash.
+	"save_owner": ExpansionDefs.SAVE_OWNER_UNIT,
 	"size": Vector3(0.090, 0.062, 0.023),
 	"loader": MediaDimensions.LOADER_SWIPE,
 	# The game code in the dump's own header, which is what mGBA's override table

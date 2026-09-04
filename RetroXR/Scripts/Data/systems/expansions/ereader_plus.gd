@@ -17,6 +17,9 @@ const ROW := {
 	"host": "game_boy_advance",
 	"media": "ereader",
 	"mount": ExpansionDefs.MOUNT_CARTRIDGE,
+	# See ereader.gd: the battery is in the reader, and each revision keeps its
+	# own flash -- they are different hardware and their cards are region-locked.
+	"save_owner": ExpansionDefs.SAVE_OWNER_UNIT,
 	"size": Vector3(0.090, 0.062, 0.023),
 	"loader": MediaDimensions.LOADER_SWIPE,
 	# See ereader.gd: the header code is what a library dump is recognised by.

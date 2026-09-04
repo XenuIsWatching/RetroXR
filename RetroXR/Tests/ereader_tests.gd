@@ -365,6 +365,21 @@ func _group_catalog() -> void:
 		"catalog/ and a file without a GBA header is not one either")
 	DirAccess.remove_absolute(not_gba)
 
+	# The battery is in the reader. Without an owner named here the unit is not a
+	# cartridge with a save_id and has no bay, so every route in
+	# _compose_sram_path answers "" and the core runs with no SRAM file at all --
+	# blank flash every launch, and the cards it has taken gone with it.
+	var seen_save: Dictionary = {}
+	for rid: String in ["ereader", "ereader_plus", "ereader_usa"]:
+		_eq(ExpansionCatalog.save_owner_of(rid), ExpansionCatalog.SAVE_OWNER_UNIT,
+			"catalog/ %s owns its own flash" % rid)
+		var save := SramPaths.unit_save_path("mgba", rid)
+		_check(not save.is_empty(), "catalog/ %s resolves to a save file" % rid)
+		seen_save[save] = true
+	# One file each: the three are different hardware, and a + reader restored
+	# from an original's flash is the calibration bug the fork already fixed.
+	_eq(seen_save.size(), 3, "catalog/ each revision keeps a flash of its own")
+
 	# And the two later revisions have no tile of their own: three tiles over one
 	# shelf of cards would be two empty libraries.
 	for rid: String in ["ereader_plus", "ereader_usa"]:
