@@ -114,6 +114,29 @@ func _ready() -> void:
 	dropped.connect(_on_dropped)
 
 
+# ── e-Reader cards ────────────────────────────────────────────────────────────
+#
+# A dotcode card is spawned as a cartridge, but it is one to two strip FILES
+# rather than one ROM. It carries the first strip in rom_path and finds the rest
+# from the library, so nothing extra has to be saved for a card to come back
+# whole after a restore.
+
+
+## The card this is, or {} when it is an ordinary cartridge.
+##
+## CardSwipeSlit and RetroSystem both read this; the strip a swipe selects is an
+## index into its `strips`.
+func get_card_data() -> Dictionary:
+	if systemid != EReaderCards.SYSTEMID:
+		return {}
+	return EReaderCards.card_for_path(rom_path)
+
+
+## The body size for this card — portrait TCG or landscape e-Reader.
+func get_card_size() -> Vector3:
+	return MediaDimensions.cart_size(systemid, rom_path)
+
+
 ## Swap the procedural box for this system's real cartridge model when one ships.
 ##
 ## The GLB's body runs +Y from its connector with the label on +Z — the same
@@ -255,9 +278,25 @@ func _apply_system_size() -> void:
 	var label_mesh := get_node_or_null("LabelMesh") as MeshInstance3D
 	if label_mesh and label_mesh.mesh is BoxMesh:
 		var lm := label_mesh.mesh.duplicate() as BoxMesh
-		lm.size = Vector3(s.x * 0.8, s.y * 0.62, 0.002)
-		label_mesh.mesh = lm
-		label_mesh.position = Vector3(0, s.y * 0.125, s.z / 2.0 + 0.001)
+		if systemid == EReaderCards.SYSTEMID:
+			# A dotcode card IS its printed face. There is no recessed sticker on
+			# one, so a card given a cartridge's label region wears its own body
+			# as a wide border no real card has.
+			lm.size = Vector3(s.x, s.y, 0.0004)
+			label_mesh.mesh = lm
+			label_mesh.position = Vector3(0, 0, s.z / 2.0 + 0.0002)
+			# And the body under it is card stock, not a moulded shell: any sliver
+			# left by art of a different aspect should read as the card's margin.
+			var card_body := get_node_or_null("CartridgeMesh") as MeshInstance3D
+			if card_body != null:
+				var bm := StandardMaterial3D.new()
+				bm.albedo_color = Color(0.92, 0.90, 0.86)
+				bm.roughness = 0.85
+				card_body.set_surface_override_material(0, bm)
+		else:
+			lm.size = Vector3(s.x * 0.8, s.y * 0.62, 0.002)
+			label_mesh.mesh = lm
+			label_mesh.position = Vector3(0, s.y * 0.125, s.z / 2.0 + 0.001)
 
 	var lbl := get_node_or_null("GameLabel") as Label3D
 	if lbl:

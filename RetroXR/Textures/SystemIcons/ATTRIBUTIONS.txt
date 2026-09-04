@@ -18,10 +18,11 @@ RetroArch and Lakka.
 
 Files were renamed from "Manufacturer - System.svg" to "<systemid>.svg" to match
 this project's systemids. Contents are unmodified: every row of the map below
-was checked by git blob SHA against the commit above. Fourteen of our files are
+was checked by git blob SHA against the commit above. Sixteen of our files are
 byte-identical to more than one upstream name (several systems share one piece
 of art — the MAME-derived ones especially); those rows name the file the copy
-was taken from.
+was taken from. The two e-Reader files are such a pair: "Nintendo - e-Reader"
+and "Nintendo - Game Boy Advance (e-Reader)" are the same art under both names.
 
 Each system also has a "-content" variant: the media you put in the machine
 rather than the machine itself — cartridge, disc, tape, card. Those are here as
@@ -150,6 +151,8 @@ ep128-content.svg                   Intelligent Software - Enterprise-content.sv
 ep128.svg                           Enterprise - 128.svg
 epochcv-content.svg                 Epoch - Cassette Vision-content.svg
 epochcv.svg                         Epoch - Cassette Vision.svg
+ereader-content.svg                 Nintendo - e-Reader-content.svg
+ereader.svg                         Nintendo - e-Reader.svg
 fb_alpha-content.svg                FBNeo - Arcade Games-content.svg
 fb_alpha.svg                        FBNeo - Arcade Games.svg
 fds-content.svg                     Nintendo - Family Computer Disk System-content.svg

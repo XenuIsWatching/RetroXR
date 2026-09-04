@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SystemInfo" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Data/systems/system_info.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+systemid = "ereader"
+display_name = "e-Reader"
+native_ports = 1
+media_type = 0

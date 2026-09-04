@@ -49,7 +49,25 @@ const CART_SIZES: Dictionary = {
 	# hand out a caddy ~40% too big. Note the PSP appears in DISC_DIAMETERS too:
 	# that is the bare platter sealed inside, this is the caddy you actually hold.
 	"playstation_portable": Vector3(0.064, 0.064, 0.0042),
+	# The landscape e-Reader card. A dotcode card comes in two shapes and this is
+	# the majority one; the portrait Pokemon-e TCG card is CARD_SIZE_EREADER_TCG.
+	# Nominal, not measured off a card.
+	"ereader":          Vector3(0.085, 0.054, 0.0008),
 }
+
+## The two e-Reader card shapes, both nominal rather than measured.
+##
+## A card is sized by which one it is, not by its systemid, because both are
+## "ereader": a Pokemon-e TCG card is a portrait trading card carrying its long
+## strip on the side edge, and a Nintendo e-Reader card is landscape. Sizing every
+## card alike would put a long strip on an edge too short to hold it.
+const CARD_SIZE_EREADER := Vector3(0.085, 0.054, 0.0008)
+const CARD_SIZE_EREADER_TCG := Vector3(0.063, 0.088, 0.0008)
+
+
+## Size of an e-Reader card. `portrait` is EReaderCards' flag for the TCG shape.
+static func ereader_card_size(portrait: bool) -> Vector3:
+	return CARD_SIZE_EREADER_TCG if portrait else CARD_SIZE_EREADER
 
 ## Generic cartridge size (the original cartridge.tscn values) for systems
 ## without an entry above.
@@ -194,6 +212,7 @@ const _DVD5_MAX_BYTES := 4831838208   # 4.5 GiB, just clear of a full DVD-5
 const LOADER_NONE := 0   # cartridge system — no disc loader
 const LOADER_TRAY := 1   # lid/tray: OPEN button gates insert/remove (PS1, GameCube…)
 const LOADER_SLOT := 2   # slot-load: disc injects on insert, EJECT slides it out (PS2)
+const LOADER_SWIPE := 3  # through-slot: the medium is slid past a reader and back out
 
 ## Systems that slot-load instead of using a lid/tray.
 ## NOTE: playstation2 was here (the fat PS2's front slot) but the console we model
@@ -273,6 +292,13 @@ static func cart_size(systemid: String, rom_path := "") -> Vector3:
 		var ext := rom_path.get_extension().to_lower()
 		if ext == "sfc" or ext == "smc":
 			return CART_SIZES["super_nes"]
+	# A dotcode card comes in two shapes and the systemid cannot tell them apart:
+	# a Pokemon-e TCG card is a portrait trading card, a Nintendo e-Reader card is
+	# landscape. Which one this is follows from the card the strip belongs to.
+	if systemid == EReaderCards.SYSTEMID and not rom_path.is_empty():
+		var card := EReaderCards.card_for_path(rom_path)
+		if not card.is_empty():
+			return ereader_card_size(bool(card.get("portrait", false)))
 	return CART_SIZES.get(systemid, CART_SIZE_DEFAULT)
 
 

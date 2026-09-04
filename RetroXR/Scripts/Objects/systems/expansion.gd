@@ -42,6 +42,12 @@ const SNAP_ZONE_SCENE := preload("res://addons/godot-xr-tools/objects/snap_zone.
 ## polling the socket.
 signal host_changed(host: RetroSystem)
 
+## A card completed a pass through this unit's groove. `strip` indexes the card's
+## own strips, or -1 when the edge presented carries no dotcode.
+signal card_swiped(card: Node3D, edge: String, strip: int)
+## A pass was started and not finished.
+signal card_swipe_aborted(card: Node3D)
+
 
 ## The console currently joined to this unit, whichever side the socket is on.
 var _host: RetroSystem = null
@@ -59,6 +65,7 @@ var _connector: XRToolsGrabPointSnap = null
 ## the same shape RetroSystem uses for its two memory-card sockets.
 var _bays: Array[XRToolsSnapZone] = []
 var _slot: MediaSlot = null
+var _slit: CardSwipeSlit = null
 var _tray: MediaTray = null
 ## The drawer mechanism on a tray unit that has no lid -- the mouth in the front
 ## face and the shelf that runs out of it. Null on a lidded unit and on every
@@ -317,6 +324,12 @@ func _build_media_bay() -> void:
 	# the Satellaview's pack 92 mm inside the box, out of sight and out of reach,
 	# because it rode the slot travel meant for something a third of its length.
 	var loader := ExpansionCatalog.loader_of(expansion_id)
+	# A swiped medium is never held, so this unit gets a groove and NO bay. The
+	# snap zones below are built before the loader is branched on, and one of them
+	# would capture the card part-way through the swipe.
+	if loader == MediaDimensions.LOADER_SWIPE:
+		_build_swipe_slit(size(), media)
+		return
 	var front_loading := loader == MediaDimensions.LOADER_SLOT
 
 	var count := ExpansionCatalog.bays_of(expansion_id)
@@ -386,6 +399,49 @@ func _build_slot_bay(s: Vector3, media: String) -> void:
 	# pointable while it is in there, so without this button a 64DD disk went in
 	# and could not come back out.
 	_build_eject_button(s, media)
+
+
+## Media that is SWIPED rather than loaded: a groove across the roof, and no bay.
+##
+## The card stays in the hand for the whole pass, so there is nothing to seat and
+## nothing to eject. CardSwipeSlit constrains the pose and reports a completed
+## pass; this unit only forwards it.
+func _build_swipe_slit(s: Vector3, media: String) -> void:
+	var card := MediaDimensions.cart_size(media)
+	var centre := ExpansionShell.build_through_slot(_body, s, card)
+
+	_slit = CardSwipeSlit.new()
+	_slit.name = "SwipeSlit"
+	_slit.card_group = MEDIA_GROUP
+	_slit.card_filter = _accepts_media
+	# The same mask a snap zone carries, and for the same reason: media rests on
+	# layer 3 and XRToolsPickable moves it to DEFAULT_LAYER while a hand has it,
+	# so a groove watching only one of the two never sees a card being carried
+	# through it -- which is the only way a card ever arrives.
+	_slit.collision_mask = 0b0000_0000_0000_0001_0000_0000_0000_0100
+	# The groove runs the width of the case, and a pass has to clear both ends.
+	_slit.travel = s.x
+	add_child(_slit)
+	_slit.position = centre
+
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	# Deep enough in Y to catch a card whose edge is in the groove, tight in Z so
+	# a card held flat above the case does not arm it.
+	box.size = Vector3(s.x, card.y * 0.5, card.z + 0.006)
+	shape.shape = box
+	_slit.add_child(shape)
+
+	_slit.swiped.connect(_on_card_swiped)
+	_slit.aborted.connect(_on_card_swipe_aborted)
+
+
+func _on_card_swiped(card: Node3D, edge: String, strip: int) -> void:
+	card_swiped.emit(card, edge, strip)
+
+
+func _on_card_swipe_aborted(card: Node3D) -> void:
+	card_swipe_aborted.emit(card)
 
 
 ## A CD unit -- a lid in the roof, or a drawer out of the front.

@@ -57,6 +57,12 @@ static func scan_roms(systemid: String, extensions: Array[String]) -> Array[Dict
 	if not dir:
 		return []
 
+	# A dotcode card is one to two strip files and belongs in the browser ONCE,
+	# the same way a bin/cue pair does. It cannot go through SHADOWED_BY below:
+	# that pairs by extension and both strips are .raw, so grouping is by name.
+	if systemid == EReaderCards.SYSTEMID:
+		return _scan_ereader_cards(dir_path)
+
 	# data ext -> descriptor ext that supersedes it
 	const SHADOWED_BY := {"bin": "cue", "img": "ccd", "mdf": "mds"}
 
@@ -102,6 +108,27 @@ static func scan_roms(systemid: String, extensions: Array[String]) -> Array[Dict
 	results.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return (a["label"] as String).naturalnocasecmp_to(b["label"] as String) < 0
 	)
+	return results
+
+
+## One row per CARD, carrying its first strip. A card finds its other strip from
+## the library, so the path here is an identity rather than the whole medium.
+##
+## Cards whose dump is unusable are left out rather than offered: a strip of the
+## wrong length is one GBACartEReaderScan drops silently, so spawning it would
+## give a card that does nothing and says nothing about why.
+static func _scan_ereader_cards(dir_path: String) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	for card: Dictionary in EReaderCards.cards(dir_path):
+		if str(card["shape"]) == EReaderCards.SHAPE_BROKEN:
+			continue
+		var strips: Array = card["strips"]
+		if strips.is_empty():
+			continue
+		results.append({
+			"path": str((strips[0] as Dictionary)["path"]),
+			"label": str(card["label"]),
+		})
 	return results
 
 

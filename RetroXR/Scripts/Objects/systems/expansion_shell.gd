@@ -40,6 +40,30 @@ static func build_slit(body: Node3D, s: Vector3, media: String) -> void:
 	slit.position = Vector3(0.0, -s.y * 0.2, s.z * 0.5 - 0.002)
 
 
+## The groove across the roof that a swiped card is drawn through.
+##
+## Open at both ends, unlike build_slit's mouth: a card goes in one side and comes
+## out the other, so the groove runs the full width of the case rather than being
+## a pocket cut into one face. Cut to the card's THICKNESS, not its height — only
+## the coded edge is down in the groove and the body of the card stands proud.
+##
+## Returns the groove's centre in `body` space, which is where the slit's Area3D
+## and its travel axis are anchored.
+static func build_through_slot(body: Node3D, s: Vector3, card: Vector3) -> Vector3:
+	var groove := MeshInstance3D.new()
+	groove.name = "SwipeGroove"
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(s.x, 0.006, card.z + 0.003)
+	groove.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = MOUTH_COLOUR
+	groove.set_surface_override_material(0, mat)
+	body.add_child(groove)
+	var centre := Vector3(0.0, s.y * 0.5 - 0.003, 0.0)
+	groove.position = centre
+	return centre
+
+
 ## The mouth in the roof that media drops into.
 ##
 ## Cut to the MEDIA, not to a fraction of the box -- the same rule the front slit

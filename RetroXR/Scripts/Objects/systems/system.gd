@@ -2932,14 +2932,67 @@ func attach_expansion(unit: RetroExpansion) -> void:
 	if unit == null or _expansions.has(unit):
 		return
 	_expansions.append(unit)
+	if not unit.card_swiped.is_connected(_on_expansion_card_swiped):
+		unit.card_swiped.connect(_on_expansion_card_swiped)
 	_update_name_label()
 
 
 func detach_expansion(unit: RetroExpansion) -> void:
 	if unit == null or not _expansions.has(unit):
 		return
+	if unit.card_swiped.is_connected(_on_expansion_card_swiped):
+		unit.card_swiped.disconnect(_on_expansion_card_swiped)
 	_expansions.erase(unit)
 	_update_name_label()
+
+
+## A dotcode card was slid through an expansion's groove.
+##
+## The card reaches the core as removable media: eject, replace, insert, and the
+## INSERT edge is what queues the dotcode. Always image 0 — the swipe has already
+## decided which strip, so there is nothing for an index to choose between, and
+## the frontend has no add_image_index bound. The core's per-strip image list is
+## for a frontend driving this from a disk menu instead.
+func _on_expansion_card_swiped(card: Node3D, edge: String, strip: int) -> void:
+	if strip < 0:
+		print("[RetroSystem] card presented %s: no dotcode on that edge" % edge)
+		return
+	var path := _swiped_strip_path(card, strip)
+	if path.is_empty():
+		push_warning("[RetroSystem] swiped card supplied no path for strip %d" % strip)
+		return
+	# mGBA does not serialize the e-Reader's card queue, scan position or dot
+	# buffer, so a rollback replaying across a swipe and a late join mid-card both
+	# diverge. Landing the op on one agreed frame is not enough on its own.
+	if NetworkManager.netplay_running() and NetworkManager.netplay_covers(self):
+		print("[RetroSystem] card refused: e-Reader state is not transferable in a session")
+		var toast := _machine_toast()
+		if toast != null:
+			toast.show_notice(_display_name(), "Card not scanned",
+				"e-Reader cards cannot be scanned during netplay.",
+				AchievementToast.ACCENT_NOTICE)
+		return
+	if not _supports_disk_control():
+		push_warning("[RetroSystem] core takes no removable media; card ignored")
+		return
+	print("[RetroSystem] card swiped: %s strip %d -> %s" % [edge, strip, path.get_file()])
+	_libretro.SetDiskEjectState(true)
+	_libretro.ReplaceDiskImage(0, path)
+	_libretro.SetDiskEjectState(false)
+	_libretro.RequestDiskInfo()
+
+
+## The file behind the strip a swipe selected, off the card itself.
+func _swiped_strip_path(card: Node3D, strip: int) -> String:
+	if card == null or not card.has_method("get_card_data"):
+		return ""
+	var data: Variant = card.call("get_card_data")
+	if typeof(data) != TYPE_DICTIONARY:
+		return ""
+	var strips: Array = (data as Dictionary).get("strips", [])
+	if strip < 0 or strip >= strips.size():
+		return ""
+	return str((strips[strip] as Dictionary).get("path", ""))
 
 
 ## A disk going into or out of an expansion's own bay. The machine's boot media
