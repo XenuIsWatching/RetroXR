@@ -557,10 +557,51 @@ func _group_launch() -> void:
 	var dd := await _unit("nintendo_64dd")
 	var n64 := await _console("nintendo_64")
 	await _bolt(n64, dd)
-	# A bare drive is a parallel_n64 machine: mupen64plus-next does not take a
-	# lone .ndd, and the core that does is the one BiosBoot already knows about.
+	# A bare drive with no player preference falls back to parallel_n64, the
+	# baseline `core_without_host` -- BiosBoot already knows it as
+	# parallel-n64-64dd-hardware. "No preference" now has to be forced rather
+	# than assumed: expansion_boot() reads the real core_defaults.json (same
+	# file, same byte-for-byte restore idiom as system_tests.gd's resolve/
+	# group), and a machine that has ever had a default set for nintendo_64 --
+	# this one has, on the box this suite was authored on -- would otherwise
+	# make this assertion pass or fail by host history rather than by code.
+	var defaults_path := CoreDefaults.default_path()
+	var had_defaults := FileAccess.file_exists(defaults_path)
+	var defaults_before := FileAccess.get_file_as_bytes(defaults_path) if had_defaults else PackedByteArray()
+	var cleared := CoreDefaults.new()
+	cleared.setup(defaults_path)
+	cleared.set_default_core("nintendo_64", "")
+	cleared.save()
+
 	_check(n64.resolve_core_name() == "parallel_n64",
 		"launch/ a 64DD with nothing in the console is a parallel_n64 machine")
+	if had_defaults:
+		var f := FileAccess.open(defaults_path, FileAccess.WRITE)
+		f.store_buffer(defaults_before)
+		f.close()
+	else:
+		DirAccess.remove_absolute(defaults_path)
+	_check(FileAccess.file_exists(defaults_path) == had_defaults
+		and (not had_defaults or FileAccess.get_file_as_bytes(defaults_path) == defaults_before),
+		"launch/ the player's own core_defaults.json is put back byte for byte")
+
+	# But mupen64plus_next can ALSO take a lone disk now (the retroXR fork), so
+	# a player already on it -- their own instance pick, standing in here for
+	# the manager's per-systemid default too, since both land in core_name --
+	# keeps it instead of being switched away.
+	n64.core_name = "mupen64plus_next"
+	_check(n64.resolve_core_name() == "mupen64plus_next",
+		"launch/ a bare 64DD honors a player already on mupen64plus_next")
+	# Android's own recommended N64 core, and the same rule.
+	n64.core_name = "mupen64plus_next_gles3"
+	_check(n64.resolve_core_name() == "mupen64plus_next_gles3",
+		"launch/ and honors mupen64plus_next_gles3 the same way")
+	# A pick that ISN'T one of the capable cores still falls back to the
+	# baseline rather than being handed a disk it cannot open.
+	n64.core_name = "mgba"
+	_check(n64.resolve_core_name() == "parallel_n64",
+		"launch/ but a core that cannot take the disk still falls back")
+	n64.core_name = ""
 	var disk := await _cart("nintendo_64dd", "/roms/n64dd/disk.ndd")
 	dd.restore_media(disk)
 	await _wait(5)
