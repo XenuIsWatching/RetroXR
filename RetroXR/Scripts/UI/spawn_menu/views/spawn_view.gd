@@ -2352,8 +2352,8 @@ func _on_scrape_accepted(rom_path: String, systemid: String, result: Dictionary)
 			scraper_client.media_download_completed.is_connected(_media_dl_refresh_cb):
 		scraper_client.media_download_completed.disconnect(_media_dl_refresh_cb)
 
-	# Re-populate when wheel or manual finishes downloading so the list
-	# updates without requiring a manual tab switch.
+	# Re-populate when a piece of art a row DRAWS finishes downloading, so the
+	# list updates without requiring a manual tab switch.
 	# Scoped to the ROM that was just scraped, and coalesced.
 	#
 	# This used to clear the whole art memo and rebuild both the tile grid and
@@ -2363,8 +2363,13 @@ func _on_scrape_accepted(rom_path: String, systemid: String, result: Dictionary)
 	# decoded art and forcing it all to be read again. Measured before this:
 	# 2.4 ms per wheel and 4.1 ms per label to re-decode, times every visible row.
 	var scraped_rom := rom_path
+	# LABEL is in this list because the row's thumbnail IS the label: a row with
+	# no RomM cover falls back to the scraped label, and leaving it out meant the
+	# one piece of art a freshly scraped game always has was the one piece that
+	# never appeared until the platform was closed and reopened. Box is not, since
+	# no row draws it.
 	_media_dl_refresh_cb = func(mtype: String, _path: String) -> void:
-		if mtype != "wheel" and mtype != "manual":
+		if mtype != "wheel" and mtype != "label" and mtype != "manual":
 			return
 		# Drop what cached a miss for this ROM before the art existed.
 		if scraped_art != null:
