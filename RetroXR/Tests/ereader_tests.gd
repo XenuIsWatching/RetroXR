@@ -499,7 +499,23 @@ class CardDouble:
 		return card_size
 
 
+## The groove, cut into a body the way the real one is.
+##
+## Parented to a PhysicsBody3D on purpose: the slit exempts the card from
+## colliding with its host for the length of a pass, and a slit hanging off a
+## plain Node has no host to exempt it from -- which would make that case pass
+## without exercising anything.
 func _make_slit() -> CardSwipeSlit:
+	var host := StaticBody3D.new()
+	host.collision_layer = 0b100
+	var host_shape := CollisionShape3D.new()
+	var host_box := BoxShape3D.new()
+	host_box.size = Vector3(0.10, 0.06, 0.03)
+	host_shape.shape = host_box
+	host.add_child(host_shape)
+	add_child(host)
+	_slit_host = host
+
 	var slit := CardSwipeSlit.new()
 	slit.travel = 0.10
 	slit.snap_time = 0.0
@@ -512,8 +528,12 @@ func _make_slit() -> CardSwipeSlit:
 	box.size = Vector3(0.10, 0.05, 0.02)
 	shape.shape = box
 	slit.add_child(shape)
-	add_child(slit)
+	host.add_child(slit)
 	return slit
+
+
+## The host of the most recent _make_slit, for the collision-exception cases.
+var _slit_host: StaticBody3D = null
 
 
 func _make_card(data: Dictionary) -> CardDouble:
@@ -565,9 +585,22 @@ func _group_swipe() -> void:
 	card.global_transform = Transform3D(Basis(Vector3.UP, PI),
 		slit.global_transform * Vector3(-0.05, stand, 0.0))
 	await _wait(2)
-	await _drag(card, slit, -0.05, 0.05, 12, stand)
+	# Half the pass, then look: the card must be exempt from its host WHILE it is
+	# being drawn through, which is when the two would otherwise fight.
+	await _drag(card, slit, -0.05, 0.0, 6, stand)
+	_check(card.get_collision_exceptions().has(_slit_host),
+		"swipe/ mid-pass the card does not collide with the machine")
+	await _drag(card, slit, 0.0, 0.05, 6, stand)
 	await _wait(2)
 	_check(_entered > 0, "swipe/ the groove detects the card")
+	# While a pass is running the card must not be fighting the machine it is
+	# being drawn through: they share a collision layer, and a card rides with its
+	# edge ON the case, so the solver pushes it out on the same step this
+	# constraint teleports it back. That is the jitter, and the exception is
+	# lifted again by _finish -- a card that kept it would fall through the
+	# machine for the rest of the session.
+	_check(not card.get_collision_exceptions().has(_slit_host),
+		"swipe/ the card and the machine collide again once the pass is over")
 	_eq(_swipes, 1, "swipe/ a full pass reads exactly once")
 	_eq(_swipe_edge, EReaderCards.EDGE_BOTTOM, "swipe/ it reports the edge in the groove")
 	_eq(_swipe_strip, 1, "swipe/ the bottom edge reads the short strip")

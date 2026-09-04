@@ -65,6 +65,9 @@ var _seated_basis: Basis = Basis.IDENTITY
 var _armed: bool = false
 ## The card's own dimensions, read once when it arrives.
 var _size: Vector3 = Vector3.ZERO
+## The body the groove is cut into, exempted from colliding with the card for the
+## length of a pass. See _arm.
+var _host: PhysicsBody3D = null
 ## Half the card dimension that stands up out of the groove. Which one that is
 ## depends on the edge presented: an edge on X leaves the card's WIDTH standing.
 var _stand_half: float = 0.0
@@ -76,6 +79,7 @@ func _ready() -> void:
 	# of them is what lets the constraint below win the frame it is written in.
 	process_physics_priority = 10
 	monitoring = true
+	_host = get_parent() as PhysicsBody3D
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 
@@ -247,6 +251,14 @@ func _physics_process(delta: float) -> void:
 		_snap = minf(1.0, _snap + delta / snap_time)
 	else:
 		_snap = 1.0
+	# A teleported body still accumulates whatever the solver handed it before the
+	# write. Left in, that is spent the moment the card is released -- it leaves
+	# the groove with the velocity of a fight it was never allowed to win.
+	var rb := _card as RigidBody3D
+	if rb != null:
+		rb.linear_velocity = Vector3.ZERO
+		rb.angular_velocity = Vector3.ZERO
+
 	var target := global_transform
 	# The card STANDS in the groove: its centre rides half a card above the line,
 	# or it would sit half buried in the case.
@@ -290,11 +302,27 @@ func _arm() -> void:
 	_extreme = t
 	_armed = true
 
+	# The card and the machine are on the same collision layer, and a swiped card
+	# rides with its edge ON the case rather than above it -- so the solver has a
+	# contact to resolve on every step of the pass, while this constraint teleports
+	# the body back onto the groove line right after it. Each fights the other at
+	# the physics rate, which is the jitter.
+	#
+	# The card is deliberately NOT frozen: freeze covers all three kinds of hold,
+	# so setting it would end the grab mid-swipe. Exempting the pair is the half
+	# that can be undone cleanly, and it lasts exactly as long as the pass.
+	var body := _card as PhysicsBody3D
+	if body != null and _host != null:
+		body.add_collision_exception_with(_host)
+
 
 func _finish(complete: bool) -> void:
 	var card := _card
 	var edge := _edge
 	var armed := _armed
+	var body := card as PhysicsBody3D
+	if body != null and is_instance_valid(body) and _host != null:
+		body.remove_collision_exception_with(_host)
 	_card = null
 	_edge = ""
 	_snap = 0.0
