@@ -19,7 +19,10 @@ const ROW := {
 	"host": "nintendo_64",
 	"media": "",
 	"mount": ExpansionDefs.MOUNT_ABOVE,
-	"size": Vector3(0.055, 0.018, 0.045),
+	# The Expansion Pak's shell (see expansion_pak.gd): the two swap into one
+	# bay, so the size is the same. Only the top differs -- no red vent, hence
+	# no cap_color.
+	"size": Vector3(0.0515, 0.046, 0.023),
 	"loader": MediaDimensions.LOADER_NONE,
 	"default_occupant": true,
 }

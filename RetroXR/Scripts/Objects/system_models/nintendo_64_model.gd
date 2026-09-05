@@ -90,6 +90,27 @@ func _seat_button(btn: Node3D, seat_path: String) -> void:
 	btn.scale = Vector3(0.45, 0.45, 0.45)
 
 
+## The cabinet lays its phono row on the back of the 0.3 x 0.1 x 0.25 box it
+## draws for a model with no body of its own -- z -0.135, y 0. This case is
+## 0.26 x 0.073 x 0.19 and stands from y 0 rather than straddling it, so left
+## alone the jacks hang 40 mm off the back with half of each below the table.
+## Same correction as the ports and buttons above.
+func configure_av_ports(ports: Array) -> void:
+	for i in ports.size():
+		var port := ports[i] as Node3D
+		if port == null:
+			continue
+		var seat := get_node_or_null("Rear/AvSeat%d" % (i + 1)) as Node3D
+		if seat == null:
+			continue
+		port.global_transform = seat.global_transform
+		# 180 about X so the socket's local +Z points out of the back panel,
+		# which is the side a plug arrives from. Set AFTER the seat, or the
+		# marker's own basis (identity, facing forward) wins and every plug
+		# goes in through the machine.
+		port.rotation = Vector3(PI, 0.0, 0.0)
+
+
 func configure_cartridge_slot(slot: Node3D) -> void:
 	var seat := get_node_or_null("CartSeat") as Node3D
 	if seat != null:
@@ -141,7 +162,7 @@ func configure_expansion_socket(socket: Node3D) -> void:
 ## case. Scaled rather than rebuilt because the plate belongs to ExpansionPort:
 ## every other console still gets the connector it always did.
 func _shrink_connector(socket: Node3D) -> void:
-	const BAY := Vector2(0.052, 0.036)          # inside the 60 x 50 mm opening
+	const BAY := Vector2(0.048, 0.022)          # inside the 54 x 26 mm opening
 	const PLATE := Vector2(0.114, 0.051)        # what _add_plate built it as
 	var s := Vector3(BAY.x / PLATE.x, 1.0, BAY.y / PLATE.y)
 	for name in ["ConnectorPlate", "ConnectorPins"]:

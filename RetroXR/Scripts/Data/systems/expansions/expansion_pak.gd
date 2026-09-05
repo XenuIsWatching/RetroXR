@@ -16,20 +16,22 @@ const ID := "expansion_pak"
 # unlike every other MOUNT_ABOVE unit, the N64 model relocates that socket
 # forward, in front of the cartridge slot, and hides it behind a lift-off
 # cover (RetroSystemModel.configure_expansion_socket), because that is where
-# the real port is: a well sunk into the deck, sized to the real Jumper/
-# Expansion Pak (55 x 18 x 45 mm) rather than to the N64DD-scale box this row
-# started as.
+# the real port is: a shaft sunk 50 mm into the deck and the base below it.
 #
-# cap_color paints the top plate red -- the real Expansion Pak's one visible
-# difference from the Jumper Pak it replaces, and the only thing that tells
-# a player which is currently seated in a bay where both are the same size
-# and shape.
+# Measured off a NUS-007: 51.5 wide, 46 tall, 23 front to back across the red
+# top. It stands upright, which is what the console's well is a shaft for.
+#
+# Below the red top the real body steps in to 14 mm; this box stays 23 all the
+# way down. That step is inside the well under the lid and never visible.
+#
+# cap_color paints the top plate red -- a perforated vent on the real part, and
+# the only thing that tells a seated Expansion Pak from a Jumper Pak.
 const ROW := {
 	"label": "Expansion Pak",
 	"host": "nintendo_64",
 	"media": "",
 	"mount": ExpansionDefs.MOUNT_ABOVE,
-	"size": Vector3(0.055, 0.018, 0.045),
+	"size": Vector3(0.0515, 0.046, 0.023),
 	"loader": MediaDimensions.LOADER_NONE,
 	"cap_color": Color(0.62, 0.10, 0.12),
 }
