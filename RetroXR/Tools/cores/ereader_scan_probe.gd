@@ -9,6 +9,13 @@
 ## WINDOWED, not --headless: the dummy renderer hands back a correctly sized
 ## frame with nothing drawn into it, so a size check passes while every shot is
 ## blank. The card decoding is the whole point of looking.
+##
+## THE SHOT IS THE ORACLE, and there is no assertion here on purpose. What a card
+## did is a screen -- a title, "Now Reading...", a prompt for the next strip, a
+## read error -- and nothing the frontend can query says which. `--expect` states
+## what the run is looking for so the footage can be read against an intention
+## rather than after the fact; it is not checked, and must not be made to look as
+## though it were.
 extends Node
 
 const BTN_A := 1 << 8
@@ -22,17 +29,21 @@ var _rom := ""
 var _card := ""
 var _shot := "res://probe_out/ereader"
 var _at: Array[float] = [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
-var _scan_at := 6.0
+## When each strip is drawn past the head, one entry per strip in `--card` order.
+## A single value with several strips delivers them all at that moment, which is
+## a swipe of every card at once -- only the last one survives. Give each its own.
+var _scan_at: Array[float] = [6.0]
 var _press_every := 1.5
 ## Nothing is pressed before this. The e-Reader spends about five seconds on its
-## boot logos, and a press that lands there walks into the scan prompt and starts
-## a scan on an empty queue -- which is a Read Error nothing later can clear.
+## boot logos, and a press that lands there walks into the scan prompt with no
+## card at the head, which reads a bare scanner and reports a read error.
 var _press_from := 6.0
+## What this run is looking for, printed and not checked. See the header.
+var _expect := ""
 var _sram := ""
 var _bios := true
 var _presses := 2
 var _pressed := 0
-var _scan_press := false
 ## When to press B. A multi-strip card asks for the next strip on the CARD READ
 ## command, which is B on the application screen.
 var _b_at: Array[float] = []
@@ -44,7 +55,8 @@ var _a_done := 0
 var _down_at: Array[float] = []
 var _down_done := 0
 var _failed := ""
-var _scanned := false
+## How many strips have been delivered so far.
+var _scanned := 0
 var _size := Vector2i.ZERO
 
 
@@ -59,7 +71,11 @@ func _ready() -> void:
 		elif a.begins_with("--shot="):
 			_shot = a.substr(7)
 		elif a.begins_with("--scan-at="):
-			_scan_at = a.substr(10).to_float()
+			_scan_at.clear()
+			for p in a.substr(10).split(","):
+				_scan_at.append(p.to_float())
+		elif a.begins_with("--expect="):
+			_expect = a.substr(9)
 		elif a.begins_with("--press-every="):
 			_press_every = a.substr(14).to_float()
 		elif a.begins_with("--press-from="):
@@ -70,8 +86,6 @@ func _ready() -> void:
 			_bios = false
 		elif a.begins_with("--presses="):
 			_presses = a.substr(10).to_int()
-		elif a == "--scan-press":
-			_scan_press = true
 		elif a.begins_with("--b-at="):
 			for p in a.substr(7).split(","):
 				_b_at.append(p.to_float())
@@ -131,11 +145,17 @@ func _size_of(path: String) -> int:
 
 ## Run the machine on a clock.
 ##
-## The card goes in BEFORE the scan is asked for. GBACartEReaderQueueCard only
-## queues; the hardware pulls a card off that queue when the software starts
-## scanning, so pressing the button first means the e-Reader scans an empty
-## slot and reports "Unable to read e-Reader card" whatever is handed over
-## afterwards. Navigate, queue, then press.
+## THE CARD GOES IN WHILE THE READER IS ASKING FOR ONE, and this ordering is the
+## whole of the probe. There is no queue: `GBACartEReaderQueueCard` decodes the
+## strip straight into the dot buffer if the scanner is powered and drops it on
+## the floor if it is not, so a strip delivered during the boot logos or on a
+## menu is simply gone. Navigate to the card-read screen FIRST, then deliver --
+## the reverse of the order this probe used when a card could sit in a FIFO.
+##
+## One swipe is also one read: after the pass the dot code goes with the card, so
+## a multi-strip title asks for its next strip and gets it only from a second
+## delivery. That is why `--scan-at` takes one time per strip rather than one
+## time for the lot.
 func _drive() -> void:
 	# Seeded from press_from, not press_every: starting it at the interval makes
 	# the release deadline already past on the first press, so the button is held
@@ -143,7 +163,6 @@ func _drive() -> void:
 	var next_press := _press_from
 	var shot_i := 0
 	var held := false
-	var scan_pressed := false
 	while true:
 		await get_tree().process_frame
 		if not _failed.is_empty():
@@ -156,9 +175,9 @@ func _drive() -> void:
 		if t > (_at[_at.size() - 1] + 1.0):
 			return
 
-		# Menu presses are independent of when the card goes in: the reader has to
-		# be walked into its card-read screen, and the card has to be waiting in
-		# the queue before it gets there.
+		# These walk the reader to its card-read screen. They are what has to land
+		# FIRST: a strip delivered before the scanner is powered is dropped, so
+		# every --scan-at belongs after the menu has arrived.
 		if _press_every > 0.0 and t >= _press_from and _pressed < _presses:
 			# A short press, then release. A button held for ever is a button the
 			# menu never sees a fresh edge from.
@@ -174,23 +193,15 @@ func _drive() -> void:
 			_lib.SetJoypadState(0, 0, 0, 0, 0, 0)
 			held = false
 
-		if not _scanned and t >= _scan_at:
-			_scanned = true
-			for path in _cards():
-				print("[scan] t=%.1f queueing %s" % [t, path.get_file()])
-				_lib.SetDiskEjectState(true)
-				_lib.ReplaceDiskImage(0, path)
-				_lib.SetDiskEjectState(false)
+		var cards := _cards()
+		while _scanned < cards.size() and _scanned < _scan_at.size() and t >= _scan_at[_scanned]:
+			var path := cards[_scanned]
+			print("[scan] t=%.1f delivering %s" % [t, path.get_file()])
+			_lib.SetDiskEjectState(true)
+			_lib.ReplaceDiskImage(0, path)
+			_lib.SetDiskEjectState(false)
 			_lib.RequestDiskInfo()
-
-		# Optional: ask for the scan right after queueing. Off by default, because
-		# a press landing during the boot logos shifts every menu step after it.
-		if _scan_press and _scanned and not scan_pressed and t >= _scan_at + 0.6:
-			scan_pressed = true
-			print("[scan] t=%.1f pressing A to scan" % t)
-			_lib.SetJoypadState(0, BTN_A, 0, 0, 0, 0)
-		elif scan_pressed and t >= _scan_at + 0.75:
-			_lib.SetJoypadState(0, 0, 0, 0, 0, 0)
+			_scanned += 1
 
 		if _down_done < _down_at.size() and t >= _down_at[_down_done]:
 			if t < _down_at[_down_done] + 0.2:
@@ -261,6 +272,7 @@ func _report() -> void:
 		print("[scan] FAIL: %s" % _failed)
 		get_tree().quit(1)
 		return
-	print("[scan] RESULT frames=%d size=%dx%d scanned=%s" % [
-		int(_lib.GetFrameCount()), _size.x, _size.y, _scanned])
+	print("[scan] RESULT frames=%d size=%dx%d delivered=%d/%d expect=%s" % [
+		int(_lib.GetFrameCount()), _size.x, _size.y, _scanned, _cards().size(),
+		_expect if not _expect.is_empty() else "(unstated)"])
 	get_tree().quit(0)
