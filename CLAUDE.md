@@ -1426,6 +1426,12 @@ GDScript UI → Libretro Node (instance) → Wrapper (per-node) → Core + Handl
 Reusable, out-of-band scripts live in the repo-root `Tools/` (distinct from `RetroXR/Tools/`,
 which holds in-editor probe scenes like `netplay_spike`).
 
+What they need is declared in `Tools/requirements.txt` — numpy, pillow, scipy and
+the imageio pair — so a fresh checkout does not discover them one ImportError at a
+time: `python -m pip install -r Tools/requirements.txt`. Blender's `bpy`/`bmesh`/
+`mathutils` are deliberately absent: `Tools/glb/*.py` run inside
+`blender --background --python`, never as plain Python.
+
 `RetroXR/imported-assets/` holds the CC BY / CC0 room and prop assets, which carry
 LICENSE files and are credited in the About panel. The hardware wears the procedural
 stand-ins in `RetroXR/Scenes/Objects/system_models/`.

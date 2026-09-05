@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { submodules: recursive, lfs: true }
 
-      - run: pip install scons
+      - run: pip install 'scons==4.10.*'   # pinned: an unpinned build tool drifts under CI
 
       # Own cache key: this job builds only template_debug, so sharing the
       # desktop job's key would keep evicting half of whichever ran last.

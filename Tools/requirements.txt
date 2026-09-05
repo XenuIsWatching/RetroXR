@@ -1,0 +1,20 @@
+# Python packages the repo-root Tools/ scripts need.
+#
+#     python -m pip install -r Tools/requirements.txt
+#
+# Lower bounds rather than pins: these are developer tools, not something the
+# shipped app loads, so a newer release is fine. The one thing that IS pinned is
+# scons, and it is pinned in the CI workflows instead — the build tool deciding
+# to behave differently between two runs is a different class of problem from a
+# probe script wanting a newer numpy.
+#
+# NOT listed, deliberately:
+#   bpy, bmesh, mathutils  — Blender's own modules. Tools/glb/*.py run inside
+#                            `blender --background --python`, never as plain
+#                            Python, so pip's `bpy` is the wrong thing to fetch.
+
+numpy>=1.24          # mesh and audio maths, and most of the image probes
+pillow>=10.0         # PIL: icon baking, controller art, render comparison
+scipy>=1.11          # Tools/wii_ir_cursor.py only
+imageio>=2.31        # encoding probe PNG frames to mp4
+imageio-ffmpeg>=0.4  # the encoder imageio calls for libx264
