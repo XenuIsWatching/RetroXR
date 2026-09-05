@@ -359,32 +359,9 @@ func _build_crt_tab(tabs: TabContainer) -> void:
 
 func _add_crt_slider(rows: VBoxContainer, key: String, label: String,
 		minv: float, maxv: float, step: float, fmt: String) -> void:
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	rows.add_child(head)
-
-	var name_lbl := Label.new()
-	name_lbl.text = label
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_font_size_override("font_size", 18)
-	name_lbl.add_theme_color_override("font_color", COLOR_ROW)
-	head.add_child(name_lbl)
-
-	var val_lbl := Label.new()
-	val_lbl.add_theme_font_size_override("font_size", 18)
-	val_lbl.add_theme_color_override("font_color", COLOR_TITLE)
-	val_lbl.custom_minimum_size = Vector2(70, 0)
-	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	head.add_child(val_lbl)
-
-	var slider := HSlider.new()
-	slider.min_value = minv
-	slider.max_value = maxv
-	slider.step = step
-	slider.custom_minimum_size = Vector2(0, 44)
-	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rows.add_child(slider)
-
+	var built := MenuStyle.slider_row(rows, label, minv, maxv, step, 70)
+	var slider := built[0] as HSlider
+	var val_lbl := built[1] as Label
 	slider.value_changed.connect(func(v: float):
 		val_lbl.text = fmt % v
 		if not _suppress_signal:

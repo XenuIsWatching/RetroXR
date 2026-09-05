@@ -165,6 +165,47 @@ static func switch_row(parent: Container, text: String, initial_on := false,
 	return sw
 
 
+## A titled slider with its value read out on the right, the shape every options
+## panel uses for a continuous setting: name and value on one line, the slider
+## on the next.
+##
+## Returns [slider, value_label]. The caller owns what the value SAYS — the
+## panels format differently ("%.2f", "%d×") and emit different signals — so
+## this builds the row and connects nothing.
+##
+## `value_width` is a parameter rather than a constant because the two panels
+## that had their own copy of this chose 70 and 80, and quietly restyling either
+## is not what sharing the builder is for.
+static func slider_row(parent: Container, text: String, minv: float, maxv: float,
+		step: float, value_width := 70, font_size := 18) -> Array:
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	parent.add_child(head)
+
+	var name_lbl := Label.new()
+	name_lbl.text = text
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.add_theme_font_size_override("font_size", font_size)
+	name_lbl.add_theme_color_override("font_color", COLOR_LICENSE)
+	head.add_child(name_lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.add_theme_font_size_override("font_size", font_size)
+	val_lbl.add_theme_color_override("font_color", COLOR_TITLE)
+	val_lbl.custom_minimum_size = Vector2(value_width, 0)
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(val_lbl)
+
+	var slider := HSlider.new()
+	slider.min_value = minv
+	slider.max_value = maxv
+	slider.step = step
+	slider.custom_minimum_size = Vector2(0, 44)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(slider)
+	return [slider, val_lbl]
+
+
 ## The "float in place" row every pickable device with an options panel carries.
 ## One builder so the wording, and what the wording promises, is the same on all
 ## of them — see FloatLock.
