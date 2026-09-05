@@ -461,10 +461,10 @@ func configure_av_legend(_legend: AvLegend) -> void:
 ## hardware). Channel 0 defaults to the classic single-port hook above; extra
 ## channels get a small sideways offset unless the model places them itself.
 func configure_cable_attach_for(attach_point: Node3D, channel: int) -> void:
-	if channel == 0:
-		configure_cable_attach(attach_point)
-	else:
-		configure_cable_attach(attach_point)
+	configure_cable_attach(attach_point)
+	# Channel 0 sits where the model put it; each further output steps 40 mm
+	# along -X so a multi-output machine's leads do not share one exit.
+	if channel != 0:
 		attach_point.position += Vector3(-0.04 * channel, 0, 0)
 
 

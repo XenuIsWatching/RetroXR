@@ -751,8 +751,6 @@ func _load_system_model() -> void:
 			# is something you OPEN.
 			var is_lid: bool = _disc_loader == MediaDimensions.LOADER_TRAY and not _front_tray
 			eject_label.text = "OPEN" if is_lid else "EJECT"
-		if _disc_loader == MediaDimensions.LOADER_TRAY:
-			_cartridge_slot.enabled = false   # tray starts closed
 		# The cartridge recess would look wrong on disc hardware — the disc
 		# tray/slit is the visual instead.
 		var cart_recess := _system_body.get_node_or_null("CartSlotMouth") as MeshInstance3D
@@ -772,14 +770,14 @@ func _load_system_model() -> void:
 		# The model draws its own mechanism: the placeholder box builds a pod or a
 		# sliding shelf to match itself, a bespoke shell already has one.
 		if _disc_loader == MediaDimensions.LOADER_TRAY:
+			_cartridge_slot.enabled = false   # tray starts closed
 			_disc_bay = _model.build_disc_bay(self, _cartridge_slot, systemid,
 				_front_tray, _on_lid_swung)
-		# Lid tray: hand the well seating / lid gating / spin / grab / collision to the
-		# shared MediaTray (bespoke models animate their own lid via play_open/close;
-		# a procedural lid pivot, if any, is animated by MediaTray). The zone's raw
-		# insert/remove signals are replaced by MediaTray's, which fire the same
-		# _on_cartridge_inserted/_removed for the emulation-side work.
-		if _disc_loader == MediaDimensions.LOADER_TRAY:
+			# Lid tray: hand the well seating / lid gating / spin / grab / collision to the
+			# shared MediaTray (bespoke models animate their own lid via play_open/close;
+			# a procedural lid pivot, if any, is animated by MediaTray). The zone's raw
+			# insert/remove signals are replaced by MediaTray's, which fire the same
+			# _on_cartridge_inserted/_removed for the emulation-side work.
 			_cartridge_slot.has_picked_up.disconnect(_on_cartridge_inserted)
 			_cartridge_slot.has_dropped.disconnect(_on_cartridge_removed)
 			_tray = MediaTray.new()

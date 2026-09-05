@@ -781,7 +781,7 @@ static func drop_ghosts(lines: Dictionary, ghosts: PackedInt32Array,
 static func skips_item(item: Dictionary) -> bool:
 	if str(item.get("fs_name", "")).begins_with("."):
 		return true
-	if bool(item.get("missing_from_fs", false) == true):
+	if bool(item.get("missing_from_fs", false)):
 		return true
 	return false
 
@@ -793,7 +793,7 @@ static func skips_item(item: Dictionary) -> bool:
 static func missing_ids_in_page(items: Array) -> Dictionary:
 	var ids := PackedInt32Array()
 	for item: Dictionary in items:
-		if not bool(item.get("missing_from_fs", false) == true):
+		if not bool(item.get("missing_from_fs", false)):
 			return {"trusted": false, "ids": PackedInt32Array()}
 		var id := int(item.get("id", 0))
 		if id != 0:
@@ -1097,8 +1097,8 @@ static func _slim_row(item: Dictionary) -> Dictionary:
 		"revision": _s(item, "revision"),
 		"cover_small": _s(item, "path_cover_small"),
 		"cover_large": _s(item, "path_cover_large"),
-		"has_manual": bool(item.get("has_manual", false) == true),
-		"multi": bool(item.get("has_multiple_files", false) == true),
+		"has_manual": bool(item.get("has_manual", false)),
+		"multi": bool(item.get("has_multiple_files", false)),
 		"updated_at": _s(item, "updated_at"),
 		"first_release_date": _i(meta, "first_release_date"),
 		"genres": _a(meta, "genres"),
