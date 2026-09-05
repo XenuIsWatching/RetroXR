@@ -1003,13 +1003,16 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 				a["vcr"].net_release_tape()
 		NetEvents.EV_TV_PLUG:
 			if _valid(a, ["owner", "tv"]):
-				# Multi-output systems carry the cable channel; VCR/DVD keep
-				# the single-arg contract. "in" is the television's own input
-				# (Composite 1-4), absent on events from before there were four.
+				# A console carries the cable channel and the set's own input
+				# ("in" is Composite 1-4, absent on events from before there
+				# were four). Anything else is guarded rather than assumed the
+				# way tv_panel guards on_tv_connected: the VCR and DVD player
+				# used to satisfy this call with an empty override, which is a
+				# method existing only to be called into and do nothing.
 				if a["owner"] is RetroSystem:
 					a["owner"].restore_cable_connection(a["tv"], int(a.get("ch", 0)),
 						int(a.get("in", 0)))
-				else:
+				elif a["owner"].has_method("restore_cable_connection"):
 					a["owner"].restore_cable_connection(a["tv"])
 		NetEvents.EV_TV_UNPLUG:
 			if _valid(a, ["tv"]):

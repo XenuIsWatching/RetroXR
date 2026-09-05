@@ -676,15 +676,6 @@ func net_release_disc() -> void:
 	_disc_slot.drop_object()
 
 
-## Reconnect the cable to a TV programmatically (EV_TV_PLUG + save restore). If
-## the cable hasn't finished spawning yet, defer until it has.
-## Kept for scene_persistence, which still records which set a deck was playing
-## through. There is nothing to restore now that the lead is a separate object:
-## the connection lives in a spawned cable's six plugs, not in this deck.
-func restore_cable_connection(_tv: RetroTV) -> void:
-	pass
-
-
 # --- Options panel (audio track / subtitles) ---
 
 ## Toggle the floating DVD settings panel. Called by SpawnMenuController when the

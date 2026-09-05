@@ -57,7 +57,6 @@ var _scan_accum: float = 0.0            # time since the last scan seek
 const SCAN_SEEK_INTERVAL := 0.08
 
 
-
 # Front-loading tape bay (insert ride, eject, grab hand-off, collision) — all owned
 # by the shared MediaSlot; see media_slot.gd. The tape rides in 10 cm and lies flat
 # (the mesh is authored standing, so it's rotated -90° about the slot's X axis).
@@ -586,13 +585,6 @@ func _on_video_finished() -> void:
 
 func get_snapped_tape() -> Node3D:
 	return _slot.get_media()
-
-
-## Kept for scene_persistence, which still records which set a deck was playing
-## through. There is nothing to restore now that the lead is a separate object:
-## the connection lives in a spawned cable's six plugs, not in this deck.
-func restore_cable_connection(_tv: RetroTV) -> void:
-	pass
 
 
 ## Seat a tape programmatically (event/save restore) — no ride, bypasses the filter.
