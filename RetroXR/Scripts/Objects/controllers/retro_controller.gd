@@ -64,12 +64,31 @@ var device_type: int = RETRO_DEVICE_JOYPAD
 var _connected_system: RetroSystem = null
 var _port_index: int = -1
 
+
+## The console this peripheral is plugged into, or null. Part of the port-
+## peripheral contract ScenePersistence and NetObjectSync ask for by method
+## rather than by field name.
+func get_connected_system() -> RetroSystem:
+	return _connected_system if is_instance_valid(_connected_system) else null
+
+
+## Which port of that console it occupies, or -1 when unplugged.
+func get_port_index() -> int:
+	return _port_index
+
 # Active bindings (loaded from ControllerBindings on plug-in)
 var _button_map: Dictionary = ControllerBindings.DEFAULT_BUTTON_MAP.duplicate()
 var _stick_map:  Dictionary = ControllerBindings.DEFAULT_STICK_MAP.duplicate()
 
 # Cable
 var _cable_instance: Node3D = null
+
+
+## The captive cable spawned for this pad, or null. Parented to the scene root
+## rather than to the pad, so anything that disposes of the pad — the storage
+## box, a despawn — has to dispose of this too or leave an orphaned rope.
+func cable_instance() -> Node3D:
+	return _cable_instance
 var _cable_plug: ControllerPlug = null
 var _cable_rope: VerletRope = null
 var _max_rope_length: float = 0.0

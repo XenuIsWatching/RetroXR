@@ -22,6 +22,12 @@ var _owner_pickup: WeakRef = null
 var _drop_method: StringName = &"_on_pivot_drop_object"
 
 
+## The DesktopPickup this pivot belongs to, or null once it has gone. Weak on
+## purpose — the pivot must not keep its owner alive.
+func owner_pickup() -> Node:
+	return _owner_pickup.get_ref() if _owner_pickup != null else null
+
+
 ## Called by XRToolsPickable.drop() to notify the grabber it was released.
 ## Forward to DesktopPickup so it clears its held object even if drop came from
 ## outside (e.g. a snap zone or another script calling pickable.drop()).

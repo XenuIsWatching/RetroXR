@@ -3930,6 +3930,31 @@ func port_holder(port: int) -> Node:
 	return held if is_instance_valid(held) else null
 
 
+## True while a save is seating this machine's media, so hooks that make a NOISE
+## on insertion can tell a restore from a player pushing a cartridge in.
+func is_restoring_media() -> bool:
+	return _restoring_media
+
+
+## The cabinet socket a plug went into, or null when it cannot be told yet.
+##
+## Two ways to find it, because _port_plugs is not always filled in by the time a
+## plug-in hook runs. The index is the FALLBACK rather than the primary: it is
+## the libretro port, which equals the cabinet socket for a joypad but not for
+## everything — a computer mouse is forced to port 0 whichever socket it is in —
+## so the identity lookup is preferred whenever it is available.
+##
+## Callers want it to place a sound at the socket rather than at the plug, which
+## on_plugged_in fires too early to do from the plug's own position.
+func port_socket(plug: Node, port_index: int) -> Node3D:
+	for i in _port_plugs.size():
+		if _port_plugs[i] == plug and i < _port_zones.size():
+			return _port_zones[i] as Node3D
+	if port_index >= 0 and port_index < _port_zones.size():
+		return _port_zones[port_index] as Node3D
+	return null
+
+
 ## Every port's holder, port order, null where nothing is plugged in.
 ##
 ## The companion to port_holder for callers that have to walk all of them —

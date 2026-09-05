@@ -307,10 +307,7 @@ func _hand_did_it() -> bool:
 	var host := get_parent()
 	if host == null:
 		return true
-	# Compare against true rather than converting: Object.get() returns NULL for a
-	# property the host does not have, and bool(null) is not a valid call — it
-	# throws, the function bails out false, and the sound silently never plays.
-	return host.get("_restoring_media") != true
+	return host.has_method("is_restoring_media") and host.is_restoring_media()
 
 
 func _on_power_button_pressed() -> void:

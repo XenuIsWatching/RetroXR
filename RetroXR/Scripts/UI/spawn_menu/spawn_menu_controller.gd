@@ -863,10 +863,8 @@ func _track_menu_press(ctrl: XRController3D, over_menu: bool) -> void:
 func _spawn_grabber() -> Node:
 	if not get_viewport().use_xr:
 		var pivot := get_tree().get_first_node_in_group("desktop_hand")
-		if pivot:
-			var ref: Variant = pivot.get("_owner_pickup")
-			if ref is WeakRef:
-				return (ref as WeakRef).get_ref()
+		if pivot != null and pivot.has_method("owner_pickup"):
+			return pivot.owner_pickup()
 		return null
 	return _spawn_grabber_xr()
 

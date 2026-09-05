@@ -14,6 +14,22 @@ class_name VrHold
 extends RefCounted
 
 
+## Who is holding a pickable, as XRToolsPickable's own grab driver.
+##
+## The single place this project reaches into the vendored addon's private
+## _grab_driver. XRToolsPickable exposes no accessor for its holder, and adding
+## one would mean patching godot-xr-tools — which the next update drops. Kept to
+## one function so that coupling is one line to find and one line to change.
+##
+## Returns null when nothing holds it. `primary` is the hand that picked it up,
+## `secondary` the second hand on a two-handed grab; each has `.controller`,
+## `.by` and `.pickup`.
+static func grab_driver(pickable: Object) -> Variant:
+	if not is_instance_valid(pickable):
+		return null
+	return pickable.get("_grab_driver")
+
+
 ## Show or hide a controller's own hand/controller model.
 ##
 ## Duck-typed on purpose: which node answers `set_model_visible` differs between

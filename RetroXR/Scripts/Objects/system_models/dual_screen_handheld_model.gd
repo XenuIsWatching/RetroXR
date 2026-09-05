@@ -621,7 +621,7 @@ func _claim_pad_contact(ctrl: XRController3D, p: Vector2, local_y: float) -> voi
 func _is_holding_hand(ctrl: XRController3D) -> bool:
 	if _host == null:
 		return false
-	var driver: Variant = _host.get("_grab_driver")
+	var driver: Variant = VrHold.grab_driver(_host)
 	if driver == null:
 		return false
 	if driver.primary and driver.primary.controller == ctrl:

@@ -78,6 +78,18 @@ var _options_panel: MouseOptionsPanel = null
 var _connected_system: RetroSystem = null
 var _port_index: int = -1
 
+
+## The console this peripheral is plugged into, or null. Part of the port-
+## peripheral contract ScenePersistence and NetObjectSync ask for by method
+## rather than by field name.
+func get_connected_system() -> RetroSystem:
+	return _connected_system if is_instance_valid(_connected_system) else null
+
+
+## Which port of that console it occupies, or -1 when unplugged.
+func get_port_index() -> int:
+	return _port_index
+
 # Cable (same pattern as RetroController)
 var _cable_instance: Node3D = null
 var _cable_plug: ControllerPlug = null

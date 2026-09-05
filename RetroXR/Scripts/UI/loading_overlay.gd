@@ -294,7 +294,7 @@ func _connect_netplay() -> void:
 	nm.session_ended.connect(func(_reason: String) -> void: end(&"netplay"))
 	if nm.has_signal(&"netplay_state_progress"):
 		nm.netplay_state_progress.connect(_on_net_state_progress)
-	var sync: Node = nm.get("_object_sync")
+	var sync: NetObjectSync = nm.object_sync()
 	if sync != null and sync.has_signal(&"world_applied"):
 		sync.world_applied.connect(func(_count: int) -> void: end(&"netplay"))
 

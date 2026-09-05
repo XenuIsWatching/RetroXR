@@ -133,7 +133,7 @@ func _load_bindings() -> void:
 
 
 func _get_secondary_ctrl() -> XRController3D:
-	var driver: Variant = _host.get("_grab_driver")
+	var driver: Variant = VrHold.grab_driver(_host)
 	if driver and driver.secondary:
 		return driver.secondary.controller
 	return null
@@ -176,7 +176,7 @@ func _on_released_signal(_pickable: Node3D, by: Node3D) -> void:
 	if _allow_drop:
 		_update_pointer_block(ctrl, false)
 		if ctrl == _holding_ctrl:
-			var driver: Variant = _host.get("_grab_driver")
+			var driver: Variant = VrHold.grab_driver(_host)
 			if driver and driver.primary:
 				_holding_ctrl = driver.primary.controller
 				_saved_by = driver.primary.by
@@ -190,7 +190,7 @@ func _on_released_signal(_pickable: Node3D, by: Node3D) -> void:
 		return
 	# Toggle grip — rehold the released hand.
 	if ctrl == _holding_ctrl:
-		var driver: Variant = _host.get("_grab_driver")
+		var driver: Variant = VrHold.grab_driver(_host)
 		if driver and driver.primary:
 			_holding_ctrl = driver.primary.controller
 			_saved_by = driver.primary.by
@@ -331,7 +331,7 @@ func _process(_delta: float) -> void:
 	if _is_combo_pressed(secondary):
 		_allow_drop = true
 		_update_pointer_block(secondary, false)
-		var driver: Variant = _host.get("_grab_driver")
+		var driver: Variant = VrHold.grab_driver(_host)
 		if driver and driver.secondary:
 			driver.secondary.pickup.drop_object()
 		_allow_drop = false

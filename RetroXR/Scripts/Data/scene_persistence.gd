@@ -1777,14 +1777,14 @@ func _serialize_peripheral(node: Node, id: int, n3d: Node3D, node_to_id: Diction
 		obj_type = "retro_mouse"
 	elif node is RetroKeyboard:
 		obj_type = "retro_keyboard"
-	var connected_sys: Node = node.get("_connected_system")
+	var connected_sys: Node = node.get_connected_system()
 	# The CABINET socket, which is what restore_controller_plug takes — not the
 	# peripheral's own _port_index, which is the libretro port and is pinned to 0
 	# for a mouse on a computer system. Falls back to it for anything the cabinet
 	# does not claim to be holding.
 	var port_index := -1
 	if connected_sys != null:
-		port_index = int(node.get("_port_index"))
+		port_index = node.get_port_index()
 		if connected_sys.has_method("cabinet_port_of"):
 			var socket: int = connected_sys.call("cabinet_port_of", node)
 			if socket >= 0:

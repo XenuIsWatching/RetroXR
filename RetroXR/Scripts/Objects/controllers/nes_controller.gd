@@ -187,9 +187,7 @@ func _click(bits: int, role: String) -> void:
 
 func on_plugged_in(system: RetroSystem, port_index: int) -> void:
 	super.on_plugged_in(system, port_index)
-	# != true, not bool(...): Object.get() returns null for a property the host does
-	# not have, and bool(null) throws rather than yielding false.
-	if system != null and system.get("_restoring_media") != true:
+	if system != null and not system.is_restoring_media():
 		# From the PLUG. These voices hang off the controller, so left alone the
 		# sound comes from wherever the pad is lying rather than from the socket
 		# the cable just went into.
@@ -210,27 +208,11 @@ func on_unplugged() -> void:
 ## Not the plug's own position: on_plugged_in fires from inside the snap, before
 ## the zone has moved the plug onto the socket, so the plug is still hanging
 ## where the hand let go of it — which is why the sound came from the pad.
-##
-## Two ways to find the socket, because _port_plugs is not always filled in yet
-## by the time this runs. The index is the fallback rather than the primary: it
-## is the LIBRETRO port, which equals the cabinet socket for a joypad but not
-## for everything (a computer mouse is forced to port 0 whichever socket it is
-## in), so the identity lookup is preferred when it is available.
 func _socket_pos(system: RetroSystem, port_index: int) -> Vector3:
 	if system == null:
 		return _plug_pos()
-	var zones: Variant = system.get("_port_zones")
-	if not (zones is Array):
-		return _plug_pos()
-	var za: Array = zones as Array
-	var plugs: Variant = system.get("_port_plugs")
-	if plugs is Array:
-		for i in (plugs as Array).size():
-			if (plugs as Array)[i] == _cable_plug and i < za.size() and za[i] != null:
-				return (za[i] as Node3D).global_position
-	if port_index >= 0 and port_index < za.size() and za[port_index] != null:
-		return (za[port_index] as Node3D).global_position
-	return _plug_pos()
+	var socket := system.port_socket(_cable_plug, port_index)
+	return socket.global_position if socket != null else _plug_pos()
 
 
 ## Where the cable end is right now, or the pad itself if it has none.
