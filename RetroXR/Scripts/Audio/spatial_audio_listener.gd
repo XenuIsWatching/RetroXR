@@ -48,6 +48,18 @@ func _ready() -> void:
 	if _mx == null:
 		set_process(false)
 		return
+	# The player's choice is applied HERE rather than pushed from AppPrefs at its
+	# own _ready. This autoload is declared after AppPrefs, so AppPrefs is always
+	# there to be asked, while the reverse is never true — AppPrefs' boot-time
+	# push looked for /root/SpatialAudioListener before it existed and always
+	# fell through to its singleton branch. A later autoload pulling from an
+	# earlier one is the direction that survives the block being reordered.
+	#
+	# Before is_available(), because that is what enabling the SDK decides.
+	# Android is excluded the same way AppPrefs excludes it: the option is not
+	# offered there, so a stored value could only be stale.
+	if OS.get_name() != "Android":
+		_mx.set_enabled(AppPrefs.spatial_audio_sdk)
 	_active = _mx.is_available()
 	set_process(_active)
 	if _active:

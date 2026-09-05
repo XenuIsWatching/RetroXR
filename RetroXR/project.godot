@@ -34,6 +34,7 @@ XRToolsRumbleManager="*uid://by853dk86g1qw"
 Mods="*res://Scripts/Mods/mod_manager.gd"
 AppPrefs="*res://Scripts/Data/app_prefs.gd"
 QualityManager="*res://Scripts/quality_manager.gd"
+LoadingOverlay="*res://Scripts/UI/loading_overlay.gd"
 SceneManager="*res://Scripts/Data/scene_manager.gd"
 NetworkManager="*res://Scripts/Net/network_manager.gd"
 SpatialAudioListener="*res://Scripts/Audio/spatial_audio_listener.gd"
@@ -43,7 +44,6 @@ SaveSync="*res://Scripts/Data/romm/romm_save_sync.gd"
 StateSync="*res://Scripts/Data/romm/romm_state_sync.gd"
 RA="*res://Scripts/Data/ra/ra_session.gd"
 HeldPhysics="*res://Scripts/Interaction/held_object_physics.gd"
-LoadingOverlay="*res://Scripts/UI/loading_overlay.gd"
 
 [debug]
 

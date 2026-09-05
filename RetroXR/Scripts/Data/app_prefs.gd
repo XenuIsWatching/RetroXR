@@ -125,7 +125,9 @@ func _ready() -> void:
 	_load_prefs()
 	ControllerModel.draw_hands = controller_hands
 	SystemFilter.enabled = system_filter
-	_apply_spatial_audio()
+	# Spatial audio is deliberately NOT applied here: SpatialAudioListener is a
+	# later autoload and reads this pref in its own _ready. See
+	# _apply_spatial_audio, which serves the player changing it afterwards.
 
 
 ## Which APIs this platform can hand a core, as [label, pref value,
@@ -188,8 +190,12 @@ func _push_hw_render(api: String) -> void:
 			return
 
 
-## Push the audio backend choice before anything builds an emitter. Ignored on
-## Android, where the option is not offered and the pref could only be stale.
+## Push the audio backend choice when the player CHANGES it. At boot the listener
+## reads this pref itself — it is declared after this autoload, so it can, and a
+## push from here could not: /root/SpatialAudioListener does not exist yet.
+##
+## Ignored on Android, where the option is not offered and the pref could only be
+## stale.
 func _apply_spatial_audio() -> void:
 	if OS.get_name() == "Android":
 		return

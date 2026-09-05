@@ -75,6 +75,12 @@ func _ready() -> void:
 	# curtain is claimed here, before anything expensive starts. Both owners are
 	# registered together so the warm finishing first cannot flash the room at a
 	# restore that has not registered yet.
+	#
+	# This needs LoadingOverlay to be declared BEFORE this autoload in
+	# project.godot, and it now is. It was not: the guard below silently found
+	# nothing at boot and the curtain was never claimed, which is exactly the
+	# way an ordering assumption behind a presence check fails — quietly, and
+	# looking like the feature simply does not do anything.
 	if has_node("/root/LoadingOverlay"):
 		LoadingOverlay.begin(&"boot_warm", "STARTING UP", 1.0)
 		if room_has_slots(current_scene_id) and active_slot(current_scene_id) != "clean":
