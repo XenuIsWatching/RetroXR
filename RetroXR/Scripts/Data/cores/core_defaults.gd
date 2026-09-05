@@ -43,26 +43,15 @@ func save() -> void:
 	if _path.is_empty():
 		push_error("CoreDefaults: no path set, call setup() first")
 		return
-	var dir := _path.get_base_dir()
-	DirAccess.make_dir_recursive_absolute(dir)
-	var f := FileAccess.open(_path, FileAccess.WRITE)
-	if not f:
-		push_error("CoreDefaults: cannot write '%s' (err %d)" % [_path, FileAccess.get_open_error()])
-		return
-	f.store_string(JSON.stringify({"defaults": _defaults}, "\t"))
+	JsonStore.write_dict(_path, {"defaults": _defaults}, "CoreDefaults")
 
 
 func load_defaults() -> void:
-	if _path.is_empty() or not FileAccess.file_exists(_path):
+	if _path.is_empty():
 		return
-	var f := FileAccess.open(_path, FileAccess.READ)
-	if not f:
-		return
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	if parsed is Dictionary and (parsed as Dictionary).has("defaults"):
-		var d: Variant = (parsed as Dictionary)["defaults"]
-		if d is Dictionary:
-			_defaults = d as Dictionary
-			# Ensure a roms/ folder exists for every configured system
-			for sid: String in _defaults:
-				RomLibrary.ensure_rom_dir(sid)
+	var d: Variant = JsonStore.read_dict(_path, "CoreDefaults").get("defaults")
+	if d is Dictionary:
+		_defaults = d as Dictionary
+		# Ensure a roms/ folder exists for every configured system
+		for sid: String in _defaults:
+			RomLibrary.ensure_rom_dir(sid)

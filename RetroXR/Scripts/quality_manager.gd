@@ -1229,16 +1229,9 @@ func _on_node_added(node: Node) -> void:
 # ── Persistence ───────────────────────────────────────────────────────────────
 
 func _load_prefs() -> void:
-	if not FileAccess.file_exists(PREFS_PATH):
+	var data := JsonStore.read_dict(PREFS_PATH, "QualityManager")
+	if data.is_empty():
 		return
-	var file := FileAccess.open(PREFS_PATH, FileAccess.READ)
-	if file == null:
-		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	file.close()
-	if typeof(parsed) != TYPE_DICTIONARY:
-		return
-	var data: Dictionary = parsed
 	msaa_3d = clampi(_prefs_int(data, "msaa_3d", msaa_3d),
 		Viewport.MSAA_DISABLED, Viewport.MSAA_8X)
 	post_aa = clampi(_prefs_int(data, "post_aa", post_aa), PostAA.OFF, PostAA.SMAA) as PostAA
@@ -1276,11 +1269,7 @@ func _load_prefs() -> void:
 
 
 func save_prefs() -> void:
-	var file := FileAccess.open(PREFS_PATH, FileAccess.WRITE)
-	if file == null:
-		push_warning("QualityManager: cannot write %s" % PREFS_PATH)
-		return
-	file.store_string(JSON.stringify({
+	JsonStore.write_dict(PREFS_PATH, {
 		"msaa_3d": msaa_3d,
 		"post_aa": int(post_aa),
 		"preset": int(preset),
@@ -1296,8 +1285,7 @@ func save_prefs() -> void:
 		"foveation_level": int(foveation_level),
 		"glow_enabled": glow_enabled,
 		"screen_lights_enabled": screen_lights_enabled,
-	}))
-	file.close()
+	}, "QualityManager")
 
 
 ## JSON numbers arrive as floats and a null would make int() fail outright.

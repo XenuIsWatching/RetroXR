@@ -29,35 +29,13 @@ func setup(core_dir: String) -> void:
 # ---------------------------------------------------------------------------
 
 func load_manifest() -> void:
-	var path := _manifest_path()
-	if not FileAccess.file_exists(path):
-		_data = {"cores": {}}
-		return
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		push_warning("DownloadManifest: cannot open %s" % path)
-		_data = {"cores": {}}
-		return
-	var text := file.get_as_text()
-	file.close()
-	var parsed = JSON.parse_string(text)
-	if parsed is Dictionary:
-		_data = parsed
-	else:
-		push_warning("DownloadManifest: invalid JSON in %s, resetting" % path)
-		_data = {"cores": {}}
+	_data = JsonStore.read_dict(_manifest_path(), "DownloadManifest")
 	if not _data.has("cores"):
 		_data["cores"] = {}
 
 
 func save() -> void:
-	var path := _manifest_path()
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		push_error("DownloadManifest: cannot write to %s (error %d)" % [path, FileAccess.get_open_error()])
-		return
-	file.store_string(JSON.stringify(_data, "\t"))
-	file.close()
+	JsonStore.write_dict(_manifest_path(), _data, "DownloadManifest")
 
 
 # ---------------------------------------------------------------------------

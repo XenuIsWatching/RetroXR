@@ -141,26 +141,17 @@ static func cache_path() -> String:
 func load_cache() -> void:
 	_cache.clear()
 	_dirty = false
-	var f := FileAccess.open(cache_path(), FileAccess.READ)
-	if f == null:
-		return
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	f.close()
-	if parsed is Dictionary:
-		var d := parsed as Dictionary
-		if d.get("entries") is Dictionary:
-			_cache = d["entries"]
+	# A disposable cache: an unreadable file means "re-hash everything", which is
+	# correct but slow, so it is read without an owner and complains about nothing.
+	var entries: Variant = JsonStore.read_dict(cache_path()).get("entries")
+	if entries is Dictionary:
+		_cache = entries as Dictionary
 
 
 func save_cache() -> void:
-	DirAccess.make_dir_recursive_absolute(CoreDownloadManager.default_core_root())
-	var f := FileAccess.open(cache_path(), FileAccess.WRITE)
-	if f == null:
-		push_warning("[FirmwareState] Cannot write %s" % cache_path())
-		return
-	f.store_string(JSON.stringify({"version": 1, "entries": _cache}, "\t"))
-	f.close()
-	_dirty = false
+	if JsonStore.write_dict(cache_path(), {"version": 1, "entries": _cache},
+			"FirmwareState"):
+		_dirty = false
 
 
 ## Drop a cached hash so the next evaluate() re-reads the file. Call after an

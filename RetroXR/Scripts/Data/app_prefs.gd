@@ -203,16 +203,9 @@ func _apply_spatial_audio() -> void:
 # ── Persistence ───────────────────────────────────────────────────────────────
 
 func _load_prefs() -> void:
-	if not FileAccess.file_exists(PREFS_PATH):
+	var data := JsonStore.read_dict(PREFS_PATH, "AppPrefs")
+	if data.is_empty():
 		return
-	var file := FileAccess.open(PREFS_PATH, FileAccess.READ)
-	if file == null:
-		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	file.close()
-	if typeof(parsed) != TYPE_DICTIONARY:
-		return
-	var data: Dictionary = parsed
 	auto_save_scene  = _prefs_bool(data, "auto_save_scene",  auto_save_scene)
 	autosave_periodic = _prefs_bool(data, "autosave_periodic", autosave_periodic)
 	autosave_interval = clampf(_prefs_float(data, "autosave_interval", autosave_interval),
@@ -241,11 +234,7 @@ func _load_prefs() -> void:
 
 
 func save_prefs() -> void:
-	var file := FileAccess.open(PREFS_PATH, FileAccess.WRITE)
-	if file == null:
-		push_warning("AppPrefs: cannot write %s" % PREFS_PATH)
-		return
-	file.store_string(JSON.stringify({
+	JsonStore.write_dict(PREFS_PATH, {
 		"auto_save_scene":  auto_save_scene,
 		"autosave_periodic": autosave_periodic,
 		"autosave_interval": autosave_interval,
@@ -265,8 +254,7 @@ func save_prefs() -> void:
 		"compact_tiles":     compact_tiles,
 		"bedroom_time_of_day": bedroom_time_of_day,
 		"hw_render_overrides": hw_render_overrides,
-	}, "\t"))
-	file.close()
+	}, "AppPrefs")
 
 
 ## A missing key or a JSON null must keep the default, not collapse to false.
