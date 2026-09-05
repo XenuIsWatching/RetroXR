@@ -1917,11 +1917,8 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				var sys := SYSTEM_SCENE.instantiate() as RetroSystem
 				sys.systemid = data.get("systemid", "")
 				sys.model_id = str(data.get("model_id", ""))
-				if data.has("video_out"):
-					sys._video_out_from_save = 1 if bool(data["video_out"]) else 0
 				sys.pad_guid = str(data.get("pad_guid", ""))
 				sys.pad_ordinal = int(data.get("pad_ordinal", 0))
-				sys._lid_angle_from_save = float(data.get("lid_angle", -1.0))
 				sys.ignore_gravity = bool(data.get("ignore_gravity", false))
 				# Before the caller adds it to the tree, like the fields above:
 				# _build_expansion_hardware runs from _ready and seeds a bay's
@@ -1930,7 +1927,9 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				# restored one, and a lid the player took off is recorded by
 				# their ABSENCE -- so without this the seed puts a new lid back
 				# on every load and nothing ever removes it.
-				sys._restoring_from_save = true
+				sys.begin_restore(
+					(1 if bool(data["video_out"]) else 0) if data.has("video_out") else -1,
+					float(data.get("lid_angle", -1.0)))
 				obj = sys
 			"tv":
 				var tv := TV_SCENE.instantiate() as RetroTV

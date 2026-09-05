@@ -219,9 +219,9 @@ func _build_station(systemid: String, model_id: String, plaque: String,
 	sys.systemid = systemid
 	sys.model_id = model_id
 	sys.system_label = plaque
-	# Handhelds default their video out OFF and read this save field for the
-	# remembered choice; consoles ignore it (their cable is always live).
-	sys._video_out_from_save = 1
+	# Handhelds default their video out OFF; consoles ignore this (their cable is
+	# always live). Every station in the hallway is wired to a set, so force it.
+	sys.force_video_out(true)
 	add_child(sys)
 	sys.freeze = true
 	sys.ignore_gravity = true

@@ -78,6 +78,34 @@ var _lid_angle_from_save: float = -1.0
 # a real upgrade, or nothing at all, and seeding on top of that would double it.
 var _restoring_from_save: bool = false
 
+
+## Hand a console the state a save carries about it, before it enters the tree.
+##
+## The three fields above are one decision — "this console is being restored, not
+## spawned" — and they are all read once from _ready. They must therefore be set
+## BEFORE the caller adds the node to the tree, which is the invariant this
+## method exists to keep in one place: ScenePersistence and TestSceneBuilder both
+## used to set them by hand, so a fourth latch would have had to be remembered at
+## two more call sites.
+##
+## `video_out` is -1 to keep the platform default, 0 or 1 to force it.
+## `lid_angle` is degrees for a clamshell, or -1 to keep the model default.
+func begin_restore(video_out: int = -1, lid_angle: float = -1.0) -> void:
+	_video_out_from_save = video_out
+	_lid_angle_from_save = lid_angle
+	_restoring_from_save = true
+
+
+## Force the video-out cables on or off, before the console enters the tree.
+##
+## Deliberately NOT begin_restore: a console built into a scene rather than
+## loaded from a save is not being restored, and marking it so would stop its
+## bays seeding their default occupants. Handhelds are the ones that need this —
+## they default video-out off, and a generated scene wants them wired to a set.
+func force_video_out(enabled: bool) -> void:
+	_video_out_from_save = 1 if enabled else 0
+
+
 ## Ignore gravity: the system freezes exactly where it's dropped and floats
 ## there. Toggled from the options panel's System tab; default off.
 var ignore_gravity: bool = false

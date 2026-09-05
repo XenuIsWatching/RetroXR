@@ -85,7 +85,7 @@ func _console(systemid: String) -> RetroSystem:
 func _restored_console(systemid: String) -> RetroSystem:
 	var sys := SYSTEM_SCENE.instantiate() as RetroSystem
 	sys.systemid = systemid
-	sys._restoring_from_save = true
+	sys.begin_restore()
 	sys.position = Vector3(_spawned.size() * 2.0, 1, 0)
 	sys.freeze = true
 	add_child(sys)
