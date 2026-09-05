@@ -158,12 +158,15 @@ void PDFRenderer::DestroyLibrary()
 
 void PDFRenderer::_bind_methods()
 {
-    ClassDB::bind_method(D_METHOD("Open", "path"), &PDFRenderer::Open);
-    ClassDB::bind_method(D_METHOD("Close"), &PDFRenderer::Close);
-    ClassDB::bind_method(D_METHOD("IsOpen"), &PDFRenderer::IsOpen);
-    ClassDB::bind_method(D_METHOD("GetPageCount"), &PDFRenderer::GetPageCount);
-    ClassDB::bind_method(D_METHOD("GetPageSize", "page_index"), &PDFRenderer::GetPageSize);
-    ClassDB::bind_method(D_METHOD("RenderPage", "page_index", "dpi"), &PDFRenderer::RenderPage,
+    // snake_case on the GDScript side, matching the other four first-party
+    // extensions and Godot's own API. The C++ names stay PascalCase, which is
+    // this file's convention — only the bound names cross the boundary.
+    ClassDB::bind_method(D_METHOD("open", "path"), &PDFRenderer::Open);
+    ClassDB::bind_method(D_METHOD("close"), &PDFRenderer::Close);
+    ClassDB::bind_method(D_METHOD("is_open"), &PDFRenderer::IsOpen);
+    ClassDB::bind_method(D_METHOD("get_page_count"), &PDFRenderer::GetPageCount);
+    ClassDB::bind_method(D_METHOD("get_page_size", "page_index"), &PDFRenderer::GetPageSize);
+    ClassDB::bind_method(D_METHOD("render_page", "page_index", "dpi"), &PDFRenderer::RenderPage,
                          DEFVAL(150));
 }
 

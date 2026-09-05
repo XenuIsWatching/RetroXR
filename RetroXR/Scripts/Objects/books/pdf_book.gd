@@ -303,19 +303,19 @@ func _load_pdf_internal(path: String) -> void:
 		push_error("[PDFBook] PDFRenderer class not available. Is the GDExtension loaded?")
 		return
 
-	if not _renderer.Open(path):
+	if not _renderer.open(path):
 		push_error("[PDFBook] Failed to open PDF: %s" % path)
 		_renderer = null
 		return
 
-	_page_count = _renderer.GetPageCount()
+	_page_count = _renderer.get_page_count()
 	if _page_count == 0:
 		push_warning("[PDFBook] PDF has 0 pages: %s" % path)
-		_renderer.Close()
+		_renderer.close()
 		_renderer = null
 		return
 
-	var size: Vector2 = _renderer.GetPageSize(0)
+	var size: Vector2 = _renderer.get_page_size(0)
 	_page_width = size.x
 	_page_height = size.y
 
@@ -613,7 +613,7 @@ func _request_page_render(page_index: int) -> void:
 		return
 
 	# PDF path
-	if not _renderer or not _renderer.IsOpen():
+	if not _renderer or not _renderer.is_open():
 		_pending_renders.erase(page_index)
 		return
 	var renderer_ref := _renderer
@@ -621,8 +621,8 @@ func _request_page_render(page_index: int) -> void:
 	WorkerThreadPool.add_task(func():
 		_render_mutex.lock()
 		var img: Image = null
-		if renderer_ref and renderer_ref.IsOpen():
-			img = renderer_ref.RenderPage(src_index, dpi)
+		if renderer_ref and renderer_ref.is_open():
+			img = renderer_ref.render_page(src_index, dpi)
 		_render_mutex.unlock()
 		img = _crop_to_half(img, page_index)
 		if img:
@@ -1810,8 +1810,8 @@ func _rebuild_highlight_overlays() -> void:
 
 func _cleanup() -> void:
 	_render_mutex.lock()
-	if _renderer and _renderer.IsOpen():
-		_renderer.Close()
+	if _renderer and _renderer.is_open():
+		_renderer.close()
 	_renderer = null
 	_render_mutex.unlock()
 	_cbz_entries.clear()
