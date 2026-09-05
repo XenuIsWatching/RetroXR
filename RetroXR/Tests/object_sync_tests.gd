@@ -1108,6 +1108,21 @@ func _test_events(p: Pair) -> void:
 			and (client_obj.get_node("MediaSlot") as MockSlot).drops == 1),
 		"events/all media eject/remove buttons take effect")
 
+	# An event missing a node it cannot be applied without is refused at the
+	# SENDER, where the caller still exists to be blamed. Before EV_NODE_KEYS it
+	# went out, failed every peer's _valid() guard, and told nobody.
+	var refused_before: int = p.host_os.events_refused
+	p.host_os.report_event(NetObjectSync.EV_CART_REMOVE, {})
+	p.host_os.report_event(NetObjectSync.EV_TAPE_REMOVE, {"vcr": null})
+	# The far side would drop these anyway, so watching the client proves
+	# nothing — what is asserted is that the SENDER refused them.
+	_eq(p.host_os.events_refused - refused_before, 2,
+		"events/an event missing a required node is refused at the sender")
+	await _until(func() -> bool:
+		return (client_obj.get_node("CartridgeSlot") as MockSlot).drops > 1, 30)
+	_ok((client_obj.get_node("CartridgeSlot") as MockSlot).drops == 1,
+		"events/and never reaches the far side")
+
 	p.host_os.report_event(NetObjectSync.EV_TV_PLUG,
 		{"owner": host_obj, "tv": host_aux})
 	p.host_os.report_event(NetObjectSync.EV_TV_UNPLUG,

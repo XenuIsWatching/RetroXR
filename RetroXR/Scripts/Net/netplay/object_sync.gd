@@ -912,8 +912,68 @@ func _release(net_id: int, pos: Vector3, quat: Quaternion, lin: Vector3, ang: Ve
 # ── Replicated events ─────────────────────────────────────────────────────────
 
 ## Called (via the NetworkManager facade) from state-transition hooks.
+## Which node arguments each event kind cannot be applied without.
+##
+## Taken from _apply_event's own _valid() guards. Those guards run on the
+## RECEIVING peer, where a missing key is silently indistinguishable from a node
+## that legitimately went away — the event is dropped and nobody is told. Checked
+## here as well, on the sending side, the same mistake fails in the caller's own
+## stack while it still exists to be blamed.
+##
+## Non-node arguments (an "open" flag, a "cmd" string) are deliberately absent:
+## they have defaults at the apply site and a missing one is not a bug.
+const EV_NODE_KEYS := {
+	EV_CART_INSERT:     ["sys", "cart"],
+	EV_CART_REMOVE:     ["sys"],
+	EV_TAPE_INSERT:     ["vcr", "tape"],
+	EV_TAPE_REMOVE:     ["vcr"],
+	EV_TV_PLUG:         ["owner", "tv"],
+	EV_TV_UNPLUG:       ["tv"],
+	EV_RCA_PLUG:        ["cable", "dev"],
+	EV_RCA_UNPLUG:      ["cable"],
+	EV_PORT_PLUG:       ["sys", "ctrl"],
+	EV_PORT_UNPLUG:     ["sys"],
+	EV_SYS_POWER:       ["sys"],
+	EV_SYS_POWER_STATE: ["sys"],
+	EV_SYS_RESET:       ["sys"],
+	EV_TV_POWER:        ["tv"],
+	EV_TV_VOL_UP:       ["tv"],
+	EV_TV_VOL_DOWN:     ["tv"],
+	EV_TV_MUTE:         ["tv"],
+	EV_TV_CRT:          ["tv"],
+	EV_TV_STEREO:       ["tv"],
+	EV_TV_AUDIO_MODE:   ["tv"],
+	EV_TV_ASPECT:       ["tv"],
+	EV_TV_SOURCE:       ["tv"],
+	EV_TV_CHANNEL:      ["tv"],
+	EV_ROOM_LIGHTS:     ["switch"],
+	EV_PULL_LIGHT:      ["cord"],
+	EV_BLINDS:          ["blinds"],
+	EV_TIME_OF_DAY:     ["clock"],
+	EV_SYS_VIDEO_OUT:   ["sys"],
+	EV_SYS_GRAVITY:     ["sys"],
+	EV_TV_SIZE:         ["tv"],
+	EV_VCR_CMD:         ["vcr"],
+	EV_BOOK_PAGE:       ["book"],
+	EV_BOOK_SIZE:       ["book"],
+	EV_BOOK_HALF:       ["book"],
+	EV_MEMCARD_INSERT:  ["sys", "card"],
+	EV_MEMCARD_REMOVE:  ["sys"],
+	EV_TRAY:            ["sys"],
+	EV_DISK_OP:         ["sys"],
+	EV_DVD_INSERT:      ["dvd", "disc"],
+	EV_DVD_REMOVE:      ["dvd"],
+	EV_DVD_CMD:         ["dvd"],
+	EV_AUDIO_INSERT:    ["player", "media"],
+	EV_AUDIO_REMOVE:    ["player"],
+	EV_AUDIO_CMD:       ["player"],
+}
+
+
 func report_event(kind: int, args: Dictionary) -> void:
 	if _applying or not _nm.is_active():
+		return
+	if not _has_required_nodes(kind, args):
 		return
 	var wire := _encode_args(args)
 	if _nm.is_host():
@@ -922,6 +982,30 @@ func report_event(kind: int, args: Dictionary) -> void:
 	else:
 		_event_req.rpc_id(1, kind, wire)
 
+
+
+## How many events this peer refused to send for want of a required node.
+##
+## The refusal is otherwise invisible: the receiving _valid() guard would have
+## dropped the same event anyway, so nothing downstream changes and a test
+## watching the far side cannot tell the two cases apart. Counted so it can be.
+var events_refused: int = 0
+
+
+## Complain here rather than dropping the event silently on every peer.
+##
+## Returns false for an event that cannot be applied, having already said which
+## key was missing — an assert would take the whole session down over one
+## mis-sent event, which is worse than the event not happening.
+func _has_required_nodes(kind: int, args: Dictionary) -> bool:
+	if not EV_NODE_KEYS.has(kind):
+		return true
+	for key: String in EV_NODE_KEYS[kind]:
+		if not is_instance_valid(args.get(key)):
+			events_refused += 1
+			push_error("NetObjectSync: event %d needs a valid '%s' node" % [kind, key])
+			return false
+	return true
 
 @rpc("any_peer", "call_remote", "reliable", 0)
 func _event_req(kind: int, wire: Dictionary) -> void:
