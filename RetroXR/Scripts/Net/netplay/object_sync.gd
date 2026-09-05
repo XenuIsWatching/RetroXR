@@ -55,6 +55,40 @@ func is_applying() -> bool:
 	return _applying
 
 
+## Run `body` with echo suppression forced on, then put back whatever was in
+## force before rather than assuming it was off.
+##
+## Every hook in this file asks `_applying` before it broadcasts, so the flag is
+## what stops a remote update being echoed straight back at the peer that sent
+## it. It used to be raised and lowered by hand at each site, which cost one
+## real bug per convention: a site that lowered it unconditionally cancelled the
+## suppression of an outer apply it was nested inside, and a site that gained an
+## early return left it raised for the rest of the session, silently ending all
+## outbound sync. Saving and restoring makes both impossible.
+func _suppressed(body: Callable) -> Variant:
+	return _with_suppression(true, body)
+
+
+## Run `body` with suppression forced OFF, then restore it.
+##
+## This is the host-authoritative half of the pair, and it is a deliberate hole
+## in the suppression rather than an oversight. Some events are an INTENT — a
+## client asking for the power to be toggled, a transport command — which the
+## host carries out for real. The object's own hook has to see an unsuppressed
+## flag so that it broadcasts the resulting STATE to every peer; suppressing it
+## would apply the change on the host alone and no one else would ever see it.
+func _unsuppressed(body: Callable) -> Variant:
+	return _with_suppression(false, body)
+
+
+func _with_suppression(suppressed: bool, body: Callable) -> Variant:
+	var was := _applying
+	_applying = suppressed
+	var result: Variant = body.call()
+	_applying = was
+	return result
+
+
 func id_of(node: Node) -> int:
 	return node.get_meta("net_id", -1) if is_instance_valid(node) else -1
 
@@ -129,6 +163,13 @@ func on_world_ready() -> void:
 
 func reset_for_scene_change() -> void:
 	# Scene teardown frees everything — suppress despawn/echo storms.
+	#
+	# The three lifecycle functions here assign the flag directly instead of
+	# going through _suppressed(), and have to: this raise is NOT a scoped
+	# window, it deliberately outlives the call and stays up until the next
+	# on_world_ready() (or end_session()) lowers it. A save/restore wrapper
+	# would put it back down on the way out, which is exactly the storm this is
+	# here to stop.
 	_applying = true
 	_world_ready = false
 	_pending_snapshot_peers.clear()
@@ -329,7 +370,12 @@ func _world_snapshot(entries: Array, room_state: Array) -> void:
 	var root: Node = _nm._resolve_world_root()
 	if root == null:
 		return
-	_applying = true
+	var count: int = _suppressed(_world_snapshot_body.bind(root, entries, room_state))
+	print("[NetObjectSync] snapshot applied: %d objects" % count)
+	_snapshot_applied.rpc_id(1)
+
+
+func _world_snapshot_body(root: Node, entries: Array, room_state: Array) -> int:
 	_clear_world(root)
 	var spawned := _persistence.instantiate_objects(root, entries)
 	for id: Variant in spawned:
@@ -339,9 +385,7 @@ func _world_snapshot(entries: Array, room_state: Array) -> void:
 		if node != null:
 			_resolve_file_fields(node, entry)
 	_apply_room_state(root, room_state)
-	_applying = false
-	print("[NetObjectSync] snapshot applied: %d objects" % spawned.size())
-	_snapshot_applied.rpc_id(1)
+	return spawned.size()
 
 
 ## Scene-placed controls are not in the spawned-object registry, but a late
@@ -433,9 +477,8 @@ func _request_spawn(entry: Dictionary) -> void:
 	var root: Node = _nm._resolve_world_root()
 	if root == null:
 		return
-	_applying = true
-	var spawned := _persistence.instantiate_objects(root, [entry])
-	_applying = false
+	var spawned: Dictionary = _suppressed(
+		_persistence.instantiate_objects.bind(root, [entry]))
 	for id: Variant in spawned:
 		var node: Node = spawned[id]
 		if _register_host(node):
@@ -449,12 +492,14 @@ func _spawn_object(entry: Dictionary) -> void:
 	var root: Node = _nm._resolve_world_root()
 	if root == null:
 		return
-	_applying = true
+	_suppressed(_spawn_object_body.bind(root, entry))
+
+
+func _spawn_object_body(root: Node, entry: Dictionary) -> void:
 	var spawned := _persistence.instantiate_objects(root, [entry])
 	for id: Variant in spawned:
 		_register_client(spawned[id], int(entry.get("id", -1)))
 		_resolve_file_fields(spawned[id], entry)
-	_applying = false
 
 
 @rpc("any_peer", "call_remote", "reliable", 0)
@@ -466,10 +511,7 @@ func _request_despawn(net_id: int) -> void:
 		# tree_exiting hook broadcasts _despawn to the remaining clients. It now
 		# fires at the END of the shrink rather than on this frame — a despawn
 		# a third of a second later, which is what every peer is watching too.
-		if node.has_method("drop_and_free"):
-			node.call("drop_and_free")
-		else:
-			Vanish.free_node(node)
+		_drop_and_free(node)
 
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -481,12 +523,7 @@ func _despawn(net_id: int) -> void:
 		# arrives with the flag already down. It still does not echo back: the
 		# id was unregistered above, and _on_node_exiting drops anything the
 		# registry no longer maps to that node.
-		_applying = true
-		if node.has_method("drop_and_free"):
-			node.call("drop_and_free")
-		else:
-			Vanish.free_node(node)
-		_applying = false
+		_suppressed(_drop_and_free.bind(node))
 
 
 func _on_node_exiting(net_id: int, exiting_node: Node) -> void:
@@ -621,8 +658,11 @@ func _hinge_apply(updates: Array) -> void:
 
 
 func _apply_hinge_updates(updates: Array) -> Array:
+	return _suppressed(_apply_hinge_updates_body.bind(updates)) as Array
+
+
+func _apply_hinge_updates_body(updates: Array) -> Array:
 	var accepted: Array = []
-	_applying = true
 	for raw: Variant in updates.slice(0, MAX_HINGES_PER_BATCH):
 		if not raw is Dictionary:
 			continue
@@ -662,7 +702,6 @@ func _apply_hinge_updates(updates: Array) -> Array:
 			_:
 				continue
 		accepted.append(rec)
-	_applying = false
 	return accepted
 
 
@@ -806,11 +845,23 @@ func _grab_denied(net_id: int) -> void:
 	_held_by_me.erase(net_id)
 	var node: Node = _registry.get(net_id)
 	if is_instance_valid(node):
-		_applying = true
-		if node.has_method("drop"):
-			node.call("drop")
-		_freeze_replica(node)
-		_applying = false
+		_suppressed(_drop_and_freeze.bind(node))
+
+
+## Remove a networked object, letting it drop whatever it holds on the way out.
+## Vanish.free_node is the fallback for anything without the pickable contract.
+func _drop_and_free(node: Node) -> void:
+	if node.has_method("drop_and_free"):
+		node.call("drop_and_free")
+	else:
+		Vanish.free_node(node)
+
+
+## Let go of a body the host refused us, and hand it back to the replica rules.
+func _drop_and_freeze(node: Node) -> void:
+	if node.has_method("drop"):
+		node.call("drop")
+	_freeze_replica(node)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered", 1)
@@ -986,8 +1037,12 @@ func _update_port_owner(kind: int, args: Dictionary, peer_id: int) -> void:
 
 
 func _apply_event(kind: int, wire: Dictionary) -> void:
-	var a := _decode_args(wire)
-	_applying = true
+	_suppressed(_dispatch_event.bind(kind, _decode_args(wire)))
+
+
+## The arms marked host-authoritative run through _unsuppressed() rather than
+## suppressed like the rest: see that method for why the hole has to be there.
+func _dispatch_event(kind: int, a: Dictionary) -> void:
 	match kind:
 		NetEvents.EV_CART_INSERT:
 			if _valid(a, ["sys", "cart"]):
@@ -1034,11 +1089,10 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 				var port := int(a.get("port", 0))
 				a["sys"].net_release_controller_port(port)
 		NetEvents.EV_SYS_POWER:
-			# Client intent — the host toggles for real. Run un-suppressed so
-			# the host's own hook broadcasts NetEvents.EV_SYS_POWER_STATE afterwards.
+			# Client intent — the host toggles for real. Un-suppressed so the
+			# host's own hook broadcasts NetEvents.EV_SYS_POWER_STATE afterwards.
 			if _nm.is_host() and _valid(a, ["sys"]):
-				_applying = false
-				a["sys"].toggle_power()
+				_unsuppressed(a["sys"].toggle_power)
 		NetEvents.EV_SYS_POWER_STATE:
 			if _valid(a, ["sys"]) and a["sys"].has_method("net_set_remote_power"):
 				a["sys"].net_set_remote_power(bool(a.get("on", false)))
@@ -1046,8 +1100,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 			# Like power intent, reset is host-authoritative. RetroSystem.reset()
 			# frame-schedules the actual core reset when lockstep is active.
 			if _nm.is_host() and _valid(a, ["sys"]) and a["sys"].has_method("reset"):
-				_applying = false
-				a["sys"].reset()
+				_unsuppressed(a["sys"].reset)
 		NetEvents.EV_TV_POWER:
 			if _valid(a, ["tv"]):
 				a["tv"].remote_power_toggle()
@@ -1106,14 +1159,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 			# playback (M5 drift sync). Run un-suppressed so the transport hook's
 			# _net_push_state() actually broadcasts.
 			if _nm.is_host() and _valid(a, ["vcr"]):
-				_applying = false
-				var vcr: Node = a["vcr"]
-				match str(a.get("cmd", "")):
-					"play": vcr.remote_play()
-					"pause": vcr.remote_pause()
-					"stop": vcr.remote_stop()
-					"ff": vcr.remote_ff()
-					"rew": vcr.remote_rewind()
+				_unsuppressed(_host_vcr_cmd.bind(a["vcr"], str(a.get("cmd", ""))))
 		NetEvents.EV_BOOK_PAGE:
 			if _valid(a, ["book"]) and a["book"].has_method("set_page"):
 				a["book"].set_page(int(a.get("state", 0)), int(a.get("leaf", 0)))
@@ -1156,24 +1202,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 			# peer's local playback. Run un-suppressed so the command hook's
 			# _net_push_state() actually broadcasts.
 			if _nm.is_host() and _valid(a, ["dvd"]):
-				_applying = false
-				var dvd: Node = a["dvd"]
-				match str(a.get("cmd", "")):
-					"play": dvd.remote_play()
-					"pause": dvd.remote_pause()
-					"stop": dvd.remote_stop()
-					"menu_up": dvd.dvd_menu_up()
-					"menu_down": dvd.dvd_menu_down()
-					"menu_left": dvd.dvd_menu_left()
-					"menu_right": dvd.dvd_menu_right()
-					"ok": dvd.dvd_ok()
-					"root": dvd.dvd_root_menu()
-					"next_ch": dvd.dvd_next_chapter()
-					"prev_ch": dvd.dvd_prev_chapter()
-					"ff": dvd.remote_ff()
-					"rew": dvd.remote_rewind()
-					"audio": dvd.dvd_cycle_audio()
-					"subtitle": dvd.dvd_cycle_subtitle()
+				_unsuppressed(_host_dvd_cmd.bind(a["dvd"], str(a.get("cmd", ""))))
 		NetEvents.EV_AUDIO_INSERT:
 			if _valid(a, ["player", "media"]):
 				a["player"].restore_media(a["media"])
@@ -1190,22 +1219,53 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 			# playback. Run un-suppressed so the command hook's _net_push_state()
 			# actually broadcasts.
 			if _nm.is_host() and _valid(a, ["player"]):
-				_applying = false
-				var ap: Node = a["player"]
-				match str(a.get("cmd", "")):
-					"play": ap.remote_play()
-					"pause": ap.remote_pause()
-					"stop": ap.remote_stop()
-					"ff": ap.remote_ff()
-					"rew": ap.remote_rewind()
-					"next": ap.remote_next()
-					"prev": ap.remote_prev()
-					# The needle landing on a band. Carries its index the way
-					# NetEvents.EV_TV_CHANNEL and NetEvents.EV_DISK_OP carry theirs. There is
-					# deliberately no `_:` arm on this match, so a host that
-					# predates this command no-ops rather than misfiring.
-					"track": ap.remote_goto_track(int(a.get("index", -1)))
-	_applying = false
+				_unsuppressed(_host_audio_cmd.bind(a["player"],
+					str(a.get("cmd", "")), int(a.get("index", -1))))
+
+
+## The three transport arms below are the host carrying out a client's command.
+## None of them has a `_:` arm, deliberately: a host that predates a command
+## no-ops on it rather than misfiring some other transport.
+func _host_vcr_cmd(vcr: Node, cmd: String) -> void:
+	match cmd:
+		"play": vcr.remote_play()
+		"pause": vcr.remote_pause()
+		"stop": vcr.remote_stop()
+		"ff": vcr.remote_ff()
+		"rew": vcr.remote_rewind()
+
+
+func _host_dvd_cmd(dvd: Node, cmd: String) -> void:
+	match cmd:
+		"play": dvd.remote_play()
+		"pause": dvd.remote_pause()
+		"stop": dvd.remote_stop()
+		"menu_up": dvd.dvd_menu_up()
+		"menu_down": dvd.dvd_menu_down()
+		"menu_left": dvd.dvd_menu_left()
+		"menu_right": dvd.dvd_menu_right()
+		"ok": dvd.dvd_ok()
+		"root": dvd.dvd_root_menu()
+		"next_ch": dvd.dvd_next_chapter()
+		"prev_ch": dvd.dvd_prev_chapter()
+		"ff": dvd.remote_ff()
+		"rew": dvd.remote_rewind()
+		"audio": dvd.dvd_cycle_audio()
+		"subtitle": dvd.dvd_cycle_subtitle()
+
+
+## `index` is the band the needle lands on, and is carried the way
+## NetEvents.EV_TV_CHANNEL and NetEvents.EV_DISK_OP carry theirs.
+func _host_audio_cmd(ap: Node, cmd: String, index: int) -> void:
+	match cmd:
+		"play": ap.remote_play()
+		"pause": ap.remote_pause()
+		"stop": ap.remote_stop()
+		"ff": ap.remote_ff()
+		"rew": ap.remote_rewind()
+		"next": ap.remote_next()
+		"prev": ap.remote_prev()
+		"track": ap.remote_goto_track(index)
 
 
 ## Which card slot a memcard event names, clamped to slots that exist. Defaults
@@ -1286,9 +1346,7 @@ func _host_media_heartbeat() -> void:
 func _media_state(net_id: int, state: Dictionary) -> void:
 	var node: Node = _registry.get(net_id)
 	if is_instance_valid(node) and node.has_method("net_apply_state"):
-		_applying = true
-		node.call("net_apply_state", state)
-		_applying = false
+		_suppressed(node.call.bind("net_apply_state", state))
 
 
 # ── File-backed objects (M3) ──────────────────────────────────────────────────
