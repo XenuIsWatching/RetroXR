@@ -304,8 +304,8 @@ static func _load_file() -> Dictionary:
     return BindingStore.load_file(SAVE_PATH, "ControllerBindings")
 
 
-static func _save_file(data: Dictionary) -> void:
-    BindingStore.save_file(SAVE_PATH, "ControllerBindings", data)
+static func _save_file(data: Dictionary) -> bool:
+    return BindingStore.save_file(SAVE_PATH, "ControllerBindings", data)
 
 
 static func _merge(base: Dictionary, overlay1: Dictionary,

@@ -32,8 +32,10 @@ static func load_file(path: String, owner: String) -> Dictionary:
 	return JsonStore.read_dict(path, owner)
 
 
-static func save_file(path: String, owner: String, data: Dictionary) -> void:
-	JsonStore.write_dict(path, data, owner)
+## Returns false when the write did not land, so a caller can say so rather
+## than reporting a change that is not on disk.
+static func save_file(path: String, owner: String, data: Dictionary) -> bool:
+	return JsonStore.write_dict(path, data, owner)
 
 
 ## The two override layers for a platform: [global, per-system]. The per-system

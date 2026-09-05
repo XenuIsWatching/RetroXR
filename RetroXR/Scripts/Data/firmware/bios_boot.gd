@@ -325,7 +325,7 @@ static func empty_media_path(extension: String) -> String:
 		return path
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
-		push_warning("[BiosBoot] cannot write %s" % path)
+		push_error("[BiosBoot] cannot write %s" % path)
 		return ""
 	f.close()
 	return path

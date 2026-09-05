@@ -72,7 +72,7 @@ static func save_values(root: String, core_name: String, values: Dictionary) -> 
 	var path := opt_path(root, core_name)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
-		push_warning("CoreOptionsStore: cannot write %s" % path)
+		push_error("CoreOptionsStore: cannot write %s" % path)
 		return false
 	var keys: Array = values.keys()
 	keys.sort()

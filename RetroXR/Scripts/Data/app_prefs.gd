@@ -233,8 +233,10 @@ func _load_prefs() -> void:
 	hw_render_overrides = _prefs_dict(data, "hw_render_overrides", hw_render_overrides)
 
 
-func save_prefs() -> void:
-	JsonStore.write_dict(PREFS_PATH, {
+## Returns false when the write did not land. Callers that report a setting
+## as changed should say so instead when this is false.
+func save_prefs() -> bool:
+	return JsonStore.write_dict(PREFS_PATH, {
 		"auto_save_scene":  auto_save_scene,
 		"autosave_periodic": autosave_periodic,
 		"autosave_interval": autosave_interval,

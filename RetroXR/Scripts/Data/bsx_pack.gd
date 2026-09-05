@@ -113,7 +113,7 @@ static func create_blank(dir_path: String, base_name := BLANK_TITLE) -> String:
 	var path := dir_path.path_join(unique_name(dir_path, base_name) + ".bs")
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
-		push_warning("BsxPack: cannot write %s" % path)
+		push_error("BsxPack: cannot write %s" % path)
 		return ""
 	f.store_buffer(blank_image())
 	f.close()

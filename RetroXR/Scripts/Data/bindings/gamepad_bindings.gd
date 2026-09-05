@@ -119,8 +119,8 @@ static func _load_file() -> Dictionary:
 	return BindingStore.load_file(SAVE_PATH, "GamepadBindings")
 
 
-static func _save_file(data: Dictionary) -> void:
-	BindingStore.save_file(SAVE_PATH, "GamepadBindings", data)
+static func _save_file(data: Dictionary) -> bool:
+	return BindingStore.save_file(SAVE_PATH, "GamepadBindings", data)
 
 
 static func _merge(base: Dictionary, overlay1: Dictionary,

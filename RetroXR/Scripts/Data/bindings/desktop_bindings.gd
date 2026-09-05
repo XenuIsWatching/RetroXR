@@ -79,8 +79,8 @@ static func _load_file() -> Dictionary:
 	return data
 
 
-static func _save_file(data: Dictionary) -> void:
-	JsonStore.write_dict(SAVE_PATH, data, "DesktopBindings")
+static func _save_file(data: Dictionary) -> bool:
+	return JsonStore.write_dict(SAVE_PATH, data, "DesktopBindings")
 
 
 ## Put one layer's events into the live InputMap.
