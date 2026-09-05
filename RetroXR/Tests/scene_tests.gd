@@ -37,6 +37,78 @@ var _saved_manifest_json := ""
 var _had_manifest := false
 
 
+
+## The pad-scene allowlist gates a value that can arrive from another machine, so
+## it must not drift: every shipped controller scene whose script is a
+## RetroController has to be on it.
+##
+## Read statically rather than by instantiating each scene — building the real
+## pads headless starts threads and leaks RIDs, and the question here is about
+## the manifest, not about runtime behaviour.
+func _test_controller_scene_allowlist() -> void:
+	var dir := "res://Scenes/Objects/controllers/"
+	var scenes: Array[String] = []
+	var stack: Array[String] = [dir]
+	while not stack.is_empty():
+		var at: String = stack.pop_back()
+		for sub in DirAccess.get_directories_at(at):
+			stack.append(at.path_join(sub))
+		for f in DirAccess.get_files_at(at):
+			if f.ends_with(".tscn"):
+				scenes.append(at.path_join(f))
+	_ok(scenes.size() > 5, "controllers/the controller scenes were found")
+
+	for path in scenes:
+		var script_path := _scene_script_path(path)
+		if script_path.is_empty() or not _extends_retro_controller(script_path):
+			continue
+		_ok(ScenePersistence.is_known_controller_scene(path),
+			"controllers/%s is on the allowlist" % path.get_file())
+
+	for listed: String in ScenePersistence.CONTROLLER_SCENES:
+		_ok(ResourceLoader.exists(listed),
+			"controllers/listed scene %s exists" % listed.get_file())
+
+	_ok(not ScenePersistence.is_known_controller_scene(
+			"res://Scenes/Objects/system.tscn"),
+		"controllers/an unlisted scene is refused")
+
+
+## The script a .tscn attaches to its root, read out of the file.
+func _scene_script_path(scene_path: String) -> String:
+	var f := FileAccess.open(scene_path, FileAccess.READ)
+	if f == null:
+		return ""
+	var text := f.get_as_text()
+	f.close()
+	var re := RegEx.create_from_string(
+		'\\[ext_resource type="Script"[^\\]]*path="([^"]+)"')
+	var m := re.search(text)
+	return m.get_string(1) if m != null else ""
+
+
+## Walk `extends` up the chain to see whether a script is a RetroController.
+func _extends_retro_controller(script_path: String) -> bool:
+	var seen := 0
+	var at := script_path
+	while not at.is_empty() and seen < 8:
+		seen += 1
+		var f := FileAccess.open(at, FileAccess.READ)
+		if f == null:
+			return false
+		var text := f.get_as_text()
+		f.close()
+		var m := RegEx.create_from_string("(?m)^extends\\s+(\\w+)").search(text)
+		if m == null:
+			return false
+		var base := m.get_string(1)
+		if base == "RetroController":
+			return true
+		# Resolve the base class by its file, which is named for it in snake_case.
+		var guess := "res://Scripts/Objects/controllers/%s.gd" % base.to_snake_case()
+		at = guess if FileAccess.file_exists(guess) else ""
+	return false
+
 func _ready() -> void:
 	get_tree().create_timer(120.0).timeout.connect(func():
 		print("[test] TIMEOUT")
@@ -48,6 +120,8 @@ func _ready() -> void:
 			_only = a.trim_prefix("--only=")
 
 	_snapshot()
+	if _want_group("controllers"):
+		_test_controller_scene_allowlist()
 	if _want_group("slots"):
 		_test_slots()
 	if _want_group("ready"):

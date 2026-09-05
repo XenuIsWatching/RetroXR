@@ -1885,12 +1885,47 @@ func _plug_records(seats: Array, node_to_id: Dictionary) -> Array:
 	return plugs
 
 
+## Every pad scene a save or a peer may name.
+##
+## The `scene` field does not only come from the player's own save file: an
+## object_sync snapshot carries it too, so the value can arrive from another
+## machine. It used to be loaded and INSTANTIATED before the result was checked,
+## which ran the named scene's scripts first and rejected it after — so any
+## scene in the pack could be constructed by naming it. The allowlist moves that
+## decision in front of the load.
+##
+## controller_scenes_are_listed in scene_tests fails if a shipped RetroController
+## scene is missing here, so adding a pad cannot silently make it unrestorable.
+const CONTROLLER_SCENES := [
+	"res://Scenes/Objects/controllers/retro_controller.tscn",
+	"res://Scenes/Objects/controllers/nes/nes_controller.tscn",
+	"res://Scenes/Objects/controllers/vb/vb_controller.tscn",
+	"res://Scenes/Objects/controllers/atari/atari_2600_cx40.tscn",
+	"res://Scenes/Objects/controllers/playstation/ps1_controller.tscn",
+	"res://Scenes/Objects/controllers/playstation/ps1_dualshock.tscn",
+]
+
+
+## True for a pad scene this build will restore: one it ships, or one a mod
+## registered through register_mod_object.
+static func is_known_controller_scene(path: String) -> bool:
+	if CONTROLLER_SCENES.has(path):
+		return true
+	for type: String in _mod_objects:
+		if str((_mod_objects[type] as Dictionary).get("scene", "")) == path:
+			return true
+	return false
+
+
 ## The pad scene the entry names, or the generic pad when the save predates the
 ## field, names a scene this build no longer ships, or names something that is
 ## not a controller at all. ResourceLoader.exists, not FileAccess: paths are
 ## remapped into the pck in an exported build.
 func _instantiate_controller(data: Dictionary) -> Node3D:
 	var path: String = str(data.get("scene", ""))
+	if not path.is_empty() and not is_known_controller_scene(path):
+		push_warning("ScenePersistence: refusing unlisted pad scene '%s'" % path)
+		path = ""
 	if not path.is_empty() and ResourceLoader.exists(path):
 		var packed := ResourceLoader.load(path) as PackedScene
 		if packed != null:
