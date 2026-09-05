@@ -784,7 +784,7 @@ func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
 	if not is_instance_valid(_holding_ctrl):
 		_saved_by = by
 		_holding_ctrl = ctrl
-	_set_model_visible(ctrl, false)
+	VrHold.set_model_visible(ctrl, false)
 	_update_pointer_block(ctrl, true)
 	_update_locomotion_block()
 	_refresh_grip()
@@ -804,7 +804,7 @@ func _on_released_signal(_pickable: Node3D, by: Node3D) -> void:
 		return
 
 	if _allow_drop:
-		_set_model_visible(ctrl, true)
+		VrHold.set_model_visible(ctrl, true)
 		_update_pointer_block(ctrl, false)
 		if ctrl == _holding_ctrl:
 			if _grab_driver and _grab_driver.primary:
@@ -839,7 +839,7 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 	if _hint:
 		_hint.on_dropped()
 	_set_face_buttons_active(false)
-	_set_model_visible(_holding_ctrl, true)
+	VrHold.set_model_visible(_holding_ctrl, true)
 	_update_pointer_block(_holding_ctrl, false)
 	_allow_drop = false
 	_saved_by = null
@@ -858,7 +858,7 @@ func _rehold() -> void:
 		_allow_drop = false
 		return
 	if not is_instance_valid(_saved_by):
-		_set_model_visible(_holding_ctrl, true)
+		VrHold.set_model_visible(_holding_ctrl, true)
 		_update_pointer_block(_holding_ctrl, false)
 		_saved_by = null
 		_holding_ctrl = null
@@ -873,11 +873,6 @@ func _rehold_hand(by: Node3D) -> void:
 	by.call("_pick_up_object", self)
 
 
-func _set_model_visible(ctrl: XRController3D, shown: bool) -> void:
-	if is_instance_valid(ctrl) and ctrl.has_method("set_model_visible"):
-		ctrl.call("set_model_visible", shown)
-
-
 func _is_combo_pressed(ctrl: XRController3D) -> bool:
 	if not HeldHint.is_combo_pressed(ctrl):
 		return false
@@ -887,11 +882,11 @@ func _is_combo_pressed(ctrl: XRController3D) -> bool:
 
 
 func _drop_all() -> void:
-	_set_model_visible(_holding_ctrl, true)
+	VrHold.set_model_visible(_holding_ctrl, true)
 	_update_pointer_block(_holding_ctrl, false)
 	var secondary_ctrl := _get_secondary_ctrl()
 	if is_instance_valid(secondary_ctrl):
-		_set_model_visible(secondary_ctrl, true)
+		VrHold.set_model_visible(secondary_ctrl, true)
 		_update_pointer_block(secondary_ctrl, false)
 	_allow_drop = true
 	_holding_ctrl = null
@@ -904,17 +899,11 @@ func _exit_tree() -> void:
 	_stop_power_haptic()
 	_pointer_block.release(_left_vr_ctrl, _right_vr_ctrl)
 	if _locomotion_manager != null:
-		_locomotion_manager.clear_owner(_vr_block_owner())
-		_locomotion_manager.set_block(_desktop_block_owner(),
+		_locomotion_manager.clear_owner(VrHold.vr_block_owner(self))
+		_locomotion_manager.set_block(VrHold.desktop_block_owner(self),
 			LocomotionManager.CHANNEL_DESKTOP_MOVE, false)
 	_allow_drop = true
 	super._exit_tree()
-
-
-## Per-instance owner for the VR channels. Shared owner keys let one object
-## erase another's block -- see LocomotionManager.set_block for what that cost.
-func _vr_block_owner() -> StringName:
-	return StringName("retro_hold_%d" % get_instance_id())
 
 
 func _update_locomotion_block() -> void:
@@ -925,9 +914,9 @@ func _update_locomotion_block() -> void:
 		or (is_instance_valid(secondary_ctrl) and secondary_ctrl.tracker == &"right_hand")
 	var desktop_claim := _desktop_held and _connected_system != null and _port_index >= 0
 	if _locomotion_manager != null:
-		_locomotion_manager.set_block(_vr_block_owner(), LocomotionManager.CHANNEL_LEFT,  left_held)
-		_locomotion_manager.set_block(_vr_block_owner(), LocomotionManager.CHANNEL_RIGHT, right_held)
-		_locomotion_manager.set_block(_desktop_block_owner(),
+		_locomotion_manager.set_block(VrHold.vr_block_owner(self), LocomotionManager.CHANNEL_LEFT,  left_held)
+		_locomotion_manager.set_block(VrHold.vr_block_owner(self), LocomotionManager.CHANNEL_RIGHT, right_held)
+		_locomotion_manager.set_block(VrHold.desktop_block_owner(self),
 			LocomotionManager.CHANNEL_DESKTOP_MOVE, desktop_claim)
 	if is_instance_valid(_spawn_menu_ctrl) and "disabled" in _spawn_menu_ctrl:
 		_spawn_menu_ctrl.set("disabled", left_held)
@@ -935,10 +924,6 @@ func _update_locomotion_block() -> void:
 
 func _update_pointer_block(ctrl: XRController3D, should_block: bool) -> void:
 	_pointer_block.set_block(ctrl, should_block)
-
-
-func _desktop_block_owner() -> StringName:
-	return StringName("desktop_hold_%d" % get_instance_id())
 
 
 # ── Desktop keyboard (Scroll Lock capture) ────────────────────────────────────
@@ -1444,7 +1429,7 @@ func _process(delta: float) -> void:
 	var secondary_ctrl := _get_secondary_ctrl()
 	if _is_combo_pressed(secondary_ctrl):
 		_allow_drop = true
-		_set_model_visible(secondary_ctrl, true)
+		VrHold.set_model_visible(secondary_ctrl, true)
 		_update_pointer_block(secondary_ctrl, false)
 		if _grab_driver and _grab_driver.secondary:
 			_grab_driver.secondary.pickup.drop_object()
@@ -1453,7 +1438,7 @@ func _process(delta: float) -> void:
 	elif _is_combo_pressed(_holding_ctrl):
 		if is_instance_valid(secondary_ctrl):
 			_allow_drop = true
-			_set_model_visible(_holding_ctrl, true)
+			VrHold.set_model_visible(_holding_ctrl, true)
 			_update_pointer_block(_holding_ctrl, false)
 			if is_instance_valid(_saved_by):
 				_saved_by.call("drop_object")

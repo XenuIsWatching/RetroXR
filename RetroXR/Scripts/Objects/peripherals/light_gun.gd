@@ -174,7 +174,7 @@ func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
 		return
 	_saved_by = by
 	_holding_ctrl = ctrl
-	_set_model_visible(ctrl, false)
+	VrHold.set_model_visible(ctrl, false)
 	_update_pointer_block(ctrl, true)
 	_update_locomotion_block()
 
@@ -186,7 +186,7 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 	else:
 		if _hint:
 			_hint.on_dropped()
-		_set_model_visible(_holding_ctrl, true)
+		VrHold.set_model_visible(_holding_ctrl, true)
 		_update_pointer_block(_holding_ctrl, false)
 		_allow_drop = false
 		_saved_by = null
@@ -201,18 +201,13 @@ func _rehold() -> void:
 		_allow_drop = false
 		return
 	if not is_instance_valid(_saved_by):
-		_set_model_visible(_holding_ctrl, true)
+		VrHold.set_model_visible(_holding_ctrl, true)
 		_update_pointer_block(_holding_ctrl, false)
 		_saved_by = null
 		_holding_ctrl = null
 		_update_locomotion_block()
 		return
 	_saved_by.call("_pick_up_object", self)
-
-
-func _set_model_visible(ctrl: XRController3D, shown: bool) -> void:
-	if is_instance_valid(ctrl) and ctrl.has_method("set_model_visible"):
-		ctrl.call("set_model_visible", shown)
 
 
 ## The combo test itself lives on HeldHint so the check and the row advertising
@@ -229,7 +224,7 @@ func _is_combo_pressed(ctrl: XRController3D) -> bool:
 
 
 func _drop_all() -> void:
-	_set_model_visible(_holding_ctrl, true)
+	VrHold.set_model_visible(_holding_ctrl, true)
 	_update_pointer_block(_holding_ctrl, false)
 	_allow_drop = true
 	_holding_ctrl = null
@@ -241,17 +236,11 @@ func _drop_all() -> void:
 func _exit_tree() -> void:
 	_pointer_block.release(_left_vr_ctrl, _right_vr_ctrl)
 	if _locomotion_manager != null:
-		_locomotion_manager.clear_owner(_vr_block_owner())
-		_locomotion_manager.set_block(_desktop_block_owner(),
+		_locomotion_manager.clear_owner(VrHold.vr_block_owner(self))
+		_locomotion_manager.set_block(VrHold.desktop_block_owner(self),
 			LocomotionManager.CHANNEL_DESKTOP_MOVE, false)
 	_allow_drop = true
 	super._exit_tree()
-
-
-## Per-instance owner for the VR channels. Shared owner keys let one object
-## erase another's block -- see LocomotionManager.set_block for what that cost.
-func _vr_block_owner() -> StringName:
-	return StringName("retro_hold_%d" % get_instance_id())
 
 
 func _update_locomotion_block() -> void:
@@ -259,12 +248,12 @@ func _update_locomotion_block() -> void:
 	var right_held := is_instance_valid(_holding_ctrl) and _holding_ctrl.tracker == &"right_hand"
 	var desktop_claim := _desktop_held and _connected_system != null and _port_index >= 0
 	if _locomotion_manager != null:
-		_locomotion_manager.set_block(_vr_block_owner(), LocomotionManager.CHANNEL_LEFT,  left_held)
-		_locomotion_manager.set_block(_vr_block_owner(), LocomotionManager.CHANNEL_RIGHT, right_held)
+		_locomotion_manager.set_block(VrHold.vr_block_owner(self), LocomotionManager.CHANNEL_LEFT,  left_held)
+		_locomotion_manager.set_block(VrHold.vr_block_owner(self), LocomotionManager.CHANNEL_RIGHT, right_held)
 	# Desktop has no hands, so the tracker tests above never fire there. The
 	# desktop providers poll the InputMap, so blocking them is the only way to
 	# stop WASD reaching the player while this device is claiming it.
-		_locomotion_manager.set_block(_desktop_block_owner(),
+		_locomotion_manager.set_block(VrHold.desktop_block_owner(self),
 			LocomotionManager.CHANNEL_DESKTOP_MOVE, desktop_claim)
 	if is_instance_valid(_spawn_menu_ctrl) and "disabled" in _spawn_menu_ctrl:
 		_spawn_menu_ctrl.set("disabled", left_held)
@@ -621,8 +610,3 @@ func _set_aim(libretro: Libretro, x: int, y: int, offscreen: bool) -> void:
 		libretro.SetLightgunIsOffscreen(_port_index, offscreen)
 
 
-## Per-instance owner for the desktop channel. Several objects share the
-## "retro_hold" key on the VR channels, so whichever updated last would otherwise
-## clear a block another object still wants.
-func _desktop_block_owner() -> StringName:
-	return StringName("desktop_hold_%d" % get_instance_id())

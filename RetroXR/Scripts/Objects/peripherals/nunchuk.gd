@@ -136,19 +136,14 @@ func _find_locomotion() -> void:
 ## Only the hand actually holding it is blocked, and only in VR: get_state()
 ## returns a zero stick when there is no XR controller, so a desktop hold
 ## contributes no input to conflict over and takes no channel away.
-## Per-instance owner for the VR channels. Shared owner keys let one object
-## erase another's block -- see LocomotionManager.set_block for what that cost.
-func _vr_block_owner() -> StringName:
-	return StringName("retro_hold_%d" % get_instance_id())
-
-
 func _update_locomotion_block() -> void:
 	if _locomotion_manager == null:
 		return
 	var ctrl_valid := is_instance_valid(_holding_ctrl)
-	_locomotion_manager.set_block(_vr_block_owner(), LocomotionManager.CHANNEL_LEFT,
+	var owner_key := VrHold.vr_block_owner(self)
+	_locomotion_manager.set_block(owner_key, LocomotionManager.CHANNEL_LEFT,
 		ctrl_valid and _holding_ctrl.tracker == &"left_hand")
-	_locomotion_manager.set_block(_vr_block_owner(), LocomotionManager.CHANNEL_RIGHT,
+	_locomotion_manager.set_block(owner_key, LocomotionManager.CHANNEL_RIGHT,
 		ctrl_valid and _holding_ctrl.tracker == &"right_hand")
 
 
@@ -268,7 +263,7 @@ func _on_grabbed_signal(_pickable: Node3D, by: Node3D) -> void:
 		return
 	_saved_by = by
 	_holding_ctrl = ctrl
-	_set_model_visible(ctrl, false)
+	VrHold.set_model_visible(ctrl, false)
 	_update_pointer_block(ctrl, true)
 	_update_locomotion_block()
 
@@ -283,7 +278,7 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 		return
 	if _hint:
 		_hint.on_dropped()
-	_set_model_visible(_holding_ctrl, true)
+	VrHold.set_model_visible(_holding_ctrl, true)
 	_update_pointer_block(_holding_ctrl, false)
 	_allow_drop = false
 	_saved_by = null
@@ -300,21 +295,13 @@ func _rehold() -> void:
 		# The hand went away rather than letting go — a teleport, a scene change.
 		# Give its model back before forgetting it, or the player is left with an
 		# invisible controller.
-		_set_model_visible(_holding_ctrl, true)
+		VrHold.set_model_visible(_holding_ctrl, true)
 		_update_pointer_block(_holding_ctrl, false)
 		_saved_by = null
 		_holding_ctrl = null
 		_update_locomotion_block()
 		return
 	_saved_by.call("_pick_up_object", self)
-
-
-## Hide the VR controller's own mesh while this is in that hand, so the player
-## sees the Nunchuk and the wrap-around hand rather than a Touch controller
-## floating inside it.
-func _set_model_visible(ctrl: XRController3D, shown: bool) -> void:
-	if is_instance_valid(ctrl) and ctrl.has_method("set_model_visible"):
-		ctrl.call("set_model_visible", shown)
 
 
 ## The combo test itself lives on HeldHint so the check and the row advertising
@@ -328,7 +315,7 @@ func _is_combo_pressed(ctrl: XRController3D) -> bool:
 
 
 func _drop_all() -> void:
-	_set_model_visible(_holding_ctrl, true)
+	VrHold.set_model_visible(_holding_ctrl, true)
 	_update_pointer_block(_holding_ctrl, false)
 	_allow_drop = true
 	_holding_ctrl = null
@@ -345,7 +332,7 @@ func _exit_tree() -> void:
 	# it takes no argument because _blocking_ctrl already knows whose it is.
 	_update_pointer_block(null, false)
 	if _locomotion_manager != null:
-		_locomotion_manager.clear_owner(_vr_block_owner())
+		_locomotion_manager.clear_owner(VrHold.vr_block_owner(self))
 	super._exit_tree()
 
 
