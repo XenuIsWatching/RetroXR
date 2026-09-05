@@ -100,7 +100,7 @@ func _set_osd_text(text: String) -> void:
 func show_volume() -> void:
 	_vol_osd_token += 1
 	var tok := _vol_osd_token
-	var filled := roundi(_tv._volume * VOL_OSD_SEGMENTS)
+	var filled := roundi(_tv.volume() * VOL_OSD_SEGMENTS)
 	var text := "VOL " + "|".repeat(filled) + "-".repeat(VOL_OSD_SEGMENTS - filled)
 	_set_vol_osd_text(text)
 	get_tree().create_timer(2.0).timeout.connect(func():

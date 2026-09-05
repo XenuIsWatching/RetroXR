@@ -424,15 +424,14 @@ func _make_pair() -> Pair:
 	hinge.set_rotation_deg_no_signal(73.0)
 	var tv := TV.instantiate() as RetroTV
 	tv.name = "SnapshotTV"
-	tv._volume = 0.4
-	tv._muted = true
-	tv._tv_enabled = false
-	tv.widescreen = true
-	tv.current_source = RetroTV.Source.RF
-	tv.rf_channel = 4
-	tv.audio_mode = 2
 	tv.stereo_mode = 1
 	p.host_root.add_child(tv)
+	# Through the public restore path, and after the set is in the tree: volume
+	# and mute belong to TvAudio, which does not exist until _ready has run.
+	tv.restore_control_state({
+		"volume": 0.4, "muted": true, "enabled": false, "widescreen": true,
+		"source": RetroTV.Source.RF, "rf_channel": 4, "audio_mode": 2,
+	})
 	tv.add_to_group("spawned")
 
 	# This must be removed by the host snapshot, without touching the host or a

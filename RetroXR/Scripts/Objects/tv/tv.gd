@@ -205,7 +205,6 @@ var _audio: TvAudio = null
 # The back panel: its sockets, their legends, and which host is on which input —
 # see tv_panel.gd.
 var _panel: TvPanel = null
-var _volume: float = 1.0       # 0.0–1.0, default 100%
 var _tv_enabled: bool = true
 
 # Selected input and the built-in tuner behind Source.TV. The tuner is created on
@@ -220,9 +219,8 @@ var _tuner: TVTuner = null
 var rf_channel: int = RF_CHANNELS[0]
 # Snow for an untuned aerial channel; see TvDisplay.rf_static.
 
-# Mute: silences the connected device's audio without changing _volume. A sticky
+# Mute: silences the connected device's audio without changing the volume. A sticky
 # "MUTE" OSD stays up until mute is toggled off or a volume key is pressed.
-var _muted: bool = false
 
 # Uniform display scale of the whole TV (1.0 = default set size). Adjusted from
 # the TV options panel and persisted per-scene. Applied to the RigidBody root so
@@ -830,8 +828,8 @@ func get_source() -> int:
 func get_control_state() -> Dictionary:
 	return {
 		"enabled": _tv_enabled,
-		"volume": _volume,
-		"muted": _muted,
+		"volume": _audio.volume(),
+		"muted": _audio.is_muted(),
 		"widescreen": widescreen,
 		"source": current_source,
 		"rf_channel": rf_channel,
@@ -843,8 +841,8 @@ func get_control_state() -> Dictionary:
 ## Restore after the TV is in the tree, so buttons, materials, audio routes and
 ## the optional tuner all receive the state rather than only its backing fields.
 func restore_control_state(state: Dictionary) -> void:
-	_volume = clampf(float(state.get("volume", _volume)), 0.0, 1.0)
-	_muted = bool(state.get("muted", _muted))
+	_audio.restore(float(state.get("volume", _audio.volume())),
+		bool(state.get("muted", _audio.is_muted())))
 	_tv_enabled = bool(state.get("enabled", _tv_enabled))
 	widescreen = bool(state.get("widescreen", widescreen))
 	audio_mode = clampi(int(state.get("audio_mode", audio_mode)), 0, 2)
@@ -928,7 +926,12 @@ func is_powered_on() -> bool:
 
 ## True when audio is muted (used by the remote's MUTE cell tint).
 func is_muted() -> bool:
-	return _muted
+	return _audio.is_muted()
+
+
+## Current loudness, 0.0-1.0. Owned by TvAudio; read here for the OSD and saves.
+func volume() -> float:
+	return _audio.volume()
 
 
 ## Cycle the speaker switch. Stays on the set because object_sync replays it by
@@ -990,7 +993,7 @@ func _on_tv_toggle() -> void:
 		_display.play_power_on_anim()
 		# Coming back on while muted keeps the sticky MUTE indicator, otherwise
 		# show the usual POWER flash.
-		if _muted:
+		if _audio.is_muted():
 			show_osd("MUTE")
 		else:
 			show_osd_timed("POWER", 3.0)

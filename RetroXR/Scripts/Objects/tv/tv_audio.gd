@@ -19,6 +19,29 @@ extends Node
 var _tv: RetroTV = null
 
 
+
+## Loudness and mute live here rather than on RetroTV, because this helper is
+## the only thing that changes them: the set reads them back for its OSD and its
+## save file. Mute is sticky and deliberately does NOT alter the volume, so
+## un-muting returns to whatever the player had set.
+var _volume: float = 1.0        # 0.0-1.0, default 100%
+var _muted: bool = false
+
+
+func volume() -> float:
+	return _volume
+
+
+func is_muted() -> bool:
+	return _muted
+
+
+## Put back a saved level. The set applies it through apply_volume() afterwards,
+## the same as any other change.
+func restore(level: float, muted: bool) -> void:
+	_volume = clampf(level, 0.0, 1.0)
+	_muted = muted
+
 func setup(tv: RetroTV) -> void:
 	_tv = tv
 
@@ -74,7 +97,7 @@ func update_mode_button() -> void:
 
 ## What the set's own amplifier is passing: silence while off or muted.
 func _effective_volume() -> float:
-	return 0.0 if (not _tv._tv_enabled or _tv._muted) else _tv._volume
+	return 0.0 if (not _tv._tv_enabled or _muted) else _volume
 
 
 ## …and what reaches one input, which is nothing at all unless that input is the
@@ -103,14 +126,14 @@ func apply_volume() -> void:
 
 ## A volume key clears mute (like a real set) so the change is audible.
 func _clear_mute_silently() -> void:
-	if _tv._muted:
-		_tv._muted = false
+	if _muted:
+		_muted = false
 		_tv.hide_osd()
 
 
 func on_volume_down() -> void:
 	_clear_mute_silently()
-	_tv._volume = maxf(0.0, _tv._volume - 0.1)
+	_volume = maxf(0.0, _volume - 0.1)
 	if _tv._tv_enabled:
 		_tv._osd.show_volume()
 	if _tv._tv_enabled:
@@ -120,7 +143,7 @@ func on_volume_down() -> void:
 
 func on_volume_up() -> void:
 	_clear_mute_silently()
-	_tv._volume = minf(1.0, _tv._volume + 0.1)
+	_volume = minf(1.0, _volume + 0.1)
 	if _tv._tv_enabled:
 		_tv._osd.show_volume()
 	if _tv._tv_enabled:
@@ -134,15 +157,15 @@ func on_volume_up() -> void:
 ## than the button so the remote's mute lands on the same cap.
 func update_mute_button() -> void:
 	if _tv._mute_btn:
-		_tv._mute_btn.set_color(Color(1.0, 0.35, 0.35) if _tv._muted else Color(0.35, 0.35, 0.35))
+		_tv._mute_btn.set_color(Color(1.0, 0.35, 0.35) if _muted else Color(0.35, 0.35, 0.35))
 
 
 func on_mute_toggle() -> void:
-	_tv._muted = not _tv._muted
+	_muted = not _muted
 	update_mute_button()
 	update_mode_button()
 	apply_volume()
-	if _tv._muted:
+	if _muted:
 		_tv.show_osd("MUTE")
 	else:
 		_tv.hide_osd()
