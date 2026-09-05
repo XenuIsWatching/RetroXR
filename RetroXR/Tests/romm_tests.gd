@@ -53,6 +53,7 @@ func _ready() -> void:
 	_test_collapse_by_systemid()
 	_test_firmware_index()
 	_test_stats_unchanged()
+	_test_password_not_persisted()
 	_test_scopes()
 	_test_verify_transfer()
 	_test_error_vocabulary()
@@ -355,6 +356,32 @@ func _test_stats_unchanged() -> void:
 # The asymmetry below is the whole design: UNKNOWN must permit, because a token
 # without me.read cannot answer the question and uploads fine today.
 # ---------------------------------------------------------------------------
+
+## The password is session-only, the same rule RaConfig applies. A leaked token
+## can be revoked from the server; a leaked password cannot.
+func _test_password_not_persisted() -> void:
+	var cfg := RommConfig.new()
+	cfg.base_url = "http://example.invalid"
+	cfg.enabled = true
+	cfg.auth_mode = RommConfig.AUTH_BASIC
+	cfg.username = "player"
+	cfg.password = "hunter2"
+
+	_ok("auth/basic is configured while the password is held",
+		cfg.is_configured())
+	_ok("auth/the header carries it in session",
+		cfg.auth_header().contains(Marshalls.utf8_to_base64("player:hunter2")))
+
+	# What a restart leaves: the username survives, the password does not, and a
+	# half-configured basic login must not report itself ready.
+	var reloaded := RommConfig.new()
+	reloaded.base_url = cfg.base_url
+	reloaded.enabled = true
+	reloaded.auth_mode = RommConfig.AUTH_BASIC
+	reloaded.username = cfg.username
+	_ok("auth/a restart drops the password", reloaded.password.is_empty())
+	_ok("auth/and is not reported as configured", not reloaded.is_configured())
+
 
 func _test_scopes() -> void:
 	var cfg := RommConfig.new()

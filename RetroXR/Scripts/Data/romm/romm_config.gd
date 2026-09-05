@@ -18,6 +18,13 @@ var enabled: bool = false
 var auth_mode: String = AUTH_TOKEN
 var token: String = ""
 var username: String = ""
+## Held for the session only and never written to disk, the same rule RaConfig
+## applies to the RetroAchievements password: a leaked token can be revoked from
+## the server, a leaked password cannot. AUTH_BASIC therefore survives a restart
+## only as far as the username — the password is asked for again.
+##
+## A password saved by an earlier build is ignored on load and dropped the next
+## time this file is written.
 var password: String = ""
 
 ## Back local saves and save states up to the server as they are written.
@@ -88,7 +95,10 @@ func is_configured() -> bool:
 		return false
 	if auth_mode == AUTH_TOKEN:
 		return not token.is_empty()
-	return not username.is_empty()
+	# Both halves, because the password is not persisted: after a restart a basic
+	# config has a username and nothing to authenticate with, and reporting it as
+	# configured would send unauthenticated requests and read as a server fault.
+	return not username.is_empty() and not password.is_empty()
 
 
 ## Normalize whatever the user typed into a usable base URL.
@@ -179,7 +189,6 @@ func load_config() -> void:
 		auth_mode = AUTH_TOKEN
 	token = str(data.get("token", ""))
 	username = str(data.get("username", ""))
-	password = str(data.get("password", ""))
 	cache_budget_gb = float(data.get("cache_budget_gb", 20.0))
 	# Default true, so an existing config that predates the switch adopts it.
 	backup_enabled = bool(data.get("backup_enabled", true))
@@ -214,7 +223,7 @@ func save_config() -> void:
 		"auth_mode": auth_mode,
 		"token": token,
 		"username": username,
-		"password": password,
+		# No password key, deliberately. See the field's comment.
 		"cache_budget_gb": cache_budget_gb,
 		"backup_enabled": backup_enabled,
 		"platform_overrides": platform_overrides,

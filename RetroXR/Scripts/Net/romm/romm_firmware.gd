@@ -19,6 +19,16 @@ extends Node
 
 
 ## `error` is set only when `ok` is false, and is phrased for a toast.
+##
+## A signal, where the rest of Net/romm/ completes through a callback argument,
+## and deliberately so: the listing is fetched once and REDRAWS a tab that may
+## not have existed when the request went out. A callback binds one caller at
+## request time; this has to reach whoever is on screen when the reply lands.
+##
+## Which is also why refresh() stays quiet on its early exits. A caller already
+## in flight will be told by the request it is waiting on, and the automatic
+## call on an already-loaded list has nothing new to redraw — emitting there
+## would re-toast a server that is merely still down.
 signal listed(ok: bool, count: int, error: String)
 
 var config: RommConfig = null
