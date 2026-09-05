@@ -141,27 +141,13 @@ static var simulate_missing_assets: bool = false
 ## model as the default even when a mod adds another for the same platform.
 ## Overriding that default is a deliberate act (override_mod_row), not a
 ## side effect of load order.
-static var _mod_rows: Dictionary = {}
-static var _overrides: Dictionary = {}
-## model_id -> the mod that contributed it, for the Mods page and for blame.
-static var _owners: Dictionary = {}
-
-## The merged view, rebuilt only when a registration changes it.
-static var _merged: Dictionary = {}
-static var _merged_dirty: bool = true
+static var _overlay := ModOverlayTable.new(_ROWS)
 
 
 ## Every row this build can resolve: shipped, with mod overrides applied, plus
 ## mod rows. Cached because the lookups below call it inside loops.
 static func _table() -> Dictionary:
-	if _merged_dirty:
-		_merged = _ROWS.duplicate(true)
-		for model_id: String in _overrides:
-			_merged[model_id] = _overrides[model_id]
-		for model_id: String in _mod_rows:
-			_merged[model_id] = _mod_rows[model_id]
-		_merged_dirty = false
-	return _merged
+	return _overlay.table()
 
 
 ## Is `row` a usable row? Returns "" when it is, or what is wrong with it.
@@ -196,16 +182,14 @@ static func validate_row(model_id: String, row: Dictionary) -> String:
 static func register_mod_row(model_id: String, row: Dictionary, owner_id: String) -> String:
 	if _ROWS.has(model_id):
 		return "'%s' is a shipped model; use override_model to replace it" % model_id
-	if _mod_rows.has(model_id):
-		return "'%s' is already registered by mod '%s'" % [model_id, _owners.get(model_id, "?")]
+	if _overlay.is_mod(model_id):
+		return "'%s' is already registered by mod '%s'" % [model_id, _overlay.owner_of(model_id)]
 	var checked := row.duplicate(true)
 	checked["id"] = model_id
 	var err := validate_row(model_id, checked)
 	if not err.is_empty():
 		return err
-	_mod_rows[model_id] = checked
-	_owners[model_id] = owner_id
-	_merged_dirty = true
+	_overlay.add(model_id, checked, owner_id)
 	return ""
 
 
@@ -214,39 +198,31 @@ static func register_mod_row(model_id: String, row: Dictionary, owner_id: String
 static func override_mod_row(model_id: String, row: Dictionary, owner_id: String) -> String:
 	if not _ROWS.has(model_id):
 		return "'%s' is not a shipped model" % model_id
-	if _overrides.has(model_id):
-		return "'%s' is already overridden by mod '%s'" % [model_id, _owners.get(model_id, "?")]
+	if _overlay.has_override(model_id):
+		return "'%s' is already overridden by mod '%s'" % [model_id, _overlay.owner_of(model_id)]
 	var checked := row.duplicate(true)
 	checked["id"] = model_id
 	var err := validate_row(model_id, checked)
 	if not err.is_empty():
 		return err
-	_overrides[model_id] = checked
-	_owners[model_id] = owner_id
-	_merged_dirty = true
+	_overlay.override(model_id, checked, owner_id)
 	return ""
 
 
 ## Which mod contributed a model, or "" for a shipped one.
 static func owner_of(model_id: String) -> String:
-	return str(_owners.get(model_id, ""))
+	return _overlay.owner_of(model_id)
 
 
 ## True for a row a mod brought. Used to keep mod models out of the boot warm.
 static func is_mod_row(model_id: String) -> bool:
-	return _mod_rows.has(model_id) or _overrides.has(model_id)
+	return _overlay.is_mod(model_id) or _overlay.has_override(model_id)
 
 
 ## Drop everything a mod registered. Only used when a mod fails part-way through
 ## register(), so a half-registered mod leaves nothing standing.
 static func drop_mod(owner_id: String) -> void:
-	for model_id: String in _owners.keys():
-		if _owners[model_id] != owner_id:
-			continue
-		_mod_rows.erase(model_id)
-		_overrides.erase(model_id)
-		_owners.erase(model_id)
-	_merged_dirty = true
+	_overlay.drop_owner(owner_id)
 
 
 ## The row for `model_id`, or the best available stand-in. Never returns empty.

@@ -263,20 +263,32 @@ const _ROWS: Dictionary = {
 ## True when this platform has a pad of its own to draw. The generic pad is not
 ## a platform, so it never answers true here.
 static func has(systemid: String) -> bool:
-	if _mod_rows.has(systemid):
+	if _overlay.is_mod(systemid):
 		return true
 	return not systemid.is_empty() and not _VARIANTS.has(systemid) and _ROWS.has(systemid)
 
 
 ## Pad drawings contributed by mods. Without a row here a platform has no
 ## anchors, so its Controls remap page has nothing to point its leader lines at.
-static var _mod_rows: Dictionary = {}
+static var _overlay := ModOverlayTable.new(_ROWS)
 
 
-static func register_mod_row(systemid: String, row_data: Dictionary) -> void:
+static func register_mod_row(systemid: String, row_data: Dictionary,
+		owner_id: String = "") -> void:
 	if systemid.is_empty():
 		return
-	_mod_rows[systemid] = row_data
+	_overlay.add(systemid, row_data, owner_id)
+
+
+## Which mod contributed a platform's pad art, or "" for a shipped one.
+static func owner_of(systemid: String) -> String:
+	return _overlay.owner_of(systemid)
+
+
+## Withdraw one mod's pad art. This table tracked no owner at all before, so its
+## rows could be registered and never taken back.
+static func drop_mod(owner_id: String) -> void:
+	_overlay.drop_owner(owner_id)
 
 
 ## The art keys to draw for one scope, in the order they should be stacked.
@@ -292,9 +304,7 @@ static func variants_for(systemid: String) -> Array:
 
 ## The row for a platform, or an empty Dictionary.
 static func row(systemid: String) -> Dictionary:
-	if _mod_rows.has(systemid):
-		return _mod_rows[systemid] as Dictionary
-	return _ROWS.get(systemid, {}) as Dictionary
+	return _overlay.table().get(systemid, {}) as Dictionary
 
 
 ## Every control this platform's pad carries, in row order.

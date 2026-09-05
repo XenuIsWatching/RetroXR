@@ -273,6 +273,18 @@ func _group_rooms() -> void:
 	_ok("rooms/drop removes it", not RoomCatalog.has("t.room:attic"))
 	_eq("rooms/shipped rooms survive a drop", RoomCatalog.ids().size(), 5)
 
+	# Pad art tracked no owner until the overlay tables were shared, so a mod's
+	# drawing could be registered and never taken back.
+	var art_owner := "t.art"
+	var art_row := {"anchors": {"a": Vector2(0.5, 0.5)}, "rows": [["a"]]}
+	ConsolePadArt.register_mod_row("t.art:pad", art_row, art_owner)
+	_ok("pad art/mod row registers", ConsolePadArt.has("t.art:pad"))
+	_eq("pad art/owner recorded", ConsolePadArt.owner_of("t.art:pad"), art_owner)
+	_ok("pad art/row is served", not ConsolePadArt.row("t.art:pad").is_empty())
+	ConsolePadArt.drop_mod(art_owner)
+	_ok("pad art/drop removes it", not ConsolePadArt.has("t.art:pad"))
+	_ok("pad art/shipped art survives a drop", ConsolePadArt.has("nes"))
+
 
 # ── objects/ ──────────────────────────────────────────────────────────────────
 

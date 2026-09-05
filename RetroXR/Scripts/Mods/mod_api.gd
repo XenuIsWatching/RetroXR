@@ -110,7 +110,7 @@ func register_platform(d: Dictionary) -> bool:
 
 ## The pad drawing behind this platform's Controls remap page.
 func register_pad_art(systemid: String, row: Dictionary) -> bool:
-	ConsolePadArt.register_mod_row(systemid, row)
+	ConsolePadArt.register_mod_row(systemid, row, id)
 	_note("platform", "%s pad art" % systemid)
 	return true
 

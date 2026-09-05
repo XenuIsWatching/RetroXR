@@ -44,21 +44,11 @@ const _ROOMS: Dictionary = {
 }
 
 ## Rooms contributed by mods, merged after the shipped ones.
-static var _mod_rooms: Dictionary = {}
-## room id -> the mod that contributed it.
-static var _owners: Dictionary = {}
-
-static var _merged: Dictionary = {}
-static var _merged_dirty: bool = true
+static var _overlay := ModOverlayTable.new(_ROOMS)
 
 
 static func _table() -> Dictionary:
-	if _merged_dirty:
-		_merged = _ROOMS.duplicate(true)
-		for room_id: String in _mod_rooms:
-			_merged[room_id] = _mod_rooms[room_id]
-		_merged_dirty = false
-	return _merged
+	return _overlay.table()
 
 
 static func has(room_id: String) -> bool:
@@ -105,18 +95,18 @@ static func slot_rooms() -> Array:
 ## True for a room a mod brought. The SCENE tab uses it to mark them, and a save
 ## slot belonging to one is left alone rather than pruned when the mod is absent.
 static func is_mod_room(room_id: String) -> bool:
-	return _mod_rooms.has(room_id)
+	return _overlay.is_mod(room_id)
 
 
 static func owner_of(room_id: String) -> String:
-	return str(_owners.get(room_id, ""))
+	return _overlay.owner_of(room_id)
 
 
 ## Register a mod room. Returns "" on success.
 static func register_mod_room(room_id: String, d: Dictionary, owner_id: String) -> String:
 	if _ROOMS.has(room_id):
 		return "'%s' is a shipped room" % room_id
-	if _mod_rooms.has(room_id):
+	if _overlay.is_mod(room_id):
 		return "'%s' is already registered by mod '%s'" % [room_id, owner_of(room_id)]
 	var path := str(d.get("path", ""))
 	if path.is_empty():
@@ -126,21 +116,14 @@ static func register_mod_room(room_id: String, d: Dictionary, owner_id: String) 
 	if not ResourceLoader.exists(path):
 		return "scene does not exist: %s" % path
 	var menu_title := str(d.get("menu_title", d.get("title", room_id)))
-	_mod_rooms[room_id] = {
+	_overlay.add(room_id, {
 		"path": path,
 		"title": str(d.get("title", menu_title.to_upper())),
 		"menu_title": menu_title,
 		"has_slots": bool(d.get("has_slots", true)),
-	}
-	_owners[room_id] = owner_id
-	_merged_dirty = true
+	}, owner_id)
 	return ""
 
 
 static func drop_mod(owner_id: String) -> void:
-	for room_id: String in _owners.keys():
-		if _owners[room_id] != owner_id:
-			continue
-		_mod_rooms.erase(room_id)
-		_owners.erase(room_id)
-	_merged_dirty = true
+	_overlay.drop_owner(owner_id)
