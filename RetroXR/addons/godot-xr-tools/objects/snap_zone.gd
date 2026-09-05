@@ -170,6 +170,14 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	_live_zones.erase(self)
+	# LOCAL PATCH (RetroXR): release whatever we are holding on the way out.
+	# A zone goes away with the object it belongs to — a machine deleted with a
+	# controller plugged into it takes its ports with it — but the plug lives at
+	# the scene root and survives, still recording this zone as its grabber. The
+	# next drop() on that plug then calls drop_object() on a freed instance.
+	# XRToolsPickable._exit_tree already does the mirror of this.
+	if is_instance_valid(picked_up_object):
+		drop_object()
 
 
 ## LOCAL PATCH (RetroXR): every zone currently in the tree. A dropped object that

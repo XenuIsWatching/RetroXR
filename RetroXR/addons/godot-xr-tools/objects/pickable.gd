@@ -250,10 +250,42 @@ func drop():
 
 	# Request secondary grabber to drop
 	if _grab_driver.secondary:
-		_grab_driver.secondary.by.drop_object()
+		_release_grab(_grab_driver.secondary)
 
 	# Request primary grabber to drop
-	_grab_driver.primary.by.drop_object()
+	if _grab_driver:
+		_release_grab(_grab_driver.primary)
+
+
+# LOCAL PATCH (RetroXR): ask a grab's holder to let go, or unwind the grab here
+# when that holder has already been freed. A freed grabber is still recorded:
+# a machine deleted with a controller plugged into it takes its ports with it,
+# and the plug at the far end of the cord kept the freed snap zone as its
+# grabber. Calling drop_object() on that is the crash this avoids.
+func _release_grab(grab: Grab) -> void:
+	if grab == null:
+		return
+	var by: Variant = grab.by
+	if is_instance_valid(by) and by.has_method("drop_object"):
+		by.drop_object()
+		return
+	_grab_driver.remove_grab(grab)
+	grab.release()
+	if _grab_driver.primary:
+		return
+	_grab_driver.discard()
+	_grab_driver = null
+	freeze = restore_freeze
+	collision_mask = original_collision_mask
+	collision_layer = original_collision_layer
+	force_update_transform()
+	PhysicsServer3D.body_set_state(
+		get_rid(),
+		PhysicsServer3D.BODY_STATE_TRANSFORM,
+		global_transform)
+	if not freeze:
+		sleeping = false
+	dropped.emit(self)
 
 
 ## RetroXR: shrink away instead of blinking out. EVERY pickable inherits this,
