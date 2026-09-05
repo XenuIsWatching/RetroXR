@@ -182,7 +182,8 @@ func _adopt_slider(slider: VRSlider, mesh_name: String) -> void:
 	slider.travel = _KNOB_TRAVEL
 	# Zone at the MIDDLE of the throw: _track_world_point maps the slider's own
 	# origin to value 0.5, so anywhere else skews the hand-to-value mapping.
-	slider.global_position = (knob.global_transform * knob.get_aabb().get_center()) 		+ world_axis * (_KNOB_TRAVEL * 0.5)
+	slider.global_position = (knob.global_transform * knob.get_aabb().get_center()) \
+		+ world_axis * (_KNOB_TRAVEL * 0.5)
 	slider.axis_local = (slider.global_transform.basis.inverse() * world_axis).normalized()
 	# The GLB models both knobs at the quiet / 2D end of the groove, which is
 	# value 0 — anchor there, then restore the authored value so taking the knob

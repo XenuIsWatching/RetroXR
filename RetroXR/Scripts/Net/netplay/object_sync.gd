@@ -1338,7 +1338,8 @@ func send_media_state(deck: Node) -> void:
 func _host_media_heartbeat() -> void:
 	for id: int in _registry:
 		var node: Node = _registry[id]
-		if is_instance_valid(node) and node.has_method("net_get_state") 				and bool(node.get("is_playing")):
+		if is_instance_valid(node) and node.has_method("net_get_state") \
+				and bool(node.get("is_playing")):
 			send_media_state(node)
 
 

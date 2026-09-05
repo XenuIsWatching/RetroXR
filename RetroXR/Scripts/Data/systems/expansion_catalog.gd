@@ -401,7 +401,8 @@ static func adapter_for_rom(path: String) -> String:
 		return ""
 	var wanted := false
 	for id: String in ROWS:
-		if not str(ROWS[id].get("rom_title", "")).is_empty() 				or not str(ROWS[id].get("rom_code", "")).is_empty():
+		if not str(ROWS[id].get("rom_title", "")).is_empty() \
+				or not str(ROWS[id].get("rom_code", "")).is_empty():
 			wanted = true
 			break
 	if not wanted:

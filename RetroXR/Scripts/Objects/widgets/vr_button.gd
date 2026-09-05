@@ -161,7 +161,8 @@ func _process_touch_mode(delta: float) -> void:
 	if _touch_ctrl != null:
 		if not _qualified(_touch_ctrl):
 			_release_touch()
-		elif global_position.distance_to(PokeTip.tip_of(_touch_ctrl)) 				<= trigger_radius * RELEASE_SCALE:
+		elif global_position.distance_to(PokeTip.tip_of(_touch_ctrl)) \
+				<= trigger_radius * RELEASE_SCALE:
 			_touch_lost = 0.0
 			return
 		else:
@@ -257,7 +258,8 @@ func _claim_contact() -> void:
 		var tip: Vector3 = PokeTip.tip_of(ctrl)
 		if not box.has_point(inv * tip):
 			continue
-		var held: bool = (_touch_pressed and ctrl == _touch_ctrl) 			or (_trigger_pressed and ctrl == _engaged_ctrl)
+		var held: bool = (_touch_pressed and ctrl == _touch_ctrl) \
+			or (_trigger_pressed and ctrl == _engaged_ctrl)
 		PokeTip.claim_box_face(ctrl, _mesh, tip, out,
 			PokeTip.CONTACT_ENGAGED if held else PokeTip.CONTACT_HOVER)
 

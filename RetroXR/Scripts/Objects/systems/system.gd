@@ -743,7 +743,8 @@ func _load_system_model() -> void:
 	# A front-sliding tray is a property of the PROCEDURAL box. A bespoke shell
 	# brings its own mechanism — the PS2 Slim's hinged cover is a lid whatever the
 	# platform row says the family does — so it keeps the lid wording and geometry.
-	_front_tray = _disc_loader == MediaDimensions.LOADER_TRAY 		and MediaDimensions.has_front_tray(systemid) and not is_bespoke
+	_front_tray = _disc_loader == MediaDimensions.LOADER_TRAY \
+		and MediaDimensions.has_front_tray(systemid) and not is_bespoke
 	if has_loader:
 		var eject_label := _eject_button.get_node_or_null("ButtonLabel") as Label3D
 		if eject_label:
@@ -1975,7 +1976,9 @@ func power_on() -> void:
 	# sixteen surveyed took the process down. It is switched on only for the
 	# machines measured to want it, and off again straight after so the next
 	# machine to start is not handed a setting it never asked for.
-	var no_content := rom_path.is_empty() 		and BiosBoot.boots_with_no_content(resolved_core, systemid) 		and BiosBoot.can_boot_empty(resolved_core, systemid)
+	var no_content := rom_path.is_empty() \
+		and BiosBoot.boots_with_no_content(resolved_core, systemid) \
+		and BiosBoot.can_boot_empty(resolved_core, systemid)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", true)
 	# An assembled machine goes over as one piece if the core will take it that
@@ -3887,7 +3890,8 @@ func _accepts_media(obj: Node3D) -> bool:
 	# on the hardware: a Mega Drive holds a 32X or a game, never both.
 	var unit := obj as RetroExpansion
 	if unit != null:
-		return ExpansionCatalog.host_of(unit.expansion_id) == systemid 			and ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE
+		return ExpansionCatalog.host_of(unit.expansion_id) == systemid \
+			and ExpansionCatalog.mount_of(unit.expansion_id) == ExpansionCatalog.MOUNT_CARTRIDGE
 	if _belongs_here(obj, _MEDIA_COMPAT):
 		return true
 	# An expansion with no bay of its own loads through THIS slot. A Satellaview

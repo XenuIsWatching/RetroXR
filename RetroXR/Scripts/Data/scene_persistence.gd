@@ -2023,7 +2023,8 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				# A room saved before there were two families holds no family at
 				# all, and every card in one is a PlayStation card.
 				var family := str(data.get("family", "playstation"))
-				var scene := GC_MEMCARD_SCENE if family == "gamecube" 					else MEMCARD_SCENE
+				var scene := GC_MEMCARD_SCENE if family == "gamecube" \
+					else MEMCARD_SCENE
 				var card := scene.instantiate() as MemoryCard
 				card.family = family
 				card.card_id = data.get("card_id", "")

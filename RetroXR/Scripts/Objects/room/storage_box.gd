@@ -150,7 +150,8 @@ func _delete_with_dependents(pickable: XRToolsPickable, seen: Dictionary = {}) -
 			Vanish.free_node(held)
 
 	# Free the object's own cable (spawned at the scene root).
-	var cable: Node3D = pickable.cable_instance() 		if pickable.has_method("cable_instance") else null
+	var cable: Node3D = pickable.cable_instance() \
+		if pickable.has_method("cable_instance") else null
 	if is_instance_valid(cable):
 		for plug_name: String in ["CablePlug", "ControllerPlug"]:
 			var plug := cable.get_node_or_null(plug_name)

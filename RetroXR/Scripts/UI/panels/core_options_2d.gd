@@ -301,7 +301,8 @@ func set_cartridge_tab_visible(shown: bool) -> void:
 func populate_system(video_out: bool, show_video_out: bool, ignore_grav: bool,
 		pad_guid: String = "", pad_ordinal: int = 0) -> void:
 	_suppress_signal = true
-	var picker_changed := _show_pad_picker != show_video_out 		or _pad_guid != pad_guid or _pad_ordinal != pad_ordinal
+	var picker_changed := _show_pad_picker != show_video_out \
+		or _pad_guid != pad_guid or _pad_ordinal != pad_ordinal
 	_show_pad_picker = show_video_out
 	_pad_guid = pad_guid
 	_pad_ordinal = pad_ordinal

@@ -451,7 +451,8 @@ func _expansion_holding_battery() -> RetroExpansion:
 	for unit: RetroExpansion in _host.get_expansions():
 		if unit == null or not is_instance_valid(unit):
 			continue
-		if ExpansionCatalog.save_owner_of(unit.expansion_id) 				== ExpansionCatalog.SAVE_OWNER_UNIT:
+		if ExpansionCatalog.save_owner_of(unit.expansion_id) \
+				== ExpansionCatalog.SAVE_OWNER_UNIT:
 			return unit
 	return null
 

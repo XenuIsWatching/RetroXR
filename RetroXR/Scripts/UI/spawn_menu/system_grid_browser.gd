@@ -578,7 +578,8 @@ func _make_tile(s: Dictionary) -> Button:
 	if allow_hiding and AppPrefs.is_system_hidden(sid):
 		btn.modulate = Color(1, 1, 1, 0.45)
 
-	var art_compact := SystemIcons.for_content(sid) if use_content_art 		else SystemIcons.for_system(sid)
+	var art_compact := SystemIcons.for_content(sid) if use_content_art \
+		else SystemIcons.for_system(sid)
 	if _compact():
 		# Nothing but the art. The name goes to the tooltip rather than nowhere:
 		# two Sega add-ons are hard to tell apart at this size, and the detail

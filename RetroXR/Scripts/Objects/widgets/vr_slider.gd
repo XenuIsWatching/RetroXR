@@ -469,7 +469,8 @@ func _update_knob() -> void:
 	# Turn about the cap's own centre where it currently sits, then slide.
 	var r := Basis(_knob_turn_axis.normalized(), deg_to_rad(knob_turn_deg) * d)
 	var pivot: Vector3 = _knob_anchor * _knob_centre
-	_knob.transform = Transform3D(Basis.IDENTITY, slide) 		* Transform3D(r, pivot - r * pivot) * _knob_anchor
+	_knob.transform = Transform3D(Basis.IDENTITY, slide) \
+		* Transform3D(r, pivot - r * pivot) * _knob_anchor
 
 
 ## Green while armed, amber while the trigger holds the knob.

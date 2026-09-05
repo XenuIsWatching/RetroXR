@@ -969,8 +969,10 @@ func _generate_centered_vrs() -> void:
 		return
 	var generator: Object = ClassDB.instantiate("XRVRS")
 	var tier: Dictionary = FOVEATION_TIERS[foveation_level]
-	var radius: float = _vrs_radius_override if _vrs_radius_override >= 0.0 		else tier["min_radius"]
-	var strength: float = _vrs_strength_override if _vrs_strength_override >= 0.0 		else tier["strength"]
+	var radius: float = _vrs_radius_override if _vrs_radius_override >= 0.0 \
+		else tier["min_radius"]
+	var strength: float = _vrs_strength_override if _vrs_strength_override >= 0.0 \
+		else tier["strength"]
 	generator.set("vrs_min_radius", radius)
 	generator.set("vrs_strength", strength)
 	# Two layers, one per eye. ZERO maps to the exact middle of each layer.

@@ -344,6 +344,7 @@ static func mount(host: Node3D, lid: MeshInstance3D, open_deg: float) -> VRSprin
 	# carry this as their HingeHint node position; a code-built rig sets its own.
 	# The line is pivot -> hinge, which for this rig is simply hinge.position.
 	var away := hinge.position.normalized() if hinge.position.length() > 0.0001 else Vector3.UP
-	var reach: float = (absf(away.x) * box.size.x + absf(away.y) * box.size.y 		+ absf(away.z) * box.size.z) * 0.5
+	var reach: float = (absf(away.x) * box.size.x + absf(away.y) * box.size.y \
+		+ absf(away.z) * box.size.z) * 0.5
 	hinge.place_hint(away * (reach + 0.014))
 	return hinge

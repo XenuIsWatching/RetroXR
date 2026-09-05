@@ -253,7 +253,8 @@ func _volume(img: Image, dims: Vector3i) -> ImageTexture3D:
 ## Which baked state the room is in right now, from the wall switch.
 func _switch_state() -> String:
 	for light in _room_lights():
-		if light.is_in_group(SWITCHED_GROUP) and light.is_visible_in_tree() 				and light.light_energy > 0.0:
+		if light.is_in_group(SWITCHED_GROUP) and light.is_visible_in_tree() \
+				and light.light_energy > 0.0:
 			return "on"
 	return "off"
 

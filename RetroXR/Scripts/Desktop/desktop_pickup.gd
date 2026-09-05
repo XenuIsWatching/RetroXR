@@ -257,7 +257,8 @@ func _try_grab() -> void:
 func _click_action_node(target: Node3D) -> Node3D:
 	var zone := target as XRToolsSnapZone
 	var obj: Node3D = InteractionResolver.held_pickable(zone) if zone != null else target
-	if obj != null and obj.has_method("desktop_click_available") 			and obj.desktop_click_available() and obj.has_method("desktop_click_action"):
+	if obj != null and obj.has_method("desktop_click_available") \
+			and obj.desktop_click_available() and obj.has_method("desktop_click_action"):
 		return obj
 	return null
 

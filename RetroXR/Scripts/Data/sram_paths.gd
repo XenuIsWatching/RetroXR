@@ -49,7 +49,8 @@ static func cart_save_path(core_name: String, rom_path: String, save_id: String)
 ## was swapped in. Deliberately independent of rom_path for the same reason --
 ## the pack IS the rom_path here.
 static func unit_save_path(core_name: String, expansion_id: String) -> String:
-	return core_save_dir(core_name).path_join(expansion_id) 		.path_join(expansion_id + ".srm")
+	return core_save_dir(core_name).path_join(expansion_id) \
+		.path_join(expansion_id + ".srm")
 
 
 ## save/memcards/<family> — every card belonging to one console family.

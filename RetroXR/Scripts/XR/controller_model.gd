@@ -234,7 +234,8 @@ func _swing_of(clip: Animation, track: int, rest: Quaternion, shaft: Vector3) ->
 
 func _track_of(clip: Animation, bone_name: String, kind: int) -> int:
 	for t in clip.get_track_count():
-		if clip.track_get_type(t) == kind 				and String(clip.track_get_path(t).get_concatenated_subnames()) == bone_name:
+		if clip.track_get_type(t) == kind \
+				and String(clip.track_get_path(t).get_concatenated_subnames()) == bone_name:
 			return t
 	return -1
 

@@ -452,7 +452,8 @@ func _animate_stick(v: Vector2) -> void:
 	var lean := Vector2(v.x, v.y).limit_length(1.0)
 	var rot := Basis(Vector3.RIGHT, -lean.y * tilt) * Basis(Vector3.BACK, -lean.x * tilt)
 	var pivot := Vector3(0.0, -STICK_PIVOT_DROP, 0.0)
-	var about := Transform3D(Basis.IDENTITY, pivot) * Transform3D(rot, Vector3.ZERO) 		* Transform3D(Basis.IDENTITY, -pivot)
+	var about := Transform3D(Basis.IDENTITY, pivot) * Transform3D(rot, Vector3.ZERO) \
+		* Transform3D(Basis.IDENTITY, -pivot)
 	var tgt := _stick_rest * about
 	_stick.transform = _stick.transform.interpolate_with(tgt, ANIM_WEIGHT)
 
