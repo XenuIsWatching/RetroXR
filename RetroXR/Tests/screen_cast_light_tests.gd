@@ -30,14 +30,14 @@ func _ready() -> void:
 	await get_tree().process_frame
 	var left := light.get_node_or_null("LeftGlow") as SpotLight3D
 	var right := light.get_node_or_null("RightGlow") as SpotLight3D
-	_check(left != null and right != null, "picture/creates world-space region lights")
+	_ok(left != null and right != null, "picture/creates world-space region lights")
 	var viewport := light.get_node_or_null("GlowSampler") as SubViewport
-	_check(viewport != null, "picture/creates tiny viewport")
+	_ok(viewport != null, "picture/creates tiny viewport")
 	if viewport != null:
-		_check(viewport.size == Vector2i(12, 8), "picture/viewport stays tiny")
+		_ok(viewport.size == Vector2i(12, 8), "picture/viewport stays tiny")
 		var rect := viewport.get_node_or_null("BlurredPicture") as ColorRect
 		var packed: Variant = (rect.material as ShaderMaterial).get_shader_parameter("source_rect")
-		_check(packed == Vector4(0.0, 0.5, 1.0, 0.5), "picture/preserves composite region")
+		_ok(packed == Vector4(0.0, 0.5, 1.0, 0.5), "picture/preserves composite region")
 
 	if RenderingServer.get_rendering_device() != null:
 		for y in image.get_height():
@@ -46,9 +46,9 @@ func _ready() -> void:
 		texture.update(image)
 		for frame in 4:
 			await get_tree().process_frame
-		_check(left.light_color.r > left.light_color.g, "updates/left follows new frame")
-		_check(light.light_color.g > light.light_color.r, "updates/centre follows new frame")
-		_check(right.light_color.b > right.light_color.r, "updates/right follows new frame")
+		_ok(left.light_color.r > left.light_color.g, "updates/left follows new frame")
+		_ok(light.light_color.g > light.light_color.r, "updates/centre follows new frame")
+		_ok(right.light_color.b > right.light_color.r, "updates/right follows new frame")
 
 	light.show_solid(Color.BLUE)
 	_close(light.light_color.b, 1.0, "solid/uses requested colour")
@@ -61,7 +61,7 @@ func _ready() -> void:
 	get_tree().quit(0 if _failed == 0 else 1)
 
 
-func _check(ok: bool, label: String) -> void:
+func _ok(ok: bool, label: String) -> void:
 	_ran += 1
 	if ok:
 		print("[test] ok   %s" % label)
@@ -71,7 +71,7 @@ func _check(ok: bool, label: String) -> void:
 
 
 func _close(actual: float, expected: float, label: String, tolerance := 0.0001) -> void:
-	_check(absf(actual - expected) <= tolerance,
+	_ok(absf(actual - expected) <= tolerance,
 		"%s (%.4f ~= %.4f)" % [label, actual, expected])
 
 

@@ -86,7 +86,7 @@ func _cleanup() -> void:
 		_srv = null
 
 
-func _ok(name: String, cond: bool, detail: String = "") -> void:
+func _ok(cond: bool, name: String, detail: String = "") -> void:
 	if cond:
 		_pass += 1
 		print("[test] PASS  %s" % name)
@@ -96,7 +96,7 @@ func _ok(name: String, cond: bool, detail: String = "") -> void:
 
 
 func _eq(name: String, got: Variant, want: Variant) -> void:
-	_ok(name, got == want, "got %s, want %s" % [str(got), str(want)])
+	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
 ## Asserts a URL path resolves to nothing at all. The failure detail prints what
@@ -104,7 +104,7 @@ func _eq(name: String, got: Variant, want: Variant) -> void:
 ## difference between a confined server and an open one.
 func _denied(name: String, rel: String) -> void:
 	var got: String = _srv._resolve(rel)
-	_ok("escape/" + name, got.is_empty(), "resolved to %s" % got)
+	_ok(got.is_empty(), "escape/" + name, "resolved to %s" % got)
 
 
 # ── The resolver, inside its roots ────────────────────────────────────────────
@@ -121,8 +121,7 @@ func _test_resolve_inside_root() -> void:
 	# own "up one directory" link.
 	_eq("resolve/traversal that lands back inside is allowed",
 		_srv._resolve("media/roms/../roms/game.nes"), _media + "/roms/game.nes")
-	_ok("resolve/the second named root resolves too",
-		not _srv._resolve("libretro").is_empty())
+	_ok(not _srv._resolve("libretro").is_empty(), "resolve/the second named root resolves too")
 
 
 func _test_resolve_rejects_unknown_root() -> void:
@@ -224,16 +223,16 @@ func _test_auth_hardening() -> void:
 	seed(1)
 	var first: String = _srv._gen_token()
 	seed(1)
-	_ok("auth/tokens do not follow the seeded RNG", _srv._gen_token() != first)
+	_ok(_srv._gen_token() != first, "auth/tokens do not follow the seeded RNG")
 
 	var who := "10.0.0.5"
 	_srv._failures.clear()
 	for i in WebFileServer.MAX_PIN_ATTEMPTS - 1:
 		_srv._note_failure(who)
-	_ok("auth/a few wrong pins are tolerated", not _srv._locked_out(who))
+	_ok(not _srv._locked_out(who), "auth/a few wrong pins are tolerated")
 	_srv._note_failure(who)
-	_ok("auth/the attempt limit locks the address out", _srv._locked_out(who))
-	_ok("auth/another address is unaffected", not _srv._locked_out("10.0.0.6"))
+	_ok(_srv._locked_out(who), "auth/the attempt limit locks the address out")
+	_ok(not _srv._locked_out("10.0.0.6"), "auth/another address is unaffected")
 	_srv._failures.clear()
 
 
@@ -325,12 +324,11 @@ func _test_upload_completes() -> void:
 	var body := _begin_upload(c, "Game.nes", "PAYLOAD-BYTES")
 	var done: bool = _srv._feed_upload_stream(c, body)
 
-	_ok("upload/a whole body finishes the stream", done)
-	_ok("upload/the file lands at its destination", FileAccess.file_exists(dest))
+	_ok(done, "upload/a whole body finishes the stream")
+	_ok(FileAccess.file_exists(dest), "upload/the file lands at its destination")
 	_eq("upload/with the bytes that were sent",
 		FileAccess.get_file_as_string(dest), "PAYLOAD-BYTES")
-	_ok("upload/and no staging file is left behind",
-		not FileAccess.file_exists(dest + ".part"))
+	_ok(not FileAccess.file_exists(dest + ".part"), "upload/and no staging file is left behind")
 	_cleanup_up_dir()
 
 
@@ -348,16 +346,15 @@ func _test_upload_interrupted_keeps_the_original() -> void:
 	# Enough to open the file and start writing, nowhere near the closing boundary.
 	var partial := body.slice(0, body.size() - 24)
 	var done: bool = _srv._feed_upload_stream(c, partial)
-	_ok("upload/a partial body does not finish the stream", not done)
-	_ok("upload/it is writing to a staging file", (c["us"] as Dictionary).get("f") != null)
+	_ok(not done, "upload/a partial body does not finish the stream")
+	_ok((c["us"] as Dictionary).get("f") != null, "upload/it is writing to a staging file")
 
 	# The peer drops: _thread_loop's disconnect branch calls exactly this.
 	_srv._discard_part(c["us"] as Dictionary)
 
-	_ok("upload/the original file survives an interrupted upload",
-		FileAccess.file_exists(dest), "dest is gone")
+	_ok(FileAccess.file_exists(dest),
+		"upload/the original file survives an interrupted upload", "dest is gone")
 	_eq("upload/and still holds its own bytes",
 		FileAccess.get_file_as_string(dest), keep)
-	_ok("upload/the staging file is cleaned up",
-		not FileAccess.file_exists(dest + ".part"))
+	_ok(not FileAccess.file_exists(dest + ".part"), "upload/the staging file is cleaned up")
 	_cleanup_up_dir()

@@ -81,7 +81,7 @@ func _glyph_stem(diagram: ConsolePadDiagram, control: String) -> String:
 	return tex.resource_path.get_file().get_basename()
 
 
-func _ok(name: String, cond: bool, detail: String = "") -> void:
+func _ok(cond: bool, name: String, detail: String = "") -> void:
 	if cond:
 		_pass += 1
 		print("[test] PASS  %s" % name)
@@ -91,7 +91,7 @@ func _ok(name: String, cond: bool, detail: String = "") -> void:
 
 
 func _eq(name: String, got: Variant, want: Variant) -> void:
-	_ok(name, got == want, "got %s, want %s" % [str(got), str(want)])
+	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
 # ── The player's own files, taken away and put back ───────────────────────────
@@ -243,22 +243,22 @@ func _test_later_global_edit_does_not_leak() -> void:
 
 func _test_has_override() -> void:
 	_clear()
-	_ok("xr/no override before a write", not ControllerBindings.has_system_override(SYS_A))
-	_ok("pad/no override before a write", not GamepadBindings.has_system_override(SYS_A))
+	_ok(not ControllerBindings.has_system_override(SYS_A), "xr/no override before a write")
+	_ok(not GamepadBindings.has_system_override(SYS_A), "pad/no override before a write")
 
 	var a := _xr_profile("right_grip", ControllerBindings.JOYPAD_R2)
 	ControllerBindings.save_for_system(SYS_A, a[0], a[1], a[2])
 	var pa := _pad_profile("a", "btn:9")
 	GamepadBindings.save_for_system(SYS_A, pa[0], pa[1])
 
-	_ok("xr/override after a write", ControllerBindings.has_system_override(SYS_A))
-	_ok("pad/override after a write", GamepadBindings.has_system_override(SYS_A))
-	_ok("xr/a sibling platform is unaffected", not ControllerBindings.has_system_override(SYS_B))
-	_ok("pad/a sibling platform is unaffected", not GamepadBindings.has_system_override(SYS_B))
+	_ok(ControllerBindings.has_system_override(SYS_A), "xr/override after a write")
+	_ok(GamepadBindings.has_system_override(SYS_A), "pad/override after a write")
+	_ok(not ControllerBindings.has_system_override(SYS_B), "xr/a sibling platform is unaffected")
+	_ok(not GamepadBindings.has_system_override(SYS_B), "pad/a sibling platform is unaffected")
 	# The global map must never report as an override, or the switch would come
 	# up ON for every platform the moment the player edits the global page.
-	_ok("xr/the global scope is not an override", not ControllerBindings.has_system_override(""))
-	_ok("pad/the global scope is not an override", not GamepadBindings.has_system_override(""))
+	_ok(not ControllerBindings.has_system_override(""), "xr/the global scope is not an override")
+	_ok(not GamepadBindings.has_system_override(""), "pad/the global scope is not an override")
 
 
 # ---------------------------------------------------------------------------
@@ -276,12 +276,11 @@ func _test_clear_restores_global() -> void:
 
 	ControllerBindings.clear_system_override(SYS_A)
 
-	_ok("xr/clear drops the override", not ControllerBindings.has_system_override(SYS_A))
+	_ok(not ControllerBindings.has_system_override(SYS_A), "xr/clear drops the override")
 	_eq("xr/cleared platform is back on global",
 		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("right_grip")),
 		ControllerBindings.JOYPAD_L)
-	_ok("xr/the other platform's profile stands",
-		ControllerBindings.has_system_override(SYS_B))
+	_ok(ControllerBindings.has_system_override(SYS_B), "xr/the other platform's profile stands")
 	_eq("xr/and still resolves to its own value",
 		int((ControllerBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("right_grip")),
 		ControllerBindings.JOYPAD_L2)
@@ -294,7 +293,7 @@ func _test_clear_restores_global() -> void:
 	var pa := _pad_profile("a", "btn:9")
 	GamepadBindings.save_for_system(SYS_A, pa[0], pa[1])
 	GamepadBindings.clear_system_override(SYS_A)
-	_ok("pad/clear drops the override", not GamepadBindings.has_system_override(SYS_A))
+	_ok(not GamepadBindings.has_system_override(SYS_A), "pad/clear drops the override")
 	_eq("pad/cleared platform is back on global",
 		str((GamepadBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("a")), "btn:5")
 
@@ -302,7 +301,7 @@ func _test_clear_restores_global() -> void:
 	# can be flicked off on a page that was never overridden.
 	ControllerBindings.clear_system_override("__never_written")
 	GamepadBindings.clear_system_override("__never_written")
-	_ok("clearing an absent profile is harmless", true)
+	_ok(true, "clearing an absent profile is harmless")
 
 
 # ---------------------------------------------------------------------------
@@ -332,10 +331,10 @@ func _test_empty_systemid_is_global() -> void:
 
 	# A global write must not invent a per_system entry, or every platform tile
 	# would come up badged the first time the global page is touched.
-	_ok("xr/a global write creates no per-system entry",
-		ControllerBindings.overridden_systems().is_empty())
-	_ok("pad/a global write creates no per-system entry",
-		GamepadBindings.overridden_systems().is_empty())
+	_ok(ControllerBindings.overridden_systems().is_empty(),
+		"xr/a global write creates no per-system entry")
+	_ok(GamepadBindings.overridden_systems().is_empty(),
+		"pad/a global write creates no per-system entry")
 
 
 # ---------------------------------------------------------------------------
@@ -344,8 +343,8 @@ func _test_empty_systemid_is_global() -> void:
 
 func _test_overridden_systems() -> void:
 	_clear()
-	_ok("xr/nothing overridden on a fresh store",
-		ControllerBindings.overridden_systems().is_empty())
+	_ok(ControllerBindings.overridden_systems().is_empty(),
+		"xr/nothing overridden on a fresh store")
 
 	var a := _xr_profile("right_grip", ControllerBindings.JOYPAD_R2)
 	ControllerBindings.save_for_system(SYS_A, a[0], a[1], a[2])
@@ -366,9 +365,8 @@ func _test_overridden_systems() -> void:
 		GamepadBindings.overridden_systems(), [SYS_A])
 	# The two stores are independent: a pad override alone must still badge the
 	# tile, which is why the view asks both.
-	_ok("the two stores disagree independently",
-		GamepadBindings.has_system_override(SYS_A)
-			and not ControllerBindings.has_system_override(SYS_A))
+	_ok(GamepadBindings.has_system_override(SYS_A) and not ControllerBindings.has_system_override(SYS_A),
+		"the two stores disagree independently")
 
 
 # ---------------------------------------------------------------------------
@@ -413,18 +411,17 @@ func _test_the_editor_writes_the_nunchuk_layer() -> void:
 
 	# The rows exist and are the two that can be bound. The stick is not among
 	# them on purpose — it is whichever hand is holding the Nunchuk.
-	_ok("editor/there is a row for C", ed._controls_opts.has("nc:c"))
-	_ok("editor/and one for Z", ed._controls_opts.has("nc:z"))
-	_ok("editor/and none for the stick", not ed._controls_opts.has("nc:stick"))
+	_ok(ed._controls_opts.has("nc:c"), "editor/there is a row for C")
+	_ok(ed._controls_opts.has("nc:z"), "editor/and one for Z")
+	_ok(not ed._controls_opts.has("nc:stick"), "editor/and none for the stick")
 
 	# A Wii Remote has a D-pad and no analog stick, and the two joypad stick rows
 	# are not merely meaningless on that page — the remote reads its own layer and
 	# never the joypad stick map, so they were live-looking controls that did
 	# nothing at all.
-	_ok("editor/the wii page offers no left stick row",
-		not ed._controls_opts.has("stick:stick_left"))
-	_ok("editor/nor a right stick row",
-		not ed._controls_opts.has("stick:stick_right"))
+	_ok(not ed._controls_opts.has("stick:stick_left"),
+		"editor/the wii page offers no left stick row")
+	_ok(not ed._controls_opts.has("stick:stick_right"), "editor/nor a right stick row")
 	ed.queue_free()
 
 	# A platform whose pad really has sticks still gets them, so the case above is
@@ -433,9 +430,8 @@ func _test_the_editor_writes_the_nunchuk_layer() -> void:
 	add_child(other)
 	other._systemid = SYS_A
 	other._build_xr_controls(other)
-	_ok("editor/a platform with sticks still gets its rows",
-		other._controls_opts.has("stick:stick_left")
-			and other._controls_opts.has("stick:stick_right"))
+	_ok(other._controls_opts.has("stick:stick_left") and other._controls_opts.has("stick:stick_right"),
+		"editor/a platform with sticks still gets its rows")
 	other.queue_free()
 
 
@@ -532,12 +528,11 @@ func _test_wii_target_table_matches_the_remote() -> void:
 
 
 func _test_pad_art_variants() -> void:
-	_ok("variant/sideways is not a platform",
-		not ConsolePadArt.has(ConsolePadArt.WII_SIDEWAYS))
-	_ok("variant/nor is the generic pad", not ConsolePadArt.has(ConsolePadArt.RETROPAD))
-	_ok("variant/but it has a row", not ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS).is_empty())
-	_ok("variant/and its art loads",
-		ResourceLoader.exists(String(ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS)["art"])))
+	_ok(not ConsolePadArt.has(ConsolePadArt.WII_SIDEWAYS), "variant/sideways is not a platform")
+	_ok(not ConsolePadArt.has(ConsolePadArt.RETROPAD), "variant/nor is the generic pad")
+	_ok(not ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS).is_empty(), "variant/but it has a row")
+	_ok(ResourceLoader.exists(String(ConsolePadArt.row(ConsolePadArt.WII_SIDEWAYS)["art"])),
+		"variant/and its art loads")
 
 	# The Wii draws two pictures; everyone else draws one; the global page draws
 	# none. Order matters — the upright remote is the one a player meets first.
@@ -577,12 +572,10 @@ func _test_pad_art_variants() -> void:
 	# thing no picture can check. Dolphin's descWiimoteSideways puts 1 on B and 2
 	# on A, so the anchors for b and a must sit where 1 and 2 are drawn — which
 	# is the far end of the shell, past the speaker, not up by the d-pad.
-	_ok("variant/b points at the 1 button, away from the d-pad",
-		(anchors["b"] as Vector2).x > 0.6)
-	_ok("variant/a points at the 2 button, further still",
-		(anchors["a"] as Vector2).x > (anchors["b"] as Vector2).x)
-	_ok("variant/x points at the A button, up by the d-pad",
-		(anchors["x"] as Vector2).x < 0.4)
+	_ok((anchors["b"] as Vector2).x > 0.6, "variant/b points at the 1 button, away from the d-pad")
+	_ok((anchors["a"] as Vector2).x > (anchors["b"] as Vector2).x,
+		"variant/a points at the 2 button, further still")
+	_ok((anchors["x"] as Vector2).x < 0.4, "variant/x points at the A button, up by the d-pad")
 
 	# A lead crosses another when the anchors' left-to-right order disagrees with
 	# the row's. Ties are the trap: two controls at the same x are decided by
@@ -606,9 +599,8 @@ func _test_pad_art_variants() -> void:
 
 
 func _test_wii_pad_art() -> void:
-	_ok("wii/has a pad", ConsolePadArt.has("wii"))
-	_ok("wii/the art loads",
-		ResourceLoader.exists(String(ConsolePadArt.row("wii")["art"])))
+	_ok(ConsolePadArt.has("wii"), "wii/has a pad")
+	_ok(ResourceLoader.exists(String(ConsolePadArt.row("wii")["art"])), "wii/the art loads")
 
 	var row := ConsolePadArt.row("wii")
 	var controls := ConsolePadArt.controls("wii")
@@ -629,7 +621,7 @@ func _test_wii_pad_art() -> void:
 	var got := controls.duplicate()
 	got.sort()
 	_eq("wii/carries exactly the controls the remote drives", got, want)
-	_ok("wii/the shake gesture is not drawn", not controls.has("r2"))
+	_ok(not controls.has("r2"), "wii/the shake gesture is not drawn")
 
 	# Same structural rule the NES gets: a row entry with no anchor draws a lead
 	# to the origin, and an anchor with no row entry silently cannot be bound.
@@ -647,7 +639,7 @@ func _test_wii_pad_art() -> void:
 		var v: Vector2 = anchors[key]
 		if v.x < 0.0 or v.x > 1.0 or v.y < 0.0 or v.y > 1.0:
 			in_range = false
-	_ok("wii/every anchor is inside the picture", in_range)
+	_ok(in_range, "wii/every anchor is inside the picture")
 
 	# Each column ordered by height, which is what keeps the leads from crossing.
 	for side in ["left", "right"]:
@@ -658,14 +650,13 @@ func _test_wii_pad_art() -> void:
 			if y < last:
 				sorted_ok = false
 			last = y
-		_ok("wii/the %s column runs down the picture" % side, sorted_ok)
+		_ok(sorted_ok, "wii/the %s column runs down the picture" % side)
 
-	_ok("wii/portrait art lays its labels in columns",
-		String(row.get("layout", "rows")) == "columns")
+	_ok(String(row.get("layout", "rows")) == "columns",
+		"wii/portrait art lays its labels in columns")
 	# Colour art: tinting it would take the whole white shell to one flat blue.
-	_ok("wii/the colour art is not tinted", row.get("tint", true) == false)
-	_ok("wii/carries the other-hand note",
-		String(row.get("note", "")).contains("other"))
+	_ok(row.get("tint", true) == false, "wii/the colour art is not tinted")
+	_ok(String(row.get("note", "")).contains("other"), "wii/carries the other-hand note")
 
 	# The chips. Falling back to the shared RETROPAD map put a PlayStation R3 on
 	# Home and a PlayStation Start on plus — names for buttons a Wii Remote does
@@ -685,8 +676,8 @@ func _test_wii_pad_art() -> void:
 				+ ConsolePadDiagram.GLYPH_EXT):
 			all_present = false
 			print("[test]        missing glyph: %s" % g)
-	_ok("wii/every glyph is a Wii one, not a borrowed RetroPad picture", all_wii)
-	_ok("wii/every glyph file is present", all_present)
+	_ok(all_wii, "wii/every glyph is a Wii one, not a borrowed RetroPad picture")
+	_ok(all_present, "wii/every glyph file is present")
 	# The two that were actually wrong on screen.
 	_eq("wii/plus is a plus, not Start", String(glyphs.get("start", "")),
 		"wii_button_plus_outline")
@@ -696,12 +687,12 @@ func _test_wii_pad_art() -> void:
 	# And the external-pad page is replaced rather than drawn: a Wii Remote is
 	# pointed and swung, and none of that maps onto a gamepad.
 	var gp_note := String(row.get("gamepad_note", ""))
-	_ok("wii/says why there is no gamepad remapping", not gp_note.is_empty())
-	_ok("wii/the reason names the sensors, not just the shape",
-		gp_note.contains("infrared") or gp_note.contains("accelerometer"))
+	_ok(not gp_note.is_empty(), "wii/says why there is no gamepad remapping")
+	_ok(gp_note.contains("infrared") or gp_note.contains("accelerometer"),
+		"wii/the reason names the sensors, not just the shape")
 	# Every OTHER console must keep its remapping page.
-	_ok("art/the nes still gets a gamepad page",
-		String(ConsolePadArt.row("nes").get("gamepad_note", "")).is_empty())
+	_ok(String(ConsolePadArt.row("nes").get("gamepad_note", "")).is_empty(),
+		"art/the nes still gets a gamepad page")
 
 	# End to end, through the panel that actually picks the picture. The cases
 	# above only prove the row DECLARES Wii glyphs; this proves the diagram reads
@@ -742,8 +733,8 @@ func _test_wii_pad_art() -> void:
 				+ ConsolePadDiagram.GLYPH_EXT):
 			if not absent.has(name_text):
 				absent.append(name_text)
-	_ok("art/every glyph every panel names has a file (%d checked)" % all_names.size(),
-		absent.is_empty(), "missing: %s" % str(absent))
+	_ok(absent.is_empty(),
+		"art/every glyph every panel names has a file (%d checked)" % all_names.size(), "missing: %s" % str(absent))
 
 	# A pad that declares none still gets the shared picture — the fallback is
 	# right for a console whose controls really are RetroPad-shaped.
@@ -821,10 +812,10 @@ func _test_wii_layers_survive_a_save() -> void:
 
 
 func _test_console_pad_art() -> void:
-	_ok("art/nes has a pad", ConsolePadArt.has("nes"))
-	_ok("art/a platform without one says so", not ConsolePadArt.has("super_nes"))
+	_ok(ConsolePadArt.has("nes"), "art/nes has a pad")
+	_ok(not ConsolePadArt.has("super_nes"), "art/a platform without one says so")
 	# The global page passes "" as its systemid, and it must never draw a console.
-	_ok("art/the global scope has no pad", not ConsolePadArt.has(""))
+	_ok(not ConsolePadArt.has(""), "art/the global scope has no pad")
 
 	var controls := ConsolePadArt.controls("nes")
 	var want := ["up", "down", "left", "right", "select", "start", "b", "a"]
@@ -869,10 +860,10 @@ func _test_console_pad_art() -> void:
 		var uv: Vector2 = anchors[control]
 		if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
 			in_range = false
-	_ok("art/anchors are normalized to the art", in_range)
+	_ok(in_range, "art/anchors are normalized to the art")
 
-	_ok("art/the texture loads", ConsolePadArt.texture("nes") != null)
-	_ok("art/an uncovered platform has no texture", ConsolePadArt.texture("super_nes") == null)
+	_ok(ConsolePadArt.texture("nes") != null, "art/the texture loads")
+	_ok(ConsolePadArt.texture("super_nes") == null, "art/an uncovered platform has no texture")
 
 
 # ---------------------------------------------------------------------------
@@ -907,19 +898,19 @@ func _test_desktop_layers() -> void:
 	_clear()
 	InputMap.load_from_project_settings()
 	var shipped := _bound_key(_DESK_ACTION)
-	_ok("desktop/the action has a project default", shipped != 0)
+	_ok(shipped != 0, "desktop/the action has a project default")
 
 	# Global layer.
 	_bind_key(_DESK_ACTION, KEY_J)
 	DesktopBindings.save()
-	_ok("desktop/no override before a platform is written",
-		not DesktopBindings.has_system_override(SYS_A))
+	_ok(not DesktopBindings.has_system_override(SYS_A),
+		"desktop/no override before a platform is written")
 
 	# A platform profile on top.
 	_bind_key(_DESK_ACTION, KEY_K)
 	DesktopBindings.save_for_system(SYS_A)
-	_ok("desktop/writing a platform profile turns its override on",
-		DesktopBindings.has_system_override(SYS_A))
+	_ok(DesktopBindings.has_system_override(SYS_A),
+		"desktop/writing a platform profile turns its override on")
 
 	DesktopBindings.apply_for_system(SYS_A)
 	_eq("desktop/the platform's key applies", _bound_key(_DESK_ACTION), KEY_K)
@@ -940,8 +931,7 @@ func _test_desktop_layers() -> void:
 
 	# Clearing puts the platform back on global.
 	DesktopBindings.clear_system_override(SYS_A)
-	_ok("desktop/clear drops the override",
-		not DesktopBindings.has_system_override(SYS_A))
+	_ok(not DesktopBindings.has_system_override(SYS_A), "desktop/clear drops the override")
 	DesktopBindings.apply_for_system(SYS_A)
 	_eq("desktop/cleared platform is back on global", _bound_key(_DESK_ACTION), KEY_L)
 
@@ -953,8 +943,7 @@ func _test_desktop_layers() -> void:
 	DesktopBindings.save_for_system("")
 	DesktopBindings.apply_for_system("")
 	_eq("desktop/save_for_system(\"\") writes global", _bound_key(_DESK_ACTION), KEY_M)
-	_ok("desktop/and creates no per-system entry",
-		DesktopBindings.overridden_systems().is_empty())
+	_ok(DesktopBindings.overridden_systems().is_empty(), "desktop/and creates no per-system entry")
 
 	# An action NOT named by any layer must come back as its project default
 	# rather than keeping the previous scope's key — that is what makes
@@ -986,15 +975,15 @@ func _test_desktop_legacy_file() -> void:
 
 	DesktopBindings.apply_for_system("")
 	_eq("desktop/a legacy flat file still applies", _bound_key(_DESK_ACTION), KEY_N)
-	_ok("desktop/and reads as global, not as a platform",
-		DesktopBindings.overridden_systems().is_empty())
+	_ok(DesktopBindings.overridden_systems().is_empty(),
+		"desktop/and reads as global, not as a platform")
 
 	# And once it is re-saved it comes back in the layered shape.
 	DesktopBindings.save()
 	var text := FileAccess.get_file_as_string(DesktopBindings.SAVE_PATH)
 	var parsed: Variant = JSON.parse_string(text)
-	_ok("desktop/a re-save migrates it to layers",
-		parsed is Dictionary and (parsed as Dictionary).has("global"))
+	_ok(parsed is Dictionary and (parsed as Dictionary).has("global"),
+		"desktop/a re-save migrates it to layers")
 
 	InputMap.load_from_project_settings()
 
@@ -1004,19 +993,17 @@ func _test_desktop_legacy_file() -> void:
 ## on Android passes only InputDevice.getName(), and the Touch controllers have
 ## no driver name.
 func _test_xr_identity() -> void:
-	_ok("pads/an Android Quest controller is not a gamepad",
-		GamepadBindings.is_xr_identity("Device 0x9873603F55A1038", "", {}))
-	_ok("pads/nor its other hand",
-		GamepadBindings.is_xr_identity("Device 0x5DC1A0F42B77021", "", {}))
-	_ok("pads/a named pad on the same headset still is one",
-		not GamepadBindings.is_xr_identity("Xbox Wireless Controller", "", {}))
-	_ok("pads/8BitDo too",
-		not GamepadBindings.is_xr_identity("8BitDo SN30 Pro", "", {}))
-	_ok("pads/a Meta vendor id is enough on its own",
-		GamepadBindings.is_xr_identity("Wireless Controller", "", {"vendor_id": 0x2833}))
-	_ok("pads/and so is the vendor an SDL GUID carries",
-		GamepadBindings.is_xr_identity("Wireless Controller",
-			"0300000033280000502400000100000000", {}))
+	_ok(GamepadBindings.is_xr_identity("Device 0x9873603F55A1038", "", {}),
+		"pads/an Android Quest controller is not a gamepad")
+	_ok(GamepadBindings.is_xr_identity("Device 0x5DC1A0F42B77021", "", {}),
+		"pads/nor its other hand")
+	_ok(not GamepadBindings.is_xr_identity("Xbox Wireless Controller", "", {}),
+		"pads/a named pad on the same headset still is one")
+	_ok(not GamepadBindings.is_xr_identity("8BitDo SN30 Pro", "", {}), "pads/8BitDo too")
+	_ok(GamepadBindings.is_xr_identity("Wireless Controller", "", {"vendor_id": 0x2833}),
+		"pads/a Meta vendor id is enough on its own")
+	_ok(GamepadBindings.is_xr_identity("Wireless Controller", "0300000033280000502400000100000000", {}),
+		"pads/and so is the vendor an SDL GUID carries")
 	_eq("pads/the GUID vendor field is read low byte first",
 		GamepadBindings.vendor_from_guid("0300000033280000502400000100000000"), 0x2833)
 
@@ -1035,14 +1022,12 @@ func _test_json_store() -> void:
 	DirAccess.make_dir_recursive_absolute(JS_DIR)
 	var path := JS_DIR.path_join("store.json")
 
-	_ok("json/a missing file reads as empty",
-		JsonStore.read_dict(path).is_empty())
+	_ok(JsonStore.read_dict(path).is_empty(), "json/a missing file reads as empty")
 
-	_ok("json/a write reports success", JsonStore.write_dict(path, {"a": 1}))
+	_ok(JsonStore.write_dict(path, {"a": 1}), "json/a write reports success")
 	_eq("json/and round-trips", int(JsonStore.read_dict(path).get("a", 0)), 1)
 	# The staging file is an implementation detail the caller must never find.
-	_ok("json/no staging file is left behind",
-		not FileAccess.file_exists(path + ".part"))
+	_ok(not FileAccess.file_exists(path + ".part"), "json/no staging file is left behind")
 
 	# The whole point of staging: a half-written store must not replace a good
 	# one. Simulated by leaving a stale .part in the way, which is what a process
@@ -1050,10 +1035,10 @@ func _test_json_store() -> void:
 	var stale := FileAccess.open(path + ".part", FileAccess.WRITE)
 	stale.store_string("{ truncated")
 	stale.close()
-	_ok("json/a stale staging file does not become the store",
-		int(JsonStore.read_dict(path).get("a", 0)) == 1)
-	_ok("json/and the next write clears it", JsonStore.write_dict(path, {"a": 2}))
-	_ok("json/leaving none behind", not FileAccess.file_exists(path + ".part"))
+	_ok(int(JsonStore.read_dict(path).get("a", 0)) == 1,
+		"json/a stale staging file does not become the store")
+	_ok(JsonStore.write_dict(path, {"a": 2}), "json/and the next write clears it")
+	_ok(not FileAccess.file_exists(path + ".part"), "json/leaving none behind")
 	_eq("json/with the new value", int(JsonStore.read_dict(path).get("a", 0)), 2)
 
 	# A corrupt store reads as empty rather than throwing, because every caller
@@ -1062,14 +1047,13 @@ func _test_json_store() -> void:
 	var bad := FileAccess.open(path, FileAccess.WRITE)
 	bad.store_string("{ this is not json")
 	bad.close()
-	_ok("json/a corrupt store reads as empty", JsonStore.read_dict(path).is_empty())
+	_ok(JsonStore.read_dict(path).is_empty(), "json/a corrupt store reads as empty")
 
 	# A JSON array is valid JSON and not a store.
 	var arr := FileAccess.open(path, FileAccess.WRITE)
 	arr.store_string("[1, 2, 3]")
 	arr.close()
-	_ok("json/so does a file holding the wrong shape",
-		JsonStore.read_dict(path).is_empty())
+	_ok(JsonStore.read_dict(path).is_empty(), "json/so does a file holding the wrong shape")
 
 	DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(path + ".part")
@@ -1083,32 +1067,28 @@ func _test_json_store() -> void:
 func _test_input_latch() -> void:
 	var l := InputLatch.new()
 
-	_ok("latch/below the threshold is not pressed", not l.pressed("g", 0.20, 0.3))
-	_ok("latch/above it is", l.pressed("g", 0.35, 0.3))
+	_ok(not l.pressed("g", 0.20, 0.3), "latch/below the threshold is not pressed")
+	_ok(l.pressed("g", 0.35, 0.3), "latch/above it is")
 
 	# The defect, in one line. A settle dip that clears the press threshold but
 	# not the release threshold must not read as a release. Set RELEASE_MARGIN to
 	# 0 and this is the case that goes red.
-	_ok("latch/a settle dip under the threshold stays pressed",
-		l.pressed("g", 0.24, 0.3))
-	_ok("latch/and the squeeze that follows is still one press",
-		l.pressed("g", 0.40, 0.3))
+	_ok(l.pressed("g", 0.24, 0.3), "latch/a settle dip under the threshold stays pressed")
+	_ok(l.pressed("g", 0.40, 0.3), "latch/and the squeeze that follows is still one press")
 
 	# It must still let go, or a latched button is worse than a doubled one.
-	_ok("latch/a real release clears it", not l.pressed("g", 0.05, 0.3))
-	_ok("latch/and stays clear at the old dip level", not l.pressed("g", 0.24, 0.3))
+	_ok(not l.pressed("g", 0.05, 0.3), "latch/a real release clears it")
+	_ok(not l.pressed("g", 0.24, 0.3), "latch/and stays clear at the old dip level")
 
 	# An axis resting at a small non-zero value must not stay latched for ever,
 	# which is what MIN_RELEASE is for: a 0.10 threshold cannot release at -0.02.
-	_ok("latch/a low threshold still releases",
-		l.pressed("g", 0.30, 0.10) and not l.pressed("g", 0.01, 0.10))
+	_ok(l.pressed("g", 0.30, 0.10) and not l.pressed("g", 0.01, 0.10),
+		"latch/a low threshold still releases")
 
 	# Two hands hold their own state — the key carries the controller, so the
 	# left hand's squeeze can never latch the right hand's button.
-	_ok("latch/one key does not press another", l.pressed("left:grip", 0.9, 0.3))
-	_ok("latch/the other key is independent",
-		not l.pressed("right:grip", 0.24, 0.3))
+	_ok(l.pressed("left:grip", 0.9, 0.3), "latch/one key does not press another")
+	_ok(not l.pressed("right:grip", 0.24, 0.3), "latch/the other key is independent")
 
 	l.clear()
-	_ok("latch/clear releases everything",
-		not l.pressed("left:grip", 0.24, 0.3))
+	_ok(not l.pressed("left:grip", 0.24, 0.3), "latch/clear releases everything")

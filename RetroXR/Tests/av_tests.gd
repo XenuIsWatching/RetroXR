@@ -178,7 +178,7 @@ func _skip(why: String) -> void:
 	_skipped = why
 
 
-func _check(cond: bool, what: String) -> void:
+func _ok(cond: bool, what: String) -> void:
 	_checks += 1
 	if cond:
 		return
@@ -187,7 +187,7 @@ func _check(cond: bool, what: String) -> void:
 
 
 func _check_eq(got: Variant, want: Variant, what: String) -> void:
-	_check(got == want, "%s: got %s, want %s" % [what, got, want])
+	_ok(got == want, "%s: got %s, want %s" % [what, got, want])
 
 
 # ── Building a room ───────────────────────────────────────────────────────────
@@ -340,8 +340,8 @@ func _r_one_lead() -> void:
 	var ins := _input_ports(tv, RetroTV.Source.COMPOSITE_4)
 	var outs := _out_ports(deck)
 	await _lead([[0, outs[0], ins[0]], [1, outs[1], ins[1]], [2, outs[2], ins[2]]])
-	_check(deck.connected_tv == tv, "the deck should know which set it feeds")
-	_check(deck._feed_video, "the picture should have a path")
+	_ok(deck.connected_tv == tv, "the deck should know which set it feeds")
+	_ok(deck._feed_video, "the picture should have a path")
 	_check_eq(deck._feed_left, 0, "left channel lands on the left speaker")
 	_check_eq(deck._feed_right, 1, "right channel lands on the right speaker")
 	_check_eq(_which_input(tv, deck), RetroTV.Source.COMPOSITE_4, "the set files the deck")
@@ -358,17 +358,17 @@ func _r_two_leads() -> void:
 	# report it was handed.
 	var picture := await _lead([[0, outs[0], ins[0]]])
 	var sound := await _lead([[1, outs[1], ins[1]], [2, outs[2], ins[2]]])
-	_check(deck._feed_video, "the picture survives the sound lead resolving after it")
+	_ok(deck._feed_video, "the picture survives the sound lead resolving after it")
 	_check_eq(deck._feed_left, 0, "left channel")
 	_check_eq(deck._feed_right, 1, "right channel")
 
 	# And neither report order loses the other half.
 	deck.on_av_topology_changed(sound.links())
 	await _wait(3)
-	_check(deck._feed_video, "a report from the sound lead must not drop the picture")
+	_ok(deck._feed_video, "a report from the sound lead must not drop the picture")
 	deck.on_av_topology_changed(picture.links())
 	await _wait(3)
-	_check(deck._feed_left == 0 and deck._feed_right == 1,
+	_ok(deck._feed_left == 0 and deck._feed_right == 1,
 		"a report from the picture lead must not drop the sound")
 
 
@@ -381,7 +381,7 @@ func _r_crossed() -> void:
 	# The pair swapped at the set's end: what a player does by accident, and the
 	# whole reason the two channels are tracked separately.
 	await _lead([[0, outs[0], ins[0]], [1, outs[1], ins[2]], [2, outs[2], ins[1]]])
-	_check(deck._feed_video, "the picture is unaffected")
+	_ok(deck._feed_video, "the picture is unaffected")
 	_check_eq(deck._feed_left, 1, "the left channel comes out of the RIGHT speaker")
 	_check_eq(deck._feed_right, 0, "the right channel comes out of the LEFT speaker")
 
@@ -395,8 +395,8 @@ func _r_video_into_audio() -> void:
 	# The yellow plug in a white socket. Sound still arrives, so the deck reads as
 	# connected — which is exactly how "I can hear it but not see it" happens.
 	await _lead([[0, outs[0], ins[1]], [2, outs[2], ins[2]]])
-	_check(deck.connected_tv == tv, "the deck is still connected")
-	_check(not deck._feed_video, "a picture into an audio socket is not a picture")
+	_ok(deck.connected_tv == tv, "the deck is still connected")
+	_ok(not deck._feed_video, "a picture into an audio socket is not a picture")
 	_check_eq(_which_input(tv, deck), RetroTV.Source.COMPOSITE_2,
 		"the set still files it on that input, on the strength of the sound")
 
@@ -408,10 +408,10 @@ func _r_pull_picture() -> void:
 	var ins := _input_ports(tv, RetroTV.Source.COMPOSITE_1)
 	var outs := _out_ports(deck)
 	var lead := await _lead([[0, outs[0], ins[0]], [1, outs[1], ins[1]], [2, outs[2], ins[2]]])
-	_check(deck._feed_video, "the picture starts connected")
+	_ok(deck._feed_video, "the picture starts connected")
 	await _unplug(lead.get_node("PlugB0") as RcaPlug)
-	_check(not deck._feed_video, "pulling the picture cord takes the picture away")
-	_check(deck._feed_left == 0 and deck._feed_right == 1, "the sound is untouched")
+	_ok(not deck._feed_video, "pulling the picture cord takes the picture away")
+	_ok(deck._feed_left == 0 and deck._feed_right == 1, "the sound is untouched")
 
 
 func _r_video_wins() -> void:
@@ -452,8 +452,8 @@ func _r_vga() -> void:
 
 	var tower_vga := sys.find_child("VgaPort", true, false) as XRToolsSnapZone
 	var mon_vga := tv.get_node_or_null("VgaPort") as XRToolsSnapZone
-	_check(tower_vga != null, "the tower wears a DE-15")
-	_check(mon_vga != null and mon_vga.enabled, "the monitor's DE-15 is fitted and live")
+	_ok(tower_vga != null, "the tower wears a DE-15")
+	_ok(mon_vga != null and mon_vga.enabled, "the monitor's DE-15 is fitted and live")
 	if tower_vga == null or mon_vga == null:
 		return
 
@@ -466,7 +466,7 @@ func _r_vga() -> void:
 	mon_vga.pick_up_object(lead.get_node("PlugB0"))
 	await _wait(40)
 	_check_eq(_which_input(tv, sys), RetroTV.Source.VGA, "the tower is filed on VGA")
-	_check(sys.connected_tv == tv, "and the tower knows which monitor it feeds")
+	_ok(sys.connected_tv == tv, "and the tower knows which monitor it feeds")
 
 
 func _d_monitor_default() -> void:
@@ -480,9 +480,9 @@ func _d_monitor_default() -> void:
 	# The tuner is available on every set, so picking the first available input in
 	# enum order would sit a monitor on a channel list rather than on its one socket.
 	_check_eq(tv.current_source, RetroTV.Source.VGA, "a monitor starts on its DE-15")
-	_check(not tv._source_available(RetroTV.Source.COMPOSITE_1),
+	_ok(not tv._source_available(RetroTV.Source.COMPOSITE_1),
 		"and does not offer a phono input it has no socket for")
-	_check(tv.get_node_or_null("TubeCollar") != null,
+	_ok(tv.get_node_or_null("TubeCollar") != null,
 		"the retained primitive monitor keeps the physical tube collar")
 
 
@@ -500,11 +500,11 @@ func _d_legacy_tv_models() -> void:
 	_spawned.append(old_monitor)
 	await _wait(40)
 	_check_eq(old_tv.tv_model, "", "the removed television migrates to the stock body")
-	_check(old_tv.shell() == null and old_tv.get_node("TVBody").visible,
+	_ok(old_tv.shell() == null and old_tv.get_node("TVBody").visible,
 		"the migrated television retains stock primitive geometry")
 	_check_eq(old_monitor.tv_model, "crt_plain",
 		"the removed VGA monitor migrates to the primitive monitor")
-	_check(old_monitor.shell() != null and old_monitor.vga_port().enabled,
+	_ok(old_monitor.shell() != null and old_monitor.vga_port().enabled,
 		"the migrated monitor retains its VGA connector")
 
 
@@ -560,7 +560,7 @@ func _single_lead(scene: PackedScene, from: Node3D, from_port: String,
 	await _wait(20)
 	var a := from.find_child(from_port, true, false) as XRToolsSnapZone
 	var b := to.find_child(to_port, true, false) as XRToolsSnapZone
-	_check(a != null and b != null, "sockets %s / %s exist" % [from_port, to_port])
+	_ok(a != null and b != null, "sockets %s / %s exist" % [from_port, to_port])
 	if a != null and b != null:
 		a.pick_up_object(lead.get_node("PlugA0"))
 		b.pick_up_object(lead.get_node("PlugB0"))
@@ -678,8 +678,8 @@ func _w_both_can_paint() -> void:
 	mon.set_source(RetroTV.Source.VGA)
 	tv.set_source(RetroTV.Source.COMPOSITE_2)
 	await _wait(6)
-	_check(mon.can_paint(tower), "the monitor would show it")
-	_check(tv.can_paint(tower), "and the set would show it at the same time")
+	_ok(mon.can_paint(tower), "the monitor would show it")
+	_ok(tv.can_paint(tower), "and the set would show it at the same time")
 
 
 ## Where the sound ends up, which is the other half of every case above.
@@ -689,10 +689,10 @@ func _w_sound_routing() -> void:
 	var speakers := _speakers()
 	await _wait(60)
 	await _single_lead(VGA_CABLE, tower, "VgaPort", mon, "VgaPort")
-	_check(tower._av_tv == null, "a picture-only hookup carries no sound")
+	_ok(tower._av_tv == null, "a picture-only hookup carries no sound")
 	await _single_lead(TRS_CABLE, tower, "LineOut", speakers, "LineIn")
 	_check_eq(tower._av_tv, speakers, "the 3.5 mm lead puts the sound in the speakers")
-	_check(tower._av_speaker_l >= 0 and tower._av_speaker_r >= 0,
+	_ok(tower._av_speaker_l >= 0 and tower._av_speaker_r >= 0,
 		"and both channels land somewhere (l=%d r=%d)"
 		% [tower._av_speaker_l, tower._av_speaker_r])
 
@@ -711,10 +711,10 @@ func _w_two_machines() -> void:
 	_check_eq(_which_input(tv, b), RetroTV.Source.COMPOSITE_3, "the second has its own")
 	tv.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(5)
-	_check(tv.can_paint(a) and not tv.can_paint(b), "only the selected one may paint")
+	_ok(tv.can_paint(a) and not tv.can_paint(b), "only the selected one may paint")
 	tv.set_source(RetroTV.Source.COMPOSITE_3)
 	await _wait(5)
-	_check(tv.can_paint(b) and not tv.can_paint(a), "and it swaps over on SOURCE")
+	_ok(tv.can_paint(b) and not tv.can_paint(a), "and it swaps over on SOURCE")
 
 
 ## Pulling a machine out entirely: every display that had it lets go, not just the
@@ -727,7 +727,7 @@ func _w_unplug_all() -> void:
 	var vga := await _single_lead(VGA_CABLE, tower, "VgaPort", mon, "VgaPort")
 	var comp := await _lead([[0, _out_ports(tower)[0],
 		_input_ports(tv, RetroTV.Source.COMPOSITE_1)[0]]])
-	_check(_which_input(mon, tower) >= 0 and _which_input(tv, tower) >= 0, "both have it")
+	_ok(_which_input(mon, tower) >= 0 and _which_input(tv, tower) >= 0, "both have it")
 	await _unplug(vga.get_node("PlugB0") as RcaPlug)
 	await _unplug(comp.get_node("PlugB0") as RcaPlug)
 	_check_eq(_which_input(mon, tower), -1, "the monitor let go")
@@ -774,10 +774,10 @@ func _w_nes_rf() -> void:
 	if ch >= 0:
 		tv_rf.rf_channel = ch
 		await _wait(5)
-		_check(tv_rf.can_paint(nes), "tuned to the console's channel, it may paint")
+		_ok(tv_rf.can_paint(nes), "tuned to the console's channel, it may paint")
 		tv_rf.rf_channel = 4 if ch != 4 else 3
 		await _wait(5)
-		_check(not tv_rf.can_paint(nes), "on the other channel it may not")
+		_ok(not tv_rf.can_paint(nes), "on the other channel it may not")
 
 
 # ── Display ───────────────────────────────────────────────────────────────────
@@ -801,7 +801,7 @@ func _d_away() -> void:
 	await _wait(4)
 	tv.set_source(RetroTV.Source.COMPOSITE_1)
 	await _wait(6)
-	_check(_shown(tv) != src.texture, "an input with nothing on it must not show the other one")
+	_ok(_shown(tv) != src.texture, "an input with nothing on it must not show the other one")
 	_check_eq(_shown(tv), tv._display._blue_texture, "it shows the no-signal screen")
 
 
@@ -842,9 +842,9 @@ func _d_off() -> void:
 	await _wait(4)
 	tv.remote_power_toggle()          # the set has no setter; this is the POWER key
 	await _wait(6)
-	_check(_shown(tv) != src.texture, "a set that is off shows nothing")
+	_ok(_shown(tv) != src.texture, "a set that is off shows nothing")
 	_check_eq(_glass(tv), tv._display._dark_material, "it wears its own dark glass")
-	_check(_glass(tv) is ShaderMaterial, "the dark glass keeps the reflective shader")
+	_ok(_glass(tv) is ShaderMaterial, "the dark glass keeps the reflective shader")
 	_check_eq(_shown(tv), tv._display._dark_texture, "the phosphors behind it are black")
 
 
@@ -859,23 +859,23 @@ func _d_ambilight() -> void:
 	src.texture = _a_texture()
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
 	await _wait(6)
-	_check(light.visible and light.light_energy > 0.0, "a set with a picture lights the room")
+	_ok(light.visible and light.light_energy > 0.0, "a set with a picture lights the room")
 	tv.remote_power_toggle()
 	await _wait(6)
-	_check(not light.visible, "a set switched off throws no light")
+	_ok(not light.visible, "a set switched off throws no light")
 	tv.remote_power_toggle()
 	await _wait(6)
-	_check(light.visible and light.light_energy > 0.0, "and lights the room again once it is back on")
+	_ok(light.visible and light.light_energy > 0.0, "and lights the room again once it is back on")
 	# The graphics switch, without saving the player's prefs from a test.
 	var was := QualityManager.screen_lights_enabled
 	QualityManager.screen_lights_enabled = false
 	QualityManager.apply_screen_lights()
 	await _wait(2)
-	_check(not light.visible, "the Screen Light switch off douses it while the set stays on")
+	_ok(not light.visible, "the Screen Light switch off douses it while the set stays on")
 	QualityManager.screen_lights_enabled = true
 	QualityManager.apply_screen_lights()
 	await _wait(2)
-	_check(light.visible and light.light_energy > 0.0, "and on lights the room again at once")
+	_ok(light.visible and light.light_energy > 0.0, "and on lights the room again at once")
 	QualityManager.screen_lights_enabled = was
 	QualityManager.apply_screen_lights()
 
@@ -907,7 +907,7 @@ func _d_no_video_cord() -> void:
 	src.video_to_tv = false
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_1, src)
 	await _wait(6)
-	_check(_shown(tv) != src.texture, "a host sending no picture here must not be shown")
+	_ok(_shown(tv) != src.texture, "a host sending no picture here must not be shown")
 	_check_eq(_shown(tv), tv._display._blue_texture, "the set shows its no-signal screen")
 
 	# And the moment a picture cord does land, the same host appears.
@@ -927,7 +927,7 @@ func _d_rf_untuned() -> void:
 	src.rf_channel = 4 if tv.rf_channel != 4 else 3     # deliberately not the set's
 	await _seat_stub(tv, RetroTV.Source.RF, src)
 	await _wait(6)
-	_check(_shown(tv) != src.texture, "a machine modulating on the other channel is not shown")
+	_ok(_shown(tv) != src.texture, "a machine modulating on the other channel is not shown")
 	_check_eq(_glass(tv), tv._display._rf_static_material,
 		"an aerial channel with nothing on it is SNOW, not the blue no-signal screen")
 
@@ -941,7 +941,7 @@ func _d_rf_tuned() -> void:
 	await _seat_stub(tv, RetroTV.Source.RF, src)
 	await _wait(6)
 	_check_eq(_shown(tv), src.texture, "tuned to its channel, the machine appears")
-	_check(tv.can_paint(src), "and it counts as the shown input")
+	_ok(tv.can_paint(src), "and it counts as the shown input")
 
 
 ## The tube's afterglow belongs to the picture that made it.
@@ -960,7 +960,7 @@ func _d_no_ghost() -> void:
 	first.texture = _a_texture(Color(1, 0, 0, 1))
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_1, first)
 	await _wait(8)
-	_check(tv._display._phosphor_fresh == 0, "the accumulator settles while one source runs")
+	_ok(tv._display._phosphor_fresh == 0, "the accumulator settles while one source runs")
 
 	var second := StubSource.new()
 	second.texture = _a_texture(Color(0, 1, 0, 1))
@@ -969,7 +969,7 @@ func _d_no_ghost() -> void:
 	tv._panel._connected_systems[RetroTV.Source.COMPOSITE_2] = second
 	tv.set_source(RetroTV.Source.COMPOSITE_2)
 	await _wait(1)
-	_check(tv._display._phosphor_fresh > 0 or _prev_is(tv, second.texture),
+	_ok(tv._display._phosphor_fresh > 0 or _prev_is(tv, second.texture),
 		"a new source starts with no history behind it")
 
 	# And the same when a machine restarts: its picture stops, then a new one
@@ -977,10 +977,10 @@ func _d_no_ghost() -> void:
 	await _wait(10)
 	second.texture = null
 	await _wait(6)
-	_check(tv._display._phosphor_fresh > 0, "a source that stops arms the accumulator")
+	_ok(tv._display._phosphor_fresh > 0, "a source that stops arms the accumulator")
 	second.texture = _a_texture(Color(0, 0, 1, 1))
 	await _wait(1)
-	_check(tv._display._phosphor_fresh > 0 or _prev_is(tv, second.texture),
+	_ok(tv._display._phosphor_fresh > 0 or _prev_is(tv, second.texture),
 		"and the picture that comes back does not blend with the old one")
 
 
@@ -1007,7 +1007,7 @@ func _d_stage() -> void:
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
 	await _wait(4)
 	var mat := _glass(tv) as ShaderMaterial
-	_check(mat != null and mat.shader == WINDOW_SHADER, "the set uses the source's shader")
+	_ok(mat != null and mat.shader == WINDOW_SHADER, "the set uses the source's shader")
 	if mat != null:
 		_check_eq(mat.get_shader_parameter("source_rect"), Vector4(0.0, 0.5, 1.0, 0.5),
 			"and the source's own uniforms")
@@ -1023,7 +1023,7 @@ func _d_glass_wear() -> void:
 		"new sets start with subtle wear")
 	_check_eq(tv.get_crt_params().get("crt_character"), 0.35,
 		"new sets start with subtle CRT character")
-	_check(tv._tube_collar.get_parent() == tv,
+	_ok(tv._tube_collar.get_parent() == tv,
 		"the physical collar is independent of the collapsing screen mesh")
 
 	# Exercise the actual UI signal, not merely the television setter.
@@ -1053,7 +1053,7 @@ func _d_glass_wear() -> void:
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
 	await _wait(4)
 	var active := _glass(tv) as ShaderMaterial
-	_check(active != null, "the source switch leaves a display material")
+	_ok(active != null, "the source switch leaves a display material")
 	if active != null:
 		_check_eq(active.get_shader_parameter("crt_glass_wear"), 2.5,
 			"wear survives a source-stage switch")
@@ -1061,7 +1061,7 @@ func _d_glass_wear() -> void:
 			"CRT character survives a source-stage switch")
 		_check_eq(active.get_shader_parameter("crt_glass_wear_tex"), RetroTV.GLASS_WEAR_TEXTURE,
 			"the mipmapped mask reaches the source stage")
-		_check(active.get_shader_parameter("crt_glass_wear_flip") is Vector2,
+		_ok(active.get_shader_parameter("crt_glass_wear_flip") is Vector2,
 			"the source stage receives this set's mirrored orientation")
 		var picture_before: Variant = active.get_shader_parameter("source_tex")
 		tv.set_crt_param("crt_glass_wear", 3.0)
@@ -1125,7 +1125,7 @@ func _d_stage_per_tv() -> void:
 	await _wait(6)
 	var top_mat := _glass(tv_top) as ShaderMaterial
 	var bottom_mat := _glass(tv_bottom) as ShaderMaterial
-	_check(top_mat != null and bottom_mat != null, "both sets show the machine")
+	_ok(top_mat != null and bottom_mat != null, "both sets show the machine")
 	if top_mat != null and bottom_mat != null:
 		_check_eq(top_mat.get_shader_parameter("source_rect"), Vector4(0.0, 0.0, 1.0, 0.5),
 			"the first set gets the top half")
@@ -1160,9 +1160,9 @@ func _d_tv_aspect() -> void:
 	# tube cannot be both. Reading the fit off the material that is ACTUALLY on the
 	# glass is the whole point — the set kept a fitted material up to date all along,
 	# it just was not showing it.
-	_check(narrow != null and wide != null,
+	_ok(narrow != null and wide != null,
 		"a broadcast is sampled into a material that carries the fit")
-	_check(narrow != wide, "the aspect button changes the picture's shape: %s vs %s"
+	_ok(narrow != wide, "the aspect button changes the picture's shape: %s vs %s"
 		% [narrow, wide])
 
 
@@ -1188,8 +1188,8 @@ func _g_refused() -> void:
 	var before := _glass(tv)
 	var rogue := StandardMaterial3D.new()
 	rogue.albedo_color = Color(1, 0, 1, 1)
-	_check(not tv.can_paint(src), "a host on another input may not paint")
-	_check(not tv.paint_screen(src, rogue), "and is refused when it tries")
+	_ok(not tv.can_paint(src), "a host on another input may not paint")
+	_ok(not tv.paint_screen(src, rogue), "and is refused when it tries")
 	_check_eq(_glass(tv), before, "the glass is left alone")
 
 
@@ -1201,8 +1201,8 @@ func _g_allowed() -> void:
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
 	await _wait(4)
 	var mine := StandardMaterial3D.new()
-	_check(tv.can_paint(src), "the shown host may paint")
-	_check(tv.paint_screen(src, mine), "and its paint is accepted")
+	_ok(tv.can_paint(src), "the shown host may paint")
+	_ok(tv.paint_screen(src, mine), "and its paint is accepted")
 	_check_eq(_glass(tv), mine, "its material is on the glass")
 	_check_eq(tv._display._screen_owner, src, "and the set records who put it there")
 
@@ -1222,7 +1222,7 @@ func _g_release() -> void:
 	tv.release_screen(stranger)
 	_check_eq(_glass(tv), mine, "a stranger cannot take somebody else's picture down")
 	tv.release_screen(src)
-	_check(_glass(tv) != mine, "the owner can")
+	_ok(_glass(tv) != mine, "the owner can")
 
 
 # ── Audio ─────────────────────────────────────────────────────────────────────
@@ -1244,9 +1244,9 @@ func _a_selected_only() -> void:
 	hidden.volumes.clear()
 	tv.remote_volume_up()
 	await _wait(4)
-	_check(not shown.volumes.is_empty() and shown.volumes.back() > 0.0,
+	_ok(not shown.volumes.is_empty() and shown.volumes.back() > 0.0,
 		"the input being watched is heard (got %s)" % str(shown.volumes))
-	_check(not hidden.volumes.is_empty() and hidden.volumes.back() == 0.0,
+	_ok(not hidden.volumes.is_empty() and hidden.volumes.back() == 0.0,
 		"the other input is silent (got %s)" % str(hidden.volumes))
 
 
@@ -1259,7 +1259,7 @@ func _a_no_display() -> void:
 	sys.add_to_group("spawned")
 	_spawned.append(sys)
 	await _wait(40)
-	_check(not sys._has_display(), "a console with no television has nowhere to show")
+	_ok(not sys._has_display(), "a console with no television has nowhere to show")
 	var tv := _tv()
 	await _wait(30)
 	var ins := _input_ports(tv, RetroTV.Source.COMPOSITE_1)
@@ -1268,4 +1268,4 @@ func _a_no_display() -> void:
 		_skip("this cabinet wears a captive lead, not sockets")
 		return
 	await _lead([[0, outs[0], ins[0]], [1, outs[1], ins[1]], [2, outs[2], ins[2]]])
-	_check(sys._has_display(), "cabling it to a set gives it one")
+	_ok(sys._has_display(), "cabling it to a set gives it one")

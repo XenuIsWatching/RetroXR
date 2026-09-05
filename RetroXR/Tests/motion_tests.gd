@@ -76,7 +76,7 @@ func _wants(group: String) -> bool:
 	return _only.is_empty() or _only == group
 
 
-func _ok(name: String, cond: bool, detail := "") -> void:
+func _ok(cond: bool, name: String, detail := "") -> void:
 	if cond:
 		_pass += 1
 		print("[motion] PASS %s" % name)
@@ -86,7 +86,7 @@ func _ok(name: String, cond: bool, detail := "") -> void:
 
 
 func _vec_ok(name: String, got: Vector3, want: Vector3) -> void:
-	_ok(name, got.distance_to(want) < EPS, "got %v, want %v" % [got, want])
+	_ok(got.distance_to(want) < EPS, name, "got %v, want %v" % [got, want])
 
 
 # ── The accelerometer's frame ────────────────────────────────────────────────
@@ -239,12 +239,11 @@ func _test_a_held_nunchuk_hangs_nose_down() -> void:
 	# +Y is BACK and +Z is UP, so gravity leaning off the device's front is a nose
 	# tipped down. Level reads (0, 0, 1); straight up the nose reads (0, -1, 0).
 	var pitch := rad_to_deg(atan2(-a.y, a.z))
-	_ok("a held Nunchuk hangs nose-down in the hand",
-		pitch > 30.0 and pitch < 60.0, "pitch %+.1f deg" % pitch)
+	_ok(pitch > 30.0 and pitch < 60.0,
+		"a held Nunchuk hangs nose-down in the hand", "pitch %+.1f deg" % pitch)
 	# Not merely off-level: the sign is the half that was wrong for years, when a
 	# nose-down grab and a nose-up frame very nearly cancelled.
-	_ok("and nose-DOWN rather than tipped back", a.y < 0.0,
-		"back axis reads %+.3f" % a.y)
+	_ok(a.y < 0.0, "and nose-DOWN rather than tipped back", "back axis reads %+.3f" % a.y)
 	nc.queue_free()
 
 
@@ -268,9 +267,8 @@ func _test_both_devices_agree_in_one_attitude() -> void:
 		wm.set("_accel_smoothed", Vector3.UP * Nunchuk.G)
 		var n_vec := nc.accel_in_nunchuk_frame()
 		var w_vec: Vector3 = wm.accel_in_wiimote_frame()
-		_ok("%s: the remote and the Nunchuk report the same gravity" % pose[0],
-			n_vec.distance_to(w_vec) < EPS,
-			"nunchuk %v against remote %v" % [n_vec, w_vec])
+		_ok(n_vec.distance_to(w_vec) < EPS,
+			"%s: the remote and the Nunchuk report the same gravity" % pose[0], "nunchuk %v against remote %v" % [n_vec, w_vec])
 	wm.queue_free()
 	nc.queue_free()
 
@@ -287,8 +285,8 @@ func _test_always_one_g_at_rest() -> void:
 			Basis(Vector3(0.6, 0.8, 0.0).normalized(), a), Vector3.ZERO)
 		_settle(nc)
 		worst = maxf(worst, absf(nc.accel_in_nunchuk_frame().length() - 1.0))
-	_ok("a still Nunchuk reads one g whichever way it lies", worst < EPS,
-		"worst error %f g" % worst)
+	_ok(worst < EPS,
+		"a still Nunchuk reads one g whichever way it lies", "worst error %f g" % worst)
 	nc.queue_free()
 
 
@@ -378,9 +376,8 @@ func _test_a_carried_nunchuk_reads_the_path_it_is_carried_on() -> void:
 	# The band is wide on purpose: the low-pass costs about a tenth at this rate
 	# and a second difference is not a derivative. It is nowhere near wide enough
 	# to admit a reading taken off the render clock.
-	_ok("a carried Nunchuk reports the acceleration of the path it is on",
-		ratio > 0.7 and ratio < 1.3,
-		"%.1f m/s^2 against a true %.1f (%.2fx)" % [got["peak"], want, ratio])
+	_ok(ratio > 0.7 and ratio < 1.3,
+		"a carried Nunchuk reports the acceleration of the path it is on", "%.1f m/s^2 against a true %.1f (%.2fx)" % [got["peak"], want, ratio])
 	nc.queue_free()
 
 
@@ -390,8 +387,8 @@ func _test_a_gentle_carry_keeps_the_pose() -> void:
 	# accelerometer leans by atan(0.49/9.81) = 2.9 degrees under it and no more,
 	# and that lean IS the hand position Dolphin's IMUAccelerometer draws from.
 	var got: Dictionary = await _carry(nc, 0.05, 0.5)
-	_ok("a gently carried Nunchuk still reports which way is up",
-		float(got["tilt"]) < 5.0, "worst pose error %.1f degrees" % got["tilt"])
+	_ok(float(got["tilt"]) < 5.0,
+		"a gently carried Nunchuk still reports which way is up", "worst pose error %.1f degrees" % got["tilt"])
 	nc.queue_free()
 
 
@@ -407,8 +404,8 @@ func _test_a_still_hand_reports_a_still_device() -> void:
 	# A millimetre of jitter with the hand going nowhere. Twice what a Quest
 	# controller actually shows at rest, so passing here has margin.
 	var got: Dictionary = await _carry(nc, 0.0, 0.0, 0.001)
-	_ok("a still hand with tracking jitter reports a still device",
-		float(got["tilt"]) < 1.0, "worst pose error %.1f degrees" % got["tilt"])
+	_ok(float(got["tilt"]) < 1.0,
+		"a still hand with tracking jitter reports a still device", "worst pose error %.1f degrees" % got["tilt"])
 	nc.queue_free()
 
 
@@ -424,9 +421,8 @@ func _test_the_deadband_leaves_a_punch_alone() -> void:
 	# Read through the public path, so a deadband set too high fails here — off
 	# _accel_smoothed it would pass however much the filter swallowed.
 	var ratio: float = float(got["out"]) / want
-	_ok("and a real punch still comes through it",
-		ratio > 0.6, "%.1f m/s^2 against a true %.1f (%.2fx)"
-			% [got["out"], want, ratio])
+	_ok(ratio > 0.6,
+		"and a real punch still comes through it", "%.1f m/s^2 against a true %.1f (%.2fx)" % [got["out"], want, ratio])
 	nc.queue_free()
 
 
@@ -442,16 +438,15 @@ func _test_motion_is_not_a_button() -> void:
 	add_child(nc)
 	await get_tree().process_frame
 	wm._on_extension_seated(nc)
-	_ok("a Nunchuk reports no shake", not nc.get_state().has("shake"))
+	_ok(not nc.get_state().has("shake"), "a Nunchuk reports no shake")
 	# Thrown hard enough that any threshold anyone would pick is behind it.
 	nc.linear_velocity = Vector3.ZERO
 	nc._update_accel(1.0 / 90.0)
 	nc.linear_velocity = Vector3(6.0, 0.0, 0.0)
 	nc._update_accel(1.0 / 90.0)
 	var mask: int = wm._button_mask(wm._pressed_now())
-	_ok("and however hard it is thrown, the remote sends no L2",
-		mask & (1 << ControllerBindings.JOYPAD_L2) == 0,
-		"mask %d" % mask)
+	_ok(mask & (1 << ControllerBindings.JOYPAD_L2) == 0,
+		"and however hard it is thrown, the remote sends no L2", "mask %d" % mask)
 	wm.queue_free()
 	nc.queue_free()
 	nc.queue_free()
@@ -472,16 +467,16 @@ func _test_the_extension_takes_a_sub_device() -> void:
 		if str(method.get("name", "")) == "SetSensorAccel":
 			arity = (method.get("args", []) as Array).size()
 			break
-	_ok("the extension's SetSensorAccel takes a sub-device index", arity == 5,
-		"found %d arguments, want 5" % arity)
+	_ok(arity == 5,
+		"the extension's SetSensorAccel takes a sub-device index", "found %d arguments, want 5" % arity)
 
 
 func _test_bare_remote() -> void:
 	var wm: Wiimote = WIIMOTE_SCENE.instantiate()
 	add_child(wm)
 	await get_tree().process_frame
-	_ok("a bare remote is a plain Wiimote", wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
-	_ok("and reports no Nunchuk", not wm._has_nunchuk())
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE, "a bare remote is a plain Wiimote")
+	_ok(not wm._has_nunchuk(), "and reports no Nunchuk")
 	wm.queue_free()
 
 
@@ -492,10 +487,10 @@ func _test_a_seated_nunchuk() -> void:
 	add_child(nc)
 	await get_tree().process_frame
 	wm._on_extension_seated(nc)
-	_ok("a seated Nunchuk makes it a Nunchuk remote",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_NC)
-	_ok("and the remote can reach it", wm._nunchuk == nc)
-	_ok("so it will send a second accelerometer", wm._has_nunchuk())
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_NC,
+		"a seated Nunchuk makes it a Nunchuk remote")
+	_ok(wm._nunchuk == nc, "and the remote can reach it")
+	_ok(wm._has_nunchuk(), "so it will send a second accelerometer")
 	wm.queue_free()
 	nc.queue_free()
 
@@ -539,30 +534,25 @@ func _test_two_hands_turn_it_sideways() -> void:
 	add_child(wm)
 	await get_tree().process_frame
 
-	_ok("the remote accepts a second hand",
-		wm.second_hand_grab == XRToolsPickable.SecondHandGrab.SECOND)
+	_ok(wm.second_hand_grab == XRToolsPickable.SecondHandGrab.SECOND,
+		"the remote accepts a second hand")
 	_hold(wm, 1)
-	_ok("one hand leaves the remote upright",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE, "one hand leaves the remote upright")
 	_hold(wm, 2)
-	_ok("a second hand turns it sideways",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW, "a second hand turns it sideways")
 	var left_grip := wm.grip_anchor(true)
 	var right_grip := wm.grip_anchor(false)
-	_ok("the D-pad end belongs to the left hand",
-		left_grip.origin.z < right_grip.origin.z)
+	_ok(left_grip.origin.z < right_grip.origin.z, "the D-pad end belongs to the left hand")
 	_vec_ok("the sideways pose turns the D-pad end left",
 		left_grip.basis.inverse() * Vector3(0.0, 0.0, -1.0), Vector3.LEFT)
 	# The half with no signal behind it: xr-tools emits `grabbed` for a second
 	# hand, while `released` is the event that has to restore the one-hand pose.
 	_hold(wm, 1)
-	_ok("letting the second hand go turns it back",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE, "letting the second hand go turns it back")
 	_vec_ok("and restores the upright centre grip", wm.grip_anchor(true).origin,
 		Vector3(0.0, 0.0, 0.012))
 	_hold(wm, 0)
-	_ok("and putting it down leaves it upright",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE, "and putting it down leaves it upright")
 	wm.queue_free()
 
 
@@ -582,12 +572,11 @@ func _test_a_real_release_turns_it_back() -> void:
 	wm._grab_driver = driver
 	wm._refresh_device_type()
 	wm._refresh_grip()
-	_ok("two real grabs read as sideways",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW, "two real grabs read as sideways")
 
 	wm.let_go(second, Vector3.ZERO, Vector3.ZERO)
-	_ok("a real second-hand release turns it upright again",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE,
+		"a real second-hand release turns it upright again")
 	_vec_ok("the real release restores the centre grip",
 		wm.grip_anchor(true).origin, Vector3(0.0, 0.0, 0.012))
 	wm.queue_free()
@@ -634,36 +623,34 @@ func _test_sideways_controls_follow_the_hands_and_shell() -> void:
 
 	left_tracker.set_input(&"trigger", 1.0)
 	var pressed := wm._pressed_now()
-	_ok("sideways/left trigger presses physical B",
-		pressed.get("b", false) and not pressed.get("one", false))
+	_ok(pressed.get("b", false) and not pressed.get("one", false),
+		"sideways/left trigger presses physical B")
 	var mask := wm._button_mask(pressed)
-	_ok("sideways/physical B reaches Dolphin's Y bit",
-		(mask & (1 << ControllerBindings.JOYPAD_Y)) != 0
-		and (mask & (1 << ControllerBindings.JOYPAD_B)) == 0)
+	_ok((mask & (1 << ControllerBindings.JOYPAD_Y)) != 0 and (mask & (1 << ControllerBindings.JOYPAD_B)) == 0,
+		"sideways/physical B reaches Dolphin's Y bit")
 
 	left_tracker.set_input(&"trigger", 0.0)
 	right_tracker.set_input(&"trigger", 1.0)
 	pressed = wm._pressed_now()
-	_ok("sideways/right trigger is unassigned",
-		not pressed.get("b", false) and not pressed.get("one", false))
+	_ok(not pressed.get("b", false) and not pressed.get("one", false),
+		"sideways/right trigger is unassigned")
 	right_tracker.set_input(&"trigger", 0.0)
 	right_tracker.set_input(&"by_button", 1.0)
 	pressed = wm._pressed_now()
-	_ok("sideways/right B presses physical 1",
-		pressed.get("one", false) and not pressed.get("b", false))
+	_ok(pressed.get("one", false) and not pressed.get("b", false),
+		"sideways/right B presses physical 1")
 	mask = wm._button_mask(pressed)
-	_ok("sideways/physical 1 reaches Dolphin's B bit",
-		(mask & (1 << ControllerBindings.JOYPAD_B)) != 0
-		and (mask & (1 << ControllerBindings.JOYPAD_Y)) == 0)
+	_ok((mask & (1 << ControllerBindings.JOYPAD_B)) != 0 and (mask & (1 << ControllerBindings.JOYPAD_Y)) == 0,
+		"sideways/physical 1 reaches Dolphin's B bit")
 	wm._animate_controls(pressed)
-	_ok("sideways/physical 1 animation follows the right B button",
-		bool((wm._face_buttons["one"] as VRButton).get("_latched_pressed")))
+	_ok(bool((wm._face_buttons["one"] as VRButton).get("_latched_pressed")),
+		"sideways/physical 1 animation follows the right B button")
 
 	right_tracker.set_input(&"by_button", 0.0)
 	right_tracker.set_input(&"ax_button", 1.0)
 	pressed = wm._pressed_now()
-	_ok("sideways/right A presses physical 2",
-		pressed.get("two", false) and not pressed.get("a", false))
+	_ok(pressed.get("two", false) and not pressed.get("a", false),
+		"sideways/right A presses physical 2")
 
 	right_tracker.set_input(&"ax_button", 0.0)
 	left_tracker.set_input(&"primary", Vector2.LEFT)
@@ -671,9 +658,8 @@ func _test_sideways_controls_follow_the_hands_and_shell() -> void:
 		Vector3(wm._dpad_animation_stick().x, wm._dpad_animation_stick().y, 0.0),
 		Vector3.UP)
 	mask = wm._button_mask(wm._pressed_now())
-	_ok("sideways/stick left still sends logical Left to Dolphin",
-		(mask & (1 << ControllerBindings.JOYPAD_LEFT)) != 0
-		and (mask & (1 << ControllerBindings.JOYPAD_UP)) == 0)
+	_ok((mask & (1 << ControllerBindings.JOYPAD_LEFT)) != 0 and (mask & (1 << ControllerBindings.JOYPAD_UP)) == 0,
+		"sideways/stick left still sends logical Left to Dolphin")
 
 	wm._grab_driver = null
 	wm._holding_ctrl = null
@@ -695,15 +681,14 @@ func _test_a_nunchuk_beats_a_second_hand() -> void:
 	# and the core has no id for the combination either — so the Nunchuk wins and
 	# the second hand is just a second hand.
 	_hold(wm, 2)
-	_ok("a Nunchuk outranks a two-handed grab",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_NC)
-	_ok("and the remote still reports its Nunchuk", wm._has_nunchuk())
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_NC, "a Nunchuk outranks a two-handed grab")
+	_ok(wm._has_nunchuk(), "and the remote still reports its Nunchuk")
 
 	# Pull it and the same two hands mean sideways after all.
 	wm._on_extension_removed()
 	_hold(wm, 2)
-	_ok("pulling it lets the two hands mean sideways",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_SW,
+		"pulling it lets the two hands mean sideways")
 	wm.queue_free()
 	nc.queue_free()
 
@@ -717,14 +702,13 @@ func _test_a_dongle_has_its_own_sideways_id() -> void:
 	wm._on_extension_seated(mp)
 
 	_hold(wm, 1)
-	_ok("a dongle alone is a MotionPlus remote",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP, "a dongle alone is a MotionPlus remote")
 	# Four ids became six for this reason: sideways and the dongle are independent
 	# of each other, so every combination needs its own, and falling back to the
 	# plain sideways id would silently detach a MotionPlus the room can see.
 	_hold(wm, 2)
-	_ok("a dongle held in two hands has an id of its own",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP_SW)
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP_SW,
+		"a dongle held in two hands has an id of its own")
 	wm.queue_free()
 	mp.queue_free()
 
@@ -741,10 +725,10 @@ func _test_a_nunchuk_behind_a_dongle() -> void:
 	# remote cannot see that zone, so this only works if it followed the chain.
 	wm._on_extension_seated(mp)
 	mp._on_nunchuk_seated(nc)
-	_ok("a Nunchuk behind a dongle is still reachable", wm._nunchuk == nc)
-	_ok("the pair is a MotionPlus Nunchuk remote",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP_NC)
-	_ok("and it still sends a second accelerometer", wm._has_nunchuk())
+	_ok(wm._nunchuk == nc, "a Nunchuk behind a dongle is still reachable")
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE_MP_NC,
+		"the pair is a MotionPlus Nunchuk remote")
+	_ok(wm._has_nunchuk(), "and it still sends a second accelerometer")
 	wm.queue_free()
 	mp.queue_free()
 	nc.queue_free()
@@ -758,8 +742,7 @@ func _test_pulling_the_extension() -> void:
 	await get_tree().process_frame
 	wm._on_extension_seated(nc)
 	wm._on_extension_removed()
-	_ok("pulling the Nunchuk puts the remote back",
-		wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE)
-	_ok("and it stops claiming a second accelerometer", not wm._has_nunchuk())
+	_ok(wm.device_type == Wiimote.RETRO_DEVICE_WIIMOTE, "pulling the Nunchuk puts the remote back")
+	_ok(not wm._has_nunchuk(), "and it stops claiming a second accelerometer")
 	wm.queue_free()
 	nc.queue_free()

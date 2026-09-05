@@ -85,21 +85,20 @@ func _test_netplay_cable_guard() -> void:
 	var cable := CompositeCable.new()
 	cable.netplay_manager_override = manager
 	var bus: Array = [{"machine": a, "port": 0}, {"machine": b, "port": 0}]
-	_ok("netplay/a covered join is claimed", cable.netplay_took_bus(bus, []))
+	_ok(cable.netplay_took_bus(bus, []), "netplay/a covered join is claimed")
 	_eq("netplay/and scheduled once", manager.scheduled.size(), 1)
-	_ok("netplay/re-resolving the same seated lead does not schedule twice",
-		cable.netplay_took_bus(bus, []))
+	_ok(cable.netplay_took_bus(bus, []),
+		"netplay/re-resolving the same seated lead does not schedule twice")
 	_eq("netplay/the duplicate join was coalesced", manager.scheduled.size(), 1)
-	_ok("netplay/a pull before the join lands is still claimed",
-		cable.netplay_took_bus([], []))
+	_ok(cable.netplay_took_bus([], []), "netplay/a pull before the join lands is still claimed")
 	_eq("netplay/and schedules the inverse operation", manager.scheduled.size(), 2)
 	if manager.scheduled.size() >= 2:
 		_eq("netplay/the inverse is a pull", manager.scheduled[1]["op"], 0)
 
 	manager.scheduled.clear()
 	var partial: Array = [{"machine": a, "port": 0}, {"machine": outside, "port": 0}]
-	_ok("netplay/a cable crossing the session boundary is claimed and refused",
-		cable.netplay_took_bus(partial, []))
+	_ok(cable.netplay_took_bus(partial, []),
+		"netplay/a cable crossing the session boundary is claimed and refused")
 	_eq("netplay/so no local or scheduled partial bus is made", manager.scheduled.size(), 0)
 	a.free()
 	b.free()
@@ -114,11 +113,11 @@ func _test_netplay_cable_guard() -> void:
 
 func _test_gc_gba_cable() -> void:
 	var scene := load("res://Scenes/Objects/cables/gc_gba_cable.tscn") as PackedScene
-	_ok("the lead has a scene", scene != null)
+	_ok(scene != null, "the lead has a scene")
 	if scene == null:
 		return
 	var lead := scene.instantiate() as GcGbaCable
-	_ok("and it is a GcGbaCable", lead != null)
+	_ok(lead != null, "and it is a GcGbaCable")
 	if lead == null:
 		return
 	add_child(lead)
@@ -126,8 +125,8 @@ func _test_gc_gba_cable() -> void:
 
 	var gc_end := lead.get_node_or_null("PlugA0") as GcLinkPlug
 	var gba_end := lead.get_node_or_null("PlugB0") as LinkPlug
-	_ok("one end is a GameCube plug", gc_end != null)
-	_ok("the other is a handheld plug", gba_end != null)
+	_ok(gc_end != null, "one end is a GameCube plug")
+	_ok(gba_end != null, "the other is a handheld plug")
 	if gc_end == null or gba_end == null:
 		lead.queue_free()
 		return
@@ -135,10 +134,10 @@ func _test_gc_gba_cable() -> void:
 	# The whole point of the two ends being different. A console socket filters
 	# on "controller_plug" and a handheld's EXT port on "link_plug", and neither
 	# end answers to both, so neither can be pushed into the wrong machine.
-	_ok("the console end answers a controller socket", gc_end.is_in_group("controller_plug"))
-	_ok("and is not a handheld plug", gc_end.plug_group() != gba_end.plug_group())
-	_ok("the handheld end answers an EXT port", gba_end.is_in_group("link_plug"))
-	_ok("and is not a controller plug", not gba_end.is_in_group("controller_plug"))
+	_ok(gc_end.is_in_group("controller_plug"), "the console end answers a controller socket")
+	_ok(gc_end.plug_group() != gba_end.plug_group(), "and is not a handheld plug")
+	_ok(gba_end.is_in_group("link_plug"), "the handheld end answers an EXT port")
+	_ok(not gba_end.is_in_group("controller_plug"), "and is not a controller plug")
 
 	# Which console's ports will take it. A GameCube lead is not a Wii lead, and
 	# the socket says so before anything electrical is decided.
@@ -149,11 +148,11 @@ func _test_gc_gba_cable() -> void:
 	_eq("and announces a Game Boy Advance", gc_end.device_type, (7 << 8) | 0)
 
 	# It carries neither picture nor sound, so AvGraph must walk straight past it.
-	_ok("the lead is not an A/V cable", lead.links().is_empty())
+	_ok(lead.links().is_empty(), "the lead is not an A/V cable")
 
 	# Nothing is seated, so it is joined to nothing and says so without faulting.
 	lead._resolve()
-	_ok("an unseated lead joins nothing", true)
+	_ok(true, "an unseated lead joins nothing")
 
 	lead.queue_free()
 	await get_tree().process_frame
@@ -181,25 +180,24 @@ func _test_every_lead_states_its_bus() -> void:
 	}
 	for path: String in leads:
 		var scene := load(path) as PackedScene
-		_ok("%s has a scene" % leads[path], scene != null)
+		_ok(scene != null, "%s has a scene" % leads[path])
 		if scene == null:
 			continue
 		var lead := scene.instantiate()
 		add_child(lead)
 		await get_tree().process_frame
-		_ok("%s can state its bus" % leads[path], lead.has_method("linked_machines"))
-		_ok("%s can name what it holds" % leads[path], lead.has_method("held_machines"))
+		_ok(lead.has_method("linked_machines"), "%s can state its bus" % leads[path])
+		_ok(lead.has_method("held_machines"), "%s can name what it holds" % leads[path])
 		if lead.has_method("linked_machines"):
 			# Seated in nothing, so it joins nothing — and must say that rather
 			# than fault, because _resolve asks before anything is plugged in.
-			_ok("%s joins nothing while unseated" % leads[path],
-				(lead.linked_machines() as Array).is_empty())
-			_ok("%s holds nothing while unseated" % leads[path],
-				(lead.held_machines() as Array).is_empty())
+			_ok((lead.linked_machines() as Array).is_empty(),
+				"%s joins nothing while unseated" % leads[path])
+			_ok((lead.held_machines() as Array).is_empty(),
+				"%s holds nothing while unseated" % leads[path])
 		# And it must defer to a session the same way, which with no session
 		# running means taking the decision itself.
-		_ok("%s acts alone when no game is running" % leads[path],
-			not lead.netplay_took_bus([], []))
+		_ok(not lead.netplay_took_bus([], []), "%s acts alone when no game is running" % leads[path])
 		lead.queue_free()
 		await get_tree().process_frame
 
@@ -228,8 +226,8 @@ func _joined_lead_names_its_pair() -> void:
 	var psx_held: Array = psx.held_machines()
 	_eq("a joined PlayStation lead names two machines", psx_held.size(), 2)
 	if psx_held.size() == 2:
-		_ok("and they are the two it joined",
-			psx_held[0]["machine"] == m1 and psx_held[1]["machine"] == m2)
+		_ok(psx_held[0]["machine"] == m1 and psx_held[1]["machine"] == m2,
+			"and they are the two it joined")
 	psx._disconnect()
 	_eq("a parted PlayStation lead names none", (psx.held_machines() as Array).size(), 0)
 
@@ -241,8 +239,8 @@ func _joined_lead_names_its_pair() -> void:
 	var gc_held: Array = gc.held_machines()
 	_eq("a joined GameCube lead names two machines", gc_held.size(), 2)
 	if gc_held.size() == 2:
-		_ok("console first", gc_held[0]["machine"] == m1)
-		_ok("then the handheld", gc_held[1]["machine"] == m2)
+		_ok(gc_held[0]["machine"] == m1, "console first")
+		_ok(gc_held[1]["machine"] == m2, "then the handheld")
 		_eq("the console keeps its own port number", int(gc_held[0]["port"]), 2)
 		_eq("and the handheld its GameCube conversation",
 			int(gc_held[1]["port"]), GcGbaCable.GBA_JOY_PORT)
@@ -256,8 +254,8 @@ func _joined_lead_names_its_pair() -> void:
 	var hh_held: Array = handheld.held_machines()
 	_eq("a joined handheld lead names two machines", hh_held.size(), 2)
 	if hh_held.size() == 2:
-		_ok("and they are the two it joined",
-			hh_held[0]["machine"] == m1 and hh_held[1]["machine"] == m2)
+		_ok(hh_held[0]["machine"] == m1 and hh_held[1]["machine"] == m2,
+			"and they are the two it joined")
 	handheld._disconnect()
 	_eq("a parted handheld lead names none", (handheld.held_machines() as Array).size(), 0)
 
@@ -269,7 +267,7 @@ func _joined_lead_names_its_pair() -> void:
 	await get_tree().process_frame
 
 
-func _ok(name: String, cond: bool, detail := "") -> void:
+func _ok(cond: bool, name: String, detail := "") -> void:
 	if cond:
 		_pass += 1
 		print("[link] PASS  %s" % name)
@@ -279,7 +277,7 @@ func _ok(name: String, cond: bool, detail := "") -> void:
 
 
 func _eq(name: String, got: Variant, want: Variant) -> void:
-	_ok(name, got == want, "got %s, want %s" % [str(got), str(want)])
+	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
 ## A socket in the tree, so _ready has run. Caller frees it.
@@ -306,11 +304,11 @@ func _test_plug_gating() -> void:
 	# renaming a group cannot quietly open the gate.
 	var rca := RcaPort.new()
 	add_child(rca)
-	_ok("a link socket does not take a phono plug", port.plug_group() != rca.plug_group())
+	_ok(port.plug_group() != rca.plug_group(), "a link socket does not take a phono plug")
 
 	var trs := TrsPort.new()
 	add_child(trs)
-	_ok("a link socket does not take a stereo plug", port.plug_group() != trs.plug_group())
+	_ok(port.plug_group() != trs.plug_group(), "a link socket does not take a stereo plug")
 
 	# The gate is enforced through the snap zone, so the requirement has to have
 	# actually been applied and not just be available to read.
@@ -328,7 +326,7 @@ func _test_port_pins_its_channel() -> void:
 	# picture nor sound, so it is pinned rather than left for a scene to set
 	# wrong.
 	_eq("channel is pinned", port.channel, RcaPort.Channel.VIDEO)
-	_ok("the jack visual is off", not port.show_jack)
+	_ok(not port.show_jack, "the jack visual is off")
 	port.queue_free()
 
 
@@ -453,18 +451,18 @@ const PORT_SCENE := "res://Scenes/Objects/cables/link_port.tscn"
 
 func _test_cable_scene() -> void:
 	var packed: PackedScene = load(CABLE_SCENE)
-	_ok("the cable scene loads", packed != null)
+	_ok(packed != null, "the cable scene loads")
 	if packed == null:
 		return
 	var cable := packed.instantiate() as LinkCable
-	_ok("it builds as a LinkCable", cable != null)
+	_ok(cable != null, "it builds as a LinkCable")
 	if cable == null:
 		return
 	add_child(cable)
 
 	var a := cable.get_node_or_null("PlugA0") as LinkPlug
 	var b := cable.get_node_or_null("PlugB0") as LinkPlug
-	_ok("both ends are link plugs", a != null and b != null)
+	_ok(a != null and b != null, "both ends are link plugs")
 	if a == null or b == null:
 		cable.queue_free()
 		return
@@ -473,22 +471,21 @@ func _test_cable_scene() -> void:
 	# would send it down the ribbon path looking for a breakout that does not
 	# exist.
 	_eq("it is a one-cord lead", cable.cord_count(), 1)
-	_ok("it has a rope", cable.get_node_or_null("VerletRope") != null)
+	_ok(cable.get_node_or_null("VerletRope") != null, "it has a rope")
 
 	# Both ends answer to the group their sockets require, which is the whole of
 	# what decides where this lead will go.
-	_ok("end A is in the link group", a.is_in_group("link_plug"))
-	_ok("end B is in the link group", b.is_in_group("link_plug"))
+	_ok(a.is_in_group("link_plug"), "end A is in the link group")
+	_ok(b.is_in_group("link_plug"), "end B is in the link group")
 
 	# The trap the two-mesh split exists for. RcaPlug derives the cord's exit from
 	# PlugTip's AABB alone, so folding the keyed nose into that mesh would drag
 	# the anchor forward of the mating face and run the tail out through the
 	# barrel. The shell is 20 mm deep behind an origin that sits on that face, so
 	# the cord has to leave 20 mm back.
-	_ok("the cord leaves the back of the shell",
-		absf(a.cable_anchor.z - -0.02) < 0.0005,
-		"anchor z = %f" % a.cable_anchor.z)
-	_ok("and on the axis", absf(a.cable_anchor.x) < 0.0005 and absf(a.cable_anchor.y) < 0.0005)
+	_ok(absf(a.cable_anchor.z - -0.02) < 0.0005,
+		"the cord leaves the back of the shell", "anchor z = %f" % a.cable_anchor.z)
+	_ok(absf(a.cable_anchor.x) < 0.0005 and absf(a.cable_anchor.y) < 0.0005, "and on the axis")
 
 	# The two ends are not interchangeable and the shells have to say so. End A is
 	# always handed to LinkConnect first, so its machine owns the clock, and on
@@ -498,21 +495,21 @@ func _test_cable_scene() -> void:
 	# turning a two-tone lead into one colour.
 	var ma := (a.get_node("PlugTip") as MeshInstance3D).get_surface_override_material(0) as StandardMaterial3D
 	var mb := (b.get_node("PlugTip") as MeshInstance3D).get_surface_override_material(0) as StandardMaterial3D
-	_ok("both shells are painted", ma != null and mb != null)
+	_ok(ma != null and mb != null, "both shells are painted")
 	if ma != null and mb != null:
-		_ok("the two ends are different colours", ma.albedo_color != mb.albedo_color,
-			"both %s" % str(ma.albedo_color))
+		_ok(ma.albedo_color != mb.albedo_color,
+			"the two ends are different colours", "both %s" % str(ma.albedo_color))
 		# The master end is the purple one, so it has to be the bluer of the two.
-		_ok("end A is the purple shell", ma.albedo_color.b > ma.albedo_color.r + 0.1,
-			"A = %s" % str(ma.albedo_color))
-		_ok("end B is the grey shell", absf(mb.albedo_color.b - mb.albedo_color.r) < 0.06,
-			"B = %s" % str(mb.albedo_color))
+		_ok(ma.albedo_color.b > ma.albedo_color.r + 0.1,
+			"end A is the purple shell", "A = %s" % str(ma.albedo_color))
+		_ok(absf(mb.albedo_color.b - mb.albedo_color.r) < 0.06,
+			"end B is the grey shell", "B = %s" % str(mb.albedo_color))
 
 	# The junction, which is what makes a third and fourth player possible. A
 	# socket that looked real and refused a plug would be worse than none, so it
 	# is a full LinkPort and has to answer as one.
 	var j := cable.junction_port()
-	_ok("the lead carries a junction", j != null)
+	_ok(j != null, "the lead carries a junction")
 	if j != null:
 		_eq("it takes the same plugs the machines do", j.snap_require, "link_plug")
 		# The two kinds of socket have to be told apart during the chain walk:
@@ -526,11 +523,11 @@ func _test_cable_scene() -> void:
 
 func _test_port_scene() -> void:
 	var packed: PackedScene = load(PORT_SCENE)
-	_ok("the port scene loads", packed != null)
+	_ok(packed != null, "the port scene loads")
 	if packed == null:
 		return
 	var port := packed.instantiate() as LinkPort
-	_ok("it builds as a LinkPort", port != null)
+	_ok(port != null, "it builds as a LinkPort")
 	if port == null:
 		return
 	add_child(port)
@@ -541,8 +538,8 @@ func _test_port_scene() -> void:
 
 	# Named LinkJack rather than RcaJack on purpose, so the inherited channel
 	# tinting cannot repaint a socket that carries no signal.
-	_ok("its jack is out of RcaPort's reach", port.get_node_or_null("RcaJack") == null)
-	_ok("but it has one", port.get_node_or_null("LinkJack") != null)
+	_ok(port.get_node_or_null("RcaJack") == null, "its jack is out of RcaPort's reach")
+	_ok(port.get_node_or_null("LinkJack") != null, "but it has one")
 
 	port.queue_free()
 	await get_tree().process_frame
@@ -560,11 +557,11 @@ func _test_cable_is_spawnable() -> void:
 	for item: Dictionary in items:
 		if str(item.get("spawn", "")) == "link_cable":
 			found = true
-			_ok("it is offered under the Game Boy Advance", true)
-			_ok("and it is labelled", not str(item.get("label", "")).is_empty())
+			_ok(true, "it is offered under the Game Boy Advance")
+			_ok(not str(item.get("label", "")).is_empty(), "and it is labelled")
 	if not found:
-		_ok("it is offered under the Game Boy Advance", false,
-			"%d items, none of them the link cable" % items.size())
+		_ok(false,
+			"it is offered under the Game Boy Advance", "%d items, none of them the link cable" % items.size())
 
 	# Offered only where there is a socket to put it in. A console with no EXT
 	# port listing a link lead would be an invitation to nothing.
@@ -573,7 +570,7 @@ func _test_cable_is_spawnable() -> void:
 	for item: Dictionary in console:
 		if str(item.get("spawn", "")) == "link_cable":
 			stray = true
-	_ok("and not offered where nothing takes it", not stray)
+	_ok(not stray, "and not offered where nothing takes it")
 
 
 ## A machine that answers the question LinkPort walks for, without being one.
@@ -617,8 +614,8 @@ func _test_lid_clears_the_socket() -> void:
 	var lid := sp.get_node_or_null("LidPivot/Lid") as MeshInstance3D
 	var barrel := sp.get_node_or_null("HingeBarrel") as MeshInstance3D
 	var body := sp.get_node_or_null("HandheldBody") as MeshInstance3D
-	_ok("the SP has a socket, a lid, a barrel and a body",
-		port != null and lid != null and barrel != null and body != null)
+	_ok(port != null and lid != null and barrel != null and body != null,
+		"the SP has a socket, a lid, a barrel and a body")
 	if port == null or lid == null or barrel == null or body == null:
 		sp.queue_free()
 		for l: Node3D in leads:
@@ -649,8 +646,8 @@ func _test_lid_clears_the_socket() -> void:
 			var mi := child as MeshInstance3D
 			if mi != null and mi.mesh != null:
 				shells.append(mi)
-	_ok("both leads have a shell to measure", shells.size() >= 4,
-		"%d meshes over %d leads" % [shells.size(), leads.size()])
+	_ok(shells.size() >= 4,
+		"both leads have a shell to measure", "%d meshes over %d leads" % [shells.size(), leads.size()])
 	var lid_box := (lid.mesh as BoxMesh).size
 
 	# Every degree of the travel, because the clash does not have to be at either
@@ -673,13 +670,13 @@ func _test_lid_clears_the_socket() -> void:
 				worst_at = reached
 	print("[link] lid clearance over a seated lead: %.2f mm, closest at %.0f degrees open"
 		% [worst * 1000.0, worst_at])
-	_ok("the lid never touches a seated lead", worst > 0.0,
-		"closest %.1f mm at %.0f degrees open" % [worst * 1000.0, worst_at])
+	_ok(worst > 0.0,
+		"the lid never touches a seated lead", "closest %.1f mm at %.0f degrees open" % [worst * 1000.0, worst_at])
 
 	# And with room to spare, because a hand-driven lid overshoots and a snapped
 	# plug wobbles in its zone. A hair's clearance reads as a clash on a headset.
-	_ok("and clears it by more than a millimetre", worst > 0.001,
-		"closest %.1f mm" % (worst * 1000.0))
+	_ok(worst > 0.001,
+		"and clears it by more than a millimetre", "closest %.1f mm" % (worst * 1000.0))
 
 	# The socket is outboard of the barrel. This is the whole reason the barrel
 	# was narrowed: on the real machine the hinge takes the middle of that edge
@@ -689,20 +686,20 @@ func _test_lid_clears_the_socket() -> void:
 	var plug_half := 0.0
 	for mi: MeshInstance3D in shells:
 		plug_half = maxf(plug_half, mi.mesh.get_aabb().size.x * 0.5)
-	_ok("the socket sits outboard of the hinge barrel", port_x - plug_half > barrel_half,
-		"socket edge %.1f mm, barrel end %.1f mm" % [(port_x - plug_half) * 1000.0, barrel_half * 1000.0])
-	_ok("and the barrel is narrower than the machine",
-		barrel_half * 2.0 < (body.mesh as BoxMesh).size.x)
+	_ok(port_x - plug_half > barrel_half,
+		"the socket sits outboard of the hinge barrel", "socket edge %.1f mm, barrel end %.1f mm" % [(port_x - plug_half) * 1000.0, barrel_half * 1000.0])
+	_ok(barrel_half * 2.0 < (body.mesh as BoxMesh).size.x,
+		"and the barrel is narrower than the machine")
 
 	# The pivot stands proud of the deck. A hinge buried in the top face turns the
 	# lid about a line inside the shell, which is what put it through its own back
 	# edge, and it is also just visibly wrong: a real SP's hinge is a raised boss.
 	var deck_y: float = (body.mesh as BoxMesh).size.y * 0.5
-	_ok("the hinge stands proud of the deck", barrel.position.y + barrel_half * 0.0 > deck_y,
-		"barrel axis at %.1f mm, deck at %.1f mm" % [barrel.position.y * 1000.0, deck_y * 1000.0])
+	_ok(barrel.position.y + barrel_half * 0.0 > deck_y,
+		"the hinge stands proud of the deck", "barrel axis at %.1f mm, deck at %.1f mm" % [barrel.position.y * 1000.0, deck_y * 1000.0])
 	var pivot := sp.get_node_or_null("LidPivot") as Node3D
-	_ok("and the lid turns about the barrel, not beside it",
-		pivot != null and pivot.position.distance_to(barrel.position) < 0.0005)
+	_ok(pivot != null and pivot.position.distance_to(barrel.position) < 0.0005,
+		"and the lid turns about the barrel, not beside it")
 
 	# Shut still means shut. Raising the pivot moves every child of it, so the
 	# compensating drop is what keeps a closed lid lying on the body rather than
@@ -710,8 +707,8 @@ func _test_lid_clears_the_socket() -> void:
 	sp.set_lid_angle_deg(0.0)
 	var shut_y: float = lid.global_position.y
 	var want_y: float = deck_y + lid_box.y * 0.5
-	_ok("a shut lid lies flush on the body", absf(shut_y - want_y) < 0.0005,
-		"lid centre at %.1f mm, flush would be %.1f mm" % [shut_y * 1000.0, want_y * 1000.0])
+	_ok(absf(shut_y - want_y) < 0.0005,
+		"a shut lid lies flush on the body", "lid centre at %.1f mm, flush would be %.1f mm" % [shut_y * 1000.0, want_y * 1000.0])
 
 	sp.queue_free()
 	for l: Node3D in leads:
@@ -766,8 +763,8 @@ func _test_bus_head_is_the_same_on_every_peer() -> void:
 	second.name = "LeadTwo"
 	await get_tree().process_frame
 
-	_ok("allocation order is what it looks like",
-		first.get_instance_id() < second.get_instance_id())
+	_ok(first.get_instance_id() < second.get_instance_id(),
+		"allocation order is what it looks like")
 
 	var wire: Array[Node3D] = [first, second]
 	# Numbered against the allocation order on purpose. A head picked by instance
@@ -775,34 +772,34 @@ func _test_bus_head_is_the_same_on_every_peer() -> void:
 	# so this case cannot pass by accident.
 	first.set_meta("net_id", 7)
 	second.set_meta("net_id", 3)
-	_ok("the head follows the minted id, not the allocation order",
-		first._bus_head(wire) == second)
+	_ok(first._bus_head(wire) == second,
+		"the head follows the minted id, not the allocation order")
 
 	# And the other way about, so the case is not just reading a fixed answer.
 	first.set_meta("net_id", 2)
 	second.set_meta("net_id", 9)
-	_ok("and it moves when the minted ids move", first._bus_head(wire) == first)
+	_ok(first._bus_head(wire) == first, "and it moves when the minted ids move")
 
 	# Both leads agree, which is the property the wire actually needs: they each
 	# run this walk separately and only one of them may conclude it is the head.
-	_ok("and both leads name the same head", first._bus_head(wire) == second._bus_head(wire))
+	_ok(first._bus_head(wire) == second._bus_head(wire), "and both leads name the same head")
 
 	# With nothing minted, the fallback is the node path. Cables are not
 	# registered today, so this is the case that runs in a real session.
 	first.remove_meta("net_id")
 	second.remove_meta("net_id")
-	_ok("an unregistered lead is keyed by its path",
-		LinkCable.stable_key(first) == str(first.get_path()))
-	_ok("and two of them are keyed apart",
-		LinkCable.stable_key(first) != LinkCable.stable_key(second))
+	_ok(LinkCable.stable_key(first) == str(first.get_path()),
+		"an unregistered lead is keyed by its path")
+	_ok(LinkCable.stable_key(first) != LinkCable.stable_key(second),
+		"and two of them are keyed apart")
 	var by_path: Node3D = first if str(first.get_path()) < str(second.get_path()) else second
-	_ok("the head is the lower path", first._bus_head(wire) == by_path)
+	_ok(first._bus_head(wire) == by_path, "the head is the lower path")
 
 	# A minted lead never sorts into the middle of unregistered ones. Mixed keys
 	# are a transient, but a transient that reordered the bus would restart both
 	# machines for no reason a player could see.
 	second.set_meta("net_id", 999999)
-	_ok("a minted lead outranks an unminted one", first._bus_head(wire) == second)
+	_ok(first._bus_head(wire) == second, "a minted lead outranks an unminted one")
 
 	first.queue_free()
 	second.queue_free()
@@ -821,7 +818,7 @@ func _test_bus_head_is_the_same_on_every_peer() -> void:
 
 func _test_the_lead_will_seat() -> void:
 	var sys_scene := load("res://Scenes/Objects/system.tscn") as PackedScene
-	_ok("the machine scene loads", sys_scene != null)
+	_ok(sys_scene != null, "the machine scene loads")
 	if sys_scene == null:
 		return
 
@@ -840,8 +837,8 @@ func _test_the_lead_will_seat() -> void:
 
 	var slot := console.find_child("ControllerPort1", true, false) as XRToolsSnapZone
 	var ext := handheld.find_child("LinkPort", true, false) as XRToolsSnapZone
-	_ok("the console has a controller socket", slot != null)
-	_ok("the handheld has an EXT socket", ext != null)
+	_ok(slot != null, "the console has a controller socket")
+	_ok(ext != null, "the handheld has an EXT socket")
 	if slot == null or ext == null:
 		console.queue_free()
 		handheld.queue_free()
@@ -854,19 +851,18 @@ func _test_the_lead_will_seat() -> void:
 	var link_end := pair.get_node_or_null("PlugA0") as Node3D
 
 	# The two that must work. Either one refusing makes the lead a prop.
-	_ok("the console end goes into a controller socket", slot.can_preview(gc_end),
-		"require '%s', plug in %s" % [slot.snap_require, str(gc_end.get_groups())])
-	_ok("the handheld end goes into an EXT socket", ext.can_preview(gba_end),
-		"require '%s', plug in %s" % [ext.snap_require, str(gba_end.get_groups())])
+	_ok(slot.can_preview(gc_end),
+		"the console end goes into a controller socket", "require '%s', plug in %s" % [slot.snap_require, str(gc_end.get_groups())])
+	_ok(ext.can_preview(gba_end),
+		"the handheld end goes into an EXT socket", "require '%s', plug in %s" % [ext.snap_require, str(gba_end.get_groups())])
 
 	# And the four that must not, which is the whole reason the ends are
 	# different shapes.
-	_ok("the console end does not go into an EXT socket", not ext.can_preview(gc_end))
-	_ok("the handheld end does not go into a controller socket",
-		not slot.can_preview(gba_end))
-	_ok("a handheld link lead does not go into a controller socket",
-		not slot.can_preview(link_end))
-	_ok("but it does go into an EXT socket", ext.can_preview(link_end))
+	_ok(not ext.can_preview(gc_end), "the console end does not go into an EXT socket")
+	_ok(not slot.can_preview(gba_end), "the handheld end does not go into a controller socket")
+	_ok(not slot.can_preview(link_end),
+		"a handheld link lead does not go into a controller socket")
+	_ok(ext.can_preview(link_end), "but it does go into an EXT socket")
 
 	# Seat the asymmetric lead through the real socket APIs, then ask the real
 	# machine discovery method for its bus. The GameCube end exists only in the
@@ -882,12 +878,10 @@ func _test_the_lead_will_seat() -> void:
 	gba_end.remove_from_group("link_plug")
 	var console_bus: Array = console.net_link_bus()
 	_eq("netplay finds a bus through the controller socket", console_bus.size(), 2)
-	_ok("and that bus contains the GameCube",
-		console_bus.any(func(entry: Dictionary) -> bool:
-			return entry.get("machine") == console))
-	_ok("and that bus contains the handheld",
-		console_bus.any(func(entry: Dictionary) -> bool:
-			return entry.get("machine") == handheld))
+	_ok(console_bus.any(func(entry: Dictionary) -> bool: return entry.get("machine") == console),
+		"and that bus contains the GameCube")
+	_ok(console_bus.any(func(entry: Dictionary) -> bool: return entry.get("machine") == handheld),
+		"and that bus contains the handheld")
 	gba_end.add_to_group("link_plug")
 
 	console.queue_free()
@@ -920,7 +914,7 @@ func _test_a_seated_plug_sits_outside() -> void:
 	await get_tree().process_frame
 
 	var junction := lead.junction_port()
-	_ok("the lead carries a junction socket", junction != null)
+	_ok(junction != null, "the lead carries a junction socket")
 	var plug := other.get_node_or_null("PlugA0") as RigidBody3D
 	if junction == null or plug == null:
 		lead.queue_free()
@@ -939,7 +933,7 @@ func _test_a_seated_plug_sits_outside() -> void:
 	var block := lead.get_node_or_null("Junction") as Node3D
 	var into := block.global_transform.affine_inverse()
 	var shell := plug.get_node_or_null(SHELL) as MeshInstance3D
-	_ok("the block and the plug's shell are both there", block != null and shell != null)
+	_ok(block != null and shell != null, "the block and the plug's shell are both there")
 	if block == null or shell == null:
 		lead.queue_free()
 		other.queue_free()
@@ -951,21 +945,21 @@ func _test_a_seated_plug_sits_outside() -> void:
 	var box: BoxMesh = (lead.get_node("Junction/Box") as MeshInstance3D).mesh
 	half = box.size.x * 0.5
 	var at: Vector3 = into * shell.global_position
-	_ok("the shell sits outside the junction block", absf(at.x) > half,
-		"shell centre %.1f mm out, the block's face is at %.1f mm" % [at.x * 1000.0, half * 1000.0])
+	_ok(absf(at.x) > half,
+		"the shell sits outside the junction block", "shell centre %.1f mm out, the block's face is at %.1f mm" % [at.x * 1000.0, half * 1000.0])
 
 	# And on the side the socket is on, rather than out through the far wall.
 	var port_at: Vector3 = into * junction.global_position
-	_ok("and on the socket's own side", signf(at.x) == signf(port_at.x),
-		"shell at %.1f mm, socket at %.1f mm" % [at.x * 1000.0, port_at.x * 1000.0])
+	_ok(signf(at.x) == signf(port_at.x),
+		"and on the socket's own side", "shell at %.1f mm, socket at %.1f mm" % [at.x * 1000.0, port_at.x * 1000.0])
 
 	# The nose is the other half of the same fact and fails the opposite way, so
 	# a socket turned round cannot pass both.
 	var nose := plug.get_node_or_null("PlugNose") as MeshInstance3D
 	if nose != null:
 		var nose_at: Vector3 = into * nose.global_position
-		_ok("and the nose is inside it", absf(nose_at.x) < half,
-			"nose centre %.1f mm out" % (nose_at.x * 1000.0))
+		_ok(absf(nose_at.x) < half,
+			"and the nose is inside it", "nose centre %.1f mm out" % (nose_at.x * 1000.0))
 
 	lead.queue_free()
 	other.queue_free()
@@ -1042,15 +1036,13 @@ func _test_a_junction_plug_keeps_up() -> void:
 
 	# The sweep has to have MOVED the block, or the case below is measuring a
 	# cord standing still and cannot fail.
-	_ok("the sweep moves the junction", travelled > 2.0,
-		"%.2f mm/tick at the peak" % travelled)
+	_ok(travelled > 2.0, "the sweep moves the junction", "%.2f mm/tick at the peak" % travelled)
 	# A plug in a machine's socket is the control: same driver, same sweep, and
 	# it has never had this problem.
-	_ok("a plug in a machine socket stays seated", worst_machine < 0.5,
-		"%.2f mm out at the peak" % worst_machine)
-	_ok("a plug in the junction stays seated too", worst_junction < 0.5,
-		"%.2f mm out at the peak, against %.2f mm/tick of junction travel"
-			% [worst_junction, travelled])
+	_ok(worst_machine < 0.5,
+		"a plug in a machine socket stays seated", "%.2f mm out at the peak" % worst_machine)
+	_ok(worst_junction < 0.5,
+		"a plug in the junction stays seated too", "%.2f mm out at the peak, against %.2f mm/tick of junction travel" % [worst_junction, travelled])
 
 	room.queue_free()
 	await get_tree().process_frame
@@ -1111,10 +1103,10 @@ func _test_the_junction_does_not_snap_through_vertical() -> void:
 
 	# The swing has to actually reach vertical, or there is no degenerate aim to
 	# survive and the case cannot fail.
-	_ok("the swung cord runs vertical through the block", most_vertical > 0.95,
-		"cord-vs-up %.3f at the closest" % most_vertical)
-	_ok("and the block turns with it rather than snapping round", worst_roll < 15.0,
-		"%.2f deg in one tick at the peak" % worst_roll)
+	_ok(most_vertical > 0.95,
+		"the swung cord runs vertical through the block", "cord-vs-up %.3f at the closest" % most_vertical)
+	_ok(worst_roll < 15.0,
+		"and the block turns with it rather than snapping round", "%.2f deg in one tick at the peak" % worst_roll)
 
 	room.queue_free()
 	await get_tree().process_frame
@@ -1134,7 +1126,7 @@ func _test_a_machine_takes_a_plug_the_same_way() -> void:
 
 	var port := handheld.find_child("LinkPort", true, false) as XRToolsSnapZone
 	var plug := lead.get_node_or_null("PlugA0") as RigidBody3D
-	_ok("the handheld has a socket to measure", port != null and plug != null)
+	_ok(port != null and plug != null, "the handheld has a socket to measure")
 	if port == null or plug == null:
 		handheld.queue_free()
 		lead.queue_free()
@@ -1152,8 +1144,8 @@ func _test_a_machine_takes_a_plug_the_same_way() -> void:
 	var shell := plug.get_node_or_null(SHELL) as MeshInstance3D
 	var out: Vector3 = port.global_basis.z.normalized()
 	var reach: float = (shell.global_position - port.global_position).dot(out)
-	_ok("the shell sits outside the machine", reach > 0.0,
-		"shell centre %.1f mm along the socket's axis, and out is positive" % (reach * 1000.0))
+	_ok(reach > 0.0,
+		"the shell sits outside the machine", "shell centre %.1f mm along the socket's axis, and out is positive" % (reach * 1000.0))
 
 	handheld.queue_free()
 	lead.queue_free()
@@ -1177,29 +1169,29 @@ func _test_each_end_says_what_it_is() -> void:
 	var console_end := lead.get_node_or_null("PlugA0") as RcaPlug
 	var handheld_end := lead.get_node_or_null("PlugB0") as RcaPlug
 	var link_end := pair.get_node_or_null("PlugA0") as RcaPlug
-	_ok("both ends of the console lead are there",
-		console_end != null and handheld_end != null and link_end != null)
+	_ok(console_end != null and handheld_end != null and link_end != null,
+		"both ends of the console lead are there")
 	if console_end == null or handheld_end == null or link_end == null:
 		lead.queue_free()
 		pair.queue_free()
 		return
 
-	_ok("the console end names itself", console_end.plug_label().contains("GameCube"),
-		console_end.plug_label())
-	_ok("the handheld end names itself",
-		handheld_end.plug_label().contains("Game Boy Advance"), handheld_end.plug_label())
+	_ok(console_end.plug_label().contains("GameCube"),
+		"the console end names itself", console_end.plug_label())
+	_ok(handheld_end.plug_label().contains("Game Boy Advance"),
+		"the handheld end names itself", handheld_end.plug_label())
 	# The point of the labels: a player who cannot tell the ends apart by shape
 	# can tell them apart by what the room calls them.
-	_ok("and the two ends are not called the same thing",
-		console_end.plug_label() != handheld_end.plug_label())
+	_ok(console_end.plug_label() != handheld_end.plug_label(),
+		"and the two ends are not called the same thing")
 	# The handheld end of a console lead and a plain link lead's end are the same
 	# connector, so they must be called the same thing. Calling them differently
 	# would be a distinction the hardware does not make.
-	_ok("a link lead's end is the same connector as the console lead's handheld end",
-		handheld_end.plug_label() == link_end.plug_label())
+	_ok(handheld_end.plug_label() == link_end.plug_label(),
+		"a link lead's end is the same connector as the console lead's handheld end")
 	# Every plug has to answer this, not just the ones added for the console
 	# lead: the message that uses it is on RcaPlug and runs for all of them.
-	_ok("and the base connector has a name too", not RcaPlug.new().plug_label().is_empty())
+	_ok(not RcaPlug.new().plug_label().is_empty(), "and the base connector has a name too")
 
 	lead.queue_free()
 	pair.queue_free()
@@ -1250,28 +1242,25 @@ func _test_every_socket_can_be_saved() -> void:
 	for seat: Dictionary in lead.seating():
 		if seat.get("plug") == gc_end:
 			console_seat = seat
-	_ok("a controller socket can be described in a save",
-		console_seat.get("device") != null and not str(console_seat.get("port", "")).is_empty(),
-		"owner %s, port '%s'" % [str(console_seat.get("device")), str(console_seat.get("port", ""))])
-	_ok("and it names the console it is on", console_seat.get("device") == console)
+	_ok(console_seat.get("device") != null and not str(console_seat.get("port", "")).is_empty(),
+		"a controller socket can be described in a save", "owner %s, port '%s'" % [str(console_seat.get("device")), str(console_seat.get("port", ""))])
+	_ok(console_seat.get("device") == console, "and it names the console it is on")
 
 	var junction_seat := {}
 	for seat: Dictionary in chained.seating():
 		if seat.get("plug") == chained_end:
 			junction_seat = seat
-	_ok("a junction can be described in a save",
-		junction_seat.get("device") != null and not str(junction_seat.get("port", "")).is_empty(),
-		"owner %s, port '%s'" % [str(junction_seat.get("device")), str(junction_seat.get("port", ""))])
-	_ok("and it names the lead the junction is moulded into",
-		junction_seat.get("device") == pair)
+	_ok(junction_seat.get("device") != null and not str(junction_seat.get("port", "")).is_empty(),
+		"a junction can be described in a save", "owner %s, port '%s'" % [str(junction_seat.get("device")), str(junction_seat.get("port", ""))])
+	_ok(junction_seat.get("device") == pair, "and it names the lead the junction is moulded into")
 
 	# The round trip that matters: what was written has to find the socket again.
 	for spec in [[lead, console_seat], [chained, junction_seat]]:
 		var owner_node: Node = spec[1].get("device")
 		var pname: String = str(spec[1].get("port", ""))
 		var found: XRToolsSnapZone = CompositeCable.port_named(owner_node, pname)
-		_ok("and the saved pair finds that socket again on load", found != null,
-			"looked for '%s' under %s" % [pname, str(owner_node)])
+		_ok(found != null,
+			"and the saved pair finds that socket again on load", "looked for '%s' under %s" % [pname, str(owner_node)])
 
 	console.queue_free()
 	handheld.queue_free()
@@ -1318,14 +1307,14 @@ func _test_psx_plug_gating() -> void:
 	add_child(gba)
 	var gba_plug := LinkPlug.new()
 	add_child(gba_plug)
-	_ok("a PlayStation socket does not take a handheld link plug",
-		port.plug_group() != gba_plug.plug_group())
-	_ok("a handheld socket does not take a PlayStation link plug",
-		gba.plug_group() != plug.plug_group())
+	_ok(port.plug_group() != gba_plug.plug_group(),
+		"a PlayStation socket does not take a handheld link plug")
+	_ok(gba.plug_group() != plug.plug_group(),
+		"a handheld socket does not take a PlayStation link plug")
 
 	var rca := RcaPort.new()
 	add_child(rca)
-	_ok("nor does it take a phono plug", port.plug_group() != rca.plug_group())
+	_ok(port.plug_group() != rca.plug_group(), "nor does it take a phono plug")
 
 	# link_port is inherited and a PlayStation has exactly one serial socket, so
 	# it stays where it started. The export exists for hardware that has more.
@@ -1353,9 +1342,9 @@ func _test_psx_cable_is_spawnable() -> void:
 	for item: Dictionary in items:
 		if str(item.get("spawn", "")) == "psx_link_cable":
 			found = true
-			_ok("and it is labelled", not str(item.get("label", "")).is_empty())
-	_ok("it is offered under the PlayStation", found,
-		"%d items, none of them the PlayStation link cable" % items.size())
+			_ok(not str(item.get("label", "")).is_empty(), "and it is labelled")
+	_ok(found,
+		"it is offered under the PlayStation", "%d items, none of them the PlayStation link cable" % items.size())
 
 	# Offered only where there is a socket to put it in.
 	var handheld: Array = SpawnCatalog.items_for("game_boy_advance")
@@ -1363,7 +1352,7 @@ func _test_psx_cable_is_spawnable() -> void:
 	for item: Dictionary in handheld:
 		if str(item.get("spawn", "")) == "psx_link_cable":
 			stray = true
-	_ok("and not offered to a machine with no serial port", not stray)
+	_ok(not stray, "and not offered to a machine with no serial port")
 
 
 func _test_psx_socket_follows_the_hardware() -> void:
@@ -1371,7 +1360,7 @@ func _test_psx_socket_follows_the_hardware() -> void:
 	# about the hardware rather than about the model: SystemInfo.serial_port is the
 	# same kind of switch as memory_cards, which is what shows the card slot.
 	var sys_scene := load("res://Scenes/Objects/system.tscn") as PackedScene
-	_ok("the machine scene loads", sys_scene != null)
+	_ok(sys_scene != null, "the machine scene loads")
 	if sys_scene == null:
 		return
 
@@ -1390,10 +1379,9 @@ func _test_psx_socket_follows_the_hardware() -> void:
 	await get_tree().process_frame
 
 	var on_psx := psx.find_child("PsxLinkPort", true, false) as PsxLinkPort
-	_ok("a PlayStation wears a serial socket", on_psx != null)
+	_ok(on_psx != null, "a PlayStation wears a serial socket")
 	var on_plain := plain.find_child("PsxLinkPort", true, false)
-	_ok("a console with no serial port does not, on the same body",
-		on_plain == null)
+	_ok(on_plain == null, "a console with no serial port does not, on the same body")
 
 	if on_psx != null:
 		# Behind the machine, not inside it: the socket has to be reachable by a
@@ -1406,11 +1394,11 @@ func _test_psx_socket_follows_the_hardware() -> void:
 		# at -0.093 and a socket correctly on it failed a threshold written for a
 		# machine 60 mm longer.
 		var panel := _panel_face_z(psx, psx.to_local(on_psx.global_position))
-		_ok("it is on the back panel", on_psx.position.z <= panel + 0.002,
-			"z = %.4f against a panel at %.4f" % [on_psx.position.z, panel])
+		_ok(on_psx.position.z <= panel + 0.002,
+			"it is on the back panel", "z = %.4f against a panel at %.4f" % [on_psx.position.z, panel])
 		var av_gap := _nearest_av_gap(psx, on_psx.position.x)
-		_ok("and clear of the A/V sockets", av_gap > 0.02,
-			"nearest A/V socket is %.1f mm away" % (av_gap * 1000.0))
+		_ok(av_gap > 0.02,
+			"and clear of the A/V sockets", "nearest A/V socket is %.1f mm away" % (av_gap * 1000.0))
 		# The machine behind the socket is the one it is bolted to, which is what
 		# the cable resolves through.
 		_eq("and it belongs to that machine", on_psx.get_machine(), psx)
@@ -1440,8 +1428,8 @@ func _test_psx_lead_will_seat() -> void:
 	var serial := a.find_child("PsxLinkPort", true, false) as XRToolsSnapZone
 	var ext := handheld.find_child("LinkPort", true, false) as XRToolsSnapZone
 	var pad := a.find_child("ControllerPort1", true, false) as XRToolsSnapZone
-	_ok("the console has a serial socket", serial != null)
-	_ok("the handheld has an EXT socket", ext != null)
+	_ok(serial != null, "the console has a serial socket")
+	_ok(ext != null, "the handheld has an EXT socket")
 	if serial == null or ext == null or pad == null:
 		a.queue_free()
 		handheld.queue_free()
@@ -1455,16 +1443,14 @@ func _test_psx_lead_will_seat() -> void:
 
 	# Symmetric, unlike the GameCube lead: this is a null modem between peers, so
 	# either end goes in either console and there is no wrong way round.
-	_ok("either end goes into a serial socket",
-		serial.can_preview(end_a) and serial.can_preview(end_b),
-		"require '%s', plug in %s" % [serial.snap_require, str(end_a.get_groups())])
+	_ok(serial.can_preview(end_a) and serial.can_preview(end_b),
+		"either end goes into a serial socket", "require '%s', plug in %s" % [serial.snap_require, str(end_a.get_groups())])
 
 	# And the three that must not.
-	_ok("a PlayStation lead does not go into a handheld's EXT socket",
-		not ext.can_preview(end_a))
-	_ok("nor into a controller socket", not pad.can_preview(end_a))
-	_ok("and a handheld link lead does not go into a serial socket",
-		not serial.can_preview(gba_end))
+	_ok(not ext.can_preview(end_a), "a PlayStation lead does not go into a handheld's EXT socket")
+	_ok(not pad.can_preview(end_a), "nor into a controller socket")
+	_ok(not serial.can_preview(gba_end),
+		"and a handheld link lead does not go into a serial socket")
 
 	a.queue_free()
 	handheld.queue_free()
@@ -1505,7 +1491,7 @@ func _test_psx_cable_joins_a_pair() -> void:
 	# resolves whenever either of its plugs moves.
 	var was: Variant = cable._linked
 	cable._join(a, b)
-	_ok("re-stating the same pair is a no-op", cable._linked == was)
+	_ok(cable._linked == was, "re-stating the same pair is a no-op")
 
 	cable._disconnect()
 	_eq("pulling a plug parts them", cable._linked.size(), 0)
@@ -1549,7 +1535,7 @@ func _test_psx_socket_is_in_the_panel() -> void:
 	var body := psx.find_child("SystemBody", true, false) as MeshInstance3D
 	var port := psx.find_child("PsxLinkPort", true, false) as Node3D
 	var jack := port.find_child("PsxLinkJack", true, false) as MeshInstance3D if port != null else null
-	_ok("the console has a body and a socket", body != null and port != null and jack != null)
+	_ok(body != null and port != null and jack != null, "the console has a body and a socket")
 	if body == null or port == null or jack == null:
 		psx.queue_free()
 		lead.queue_free()
@@ -1566,26 +1552,22 @@ func _test_psx_socket_is_in_the_panel() -> void:
 	# moulds the socket and prints its name; the port's recess laid over that is a
 	# black box stuck on the back panel, and the plate over the print is a black
 	# rectangle. Both were shipped and both were reported.
-	_ok("a shelled console draws its own socket, not the port's",
-		not jack.is_visible_in_tree())
+	_ok(not jack.is_visible_in_tree(), "a shelled console draws its own socket, not the port's")
 
 	# Where it puts the SEAT is still its whole job, and the failure is invisible
 	# once nothing is drawn -- so measure it against the shell's own socket, which
 	# is the thing a plug has to go into.
 	var moulded := psx.find_child("JackSerial", true, false) as MeshInstance3D
-	_ok("the shell has the socket the seat is measured from", moulded != null)
+	_ok(moulded != null, "the shell has the socket the seat is measured from")
 	if moulded != null:
 		var mb := moulded.get_aabb()
 		var m0: Vector3 = psx.to_local(moulded.global_transform * mb.position)
 		var m1: Vector3 = psx.to_local(moulded.global_transform * (mb.position + mb.size))
 		var face: float = minf(m0.z, m1.z)
-		_ok("and the seat is on its face, not out in the air",
-			absf(psx.to_local(port.global_position).z - face) < 0.002,
-			"seat %.4f against the socket face %.4f, panel %.4f"
-				% [psx.to_local(port.global_position).z, face, panel_z])
-		_ok("which is on the back panel, not behind the console",
-			face >= panel_z - 0.004,
-			"socket face %.4f against a panel at %.4f" % [face, panel_z])
+		_ok(absf(psx.to_local(port.global_position).z - face) < 0.002,
+			"and the seat is on its face, not out in the air", "seat %.4f against the socket face %.4f, panel %.4f" % [psx.to_local(port.global_position).z, face, panel_z])
+		_ok(face >= panel_z - 0.004,
+			"which is on the back panel, not behind the console", "socket face %.4f against a panel at %.4f" % [face, panel_z])
 
 	# A console does not always stand square to the room, and it has to be turned
 	# BEFORE it is built: the socket is posed once, at spawn. Posed by world
@@ -1600,11 +1582,8 @@ func _test_psx_socket_is_in_the_panel() -> void:
 	for i in range(4):
 		await get_tree().process_frame
 	var turned: Node3D = angled.find_child("PsxLinkPort", true, false)
-	_ok("a console standing at an angle keeps its socket on its panel",
-		turned != null and turned.global_basis.z.normalized().dot(
-			-angled.global_basis.z.normalized()) > 0.999,
-		"socket +Z . panel normal = %.3f" % (turned.global_basis.z.normalized().dot(
-			-angled.global_basis.z.normalized()) if turned != null else 0.0))
+	_ok(turned != null and turned.global_basis.z.normalized().dot( -angled.global_basis.z.normalized()) > 0.999,
+		"a console standing at an angle keeps its socket on its panel", "socket +Z . panel normal = %.3f" % (turned.global_basis.z.normalized().dot( -angled.global_basis.z.normalized()) if turned != null else 0.0))
 	angled.queue_free()
 	await get_tree().process_frame
 
@@ -1618,31 +1597,30 @@ func _test_psx_socket_is_in_the_panel() -> void:
 		var nb := nose.get_aabb()
 		var n0: Vector3 = psx.to_local(nose.global_transform * nb.position)
 		var n1: Vector3 = psx.to_local(nose.global_transform * (nb.position + nb.size))
-		_ok("a seated plug's nose is inside the panel", maxf(n0.z, n1.z) > panel_z,
-			"nose reaches %.4f, panel at %.4f" % [maxf(n0.z, n1.z), panel_z])
+		_ok(maxf(n0.z, n1.z) > panel_z,
+			"a seated plug's nose is inside the panel", "nose reaches %.4f, panel at %.4f" % [maxf(n0.z, n1.z), panel_z])
 		# And the shell stays out, or the lead has been swallowed.
 		var tip := lead.get_node("PlugA0").find_child("PlugTip", true, false) as MeshInstance3D
 		var t0: Vector3 = psx.to_local(tip.global_transform * tip.get_aabb().position)
-		_ok("and its shell stays outside", t0.z < panel_z,
-			"shell at %.4f, panel at %.4f" % [t0.z, panel_z])
+		_ok(t0.z < panel_z,
+			"and its shell stays outside", "shell at %.4f, panel at %.4f" % [t0.z, panel_z])
 
 	# The lettering has to read from OUTSIDE the console. The port is turned to
 	# face out, which flips the frame the glyphs are laid out in; the plate undoes
 	# that turn, and a plate that stopped undoing it would print SERIAL I/O
 	# backwards without anything else noticing.
 	var legend := port.find_child("Legend", true, false) as Node3D
-	_ok("the socket carries a legend", legend != null)
+	_ok(legend != null, "the socket carries a legend")
 	if legend != null:
 		var label := legend.find_child("Label", true, false) as Label3D
-		_ok("and it says what the socket is",
-			label != null and label.text == "SERIAL I/O",
-			label.text if label != null else "no label")
+		_ok(label != null and label.text == "SERIAL I/O",
+			"and it says what the socket is", label.text if label != null else "no label")
 		# Its own +X must end up pointing the same way the machine's does, or the
 		# text runs right to left.
 		var right: Vector3 = legend.global_transform.basis.x.normalized()
 		var machine_right: Vector3 = psx.global_transform.basis.x.normalized()
-		_ok("and it reads the right way round", right.dot(machine_right) < -0.9,
-			"legend +X . machine +X = %.2f" % right.dot(machine_right))
+		_ok(right.dot(machine_right) < -0.9,
+			"and it reads the right way round", "legend +X . machine +X = %.2f" % right.dot(machine_right))
 
 	psx.queue_free()
 	lead.queue_free()
@@ -1786,12 +1764,12 @@ func _nearest_av_gap(machine: Node3D, x: float) -> float:
 # mechanism it watched is gone.
 func _test_no_reset_path() -> void:
 	var cable: LinkCable = load(CABLE_SCENE).instantiate()
-	_ok("reset/the cable declares no machine_restarted signal",
-		not cable.has_signal("machine_restarted"))
-	_ok("reset/and carries no _restart", not cable.has_method("_restart"))
+	_ok(not cable.has_signal("machine_restarted"),
+		"reset/the cable declares no machine_restarted signal")
+	_ok(not cable.has_method("_restart"), "reset/and carries no _restart")
 	var found := false
 	for m: Dictionary in cable.get_method_list():
 		if str(m.get("name", "")).contains("restart"):
 			found = true
-	_ok("reset/nor anything else named for one", not found)
+	_ok(not found, "reset/nor anything else named for one")
 	cable.free()

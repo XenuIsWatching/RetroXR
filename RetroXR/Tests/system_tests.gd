@@ -153,7 +153,7 @@ func _settle() -> void:
 		await get_tree().process_frame
 
 
-func _ok(test_name: String, cond: bool, detail: String = "") -> void:
+func _ok(cond: bool, test_name: String, detail: String = "") -> void:
 	if cond:
 		_pass += 1
 		print("[test] PASS  %s" % test_name)
@@ -163,7 +163,7 @@ func _ok(test_name: String, cond: bool, detail: String = "") -> void:
 
 
 func _eq(test_name: String, got: Variant, want: Variant) -> void:
-	_ok(test_name, got == want, "got %s, want %s" % [str(got), str(want)])
+	_ok(got == want, test_name, "got %s, want %s" % [str(got), str(want)])
 
 
 ## A bare instance: never added to the tree, so `_ready()` never runs and no
@@ -181,13 +181,13 @@ func _system(sysid: String = "nes") -> RetroSystem:
 func _test_reads_as_lightgun() -> void:
 	for gun: String in ["Zapper", "Super Scope", "Konami Justifier", "GunCon",
 			"Light Phaser", "Menacer", "Lightgun"]:
-		_ok("gun name/'%s' is a gun" % gun, RetroSystem._reads_as_lightgun(gun))
+		_ok(RetroSystem._reads_as_lightgun(gun), "gun name/'%s' is a gun" % gun)
 	# The rest of a NES port list, plus the devices most likely to be mistaken
 	# for one because they also report a screen position.
 	for other: String in ["Auto", "Gamepad", "Arkanoid", "Power Pad A",
 			"SNES Mouse", "Keyboard", "Multitap", "Oeka Kids Tablet",
 			"Pointer", "Touchscreen"]:
-		_ok("gun name/'%s' is not a gun" % other, not RetroSystem._reads_as_lightgun(other))
+		_ok(not RetroSystem._reads_as_lightgun(other), "gun name/'%s' is not a gun" % other)
 
 
 # ---------------------------------------------------------------------------
@@ -259,9 +259,9 @@ func _test_light_gun_cards() -> void:
 		"sega_cd"]
 
 	for sysid: String in with_gun:
-		_ok("gun/%s offers one" % sysid, not _gun_row(sysid).is_empty())
+		_ok(not _gun_row(sysid).is_empty(), "gun/%s offers one" % sysid)
 	for sysid: String in without_gun:
-		_ok("gun/%s does not" % sysid, _gun_row(sysid).is_empty())
+		_ok(_gun_row(sysid).is_empty(), "gun/%s does not" % sysid)
 
 	# Once per card: it is appended by items_for, so a copy left in _PERIPHERALS
 	# would list it twice on that one platform and nowhere else.
@@ -276,9 +276,8 @@ func _test_light_gun_cards() -> void:
 	var row := _gun_row("super_nes")
 	_eq("gun/is a peripheral", String(row.get("kind", "")), "peripheral")
 	_eq("gun/token", SpawnCatalog.spawn_token("super_nes", row), "light_gun")
-	_ok("gun/the token's scene loads a LightGun",
-		(load("res://Scenes/Objects/peripherals/light_gun.tscn") as PackedScene)
-			.can_instantiate())
+	_ok((load("res://Scenes/Objects/peripherals/light_gun.tscn") as PackedScene) .can_instantiate(),
+		"gun/the token's scene loads a LightGun")
 
 
 ## Where the BS-X cartridge is offered from, and when.
@@ -297,10 +296,9 @@ func _test_light_gun_cards() -> void:
 func _test_bsx_card() -> void:
 	_eq("bsx/filed on the Satellaview card",
 		ExpansionCatalog.card_systemid("bsx_cart"), "satellaview")
-	_ok("bsx/and listed there",
-		ExpansionCatalog.ids_carded_on("satellaview").has("bsx_cart"))
-	_ok("bsx/not on the Super Famicom's",
-		not ExpansionCatalog.ids_carded_on("super_nes").has("bsx_cart"))
+	_ok(ExpansionCatalog.ids_carded_on("satellaview").has("bsx_cart"), "bsx/and listed there")
+	_ok(not ExpansionCatalog.ids_carded_on("super_nes").has("bsx_cart"),
+		"bsx/not on the Super Famicom's")
 	# The Jaguar CD used to be the case this rule did NOT move: its discs were
 	# filed as the Jaguar's own media, so it had no tile and the console's card
 	# was the only place it could be reached from. virtualjaguar names jaguar_cd
@@ -308,19 +306,20 @@ func _test_bsx_card() -> void:
 	# spawned from its own card like every other expansion.
 	_eq("bsx/the Jaguar CD is filed on its own card",
 		ExpansionCatalog.card_systemid("jaguar_cd"), "jaguar_cd")
-	_ok("bsx/the Jaguar CD no longer sits on the console's",
-		not ExpansionCatalog.ids_carded_on("atari_jaguar").has("jaguar_cd"))
-	_ok("bsx/and is offered from its own spawn menu",
-		not _spawn_row("jaguar_cd", "expansion:jaguar_cd").is_empty())
+	_ok(not ExpansionCatalog.ids_carded_on("atari_jaguar").has("jaguar_cd"),
+		"bsx/the Jaguar CD no longer sits on the console's")
+	_ok(not _spawn_row("jaguar_cd", "expansion:jaguar_cd").is_empty(),
+		"bsx/and is offered from its own spawn menu")
 
-	_ok("bsx/never on the SNES spawn list", _spawn_row("super_nes", "expansion:bsx_cart").is_empty())
+	_ok(_spawn_row("super_nes", "expansion:bsx_cart").is_empty(),
+		"bsx/never on the SNES spawn list")
 	var installed := ExpansionCatalog.firmware_present("bsx_cart")
 	var offered := not _spawn_row("satellaview", "expansion:bsx_cart").is_empty()
 	_eq("bsx/offered exactly when BS-X.bin is installed", offered, installed)
 	# The base station is the card either way -- gating the cartridge must never
 	# take the tile's own hardware down with it.
-	_ok("bsx/the base station is offered regardless",
-		not _spawn_row("satellaview", "expansion:satellaview").is_empty())
+	_ok(not _spawn_row("satellaview", "expansion:satellaview").is_empty(),
+		"bsx/the base station is offered regardless")
 
 
 ## A card's row carrying `token`, or {} when it offers none.
@@ -356,11 +355,10 @@ func _test_playstation_hardware() -> void:
 		labels.append(String((it as Dictionary).get("label", "")))
 	# A platform that models its own console AND its own pads has no use for the
 	# generic box or the generic pad; they are clutter on its card.
-	_ok("psx/no Primitive System offered", not labels.has("Primitive System"))
-	_ok("psx/no Primitive Controller offered", not labels.has("Primitive Controller"))
-	_ok("psx/the console is still offered", labels.has("PlayStation"))
-	_ok("psx/both pads are offered",
-		labels.has("Controller") and labels.has("DualShock"))
+	_ok(not labels.has("Primitive System"), "psx/no Primitive System offered")
+	_ok(not labels.has("Primitive Controller"), "psx/no Primitive Controller offered")
+	_ok(labels.has("PlayStation"), "psx/the console is still offered")
+	_ok(labels.has("Controller") and labels.has("DualShock"), "psx/both pads are offered")
 
 	var sys_scene := load("res://Scenes/Objects/system.tscn") as PackedScene
 	var card_scene := load("res://Scenes/Objects/media/memory_card.tscn") as PackedScene
@@ -395,28 +393,27 @@ func _test_playstation_hardware() -> void:
 	for i in range(18):
 		await get_tree().process_frame
 	var rel := model.global_transform.affine_inverse() * card.global_transform
-	_ok("psx/the memory card seats label-up", rel.basis.y.y > 0.9,
-		"up = %.3v" % rel.basis.y)
-	_ok("psx/and connector-first, tab out the front", rel.basis.z.z > 0.9,
-		"front = %.3v" % rel.basis.z)
+	_ok(rel.basis.y.y > 0.9, "psx/the memory card seats label-up", "up = %.3v" % rel.basis.y)
+	_ok(rel.basis.z.z > 0.9,
+		"psx/and connector-first, tab out the front", "front = %.3v" % rel.basis.z)
 	eject.button_pressed.emit()
 	for i in range(22):
 		await get_tree().process_frame
-	_ok("psx/OPEN raises the lid", float(model.call("get_lid_angle_deg")) > 40.0,
-		"%.1f deg" % model.call("get_lid_angle_deg"))
+	_ok(float(model.call("get_lid_angle_deg")) > 40.0,
+		"psx/OPEN raises the lid", "%.1f deg" % model.call("get_lid_angle_deg"))
 	var hinge := psx.find_child("LidHinge", true, false)
 	if hinge != null and hinge.has_method("latch_closed"):
 		hinge.latch_closed()
 	for i in range(22):
 		await get_tree().process_frame
-	_ok("psx/a hand can shut it", float(model.call("get_lid_angle_deg")) < 5.0,
-		"%.1f deg" % model.call("get_lid_angle_deg"))
-	_ok("psx/and the machine learns it is shut", not bool(psx.get("_tray_open")))
+	_ok(float(model.call("get_lid_angle_deg")) < 5.0,
+		"psx/a hand can shut it", "%.1f deg" % model.call("get_lid_angle_deg"))
+	_ok(not bool(psx.get("_tray_open")), "psx/and the machine learns it is shut")
 	eject.button_pressed.emit()
 	for i in range(22):
 		await get_tree().process_frame
-	_ok("psx/OPEN works a second time", float(model.call("get_lid_angle_deg")) > 40.0,
-		"%.1f deg" % model.call("get_lid_angle_deg"))
+	_ok(float(model.call("get_lid_angle_deg")) > 40.0,
+		"psx/OPEN works a second time", "%.1f deg" % model.call("get_lid_angle_deg"))
 
 	card.queue_free()
 	psx.queue_free()
@@ -465,35 +462,34 @@ func _test_analog_mode_switch() -> void:
 
 	var glow := pad.find_child("AnalogLampGlow", true, false) as OmniLight3D
 	var btn := pad.get_node_or_null("AnalogButton") as VRButton
-	_ok("analog/plugged in", pad.get("_connected_system") != null)
-	_ok("analog/starts in analogue mode", bool(pad.get("_analog_mode")))
-	_ok("analog/lamp lit", glow != null and glow.visible)
+	_ok(pad.get("_connected_system") != null, "analog/plugged in")
+	_ok(bool(pad.get("_analog_mode")), "analog/starts in analogue mode")
+	_ok(glow != null and glow.visible, "analog/lamp lit")
 	_eq("analog/pad type", String(pad.get("pad_type_pref")), "dualshock")
 
 	if btn != null:
 		btn.button_pressed.emit()
 	for i in range(6):
 		await get_tree().process_frame
-	_ok("analog/a poke leaves analogue mode", not bool(pad.get("_analog_mode")))
-	_ok("analog/lamp goes out", glow != null and not glow.visible)
+	_ok(not bool(pad.get("_analog_mode")), "analog/a poke leaves analogue mode")
+	_ok(glow != null and not glow.visible, "analog/lamp goes out")
 	var em := 0.0
 	for m in (pad.get("_led_mats") as Array):
 		em = maxf(em, (m as StandardMaterial3D).emission_energy_multiplier)
-	_ok("analog/emission goes out", is_zero_approx(em))
+	_ok(is_zero_approx(em), "analog/emission goes out")
 	_eq("analog/pad type follows", String(pad.get("pad_type_pref")), "standard")
 	pad.call("_send_joypad", 0, 32767, 0, 32767, 0)
-	_ok("analog/digital reports centred sticks",
-		(pad.get("_cur_lstick") as Vector2).is_zero_approx())
+	_ok((pad.get("_cur_lstick") as Vector2).is_zero_approx(),
+		"analog/digital reports centred sticks")
 
 	if btn != null:
 		btn.button_pressed.emit()
 	for i in range(6):
 		await get_tree().process_frame
-	_ok("analog/a second poke returns", bool(pad.get("_analog_mode")))
-	_ok("analog/lamp returns", glow != null and glow.visible)
+	_ok(bool(pad.get("_analog_mode")), "analog/a second poke returns")
+	_ok(glow != null and glow.visible, "analog/lamp returns")
 	pad.call("_send_joypad", 0, 32767, 0, 32767, 0)
-	_ok("analog/sticks report again",
-		not (pad.get("_cur_lstick") as Vector2).is_zero_approx())
+	_ok(not (pad.get("_cur_lstick") as Vector2).is_zero_approx(), "analog/sticks report again")
 
 	pad.queue_free()
 	psx.queue_free()
@@ -571,17 +567,15 @@ func _test_libretro_port_routing() -> void:
 	tower.queue_free()
 	# ...but does not occupy it: its keys are global to port 0 regardless, and
 	# claiming a numbered port would take the slot the mouse needs.
-	_ok("routing/computer keyboard claims no port",
-		not pc._claims_port_device(DEVICE_KEYBOARD))
-	_ok("routing/computer mouse claims a port", pc._claims_port_device(DEVICE_MOUSE))
+	_ok(not pc._claims_port_device(DEVICE_KEYBOARD), "routing/computer keyboard claims no port")
+	_ok(pc._claims_port_device(DEVICE_MOUSE), "routing/computer mouse claims a port")
 	pc.free()
 
 	var console := _system("nes")
 	_eq("routing/console mouse keeps its socket",
 		console._libretro_port_for(DEVICE_MOUSE, 1), 1)
-	_ok("routing/console keyboard claims a port",
-		console._claims_port_device(DEVICE_KEYBOARD))
-	_ok("routing/console gun claims a port", console._claims_port_device(DEVICE_LIGHTGUN))
+	_ok(console._claims_port_device(DEVICE_KEYBOARD), "routing/console keyboard claims a port")
+	_ok(console._claims_port_device(DEVICE_LIGHTGUN), "routing/console gun claims a port")
 	console.free()
 
 
@@ -597,7 +591,7 @@ func _test_port_device_cache() -> void:
 
 	sys.set_controller_port_device(1, 258)
 	_eq("cache/port 2 shows the Zapper", sys._controller_info[1]["current_id"], 258)
-	_ok("cache/port 1 untouched", not sys._controller_info[0].has("current_id"))
+	_ok(not sys._controller_info[0].has("current_id"), "cache/port 1 untouched")
 
 	# A port the core did not declare must not invent an entry or disturb one.
 	sys.set_controller_port_device(9, 513)
@@ -655,7 +649,7 @@ func _test_seated_content() -> void:
 	# picks the core and the save location.
 	_eq("content/cart names the system", sys._resolve_systemid(), "fds")
 	_eq("content/cart names the save slot", sys._memcards._sram_slot(), "dh-001")
-	_ok("content/cart has a save path", not sys._memcards._compose_sram_path("fceumm").is_empty())
+	_ok(not sys._memcards._compose_sram_path("fceumm").is_empty(), "content/cart has a save path")
 
 	# A blank label is not a label — the file name is better than an empty plate.
 	cart.game_label = ""
@@ -683,18 +677,18 @@ func _test_seated_content() -> void:
 func _test_media_removal() -> void:
 	var tray := _system("playstation")
 	tray._disc_loader = MediaDimensions.LOADER_TRAY
-	_ok("media/a tray console keeps running", tray._media_survives_removal())
+	_ok(tray._media_survives_removal(), "media/a tray console keeps running")
 	tray.free()
 
 	var slot := _system("wii")
 	slot._disc_loader = MediaDimensions.LOADER_SLOT
-	_ok("media/a slot console keeps running", slot._media_survives_removal())
+	_ok(slot._media_survives_removal(), "media/a slot console keeps running")
 	slot.free()
 
 	# A Neo Geo CD loads under a lift-up lid, the same motion as the PlayStation
 	# above. Without a DISC_DIAMETERS row it was not a disc system at all and its
 	# discs were moulded as cartridges.
-	_ok("media/the Neo Geo CD is a disc system", MediaDimensions.is_disc_system("neo_geo_cd"))
+	_ok(MediaDimensions.is_disc_system("neo_geo_cd"), "media/the Neo Geo CD is a disc system")
 	_eq("media/and loads under a lid", MediaDimensions.disc_loader("neo_geo_cd"),
 		MediaDimensions.LOADER_TRAY)
 
@@ -703,12 +697,12 @@ func _test_media_removal() -> void:
 	var floppy := _system("dos")
 	_eq("media/a floppy machine has no disc loader",
 		floppy._disc_loader, MediaDimensions.LOADER_NONE)
-	_ok("media/a floppy machine keeps running", floppy._media_survives_removal())
+	_ok(floppy._media_survives_removal(), "media/a floppy machine keeps running")
 	floppy.free()
 
 	# The cartridge IS the program. Pulling it stops the machine, as it always has.
 	var cart := _system("nes")
-	_ok("media/a cartridge deck stops", not cart._media_survives_removal())
+	_ok(not cart._media_survives_removal(), "media/a cartridge deck stops")
 	cart.free()
 
 	# Whether a swap can reach the core is answered by the core's .info file
@@ -717,27 +711,26 @@ func _test_media_removal() -> void:
 	# no-disk-control path and power the machine off.
 	var psx := _system("playstation")
 	psx.core_name = "pcsx_rearmed"
-	_ok("disk control/declared by a PS1 core", psx._supports_disk_control())
+	_ok(psx._supports_disk_control(), "disk control/declared by a PS1 core")
 	psx.free()
 
 	var amiga := _system("commodore_amiga")
 	amiga.core_name = "puae"
-	_ok("disk control/declared by a floppy core", amiga._supports_disk_control())
+	_ok(amiga._supports_disk_control(), "disk control/declared by a floppy core")
 	amiga.free()
 
 	var nes := _system("nes")
 	nes.core_name = "fceumm"
-	_ok("disk control/not declared by a cartridge core", not nes._supports_disk_control())
+	_ok(not nes._supports_disk_control(), "disk control/not declared by a cartridge core")
 	# The running core is still the better witness: a core that reports the
 	# interface at runtime is believed whatever its .info file says.
 	nes._has_disk_control = true
-	_ok("disk control/the live answer wins", nes._supports_disk_control())
+	_ok(nes._supports_disk_control(), "disk control/the live answer wins")
 	nes.free()
 
 	var unknown := _system("playstation")
 	unknown.core_name = "not_a_real_core"
-	_ok("disk control/an unknown core claims nothing",
-		not unknown._supports_disk_control())
+	_ok(not unknown._supports_disk_control(), "disk control/an unknown core claims nothing")
 	unknown.free()
 
 	_test_lid_ops()
@@ -796,7 +789,7 @@ func _test_expanded_port_binding() -> void:
 	_eq("expanded/the port remembers the peripheral", sys.port_holder(1), gun)
 	# No cabinet socket, so nothing is recorded as a plug — that array belongs to
 	# the sockets, and a stray entry would be released as if a cord were pulled.
-	_ok("expanded/no cabinet plug recorded", sys._port_plugs[1] == null)
+	_ok(sys._port_plugs[1] == null, "expanded/no cabinet plug recorded")
 
 	sys.detach_expanded_controller(1, gun)
 	_eq("expanded/unplugging clears the port", sys._controller_info[1]["current_id"], 0)
@@ -805,7 +798,7 @@ func _test_expanded_port_binding() -> void:
 	# A port below zero is not a port; binding one used to be caught by the
 	# caller, and _bind_port is now the only thing that can catch it.
 	sys.attach_expanded_controller(-1, gun)
-	_ok("expanded/a negative port binds nothing", sys.port_holder(0) == null)
+	_ok(sys.port_holder(0) == null, "expanded/a negative port binds nothing")
 
 	gun.free()
 	sys.free()
@@ -822,41 +815,41 @@ func _test_belongs_here() -> void:
 	var cart := FakeSeated.new()
 
 	cart.systemid = "nes"
-	_ok("belongs/its own media fits", nes._accepts_media(cart))
+	_ok(nes._accepts_media(cart), "belongs/its own media fits")
 	cart.systemid = "snes"
-	_ok("belongs/another system's media does not", not nes._accepts_media(cart))
+	_ok(not nes._accepts_media(cart), "belongs/another system's media does not")
 	cart.systemid = ""
-	_ok("belongs/unlabelled media fits anywhere", nes._accepts_media(cart))
+	_ok(nes._accepts_media(cart), "belongs/unlabelled media fits anywhere")
 	# An object with no systemid property at all — a prop that predates the rule.
 	var plain := Node3D.new()
-	_ok("belongs/an object naming no system fits", nes._accepts_media(plain))
+	_ok(nes._accepts_media(plain), "belongs/an object naming no system fits")
 
 	cart.systemid = "snes"
-	_ok("belongs/the port gate reads the same way", not nes._accepts_plug(cart))
+	_ok(not nes._accepts_plug(cart), "belongs/the port gate reads the same way")
 	cart.systemid = ""
-	_ok("belongs/an unlabelled plug fits", nes._accepts_plug(cart))
+	_ok(nes._accepts_plug(cart), "belongs/an unlabelled plug fits")
 	nes.free()
 
 	# The media table is the console's, and it is not symmetric: a Wii takes a
 	# GameCube disc, a GameCube does not take a Wii one.
 	var wii := _system("wii")
 	cart.systemid = "gamecube"
-	_ok("belongs/a Wii takes a GameCube disc", wii._accepts_media(cart))
+	_ok(wii._accepts_media(cart), "belongs/a Wii takes a GameCube disc")
 	# ...and the front of the machine agrees with the tray. This case used to
 	# read the other way, pinning an empty port table, and the cost of that
 	# showed up the day a GameCube-to-Game Boy Advance lead was carried over to
 	# the one console in the room that could use it and was silently refused.
-	_ok("belongs/and a GameCube plug in its front sockets", wii._accepts_plug(cart))
+	_ok(wii._accepts_plug(cart), "belongs/and a GameCube plug in its front sockets")
 	wii.free()
 
 	var cube := _system("gamecube")
 	cart.systemid = "wii"
-	_ok("belongs/a GameCube refuses a Wii disc", not cube._accepts_media(cart))
+	_ok(not cube._accepts_media(cart), "belongs/a GameCube refuses a Wii disc")
 	cube.free()
 
 	var gba := _system("game_boy_advance")
 	cart.systemid = "game_boy"
-	_ok("belongs/a GBA takes a Game Boy cart", gba._accepts_media(cart))
+	_ok(gba._accepts_media(cart), "belongs/a GBA takes a Game Boy cart")
 	gba.free()
 
 	plain.free()
@@ -910,7 +903,7 @@ func _test_core_resolution() -> void:
 	_eq("resolve/the player's own defaults are put back",
 		FileAccess.file_exists(path), had)
 	if had:
-		_ok("resolve/byte for byte", FileAccess.get_file_as_bytes(path) == before)
+		_ok(FileAccess.get_file_as_bytes(path) == before, "resolve/byte for byte")
 
 	sys.core_directory = "C:/somewhere/libretro"
 	_eq("resolve/a named directory wins", sys._resolve_dir(), "C:/somewhere/libretro")
@@ -933,35 +926,34 @@ func _test_forced_options_merge() -> void:
 	var core := "selftest_core"
 	var path := CoreOptionsStore.opt_path(root, core)
 
-	_ok("forced/nothing forced writes nothing",
-		not CoreOptionsStore.merge_values(root, core, {}))
-	_ok("forced/and creates no file", not FileAccess.file_exists(path))
+	_ok(not CoreOptionsStore.merge_values(root, core, {}), "forced/nothing forced writes nothing")
+	_ok(not FileAccess.file_exists(path), "forced/and creates no file")
 
 	# The player's own settings, as a run would have left them.
 	CoreOptionsStore.save_values(root, core, {"user_key": "mine", "vb_3dmode": "anaglyph"})
 
-	_ok("forced/a new pin is written",
-		CoreOptionsStore.merge_values(root, core, {"vb_3dmode": "sidebyside"}))
+	_ok(CoreOptionsStore.merge_values(root, core, {"vb_3dmode": "sidebyside"}),
+		"forced/a new pin is written")
 	var after := CoreOptionsStore.load_values(root, core)
 	_eq("forced/the pin took", after.get("vb_3dmode", ""), "sidebyside")
 	_eq("forced/the player's own key survives", after.get("user_key", ""), "mine")
 
 	# Already pinned: no write at all, so the file keeps its bytes and its order.
 	var before_time := FileAccess.get_modified_time(path)
-	_ok("forced/an unchanged pin rewrites nothing",
-		not CoreOptionsStore.merge_values(root, core, {"vb_3dmode": "sidebyside"}))
+	_ok(not CoreOptionsStore.merge_values(root, core, {"vb_3dmode": "sidebyside"}),
+		"forced/an unchanged pin rewrites nothing")
 	_eq("forced/the file was left alone", FileAccess.get_modified_time(path), before_time)
 
 	# Values arrive from a model as ints and bools as often as strings.
-	_ok("forced/a non-string value is written",
-		CoreOptionsStore.merge_values(root, core, {"citra_factor_3d": 0}))
+	_ok(CoreOptionsStore.merge_values(root, core, {"citra_factor_3d": 0}),
+		"forced/a non-string value is written")
 	_eq("forced/and reads back as its text",
 		CoreOptionsStore.load_values(root, core).get("citra_factor_3d", ""), "0")
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(CoreOptionsStore.opt_dir(root)))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(root))
-	_ok("forced/cleaned up", not FileAccess.file_exists(path))
+	_ok(not FileAccess.file_exists(path), "forced/cleaned up")
 
 
 # ---------------------------------------------------------------------------
@@ -978,10 +970,10 @@ func _test_state_paths() -> void:
 		seen[StatePaths.mint_id()] = true
 	_eq("state/200 ids are 200 ids", seen.size(), 200)
 	var one := StatePaths.mint_id()
-	_ok("state/an id reads as one", StatePaths.is_state_id(one), one)
-	_ok("state/a stray file does not", not StatePaths.is_state_id("autosave"))
-	_ok("state/nor does a bare timestamp", not StatePaths.is_state_id("1787000000000"))
-	_ok("state/nor does a path traversal", not StatePaths.is_state_id("../../etc/passwd"))
+	_ok(StatePaths.is_state_id(one), "state/an id reads as one", one)
+	_ok(not StatePaths.is_state_id("autosave"), "state/a stray file does not")
+	_ok(not StatePaths.is_state_id("1787000000000"), "state/nor does a bare timestamp")
+	_ok(not StatePaths.is_state_id("../../etc/passwd"), "state/nor does a path traversal")
 
 	# The three files are siblings sharing a basename: that is what lets delete
 	# find them without an index, and what lets an overwrite keep its picture.
@@ -992,13 +984,12 @@ func _test_state_paths() -> void:
 		[sp.get_basename(), shot.get_basename(), meta.get_basename()],
 		[sp.get_basename(), sp.get_basename(), sp.get_basename()])
 	_eq("state/the state is a .state", sp.get_extension(), "state")
-	_ok("state/keyed by core", sp.contains("fceumm"), sp)
-	_ok("state/and by game", sp.contains("Game (USA)"), sp)
+	_ok(sp.contains("fceumm"), "state/keyed by core", sp)
+	_ok(sp.contains("Game (USA)"), "state/and by game", sp)
 	# Two cores running the same game keep separate folders — a state is only
 	# ever meaningful to the core that wrote it.
-	_ok("state/another core is another folder",
-		StatePaths.game_dir("nestopia", "C:/roms/nes/Game (USA).nes")
-			!= StatePaths.game_dir("fceumm", "C:/roms/nes/Game (USA).nes"))
+	_ok(StatePaths.game_dir("nestopia", "C:/roms/nes/Game (USA).nes") != StatePaths.game_dir("fceumm", "C:/roms/nes/Game (USA).nes"),
+		"state/another core is another folder")
 	# ...but the same game reached by a different path is the same folder, which
 	# is what lets a ROM be moved without losing its states.
 	_eq("state/the same game moved is the same folder",
@@ -1019,8 +1010,8 @@ func _test_state_thumbnail() -> void:
 	# Downscale keeps the aspect: a 4:3 frame must not come back square.
 	_eq("thumb/scaled to the box", thumb.get_width(), StatePaths.THUMB_MAX_W)
 	_eq("thumb/aspect kept", thumb.get_height(), 168)
-	_ok("thumb/the source is left alone", frame.get_width() == 256
-		and frame.get_format() == Image.FORMAT_RGBA8)
+	_ok(frame.get_width() == 256 and frame.get_format() == Image.FORMAT_RGBA8,
+		"thumb/the source is left alone")
 
 	# Never upscaled. Blowing a Game Boy frame up to fill the box only makes it
 	# blurry, and the row centres it instead.
@@ -1060,7 +1051,7 @@ func _test_state_disk_round_trip() -> void:
 	_eq("disk/one state is listed", rows.size(), 1)
 	if rows.size() == 1:
 		_eq("disk/under its own id", rows[0]["state_id"], id)
-		_ok("disk/with its picture", not str(rows[0]["shot"]).is_empty())
+		_ok(not str(rows[0]["shot"]).is_empty(), "disk/with its picture")
 		_eq("disk/and its size", int(rows[0]["bytes"]), job.data.size())
 	var meta := StatePaths.read_meta(core, rom, id)
 	_eq("disk/the sidecar carries the frame", int(meta.get("frame", -1)), 4242)
@@ -1076,7 +1067,7 @@ func _test_state_disk_round_trip() -> void:
 	var meta2 := StatePaths.read_meta(core, rom, id)
 	_eq("disk/the frame moved on", int(meta2.get("frame", -1)), 9999)
 	_eq("disk/the birthday did not", int(meta2.get("created_at", -1)), 1000)
-	_ok("disk/updated_at is stamped", int(meta2.get("updated_at", 0)) > 0)
+	_ok(int(meta2.get("updated_at", 0)) > 0, "disk/updated_at is stamped")
 
 	# Nothing half-written is ever offered: the promote is a rename, so a .part
 	# left behind by a crash is invisible to the list.
@@ -1089,13 +1080,13 @@ func _test_state_disk_round_trip() -> void:
 	_eq("disk/total_bytes counts the picture too", StatePaths.total_bytes(core, rom),
 		job.data.size() + NetFileTransfer.size_of(job.shot_path))
 
-	_ok("disk/delete succeeds", StatePaths.delete_state(core, rom, id))
+	_ok(StatePaths.delete_state(core, rom, id), "disk/delete succeeds")
 	_eq("disk/and the list is empty", StatePaths.list_states(core, rom).size(), 0)
-	_ok("disk/the picture went with it", not FileAccess.file_exists(job.shot_path))
-	_ok("disk/and the sidecar", not FileAccess.file_exists(job.meta_path))
-	_ok("disk/deleting it twice is not a success", not StatePaths.delete_state(core, rom, id))
-	_ok("disk/nor is deleting something that is not an id",
-		not StatePaths.delete_state(core, rom, "../../boot"))
+	_ok(not FileAccess.file_exists(job.shot_path), "disk/the picture went with it")
+	_ok(not FileAccess.file_exists(job.meta_path), "disk/and the sidecar")
+	_ok(not StatePaths.delete_state(core, rom, id), "disk/deleting it twice is not a success")
+	_ok(not StatePaths.delete_state(core, rom, "../../boot"),
+		"disk/nor is deleting something that is not an id")
 	DirAccess.remove_absolute(dir)
 
 
@@ -1110,19 +1101,19 @@ func _test_bios_seed() -> void:
 	var core := "selftest_core"
 	var path := CoreOptionsStore.opt_path(root, core)
 
-	_ok("seed/nothing to seed writes nothing", not CoreOptionsStore.seed_values(root, core, {}))
-	_ok("seed/and creates no file", not FileAccess.file_exists(path))
+	_ok(not CoreOptionsStore.seed_values(root, core, {}), "seed/nothing to seed writes nothing")
+	_ok(not FileAccess.file_exists(path), "seed/and creates no file")
 
-	_ok("seed/a fresh key is written",
-		CoreOptionsStore.seed_values(root, core, {"splash": "enabled"}))
+	_ok(CoreOptionsStore.seed_values(root, core, {"splash": "enabled"}),
+		"seed/a fresh key is written")
 	_eq("seed/the default took",
 		CoreOptionsStore.load_values(root, core).get("splash", ""), "enabled")
 
 	# The whole point of a default: the player turns it off and it STAYS off.
 	# merge_values would put it back on at the next power-on.
 	CoreOptionsStore.set_value(root, core, "splash", "disabled")
-	_ok("seed/seeding twice writes nothing",
-		not CoreOptionsStore.seed_values(root, core, {"splash": "enabled"}))
+	_ok(not CoreOptionsStore.seed_values(root, core, {"splash": "enabled"}),
+		"seed/seeding twice writes nothing")
 	_eq("seed/the player's choice survives",
 		CoreOptionsStore.load_values(root, core).get("splash", ""), "disabled")
 
@@ -1130,16 +1121,16 @@ func _test_bios_seed() -> void:
 	# key it declares is already in the file. Presence must not be mistaken for
 	# "already seeded" or a BIOS installed later would never take effect.
 	CoreOptionsStore.save_values(root, core, {"splash": "disabled", "later": "off"})
-	_ok("seed/a key the core already wrote is still seedable",
-		CoreOptionsStore.seed_values(root, core, {"later": "on"}))
+	_ok(CoreOptionsStore.seed_values(root, core, {"later": "on"}),
+		"seed/a key the core already wrote is still seedable")
 	var after := CoreOptionsStore.load_values(root, core)
 	_eq("seed/and takes", after.get("later", ""), "on")
 	_eq("seed/without disturbing its neighbours", after.get("splash", ""), "disabled")
 
 	# The record is per (core, key). genesis_plus_gx_bios really is shared by
 	# five machines under one core, so the key alone cannot be the identity.
-	_ok("seed/another core's same key is untouched",
-		CoreOptionsStore.seed_values(root, "other_core", {"later": "on"}))
+	_ok(CoreOptionsStore.seed_values(root, "other_core", {"later": "on"}),
+		"seed/another core's same key is untouched")
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(
@@ -1147,7 +1138,7 @@ func _test_bios_seed() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(CoreOptionsStore.opt_dir(root)))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(CoreOptionsStore.seeded_path(root)))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(root))
-	_ok("seed/cleaned up", not FileAccess.file_exists(path))
+	_ok(not FileAccess.file_exists(path), "seed/cleaned up")
 
 
 func _test_neo_geo_cd_cores() -> void:
@@ -1157,22 +1148,22 @@ func _test_neo_geo_cd_cores() -> void:
 	var owners: Array[String] = []
 	for entry: Dictionary in db.get_by_systemid("neo_geo_cd"):
 		owners.append(str(entry.get("corename", "")))
-	_ok("neogeocd/neocd serves it", owners.has("NeoCD"))
+	_ok(owners.has("NeoCD"), "neogeocd/neocd serves it")
 
 	# Geolith reads the CD too — its firmware list declares neocd.zip and
 	# neocdz.zip as required — but a core is only offered under a platform it
 	# NAMES, so without secondary_systemids it was reachable as an AES only.
-	_ok("neogeocd/geolith serves it as well", owners.has("Geolith"))
-	_ok("neogeocd/and still serves the cartridge Neo Geo",
-		CoreInfoDatabase.systemids_of(db.get_by_core_name("geolith")).has("neogeo"))
+	_ok(owners.has("Geolith"), "neogeocd/geolith serves it as well")
+	_ok(CoreInfoDatabase.systemids_of(db.get_by_core_name("geolith")).has("neogeo"),
+		"neogeocd/and still serves the cartridge Neo Geo")
 
 	# A CHD is the point of the whole platform: the library stores these discs
 	# converted, so an extension list without chd files none of them.
 	var exts := CoreInfoDatabase.extensions_for_systemid("neo_geo_cd")
-	_ok("neogeocd/reads cue", exts.has("cue"))
-	_ok("neogeocd/reads chd", exts.has("chd"))
+	_ok(exts.has("cue"), "neogeocd/reads cue")
+	_ok(exts.has("chd"), "neogeocd/reads chd")
 	# Geolith contributes only its declared subset, never its whole list.
-	_ok("neogeocd/does not inherit the cartridge .neo", not exts.has("neo"))
+	_ok(not exts.has("neo"), "neogeocd/does not inherit the cartridge .neo")
 
 
 ## SuperGrafx is not an ExpansionCatalog accessory: it is the PC Engine's own
@@ -1184,20 +1175,18 @@ func _test_neo_geo_cd_cores() -> void:
 func _test_supergrafx_core() -> void:
 	var db := CoreInfoDatabase.shared()
 	var entry: Dictionary = db.get_by_core_name("mednafen_supergrafx")
-	_ok("supergrafx/mednafen_supergrafx is a known core", not entry.is_empty())
-	_ok("supergrafx/and declares the supergrafx systemid",
-		CoreInfoDatabase.systemids_of(entry).has("supergrafx"))
-	_ok("supergrafx/which is reached only through that declaration",
-		db.is_secondary_systemid("supergrafx"))
-	_ok("supergrafx/mednafen_pce_fast does not declare it — why the recommendation "
-			+ "is mednafen_supergrafx and not the lighter core",
-		not CoreInfoDatabase.systemids_of(db.get_by_core_name("mednafen_pce_fast"))
-			.has("supergrafx"))
+	_ok(not entry.is_empty(), "supergrafx/mednafen_supergrafx is a known core")
+	_ok(CoreInfoDatabase.systemids_of(entry).has("supergrafx"),
+		"supergrafx/and declares the supergrafx systemid")
+	_ok(db.is_secondary_systemid("supergrafx"),
+		"supergrafx/which is reached only through that declaration")
+	_ok(not CoreInfoDatabase.systemids_of(db.get_by_core_name("mednafen_pce_fast")) .has("supergrafx"),
+		"supergrafx/mednafen_pce_fast does not declare it — why the recommendation " + "is mednafen_supergrafx and not the lighter core")
 
 	var info := SystemInfo.for_system("supergrafx")
-	_ok("supergrafx/has its own SystemInfo descriptor", info != null)
-	_ok("supergrafx/named distinctly from the plain PC Engine",
-		info != null and info.display_name == "PC Engine SuperGrafx")
+	_ok(info != null, "supergrafx/has its own SystemInfo descriptor")
+	_ok(info != null and info.display_name == "PC Engine SuperGrafx",
+		"supergrafx/named distinctly from the plain PC Engine")
 	_eq("supergrafx/and that name is what the core scan would show a player",
 		db.get_systemname_for_id("supergrafx"), "PC Engine SuperGrafx")
 
@@ -1209,16 +1198,13 @@ func _test_bios_boot_table() -> void:
 		_eq("table/%s is keyed core-then-systemid" % key, parts.size(), 2)
 		if parts.size() != 2:
 			continue
-		_ok("table/%s names a real core" % key,
-			not db.get_by_core_name(parts[0]).is_empty())
-		_ok("table/%s names a real system" % key,
-			ResourceLoader.exists("res://SystemInfo/%s.tres" % parts[1]))
+		_ok(not db.get_by_core_name(parts[0]).is_empty(), "table/%s names a real core" % key)
+		_ok(ResourceLoader.exists("res://SystemInfo/%s.tres" % parts[1]),
+			"table/%s names a real system" % key)
 		var row: Dictionary = BiosBoot._ROWS[key]
-		_ok("table/%s declares a boot rom" % key,
-			not (row.get("boot_rom", []) as Array).is_empty())
+		_ok(not (row.get("boot_rom", []) as Array).is_empty(), "table/%s declares a boot rom" % key)
 		for opt_key: String in (row.get("splash", {}) as Dictionary):
-			_ok("table/%s option %s is named" % [key, opt_key],
-				not opt_key.strip_edges().is_empty())
+			_ok(not opt_key.strip_edges().is_empty(), "table/%s option %s is named" % [key, opt_key])
 
 	# Keyed on the PAIR. One core, five Sega machines, five different boot ROMs
 	# — read by core alone this would offer a Game Gear the Mega Drive's.
@@ -1229,12 +1215,10 @@ func _test_bios_boot_table() -> void:
 
 	# Measured, and the natural guess is the wrong way round: pcee2 says
 	# pcsx2_fast_boot where LRPS2 says pcsx2_fastboot.
-	_ok("table/pcee2 uses fast_boot",
-		(BiosBoot.entry("pcee2", "playstation2").get("splash", {}) as Dictionary)
-			.has("pcsx2_fast_boot"))
-	_ok("table/pcsx2 uses fastboot",
-		(BiosBoot.entry("pcsx2", "playstation2").get("splash", {}) as Dictionary)
-			.has("pcsx2_fastboot"))
+	_ok((BiosBoot.entry("pcee2", "playstation2").get("splash", {}) as Dictionary) .has("pcsx2_fast_boot"),
+		"table/pcee2 uses fast_boot")
+	_ok((BiosBoot.entry("pcsx2", "playstation2").get("splash", {}) as Dictionary) .has("pcsx2_fastboot"),
+		"table/pcsx2 uses fastboot")
 
 	# Only the PlayStation reaches a BIOS from an empty slot; measured over
 	# sixteen cores, and the rest refuse a blank image or crash on one.
@@ -1253,13 +1237,12 @@ func _test_bios_boot_table() -> void:
 	_eq("table/nor does a machine with no row",
 		BiosBoot.empty_media_extension("fceumm", "nes"), "")
 
-	_ok("table/an unknown pair offers nothing",
-		BiosBoot.entry("selftest_core", "nes").is_empty())
-	_ok("table/and no splash", BiosBoot.splash_options("selftest_core", "nes").is_empty())
-	_ok("table/a core with no .info requires nothing",
-		BiosBoot.missing_required("selftest_core").is_empty())
+	_ok(BiosBoot.entry("selftest_core", "nes").is_empty(), "table/an unknown pair offers nothing")
+	_ok(BiosBoot.splash_options("selftest_core", "nes").is_empty(), "table/and no splash")
+	_ok(BiosBoot.missing_required("selftest_core").is_empty(),
+		"table/a core with no .info requires nothing")
 	# The pair is required: a core alone names no machine.
-	_ok("table/no systemid is not a match", BiosBoot.entry("pcsx_rearmed", "").is_empty())
+	_ok(BiosBoot.entry("pcsx_rearmed", "").is_empty(), "table/no systemid is not a match")
 
 
 # ---------------------------------------------------------------------------
@@ -1284,26 +1267,25 @@ func _test_bios_pinned_options() -> void:
 	# The loaded-game half is gated on the boot ROM being installed, so on a box
 	# with none it is empty — pinning a core to run a file that is not there
 	# turns a machine that played games into a black screen.
-	_ok("pin/an unknown pair pins nothing either way",
-		BiosBoot.pinned_options("selftest_core", "nes", true).is_empty()
-			and BiosBoot.pinned_options("selftest_core", "nes", false).is_empty())
+	_ok(BiosBoot.pinned_options("selftest_core", "nes", true).is_empty() and BiosBoot.pinned_options("selftest_core", "nes", false).is_empty(),
+		"pin/an unknown pair pins nothing either way")
 
 	# Keys only, and both halves of every row for the core: the core manager
 	# edits a core with no machine in front of it and has no systemid to ask
 	# with.
 	var mgba_keys := BiosBoot.pinned_keys_for_core("mgba")
-	_ok("pin/a core's key set covers its empty-slot half",
-		mgba_keys.has("mgba_skip_bios") and mgba_keys.has("mgba_use_bios"))
-	_ok("pin/one core's five Sega machines fold into one key",
-		BiosBoot.pinned_keys_for_core("genesis_plus_gx").has("genesis_plus_gx_bios"))
-	_ok("pin/a core with no row pins no keys",
-		BiosBoot.pinned_keys_for_core("selftest_core").is_empty())
-	_ok("pin/and no core names none", BiosBoot.pinned_keys_for_core("").is_empty())
+	_ok(mgba_keys.has("mgba_skip_bios") and mgba_keys.has("mgba_use_bios"),
+		"pin/a core's key set covers its empty-slot half")
+	_ok(BiosBoot.pinned_keys_for_core("genesis_plus_gx").has("genesis_plus_gx_bios"),
+		"pin/one core's five Sega machines fold into one key")
+	_ok(BiosBoot.pinned_keys_for_core("selftest_core").is_empty(),
+		"pin/a core with no row pins no keys")
+	_ok(BiosBoot.pinned_keys_for_core("").is_empty(), "pin/and no core names none")
 	# A key from ANOTHER core's row must not leak in — pcee2 and pcsx2 spell the
 	# same switch differently, and one table read by core alone would offer each
 	# the other's no-op.
-	_ok("pin/nor another core's spelling of the same switch",
-		not BiosBoot.pinned_keys_for_core("pcsx2").has("pcsx2_fast_boot"))
+	_ok(not BiosBoot.pinned_keys_for_core("pcsx2").has("pcsx2_fast_boot"),
+		"pin/nor another core's spelling of the same switch")
 
 
 ## The system half, with a real firmware presence behind it.
@@ -1323,7 +1305,7 @@ func _test_bios_pins_reach_the_opt_file() -> void:
 	var dest := FirmwareRequirements.destination(core, "pcsx2/bios")
 	var made_dir := not DirAccess.dir_exists_absolute(dest)
 	if made_dir and DirAccess.make_dir_recursive_absolute(dest) != OK:
-		_ok("pin/could create a boot ROM directory to test against", false)
+		_ok(false, "pin/could create a boot ROM directory to test against")
 		return
 	FirmwareState.shared().invalidate(core, "pcsx2/bios")
 
@@ -1332,8 +1314,7 @@ func _test_bios_pins_reach_the_opt_file() -> void:
 	var sys := _system(systemid)
 	sys.rom_path = "/roms/ps2/game.iso"
 
-	_ok("pin/the boot ROM reads as present",
-		BiosBoot.boot_rom_present(core, systemid))
+	_ok(BiosBoot.boot_rom_present(core, systemid), "pin/the boot ROM reads as present")
 
 	AppPrefs.bios_boot_override = false
 	_eq("pin/a loaded game pins its boot animation on",
@@ -1348,8 +1329,7 @@ func _test_bios_pins_reach_the_opt_file() -> void:
 		CoreOptionsStore.load_values(root, core).get(key, ""), "disabled")
 
 	AppPrefs.bios_boot_override = true
-	_ok("pin/the override hands the key back",
-		not sys._all_forced_options(core).has(key))
+	_ok(not sys._all_forced_options(core).has(key), "pin/the override hands the key back")
 	CoreOptionsStore.save_values(root, core, {key: "enabled"})
 	sys._apply_forced_core_options(root, core)
 	_eq("pin/and the player's value then survives a launch",
@@ -1364,34 +1344,34 @@ func _test_bios_pins_reach_the_opt_file() -> void:
 	if made_dir:
 		DirAccess.remove_absolute(dest)
 		FirmwareState.shared().invalidate(core, "pcsx2/bios")
-	_ok("pin/cleaned up", made_dir == (not DirAccess.dir_exists_absolute(dest)))
+	_ok(made_dir == (not DirAccess.dir_exists_absolute(dest)), "pin/cleaned up")
 
 
 func _test_power_on_verdict() -> void:
 	var none: Array[Dictionary] = []
 
 	var no_core := RetroSystem._power_on_verdict("", "nes", "/roms/a.nes", none, "")
-	_ok("verdict/no core refuses", not no_core["start"])
+	_ok(not no_core["start"], "verdict/no core refuses")
 	_eq("verdict/and says so", no_core["title"], "No core installed")
 
 	var running := RetroSystem._power_on_verdict("fceumm", "nes", "/roms/a.nes", none, "")
-	_ok("verdict/a game inserted starts", running["start"])
+	_ok(running["start"], "verdict/a game inserted starts")
 	_eq("verdict/with that game", running["rom"], "/roms/a.nes")
 
 	var empty := RetroSystem._power_on_verdict("fceumm", "nes", "", none, "")
-	_ok("verdict/an empty slot refuses when the machine cannot boot", not empty["start"])
+	_ok(not empty["start"], "verdict/an empty slot refuses when the machine cannot boot")
 	_eq("verdict/with the long-standing card", empty["title"], "No game inserted")
-	_ok("verdict/worded for a cartridge", str(empty["description"]).contains("cartridge"))
+	_ok(str(empty["description"]).contains("cartridge"), "verdict/worded for a cartridge")
 	_eq("verdict/and nothing in the slot", empty["rom"], "")
 
 	# The wording follows the machine, not the core. Untested before this.
 	var disc := RetroSystem._power_on_verdict("pcsx_rearmed", "playstation", "", none, "")
-	_ok("verdict/worded for a disc", str(disc["description"]).contains("disc"))
+	_ok(str(disc["description"]).contains("disc"), "verdict/worded for a disc")
 
 	# The substitution: a blank image was resolved, so the machine starts on it.
 	var bios := RetroSystem._power_on_verdict(
 		"pcsx_rearmed", "playstation", "", none, "/tmp/no_disc.cue")
-	_ok("verdict/an empty slot with a blank disc starts", bios["start"])
+	_ok(bios["start"], "verdict/an empty slot with a blank disc starts")
 	_eq("verdict/on the blank disc", bios["rom"], "/tmp/no_disc.cue")
 
 	# A required BIOS blocks the run whether or not a game is in — the core
@@ -1402,29 +1382,25 @@ func _test_power_on_verdict() -> void:
 	}]
 	var no_bios := RetroSystem._power_on_verdict(
 		"pcee2", "playstation2", "/roms/g.iso", missing, "")
-	_ok("verdict/a missing required bios refuses", not no_bios["start"])
+	_ok(not no_bios["start"], "verdict/a missing required bios refuses")
 	_eq("verdict/and names the fault", no_bios["title"], "BIOS required")
-	_ok("verdict/names the file",
-		str(no_bios["description"]).contains("pcsx2/bios"))
-	_ok("verdict/and where to get it",
-		str(no_bios["description"]).contains("BIOS / Extras"))
+	_ok(str(no_bios["description"]).contains("pcsx2/bios"), "verdict/names the file")
+	_ok(str(no_bios["description"]).contains("BIOS / Extras"), "verdict/and where to get it")
 	# The card is 520x132 px at 1400 px/m. An absolute system path overflowed it
 	# top and bottom and clipped the instruction clean off — caught by rendering
 	# it, not by any assertion, so the length is pinned here now.
-	_ok("verdict/says it in two short lines",
-		str(no_bios["description"]).split("\n").size() == 2)
+	_ok(str(no_bios["description"]).split("\n").size() == 2, "verdict/says it in two short lines")
 	for line: String in str(no_bios["description"]).split("\n"):
-		_ok("verdict/line fits the card: %s" % line, line.length() <= 52)
-	_ok("verdict/one missing file is not counted up",
-		not str(no_bios["description"]).contains("more"))
+		_ok(line.length() <= 52, "verdict/line fits the card: %s" % line)
+	_ok(not str(no_bios["description"]).contains("more"),
+		"verdict/one missing file is not counted up")
 
 	var two: Array[Dictionary] = [missing[0], {
 		"path": "pcsx2/resources", "desc": "'pcsx2/resources' folder",
 		"dest": "/root/system/pcee2/pcsx2/resources",
 	}]
 	var counted := RetroSystem._power_on_verdict("pcee2", "playstation2", "/roms/g.iso", two, "")
-	_ok("verdict/two missing files are counted",
-		str(counted["description"]).contains("(+1 more)"))
+	_ok(str(counted["description"]).contains("(+1 more)"), "verdict/two missing files are counted")
 
 	# Order matters: a machine that is both empty AND missing its BIOS is told
 	# about the BIOS, which is the one the player cannot fix from where they
@@ -1453,9 +1429,9 @@ func _test_net_link_group_merge() -> void:
 	var group := RetroSystem.merge_link_buses(console, buses)
 	_eq("link-group/the anchor stays first", group[0], console)
 	_eq("link-group/every directly cabled machine is included", group.size(), 4)
-	_ok("link-group/a second controller-port cable is not lost", group.has(gba2))
-	_ok("link-group/transitively linked machines are included", group.has(gba3))
-	_ok("link-group/an unrelated cable is excluded", not group.has(unrelated))
+	_ok(group.has(gba2), "link-group/a second controller-port cable is not lost")
+	_ok(group.has(gba3), "link-group/transitively linked machines are included")
+	_ok(not group.has(unrelated), "link-group/an unrelated cable is excluded")
 	console.free()
 	gba1.free()
 	gba2.free()
@@ -1511,20 +1487,19 @@ func _test_memcard_presence() -> void:
 
 	# Only pcsx_rearmed has these keys, and only a machine that takes cards has a
 	# slot. Pinning them anywhere else would write keys into another core's file.
-	_ok("memcard/another core is told nothing",
-		psx._removable_media_options("swanstation").is_empty())
+	_ok(psx._removable_media_options("swanstation").is_empty(),
+		"memcard/another core is told nothing")
 	var nes := preload("res://Scenes/Objects/system.tscn").instantiate() as RetroSystem
 	nes.systemid = "nes"
 	add_child(nes)
-	_ok("memcard/a cartridge console is told nothing",
-		nes._removable_media_options("pcsx_rearmed").is_empty())
+	_ok(nes._removable_media_options("pcsx_rearmed").is_empty(),
+		"memcard/a cartridge console is told nothing")
 
 	# The runtime half. It reaches for the live core, so on a machine that is not
 	# running it must do nothing at all rather than fault -- which is also what
 	# guards the case where the option arrives before a core exists to take it.
 	psx._memcards._set_card_presence(0, false)
-	_ok("memcard/presence on a machine that is off does nothing",
-		not psx.is_powered_on)
+	_ok(not psx.is_powered_on, "memcard/presence on a machine that is off does nothing")
 
 	# A GameCube shows TWO slots, and takes a different family of card. The
 	# family is what keeps the two apart: every card is in one "memory_card"
@@ -1535,8 +1510,8 @@ func _test_memcard_presence() -> void:
 	add_child(gc)
 	_eq("memcard/a GameCube has two slots", gc.card_slot_count(), 2)
 	_eq("memcard/of the GameCube family", gc.card_family(), "gamecube")
-	_ok("memcard/and is told no pcsx_rearmed keys",
-		gc._removable_media_options("pcsx_rearmed").is_empty())
+	_ok(gc._removable_media_options("pcsx_rearmed").is_empty(),
+		"memcard/and is told no pcsx_rearmed keys")
 
 	# A Wii takes GameCube cards, which is the whole reason a family is not a
 	# systemid: it plays GameCube discs and writes to the same card.
@@ -1556,17 +1531,17 @@ func _test_memcard_presence() -> void:
 	var ps_card := preload("res://Scenes/Objects/media/memory_card.tscn") 		.instantiate() as MemoryCard
 	_eq("memcard/a GameCube card knows its family", gc_card.family, "gamecube")
 	_eq("memcard/and a PlayStation card knows its own", ps_card.family, "playstation")
-	_ok("memcard/a GameCube takes a GameCube card", gc._accepts_card(gc_card))
-	_ok("memcard/but not a PlayStation card", not gc._accepts_card(ps_card))
-	_ok("memcard/a PlayStation takes its own", psx._accepts_card(ps_card))
-	_ok("memcard/but not a GameCube card", not psx._accepts_card(gc_card))
+	_ok(gc._accepts_card(gc_card), "memcard/a GameCube takes a GameCube card")
+	_ok(not gc._accepts_card(ps_card), "memcard/but not a PlayStation card")
+	_ok(psx._accepts_card(ps_card), "memcard/a PlayStation takes its own")
+	_ok(not psx._accepts_card(gc_card), "memcard/but not a GameCube card")
 
 	# Paths are keyed by FAMILY, so a Wii and a GameCube reach the same card.
 	_eq("memcard/a Wii and a GameCube share a card folder",
 		SramPaths.cards_dir(wii_info.card_family),
 		SramPaths.cards_dir(gc.card_family()))
-	_ok("memcard/which is not the PlayStation's",
-		SramPaths.cards_dir("gamecube") != SramPaths.cards_dir("playstation"))
+	_ok(SramPaths.cards_dir("gamecube") != SramPaths.cards_dir("playstation"),
+		"memcard/which is not the PlayStation's")
 
 	gc_card.free()
 	ps_card.free()
@@ -1605,8 +1580,8 @@ func _test_power_led() -> void:
 			continue
 
 		var mats: Array = model.get("_power_light_mats")
-		_ok("led/%s has an emissive lens" % systemid, mats != null and mats.size() > 0,
-			"got %s" % ("null" if mats == null else str(mats.size())))
+		_ok(mats != null and mats.size() > 0,
+			"led/%s has an emissive lens" % systemid, "got %s" % ("null" if mats == null else str(mats.size())))
 		if mats == null or mats.is_empty():
 			sys.queue_free()
 			continue
@@ -1615,27 +1590,24 @@ func _test_power_led() -> void:
 		var glow := model.get("_power_light_glow") as OmniLight3D
 
 		model.set_power_light(false)
-		_ok("led/%s is dark when off" % systemid,
-			is_equal_approx(lens.emission_energy_multiplier, 0.0),
-			str(lens.emission_energy_multiplier))
-		_ok("led/%s hides its glow when off" % systemid, glow == null or not glow.visible)
+		_ok(is_equal_approx(lens.emission_energy_multiplier, 0.0),
+			"led/%s is dark when off" % systemid, str(lens.emission_energy_multiplier))
+		_ok(glow == null or not glow.visible, "led/%s hides its glow when off" % systemid)
 
 		model.set_power_light(true)
 		# The energy is per console, not a shared constant: the NES's red lens
 		# needs 3.0 where the PlayStation's green needs 1.0 for the same apparent
 		# brightness. A helper that hard-coded one would light one of them wrong.
-		_ok("led/%s lights at its own energy" % systemid,
-			is_equal_approx(lens.emission_energy_multiplier, want_energy),
-			"got %.2f want %.2f" % [lens.emission_energy_multiplier, want_energy])
-		_ok("led/%s shows its glow when on" % systemid, glow != null and glow.visible)
+		_ok(is_equal_approx(lens.emission_energy_multiplier, want_energy),
+			"led/%s lights at its own energy" % systemid, "got %.2f want %.2f" % [lens.emission_energy_multiplier, want_energy])
+		_ok(glow != null and glow.visible, "led/%s shows its glow when on" % systemid)
 		# Emission colour is the lens's own, and must survive being driven.
-		_ok("led/%s keeps its emission colour" % systemid,
-			lens.emission_enabled and lens.emission.get_luminance() > 0.0,
-			str(lens.emission))
+		_ok(lens.emission_enabled and lens.emission.get_luminance() > 0.0,
+			"led/%s keeps its emission colour" % systemid, str(lens.emission))
 
 		model.set_power_light(false)
-		_ok("led/%s goes dark again" % systemid,
-			is_equal_approx(lens.emission_energy_multiplier, 0.0))
+		_ok(is_equal_approx(lens.emission_energy_multiplier, 0.0),
+			"led/%s goes dark again" % systemid)
 		sys.queue_free()
 		await get_tree().process_frame
 
@@ -1679,8 +1651,8 @@ func _test_save_state_gates() -> void:
 		str(sys.can_capture_state()["reason"]), "the machine is off")
 
 	sys.is_powered_on = true
-	_ok("state/a running machine with a game can capture",
-		bool(sys.can_capture_state()["ok"]), str(sys.can_capture_state()))
+	_ok(bool(sys.can_capture_state()["ok"]),
+		"state/a running machine with a game can capture", str(sys.can_capture_state()))
 
 	sys._save_state._capture_id = "__in_flight"
 	_eq("state/one capture at a time",
@@ -1705,7 +1677,7 @@ func _test_save_state_gates() -> void:
 	if answers.size() == 1:
 		_eq("state/and answers about the id that was asked for",
 			str((answers[0] as Array)[0]), "wanted-id")
-		_ok("state/and answers not-ok", not bool((answers[0] as Array)[1]))
+		_ok(not bool((answers[0] as Array)[1]), "state/and answers not-ok")
 		_eq("state/carrying the reason the gate gave",
 			str((answers[0] as Array)[2]), "no game is inserted")
 
@@ -1825,9 +1797,8 @@ func _test_sram_paths() -> void:
 		SramPaths.cart_save_path("fceumm", "/nonexistent/__sram_selftest.nes",
 			"__sram_selftest_cart"))
 	# Unlike a card, this one DOES move with the game.
-	_ok("sram/and a different rom is a different file",
-		nes._memcards._compose_sram_path("fceumm")
-			!= SramPaths.cart_save_path("fceumm", "/other.nes", "__sram_selftest_cart"))
+	_ok(nes._memcards._compose_sram_path("fceumm") != SramPaths.cart_save_path("fceumm", "/other.nes", "__sram_selftest_cart"),
+		"sram/and a different rom is a different file")
 
 	nes._snapped_cartridge = null
 	cart.queue_free()
@@ -1857,21 +1828,20 @@ func _test_audio_cabling_gate() -> void:
 	sys._av_ports = []
 	sys._av_speaker_l = -1
 	sys._av_speaker_r = -1
-	_ok("audio/captive-lead hardware is always live", sys._audio._is_live())
-	_ok("audio/and reports itself unsocketed",
-		not bool(sys._audio_speakers().get("socketed", true)))
+	_ok(sys._audio._is_live(), "audio/captive-lead hardware is always live")
+	_ok(not bool(sys._audio_speakers().get("socketed", true)),
+		"audio/and reports itself unsocketed")
 
 	# Sockets, but no cord in any of them.
 	sys._av_ports = [null, null]
-	_ok("audio/a socketed machine wired to nothing is silent",
-		not sys._audio._is_live())
+	_ok(not sys._audio._is_live(), "audio/a socketed machine wired to nothing is silent")
 
 	# Half connected is still audible — one cord carries one channel.
 	sys._av_speaker_l = 0
-	_ok("audio/one audio cord makes it live", sys._audio._is_live())
+	_ok(sys._audio._is_live(), "audio/one audio cord makes it live")
 	sys._av_speaker_l = -1
 	sys._av_speaker_r = 1
-	_ok("audio/either channel alone makes it live", sys._audio._is_live())
+	_ok(sys._audio._is_live(), "audio/either channel alone makes it live")
 
 	# The speaker map the component reads. Deliberately answered WITHOUT
 	# resolving the sink: _apply_av_feed invalidates the gain cache one line
@@ -1879,7 +1849,7 @@ func _test_audio_cabling_gate() -> void:
 	var spk: Dictionary = sys._audio_speakers()
 	_eq("audio/the speaker map carries left", spk.get("left", 99), -1)
 	_eq("audio/the speaker map carries right", spk.get("right", 99), 1)
-	_ok("audio/and does not resolve the sink", not spk.has("tv"))
+	_ok(not spk.has("tv"), "audio/and does not resolve the sink")
 
 	sys.queue_free()
 

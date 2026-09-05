@@ -64,7 +64,7 @@ func _group(name: String) -> bool:
 	return _only.is_empty() or name.begins_with(_only)
 
 
-func _ok(test_name: String, cond: bool, detail := "") -> void:
+func _ok(cond: bool, test_name: String, detail := "") -> void:
 	if not _group(test_name):
 		return
 	if cond:
@@ -76,7 +76,7 @@ func _ok(test_name: String, cond: bool, detail := "") -> void:
 
 
 func _eq(test_name: String, got: Variant, want: Variant) -> void:
-	_ok(test_name, got == want, "got %s, want %s" % [got, want])
+	_ok(got == want, test_name, "got %s, want %s" % [got, want])
 
 
 # --- The registry -------------------------------------------------------------
@@ -84,29 +84,26 @@ func _eq(test_name: String, got: Variant, want: Variant) -> void:
 func _test_registry() -> void:
 	var ps1 := CardFormats.for_family("playstation")
 	var gc := CardFormats.for_family("gamecube")
-	_ok("registry/the PlayStation is registered", ps1 != null)
-	_ok("registry/so is the GameCube", gc != null)
-	_ok("registry/an unknown family is null", CardFormats.for_family("dreamcast") == null)
-	_ok("registry/and so is an empty one", CardFormats.for_family("") == null)
+	_ok(ps1 != null, "registry/the PlayStation is registered")
+	_ok(gc != null, "registry/so is the GameCube")
+	_ok(CardFormats.for_family("dreamcast") == null, "registry/an unknown family is null")
+	_ok(CardFormats.for_family("") == null, "registry/and so is an empty one")
 
 	# The two extensions must differ, because for_path resolves a family from a
 	# filename alone and could not otherwise tell the two folders apart.
-	_ok("registry/the extensions are distinct", ps1.extension() != gc.extension())
-	_ok("registry/and so are the save extensions",
-		ps1.save_extension() != gc.save_extension())
+	_ok(ps1.extension() != gc.extension(), "registry/the extensions are distinct")
+	_ok(ps1.save_extension() != gc.save_extension(), "registry/and so are the save extensions")
 	_eq("registry/a path resolves by extension",
 		CardFormats.for_path("/x/y/MEMORY CARD.mcr").id(), "playstation")
 	_eq("registry/for the GameCube too",
 		CardFormats.for_path("/x/y/MEMORY CARD.raw").id(), "gamecube")
-	_ok("registry/an unknown extension is null",
-		CardFormats.for_path("/x/y/card.bin") == null)
+	_ok(CardFormats.for_path("/x/y/card.bin") == null, "registry/an unknown extension is null")
 
 	# A console reaches its family through its own descriptor, and a Wii must
 	# reach the GAMECUBE's — that is the whole reason a family is not a systemid.
 	_eq("registry/a PlayStation resolves its family",
 		CardFormats.for_system("playstation").id(), "playstation")
-	_ok("registry/a cartridge console has none",
-		CardFormats.for_system("nes") == null)
+	_ok(CardFormats.for_system("nes") == null, "registry/a cartridge console has none")
 
 
 # --- The GameCube blank -------------------------------------------------------
@@ -114,7 +111,7 @@ func _test_registry() -> void:
 func _test_gc_blank() -> void:
 	var img := GCCard.blank_image()
 	_eq("gc/blank/a 251 card is 2 MiB", img.size(), 256 * GCCard.BLOCK_SIZE)
-	_ok("gc/blank/it parses as a card", GCCard.is_card_image(img))
+	_ok(GCCard.is_card_image(img), "gc/blank/it parses as a card")
 	_eq("gc/blank/with 251 blocks free", GCCard.free_blocks(img), 251)
 	_eq("gc/blank/and 251 in total", GCCard.total_blocks(img), 251)
 	_eq("gc/blank/holding nothing", GCCard.list_saves(img, false).size(), 0)
@@ -122,29 +119,27 @@ func _test_gc_blank() -> void:
 	# Every system block must pass its own checksum, which is the rule the
 	# 0xFFFF-becomes-0 quirk exists to satisfy. Getting that wrong makes a card
 	# Dolphin refuses, and the refusal looks like a corrupt card to the player.
-	_ok("gc/blank/the header checksum is right",
-		GCCard._checksums_ok(img, 0, GCCard.HDR_CSUM, GCCard.HDR_CSUM))
+	_ok(GCCard._checksums_ok(img, 0, GCCard.HDR_CSUM, GCCard.HDR_CSUM),
+		"gc/blank/the header checksum is right")
 	for b: int in [1, 2]:
 		var o := b * GCCard.BLOCK_SIZE
-		_ok("gc/blank/directory copy %d checksums" % b,
-			GCCard._checksums_ok(img, o, GCCard.DIR_CSUM, o + GCCard.DIR_CSUM))
+		_ok(GCCard._checksums_ok(img, o, GCCard.DIR_CSUM, o + GCCard.DIR_CSUM),
+			"gc/blank/directory copy %d checksums" % b)
 	for b: int in [3, 4]:
 		var o := b * GCCard.BLOCK_SIZE
-		_ok("gc/blank/BAT copy %d checksums" % b,
-			GCCard._checksums_ok(img, o + GCCard.BAT_UPDATE,
-				GCCard.BLOCK_SIZE - GCCard.BAT_UPDATE, o + GCCard.BAT_CSUM))
+		_ok(GCCard._checksums_ok(img, o + GCCard.BAT_UPDATE, GCCard.BLOCK_SIZE - GCCard.BAT_UPDATE, o + GCCard.BAT_CSUM),
+			"gc/blank/BAT copy %d checksums" % b)
 
 	# A 59-block card is just as ordinary as a 251, and its size has to come from
 	# the image rather than from the family.
 	var small := GCCard.blank_image(0x04)
-	_ok("gc/blank/a 59-block card parses", GCCard.is_card_image(small))
+	_ok(GCCard.is_card_image(small), "gc/blank/a 59-block card parses")
 	_eq("gc/blank/and reports its own size", GCCard.total_blocks(small), 59)
 
 	# The blank is deterministic given a format time, so two runs of the suite
 	# compare the same bytes.
-	_ok("gc/blank/it is reproducible",
-		GCCard.blank_image(GCCard.MBIT_251, 12345)
-			== GCCard.blank_image(GCCard.MBIT_251, 12345))
+	_ok(GCCard.blank_image(GCCard.MBIT_251, 12345) == GCCard.blank_image(GCCard.MBIT_251, 12345),
+		"gc/blank/it is reproducible")
 
 
 # --- Round trip ---------------------------------------------------------------
@@ -190,11 +185,11 @@ func _make_gci(gamecode: String, maker: String, name: String, blocks: int,
 func _test_gc_roundtrip() -> void:
 	var card := GCCard.blank_image()
 	var a := _make_gci("GALE", "01", "melee_save", 3, "Super Smash Bros", "Melee data")
-	_ok("gc/round/the built save is a valid gci", GCCard.is_gci(a))
+	_ok(GCCard.is_gci(a), "gc/round/the built save is a valid gci")
 
 	var one := GCCard.insert_save(card, a)
-	_ok("gc/round/it splices in", not one.is_empty())
-	_ok("gc/round/and the card still parses", GCCard.is_card_image(one))
+	_ok(not one.is_empty(), "gc/round/it splices in")
+	_ok(GCCard.is_card_image(one), "gc/round/and the card still parses")
 	_eq("gc/round/three blocks are taken", GCCard.free_blocks(one), 248)
 
 	var saves := GCCard.list_saves(one, false)
@@ -209,33 +204,33 @@ func _test_gc_roundtrip() -> void:
 	# that catches a first-block field carried through instead of normalised —
 	# which would make a save's hash a fact about where it sat on the card.
 	var back := GCCard.extract_save(one, int(saves[0]["block"]))
-	_ok("gc/round/what comes back out is what went in", back == a)
+	_ok(back == a, "gc/round/what comes back out is what went in")
 
 	# A second save of a different game, and the first still readable after it.
 	var b := _make_gci("GZLE", "01", "zelda_save", 2)
 	var two := GCCard.insert_save(one, b)
-	_ok("gc/round/a second save splices in", not two.is_empty())
+	_ok(not two.is_empty(), "gc/round/a second save splices in")
 	_eq("gc/round/both are listed", GCCard.list_saves(two, false).size(), 2)
 	_eq("gc/round/five blocks are taken", GCCard.free_blocks(two), 246)
-	_ok("gc/round/the first still extracts unchanged",
-		GCCard.extract_save(two, GCCard.block_of(two, "melee_save")) == a)
-	_ok("gc/round/and so does the second",
-		GCCard.extract_save(two, GCCard.block_of(two, "zelda_save")) == b)
+	_ok(GCCard.extract_save(two, GCCard.block_of(two, "melee_save")) == a,
+		"gc/round/the first still extracts unchanged")
+	_ok(GCCard.extract_save(two, GCCard.block_of(two, "zelda_save")) == b,
+		"gc/round/and so does the second")
 
 	# Delete frees exactly what it took and leaves the neighbour alone. Losing
 	# the OTHER save is the failure this whole design is arranged against.
 	var gone := GCCard.delete_save(two, GCCard.block_of(two, "melee_save"))
-	_ok("gc/round/delete returns a card", not gone.is_empty())
-	_ok("gc/round/which still parses", GCCard.is_card_image(gone))
+	_ok(not gone.is_empty(), "gc/round/delete returns a card")
+	_ok(GCCard.is_card_image(gone), "gc/round/which still parses")
 	_eq("gc/round/one save is left", GCCard.list_saves(gone, false).size(), 1)
 	_eq("gc/round/its blocks came back", GCCard.free_blocks(gone), 249)
-	_ok("gc/round/and the neighbour is untouched",
-		GCCard.extract_save(gone, GCCard.block_of(gone, "zelda_save")) == b)
+	_ok(GCCard.extract_save(gone, GCCard.block_of(gone, "zelda_save")) == b,
+		"gc/round/and the neighbour is untouched")
 	_eq("gc/round/the deleted one is gone", GCCard.block_of(gone, "melee_save"), -1)
 
 	# The freed blocks are reusable, which is the point of freeing them.
 	var again := GCCard.insert_save(gone, a)
-	_ok("gc/round/the freed blocks take a save again", not again.is_empty())
+	_ok(not again.is_empty(), "gc/round/the freed blocks take a save again")
 	_eq("gc/round/back to five taken", GCCard.free_blocks(again), 246)
 
 	# Every mutation returns a NEW image; the caller's copy must be untouched, so
@@ -248,35 +243,30 @@ func _test_gc_reject() -> void:
 	var a := _make_gci("GALE", "01", "melee_save", 3)
 	var one := GCCard.insert_save(card, a)
 
-	_ok("gc/reject/the same name twice is refused",
-		GCCard.insert_save(one, a).is_empty())
-	_ok("gc/reject/a PlayStation save is not a gci",
-		not GCCard.is_gci(PS1Card.blank_image()))
-	_ok("gc/reject/and is refused by the card",
-		GCCard.insert_save(card, PS1Card.blank_image()).is_empty())
-	_ok("gc/reject/an empty file is not a gci", not GCCard.is_gci(PackedByteArray()))
+	_ok(GCCard.insert_save(one, a).is_empty(), "gc/reject/the same name twice is refused")
+	_ok(not GCCard.is_gci(PS1Card.blank_image()), "gc/reject/a PlayStation save is not a gci")
+	_ok(GCCard.insert_save(card, PS1Card.blank_image()).is_empty(),
+		"gc/reject/and is refused by the card")
+	_ok(not GCCard.is_gci(PackedByteArray()), "gc/reject/an empty file is not a gci")
 
 	# A truncated save: the entry says three blocks, the file holds two.
 	var short := a.slice(0, GCCard.DENTRY_SIZE + 2 * GCCard.BLOCK_SIZE)
-	_ok("gc/reject/a truncated gci is refused", not GCCard.is_gci(short))
+	_ok(not GCCard.is_gci(short), "gc/reject/a truncated gci is refused")
 
 	# A card that does not fit its own header, which is what a truncated image
 	# looks like — taking its word for the size would walk off the buffer.
 	var chopped := card.slice(0, card.size() - GCCard.BLOCK_SIZE)
-	_ok("gc/reject/a truncated card is not a card", not GCCard.is_card_image(chopped))
-	_ok("gc/reject/nor is a PlayStation card",
-		not GCCard.is_card_image(PS1Card.blank_image()))
-	_ok("gc/reject/deleting a free entry does nothing",
-		GCCard.delete_save(card, 0).is_empty())
-	_ok("gc/reject/an out-of-range handle does nothing",
-		GCCard.delete_save(one, 9999).is_empty())
+	_ok(not GCCard.is_card_image(chopped), "gc/reject/a truncated card is not a card")
+	_ok(not GCCard.is_card_image(PS1Card.blank_image()), "gc/reject/nor is a PlayStation card")
+	_ok(GCCard.delete_save(card, 0).is_empty(), "gc/reject/deleting a free entry does nothing")
+	_ok(GCCard.delete_save(one, 9999).is_empty(), "gc/reject/an out-of-range handle does nothing")
 
 	# A save larger than the card. A 59-block card cannot hold 60 blocks, and the
 	# refusal has to come before anything is written.
 	var small := GCCard.blank_image(0x04)
 	var big := _make_gci("GXXE", "01", "huge", 60)
-	_ok("gc/reject/a save too big for the card is refused",
-		GCCard.insert_save(small, big).is_empty())
+	_ok(GCCard.insert_save(small, big).is_empty(),
+		"gc/reject/a save too big for the card is refused")
 	_eq("gc/reject/and the card is untouched", GCCard.free_blocks(small), 59)
 
 
@@ -299,8 +289,8 @@ func _test_gc_chain() -> void:
 
 	var wide := _make_gci("GBBE", "01", "wide", 25)
 	var out := GCCard.insert_save(card, wide)
-	_ok("gc/chain/a save spanning the gaps fits", not out.is_empty())
-	_ok("gc/chain/and the card still parses", GCCard.is_card_image(out))
+	_ok(not out.is_empty(), "gc/chain/a save spanning the gaps fits")
+	_ok(GCCard.is_card_image(out), "gc/chain/and the card still parses")
 	_eq("gc/chain/fourteen left", GCCard.free_blocks(out), 14)
 
 	var idx := GCCard.block_of(out, "wide")
@@ -308,16 +298,14 @@ func _test_gc_chain() -> void:
 		GCCard._be16(out, GCCard.dir_offset(out) + idx * GCCard.DENTRY_SIZE
 			+ GCCard.E_FIRSTBLK))
 	_eq("gc/chain/the chain is twenty-five blocks", chain.size(), 25)
-	_ok("gc/chain/which is genuinely not contiguous",
-		chain[chain.size() - 1] - chain[0] != 24)
-	_ok("gc/chain/and it reads back byte for byte",
-		GCCard.extract_save(out, idx) == wide)
+	_ok(chain[chain.size() - 1] - chain[0] != 24, "gc/chain/which is genuinely not contiguous")
+	_ok(GCCard.extract_save(out, idx) == wide, "gc/chain/and it reads back byte for byte")
 
 	# The neighbours it was threaded around must be intact.
-	_ok("gc/chain/a save it stepped over is unharmed",
-		not GCCard.extract_save(out, GCCard.block_of(out, "two")).is_empty())
-	_ok("gc/chain/and so is the other",
-		not GCCard.extract_save(out, GCCard.block_of(out, "four")).is_empty())
+	_ok(not GCCard.extract_save(out, GCCard.block_of(out, "two")).is_empty(),
+		"gc/chain/a save it stepped over is unharmed")
+	_ok(not GCCard.extract_save(out, GCCard.block_of(out, "four")).is_empty(),
+		"gc/chain/and so is the other")
 
 
 # --- Pictures -----------------------------------------------------------------
@@ -394,7 +382,7 @@ func _test_gc_pictures() -> void:
 		gci[GCCard.DENTRY_SIZE + addr + i] = pixels[i]
 
 	var card := GCCard.insert_save(GCCard.blank_image(), gci)
-	_ok("gc/pictures/the save with an icon splices in", not card.is_empty())
+	_ok(not card.is_empty(), "gc/pictures/the save with an icon splices in")
 	var saves := GCCard.list_saves(card, true)
 	_eq("gc/pictures/one save", saves.size(), 1)
 	var icons: Array = saves[0]["icons"]
@@ -417,7 +405,7 @@ func _test_gc_pictures() -> void:
 					first_bad = "at %d,%d got %s want %s" % [px, py,
 						got.get_pixel(px, py), src.get_pixel(px, py)]
 				same = false
-	_ok("gc/pictures/the decoded icon is the icon that went in", same, first_bad)
+	_ok(same, "gc/pictures/the decoded icon is the icon that went in", first_bad)
 
 	# A frame DELAY of zero ends the list, not a format of zero. With the delay
 	# bits cleared the icon must vanish entirely, however the format reads.
@@ -435,20 +423,19 @@ func _test_gc_pictures() -> void:
 	var psaves := GCCard.list_saves(plain, true)
 	_eq("gc/pictures/a save with no image has no icons",
 		(psaves[0]["icons"] as Array).size(), 0)
-	_ok("gc/pictures/and no banner", psaves[0]["banner"] == null)
+	_ok(psaves[0]["banner"] == null, "gc/pictures/and no banner")
 
 
 # --- The PlayStation, held to the same contract -------------------------------
 
 func _test_ps1_contract() -> void:
 	var img := PS1Card.blank_image()
-	_ok("ps1/the blank parses", PS1Card.is_card_image(img))
+	_ok(PS1Card.is_card_image(img), "ps1/the blank parses")
 	_eq("ps1/with fifteen blocks free", PS1Card.free_blocks(img), 15)
 	_eq("ps1/holding nothing", PS1Card.list_saves(img, false).size(), 0)
-	_ok("ps1/a GameCube card is not a PlayStation card",
-		not PS1Card.is_card_image(GCCard.blank_image()))
-	_ok("ps1/and a GameCube save is not an mcs",
-		not PS1Card.is_mcs(GCCard.blank_image()))
+	_ok(not PS1Card.is_card_image(GCCard.blank_image()),
+		"ps1/a GameCube card is not a PlayStation card")
+	_ok(not PS1Card.is_mcs(GCCard.blank_image()), "ps1/and a GameCube save is not an mcs")
 
 	# Frame 63 is the write-test frame, a copy of the header. Every real card
 	# carries it and pcsx_rearmed does not write it; a card without it is the odd
@@ -462,35 +449,31 @@ func _test_ps1_contract() -> void:
 func _test_shared_contract() -> void:
 	for fmt: CardFormat in CardFormats.all():
 		var n := fmt.id()
-		_ok("shared/%s/has a label" % n, not fmt.label().is_empty())
-		_ok("shared/%s/has an extension" % n, not fmt.extension().is_empty())
-		_ok("shared/%s/has a save extension" % n, not fmt.save_extension().is_empty())
-		_ok("shared/%s/has a unit noun" % n, not fmt.unit_noun().is_empty())
-		_ok("shared/%s/animates above zero" % n, fmt.icon_fps() > 0.0)
+		_ok(not fmt.label().is_empty(), "shared/%s/has a label" % n)
+		_ok(not fmt.extension().is_empty(), "shared/%s/has an extension" % n)
+		_ok(not fmt.save_extension().is_empty(), "shared/%s/has a save extension" % n)
+		_ok(not fmt.unit_noun().is_empty(), "shared/%s/has a unit noun" % n)
+		_ok(fmt.icon_fps() > 0.0, "shared/%s/animates above zero" % n)
 
 		var blank := fmt.blank_image()
-		_ok("shared/%s/blanks a card" % n, not blank.is_empty())
-		_ok("shared/%s/which parses" % n, fmt.is_card_image(blank))
+		_ok(not blank.is_empty(), "shared/%s/blanks a card" % n)
+		_ok(fmt.is_card_image(blank), "shared/%s/which parses" % n)
 		_eq("shared/%s/holding nothing" % n, fmt.list_saves(blank, false).size(), 0)
 		_eq("shared/%s/with everything free" % n,
 			fmt.free_blocks(blank), fmt.total_blocks(blank))
-		_ok("shared/%s/an empty image is not a card" % n,
-			not fmt.is_card_image(PackedByteArray()))
-		_ok("shared/%s/nor is an empty file a save" % n,
-			not fmt.is_save_file(PackedByteArray()))
+		_ok(not fmt.is_card_image(PackedByteArray()), "shared/%s/an empty image is not a card" % n)
+		_ok(not fmt.is_save_file(PackedByteArray()), "shared/%s/nor is an empty file a save" % n)
 		_eq("shared/%s/an absent save has no handle" % n,
 			fmt.block_of(blank, "nothing"), -1)
 
 		# total_blocks must answer for a card that does not exist yet, because
 		# that is what a freshly spawned card's panel has to show.
-		_ok("shared/%s/an absent card still has a size" % n,
-			fmt.total_blocks(PackedByteArray()) > 0)
+		_ok(fmt.total_blocks(PackedByteArray()) > 0, "shared/%s/an absent card still has a size" % n)
 
 		# A one-block save is one block, and the arithmetic is the format's.
 		var one_block: int = fmt.blocks_for_size(
 			blank.size() if n == "" else _smallest_save_size(fmt))
-		_ok("shared/%s/a smallest save is one block" % n, one_block == 1,
-			"got %d" % one_block)
+		_ok(one_block == 1, "shared/%s/a smallest save is one block" % n, "got %d" % one_block)
 
 
 ## The byte size of the smallest save this format can produce — one block plus

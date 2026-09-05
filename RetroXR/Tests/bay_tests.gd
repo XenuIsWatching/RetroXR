@@ -49,7 +49,7 @@ func _wait(n: int) -> void:
 		await get_tree().physics_frame
 
 
-func _check(ok: bool, what: String) -> void:
+func _ok(ok: bool, what: String) -> void:
 	_checks += 1
 	if not ok:
 		_failed += 1
@@ -131,7 +131,7 @@ func _group_perch() -> void:
 	var slot := sys.get_node("CartridgeSlot") as XRToolsSnapZone
 	var cart := await _cart("nes")
 
-	_check(slot.preview_offset.length() > 0.02,
+	_ok(slot.preview_offset.length() > 0.02,
 		"perch/the bay stands a held cart proud of the mouth")
 
 	# The offer runs along the TRAY's axis, which is tilted up while the tray is
@@ -141,10 +141,10 @@ func _group_perch() -> void:
 	var axis: Vector3 = sys._model.get_cartridge_insert_direction()
 	var offer := ghost.origin - seat.origin
 	var along := offer.dot(axis)
-	_check(along > 0.02, "perch/the offer is out of the machine, not into it")
-	_check((offer - axis * along).length() < 0.002, "perch/and square to the mouth")
+	_ok(along > 0.02, "perch/the offer is out of the machine, not into it")
+	_ok((offer - axis * along).length() < 0.002, "perch/and square to the mouth")
 	var level: Vector3 = sys.global_transform.basis.z.normalized()
-	_check(axis.dot(level) < 0.9995,
+	_ok(axis.dot(level) < 0.9995,
 		"perch/the mouth is tilted up, so the offer is too")
 
 	# The point of measuring the offer rather than writing one down: the ghost has to
@@ -155,14 +155,14 @@ func _group_perch() -> void:
 	var front_z: float = ((to_model * deck.global_transform) * deck.get_aabb()).end.z
 	var half: float = MediaDimensions.cart_size("nes").y * 0.5
 	var face_z: float = (to_model * (ghost.origin + axis * half)).z
-	_check(face_z >= front_z - 0.001,
+	_ok(face_z >= front_z - 0.001,
 		"perch/the ghost's cart reaches the front face")
 
 	slot.pick_up_object(cart)
-	_check(cart.freeze,
+	_ok(cart.freeze,
 		"perch/the insertion keeps the snapped cart out of rigid-body physics")
 	await _wait(40)
-	_check(cart.global_position.distance_to(slot.snap_pose_for(cart).origin) < 0.003,
+	_ok(cart.global_position.distance_to(slot.snap_pose_for(cart).origin) < 0.003,
 		"perch/a released cart ends at the seat, not the perch")
 
 	# Taking hold of it again pulls it back out to the mouth — as a SLIDE. The
@@ -181,9 +181,9 @@ func _group_perch() -> void:
 	cart.pick_up(hand)
 	await _wait(1)
 	var first: float = cart.global_position.distance_to(seat_o)
-	_check(first < stand * 0.5, "perch/taking hold of it eases it out, not flicks it")
+	_ok(first < stand * 0.5, "perch/taking hold of it eases it out, not flicks it")
 	await _wait(30)
-	_check(cart.global_position.distance_to(seat_o) > stand * 0.9,
+	_ok(cart.global_position.distance_to(seat_o) > stand * 0.9,
 		"perch/and it does reach the mouth")
 	await _clear()
 
@@ -201,27 +201,27 @@ func _group_tray() -> void:
 	var lid_box: AABB = (model.global_transform.affine_inverse() * lid.global_transform) \
 		* lid.get_aabb()
 	var flap_box := _box_aabb_in(model, flap_shape)
-	_check(flap.box_engages and flap_shape.shape is BoxShape3D,
+	_ok(flap.box_engages and flap_shape.shape is BoxShape3D,
 		"tray/the flap uses its box for VR activation")
-	_check(absf(flap_box.position.z - lid_box.position.z) < 0.0001,
+	_ok(absf(flap_box.position.z - lid_box.position.z) < 0.0001,
 		"tray/the flap box stops at the lid's inward face")
-	_check(flap_box.end.y > lid_box.end.y + 0.015,
+	_ok(flap_box.end.y > lid_box.end.y + 0.015,
 		"tray/the flap box reaches above the lid")
-	_check(flap_box.end.z > lid_box.end.z + 0.020,
+	_ok(flap_box.end.z > lid_box.end.z + 0.020,
 		"tray/the flap box reaches out in front")
 	var flap_half: Vector3 = (flap_shape.shape as BoxShape3D).size * 0.5
 	var behind_flap: Vector3 = flap_shape.global_transform \
 		* Vector3(0, 0, -flap_half.z - 0.005)
-	_check(not flap._tip_in_activation_region(behind_flap),
+	_ok(not flap._tip_in_activation_region(behind_flap),
 		"tray/a hand behind the flap box cannot activate it")
 	var lid_poke_top := flap.find_child("LidPokeTop", false, false) as CollisionShape3D
 	var lid_poke_front := flap.find_child("LidPokeFront", false, false) as CollisionShape3D
 	var top_half: Vector3 = (lid_poke_top.shape as BoxShape3D).size * 0.5
 	var front_half: Vector3 = (lid_poke_front.shape as BoxShape3D).size * 0.5
-	_check(lid_poke_top != flap_shape and lid_poke_front != flap_shape
+	_ok(lid_poke_top != flap_shape and lid_poke_front != flap_shape
 		and flap._poke_shapes().size() == 2,
 		"tray/the lid pokes use two surfaces separate from its trigger box")
-	_check(top_half.y < 0.002 and front_half.z < 0.004,
+	_ok(top_half.y < 0.002 and front_half.z < 0.004,
 		"tray/the lid poke boxes are thin planes, not another volume")
 	var lid_bottom: Vector3 = lid_poke_front.global_transform \
 		* Vector3(0, -front_half.y, 0)
@@ -236,10 +236,10 @@ func _group_tray() -> void:
 	var front_top_corner: Vector3 = lid_poke_front.global_transform \
 		* Vector3(0, front_half.y, front_half.z)
 	var lid_top_front_seam := top_front_corner.lerp(front_top_corner, 0.5)
-	_check(flap._face_at_tip(lid_bottom, 0.001) == VRHinge.FACE_Y_NEG
+	_ok(flap._face_at_tip(lid_bottom, 0.001) == VRHinge.FACE_Y_NEG
 		and flap._face_at_tip(lid_front, 0.001) == VRHinge.FACE_Z_POS,
 		"tray/the front plane's thin bottom and broad outward faces accept pokes")
-	_check((flap._shape_faces(lid_poke_front, &"poke_open_faces", 0)
+	_ok((flap._shape_faces(lid_poke_front, &"poke_open_faces", 0)
 			& VRHinge.FACE_Y_NEG) != 0
 		and (flap._shape_faces(lid_poke_front, &"poke_torque_faces", 0)
 			& VRHinge.FACE_Z_POS) != 0,
@@ -248,16 +248,16 @@ func _group_tray() -> void:
 		VRHinge.FACE_Z_POS, lid_poke_front) * 0.005
 	var top_approach: Vector3 = -flap._face_world_normal(
 		VRHinge.FACE_Y_POS, lid_poke_top) * 0.005
-	_check(flap._face_at_tip(lid_front_bottom_seam, 0.001, -1, front_approach)
+	_ok(flap._face_at_tip(lid_front_bottom_seam, 0.001, -1, front_approach)
 		== VRHinge.FACE_Z_POS,
 		"tray/frontward intent wins the front/bottom seam")
-	_check(flap._face_at_tip(lid_top_front_seam, 0.002, -1, front_approach)
+	_ok(flap._face_at_tip(lid_top_front_seam, 0.002, -1, front_approach)
 		== VRHinge.FACE_Z_POS,
 		"tray/frontward approach selects +Z at the front/top seam")
-	_check(flap._face_at_tip(lid_top_front_seam, 0.002, -1, top_approach)
+	_ok(flap._face_at_tip(lid_top_front_seam, 0.002, -1, top_approach)
 		== VRHinge.FACE_Y_POS,
 		"tray/downward approach selects +Y at the front/top seam")
-	_check(flap._face_at_tip(lid_top, 0.001) == VRHinge.FACE_Y_POS,
+	_ok(flap._face_at_tip(lid_top, 0.001) == VRHinge.FACE_Y_POS,
 		"tray/the lid's top face pokes it closed")
 	var face_follow_ctrl := XRController3D.new()
 	add_child(face_follow_ctrl)
@@ -267,12 +267,12 @@ func _group_tray() -> void:
 	flap._poke_mode = VRHinge.POKE_TORQUE
 	flap._begin_track(lid_top_front_seam)
 	flap._update_active_poke_face(lid_top, top_approach)
-	_check(flap._poke_shape == lid_poke_top
+	_ok(flap._poke_shape == lid_poke_top
 		and flap._poke_face == VRHinge.FACE_Y_POS
 		and flap._poke_mode == VRHinge.POKE_CLOSE,
 		"tray/an active lid poke follows onto the top face and changes to close")
 	flap._update_active_poke_face(lid_front, front_approach)
-	_check(flap._poke_shape == lid_poke_front
+	_ok(flap._poke_shape == lid_poke_front
 		and flap._poke_face == VRHinge.FACE_Z_POS
 		and flap._poke_mode == VRHinge.POKE_TORQUE,
 		"tray/an active lid poke follows back onto the front face and changes to torque")
@@ -283,28 +283,28 @@ func _group_tray() -> void:
 	face_follow_ctrl.queue_free()
 	var top_underside: Vector3 = lid_poke_top.global_transform \
 		* Vector3(0, -top_half.y, 0)
-	_check(flap._face_at_tip(top_underside, 0.001) == VRHinge.FACE_Y_NEG
+	_ok(flap._face_at_tip(top_underside, 0.001) == VRHinge.FACE_Y_NEG
 		and (flap._shape_faces(lid_poke_top, &"poke_open_faces", 0)
 			& VRHinge.FACE_Y_NEG) != 0,
 		"tray/the top plane's underside is explicitly open-only")
 	flap._begin_track(lid_bottom)
 	flap._on_poke_motion(lid_bottom + Vector3.UP * 0.03, VRHinge.POKE_OPEN)
-	_check(model.get_lid_angle_deg() > 40.0,
+	_ok(model.get_lid_angle_deg() > 40.0,
 		"tray/an upward bottom-face poke lifts the lid")
 	model.set_lid_angle_deg(0.0)
 	var top_underside_lever: Vector3 = lid_poke_top.global_transform \
 		* Vector3(0, -top_half.y, top_half.z - 0.002)
 	flap._begin_track(top_underside_lever)
 	flap._on_poke_motion(top_underside_lever + Vector3.UP * 0.03, VRHinge.POKE_OPEN)
-	_check(model.get_lid_angle_deg() > 40.0,
+	_ok(model.get_lid_angle_deg() > 40.0,
 		"tray/an upward poke under the top plane lifts the lid")
 	model.set_lid_angle_deg(0.0)
 	lid_front = lid_poke_front.global_transform * Vector3(0, 0, front_half.z)
 	flap._begin_track(lid_front)
 	flap._on_poke_motion(lid_front + Vector3.UP * 0.03, VRHinge.POKE_TORQUE)
-	_check(model.get_lid_angle_deg() > 20.0,
+	_ok(model.get_lid_angle_deg() > 20.0,
 		"tray/upward torque on the front face lifts the lid")
-	_check(flap.poke_release_momentum,
+	_ok(flap.poke_release_momentum,
 		"tray/the NES lid carries angular poke motion through release")
 	var momentum_axis: Vector3 = model._flap_pivot.global_transform.basis.x.normalized()
 	var momentum_origin: Vector3 = model._flap_pivot.global_position
@@ -312,14 +312,14 @@ func _group_tray() -> void:
 		deg_to_rad(4.0)) * (lid_front - momentum_origin)
 	flap._poke_release_velocity_deg = 0.0
 	flap._sample_poke_release_velocity(momentum_next, lid_front, 0.02)
-	_check(flap._poke_release_velocity_deg > flap.poke_momentum_min_deg_per_sec,
+	_ok(flap._poke_release_velocity_deg > flap.poke_momentum_min_deg_per_sec,
 		"tray/a tangential pull-off gives the lid angular release momentum")
 	model.set_lid_angle_deg(45.0)
 	var momentum_before := rad_to_deg(model._flap_pivot.rotation.x)
 	flap._release_angular_velocity_deg = flap._poke_release_velocity_deg
 	flap._step_release_momentum(0.02)
 	var momentum_after := rad_to_deg(model._flap_pivot.rotation.x)
-	_check((momentum_after - momentum_before) * flap._poke_release_velocity_deg > 0.0,
+	_ok((momentum_after - momentum_before) * flap._poke_release_velocity_deg > 0.0,
 		"tray/the released lid coasts in the fingertip's angular direction")
 	model.set_lid_angle_deg(105.0)
 	lid_front = lid_poke_front.global_transform * Vector3(0, 0, front_half.z)
@@ -329,43 +329,43 @@ func _group_tray() -> void:
 		* (lid_front - hinge_origin)
 	flap._begin_track(lid_front)
 	flap._on_poke_motion(close_arc, VRHinge.POKE_TORQUE)
-	_check(model.get_lid_angle_deg() < 100.0,
+	_ok(model.get_lid_angle_deg() < 100.0,
 		"tray/closing torque on the front face lowers the lid")
 	model.set_lid_angle_deg(105.0)
 	lid_top = lid_poke_top.global_transform * Vector3(0, top_half.y, 0)
 	var top_inward: Vector3 = -flap._face_world_normal(VRHinge.FACE_Y_POS, lid_poke_top)
 	flap._begin_track(lid_top)
 	flap._on_poke_motion(lid_top + top_inward * 0.03, VRHinge.POKE_CLOSE)
-	_check(model.get_lid_angle_deg() < 90.0,
+	_ok(model.get_lid_angle_deg() < 90.0,
 		"tray/an inward top-face poke lowers the lid")
 	model.set_lid_angle_deg(0.0)
 
 	var tray_hinge := model._tray_hinge as VRHinge
 	var tray_shape := tray_hinge.find_child("CradleActivationBox", false, false) as CollisionShape3D
 	var cradle_geom := model._cradle_mesh() as MeshInstance3D
-	_check(tray_hinge.box_engages and tray_shape.shape is BoxShape3D,
+	_ok(tray_hinge.box_engages and tray_shape.shape is BoxShape3D,
 		"tray/the cradle uses its box for VR activation")
 	var tray_size: Vector3 = (tray_shape.shape as BoxShape3D).size
 	var want_size := Vector3(0.114543, 0.021835938, 0.037454814)
-	_check(tray_size.distance_to(want_size) < 0.000001,
+	_ok(tray_size.distance_to(want_size) < 0.000001,
 		"tray/the authored cradle box size reaches runtime")
 	var tray_in_cradle: Transform3D = cradle_geom.global_transform.affine_inverse() \
 		* tray_shape.global_transform
 	var want_origin := Vector3(-0.000053, 0.0150039685, 0.099778757)
-	_check(tray_in_cradle.origin.distance_to(want_origin) < 0.000001,
+	_ok(tray_in_cradle.origin.distance_to(want_origin) < 0.000001,
 		"tray/the authored cradle box offset reaches runtime")
 	var tray_half: Vector3 = (tray_shape.shape as BoxShape3D).size * 0.5
 	var behind_tray: Vector3 = tray_shape.global_transform \
 		* Vector3(0, 0, tray_half.z + 0.005)
-	_check(not tray_hinge._tip_in_activation_region(behind_tray),
+	_ok(not tray_hinge._tip_in_activation_region(behind_tray),
 		"tray/a hand deeper inside the shell cannot activate the cradle")
 	var tray_top: Vector3 = tray_shape.global_transform \
 		* Vector3(0, tray_half.y, 0)
-	_check(tray_hinge._face_at_tip(tray_top, 0.001) == VRHinge.FACE_Y_POS,
+	_ok(tray_hinge._face_at_tip(tray_top, 0.001) == VRHinge.FACE_Y_POS,
 		"tray/only the cradle's top face accepts a poke")
 
-	_check(sys.has_push_tray_bay(), "tray/the NES bay is a push tray")
-	_check(not sys._model.is_tray_down(), "tray/an empty bay rests up")
+	_ok(sys.has_push_tray_bay(), "tray/the NES bay is a push tray")
+	_ok(not sys._model.is_tray_down(), "tray/an empty bay rests up")
 
 	slot.pick_up_object(cart)
 	await _wait(40)
@@ -373,9 +373,9 @@ func _group_tray() -> void:
 	# How far the mouth points up: sin(TRAY_UP_DEG) while the tray is sprung up,
 	# nothing at all once it is home.
 	var up_axis_rise: float = sys._model.get_cartridge_insert_direction().y
-	_check(sys._snapped_cartridge == null,
+	_ok(sys._snapped_cartridge == null,
 		"tray/a cart laid in is not read yet")
-	_check(sys._tray_cartridge == cart, "tray/but the bay knows it is lying there")
+	_ok(sys._tray_cartridge == cart, "tray/but the bay knows it is lying there")
 
 	var cradle_up: Transform3D = Transform3D.IDENTITY
 	var cradle_node := sys.find_child("NesCradle", true, false) as MeshInstance3D
@@ -385,8 +385,8 @@ func _group_tray() -> void:
 	sys.toggle_cart_tray()
 	await _settle_tray(sys)
 	var down_axis_rise: float = sys._model.get_cartridge_insert_direction().y
-	_check(sys._model.is_tray_down(), "tray/a click pushes it home")
-	_check(sys._snapped_cartridge == cart, "tray/and only then is it read")
+	_ok(sys._model.is_tray_down(), "tray/a click pushes it home")
+	_ok(sys._snapped_cartridge == cart, "tray/and only then is it read")
 
 	# Pushed home, the tray is LEVEL with the console — not merely "somewhere else
 	# than it was". Measured absolutely, because a cradle inverted about its own
@@ -394,16 +394,16 @@ func _group_tray() -> void:
 	var deck := sys.find_child("NesDeck", true, false) as MeshInstance3D
 	var cradle_now := sys.find_child("NesCradle", true, false) as MeshInstance3D
 	if deck != null and cradle_now != null:
-		_check(_basis_angle(cradle_now, deck) < 0.5,
+		_ok(_basis_angle(cradle_now, deck) < 0.5,
 			"tray/the cradle is level when it is pushed home")
 	else:
-		_check(false, "tray/the cradle is level when it is pushed home")
+		_ok(false, "tray/the cradle is level when it is pushed home")
 
 	# The cart travels with the tray: its nose drops as the cradle levels out.
 	var down_pose := cart.global_transform
-	_check(up_pose.origin.y - down_pose.origin.y > 0.0005,
+	_ok(up_pose.origin.y - down_pose.origin.y > 0.0005,
 		"tray/the cart comes down with the tray")
-	_check(down_axis_rise < up_axis_rise and absf(down_axis_rise) < 0.005,
+	_ok(down_axis_rise < up_axis_rise and absf(down_axis_rise) < 0.005,
 		"tray/and levels out as it goes")
 
 	# The tray the player can SEE moves, not just the cart riding an invisible frame.
@@ -413,31 +413,31 @@ func _group_tray() -> void:
 	if cradle != null:
 		var now: Vector3 = (cradle.global_transform * cradle.get_aabb()).get_center()
 		var was: Vector3 = (cradle_up * cradle.get_aabb()).get_center()
-		_check(now.distance_to(was) > 0.001, "tray/the cradle travels with it")
+		_ok(now.distance_to(was) > 0.001, "tray/the cradle travels with it")
 		var swung := rad_to_deg(cradle_up.basis.get_rotation_quaternion().angle_to(
 			cradle.global_transform.basis.get_rotation_quaternion()))
-		_check(swung > 2.0, "tray/and swings through the tray's own angle")
+		_ok(swung > 2.0, "tray/and swings through the tray's own angle")
 	else:
-		_check(false, "tray/the cradle travels with it")
+		_ok(false, "tray/the cradle travels with it")
 
 	# Clamped home: no hand, beam or drag takes it until the tray is let up.
-	_check(cart.is_clamped(), "tray/a cart pushed home cannot be taken")
+	_ok(cart.is_clamped(), "tray/a cart pushed home cannot be taken")
 	# A click means "push/lift" only while the cart is in the tray. Everywhere else
 	# it has to mean "pick me up", or a cart lying on the floor cannot be taken by
 	# clicking it at all — which is how every other object in the room behaves.
-	_check(cart.desktop_click_available(),
+	_ok(cart.desktop_click_available(),
 		"tray/a cart in the tray claims the click")
 	# ...and the refusal happens before the socket lets go, so a grab that is
 	# turned down leaves the cart where it was rather than loose in the machine.
-	_check(slot.picked_up_object == cart, "tray/a refused grab leaves it seated")
+	_ok(slot.picked_up_object == cart, "tray/a refused grab leaves it seated")
 
 	sys.toggle_cart_tray()
 	await _settle_tray(sys)
-	_check(not cart.is_clamped(), "tray/letting it up frees the cart again")
-	_check(not sys._model.is_tray_down(), "tray/a second click lifts it")
-	_check(sys._snapped_cartridge == null,
+	_ok(not cart.is_clamped(), "tray/letting it up frees the cart again")
+	_ok(not sys._model.is_tray_down(), "tray/a second click lifts it")
+	_ok(sys._snapped_cartridge == null,
 		"tray/lifting takes the cart off the machine")
-	_check(slot.picked_up_object == cart, "tray/but leaves it lying in the tray")
+	_ok(slot.picked_up_object == cart, "tray/but leaves it lying in the tray")
 
 	# ...and sprung back up it carries the cart at the cart's own angle. Both halves
 	# matter: a tray that swings the right distance from the wrong rest pose ends up
@@ -447,7 +447,7 @@ func _group_tray() -> void:
 		var cart_turned := rad_to_deg(cart.global_transform.basis.get_rotation_quaternion()
 			.angle_to(down_pose.basis.get_rotation_quaternion()))
 		var want: float = RetroSystemModelNES.TRAY_UP_DEG
-		_check(absf(tray_up - want) < 0.5 and absf(tray_up - cart_turned) < 0.5,
+		_ok(absf(tray_up - want) < 0.5 and absf(tray_up - cart_turned) < 0.5,
 			"tray/and carries the cart at its own angle when up")
 
 	# A direct top-face press must cross BELOW the normal locked rest angle before
@@ -464,7 +464,7 @@ func _group_tray() -> void:
 	tray_hinge._on_poke_motion(home_arc, VRHinge.POKE_CLOSE)
 	tray_hinge._on_poke_ended()
 	await _settle_tray(sys)
-	_check(not tray_hinge.is_latched_closed()
+	_ok(not tray_hinge.is_latched_closed()
 		and absf(rad_to_deg(model._tray_pivot.rotation.x)
 			- RetroSystemModelNES.TRAY_UP_DEG) < 0.5,
 		"tray/a top poke released at home has not crossed the latch")
@@ -480,22 +480,22 @@ func _group_tray() -> void:
 	add_child(held_latch_finger)
 	tray_hinge._poke_ctrl = held_latch_finger
 	tray_hinge._on_poke_motion(latch_arc, VRHinge.POKE_CLOSE)
-	_check(tray_hinge.is_latched_closed(),
+	_ok(tray_hinge.is_latched_closed(),
 		"tray/a top poke crossing below home catches the latch")
-	_check(rad_to_deg(model._tray_pivot.rotation.x) < -0.5,
+	_ok(rad_to_deg(model._tray_pivot.rotation.x) < -0.5,
 		"tray/the first latch press visibly overtravels below home")
-	_check(tray_hinge._poke_ctrl == held_latch_finger and tray_hinge._poke_consumed,
+	_ok(tray_hinge._poke_ctrl == held_latch_finger and tray_hinge._poke_consumed,
 		"tray/the caught latch keeps the same poke captured")
-	_check(tray_hinge._latch_feedback_ctrl == held_latch_finger,
+	_ok(tray_hinge._latch_feedback_ctrl == held_latch_finger,
 		"tray/the latch remembers which controller receives its resting feedback")
 	var held_latch_angle: float = rad_to_deg(model._tray_pivot.rotation.x)
 	tray_hinge._on_poke_motion(latch_arc, VRHinge.POKE_CLOSE)
-	_check(is_equal_approx(rad_to_deg(model._tray_pivot.rotation.x), held_latch_angle),
+	_ok(is_equal_approx(rad_to_deg(model._tray_pivot.rotation.x), held_latch_angle),
 		"tray/the caught latch does not rebound through a stationary fingertip")
 	tray_hinge._on_poke_motion(home_arc, VRHinge.POKE_CLOSE)
-	_check(rad_to_deg(model._tray_pivot.rotation.x) > held_latch_angle,
+	_ok(rad_to_deg(model._tray_pivot.rotation.x) > held_latch_angle,
 		"tray/the caught latch follows the fingertip upward")
-	_check(tray_hinge._latch_feedback_ctrl == null,
+	_ok(tray_hinge._latch_feedback_ctrl == null,
 		"tray/the resting latch consumes its pending light feedback once")
 	# The test has no tracked hand to leave the face, so simulate that physical exit.
 	tray_hinge._poke_ctrl = null
@@ -504,12 +504,12 @@ func _group_tray() -> void:
 	held_latch_finger.queue_free()
 	tray_hinge._icon.visible = true
 	tray_hinge._update_icon()
-	_check(not tray_hinge._icon.visible,
+	_ok(not tray_hinge._icon.visible,
 		"tray/the latched cradle clears its poke glyph when the hand leaves")
 	await _settle_tray(sys)
-	_check(absf(rad_to_deg(model._tray_pivot.rotation.x)) < 0.1,
+	_ok(absf(rad_to_deg(model._tray_pivot.rotation.x)) < 0.1,
 		"tray/the caught latch rebounds up to its locked rest angle")
-	_check(cart.is_clamped() and model.is_tray_down(),
+	_ok(cart.is_clamped() and model.is_tray_down(),
 		"tray/the rebounded carriage is locked with the cart connected")
 
 	# Pressing that same top face while latched uses linear overtravel to release;
@@ -523,20 +523,20 @@ func _group_tray() -> void:
 	tray_hinge._poke_ctrl = held_release_finger
 	tray_hinge._on_poke_motion(tray_top
 		- poke_normal * (tray_hinge.push_push_unlatch_depth + 0.001), VRHinge.POKE_CLOSE)
-	_check(not tray_hinge.is_latched_closed(),
+	_ok(not tray_hinge.is_latched_closed(),
 		"tray/a second top poke releases the push-push latch")
-	_check(rad_to_deg(model._tray_pivot.rotation.x) < -0.5,
+	_ok(rad_to_deg(model._tray_pivot.rotation.x) < -0.5,
 		"tray/the release press visibly overtravels below home")
-	_check(tray_hinge._poke_ctrl == held_release_finger and tray_hinge._poke_consumed,
+	_ok(tray_hinge._poke_ctrl == held_release_finger and tray_hinge._poke_consumed,
 		"tray/the released latch follows the poke instead of dropping it")
 	var held_release_angle: float = rad_to_deg(model._tray_pivot.rotation.x)
 	var release_tip: Vector3 = tray_top \
 		- poke_normal * (tray_hinge.push_push_unlatch_depth + 0.001)
 	tray_hinge._on_poke_motion(release_tip, VRHinge.POKE_CLOSE)
-	_check(is_equal_approx(rad_to_deg(model._tray_pivot.rotation.x), held_release_angle),
+	_ok(is_equal_approx(rad_to_deg(model._tray_pivot.rotation.x), held_release_angle),
 		"tray/the released latch does not spring through a stationary fingertip")
 	tray_hinge._on_poke_motion(tray_top, VRHinge.POKE_CLOSE)
-	_check(rad_to_deg(model._tray_pivot.rotation.x) > held_release_angle,
+	_ok(rad_to_deg(model._tray_pivot.rotation.x) > held_release_angle,
 		"tray/the released latch follows the fingertip upward")
 	tray_hinge._poke_ctrl = null
 	tray_hinge._on_poke_ended()
@@ -544,7 +544,7 @@ func _group_tray() -> void:
 	held_release_finger.queue_free()
 	model._set_tray_down(false)
 	await _settle_tray(sys)
-	_check(absf(rad_to_deg(model._tray_pivot.rotation.x) - RetroSystemModelNES.TRAY_UP_DEG) < 0.5,
+	_ok(absf(rad_to_deg(model._tray_pivot.rotation.x) - RetroSystemModelNES.TRAY_UP_DEG) < 0.5,
 		"tray/the released poke springs the cradle all the way up")
 	# Shut the bay for the move: a cart let go inside its own grab sphere is caught
 	# straight back by it, which is the room's behaviour and not what this asks.
@@ -552,8 +552,8 @@ func _group_tray() -> void:
 	slot.drop_object()
 	cart.global_position += Vector3(0, 0.5, 0)
 	await _wait(20)
-	_check(sys._tray_cartridge == null, "tray/taking it out empties the bay")
-	_check(not cart.desktop_click_available(),
+	_ok(sys._tray_cartridge == null, "tray/taking it out empties the bay")
+	_ok(not cart.desktop_click_available(),
 		"tray/and a loose cart goes back to click-to-take")
 
 	await _clear()
@@ -564,7 +564,7 @@ func _group_tray() -> void:
 func _group_plug() -> void:
 	var sys := await _console("nes", "nes")
 	var port := sys.get_node("ControllerPort1") as XRToolsSnapZone
-	_check(port.preview_offset.length() > 0.005,
+	_ok(port.preview_offset.length() > 0.005,
 		"plug/a plug is offered off the socket, not inside it")
 
 	var pad := PAD_SCENE.instantiate() as Node3D
@@ -577,21 +577,21 @@ func _group_plug() -> void:
 	if plug != null and is_instance_valid(plug.get_parent()):
 		_spawned.append(plug.get_parent())
 	if plug == null:
-		_check(false, "plug/the pad has a plug on its cord")
+		_ok(false, "plug/the pad has a plug on its cord")
 		await _clear()
 		return
 
 	var ghost := port.preview_pose_for(plug)
 	var seat := port.snap_pose_for(plug)
 	var out: Vector3 = port.global_transform.basis.z.normalized()
-	_check((ghost.origin - seat.origin).dot(out) > 0.005,
+	_ok((ghost.origin - seat.origin).dot(out) > 0.005,
 		"plug/the offer stands off the socket's own axis")
 
 	port.pick_up_object(plug)
-	_check(plug.freeze,
+	_ok(plug.freeze,
 		"plug/the insertion keeps the snapped plug out of rigid-body physics")
 	await _wait(40)
-	_check(plug.global_position.distance_to(port.snap_pose_for(plug).origin) < 0.003,
+	_ok(plug.global_position.distance_to(port.snap_pose_for(plug).origin) < 0.003,
 		"plug/a released plug ends in the socket")
 	await _clear()
 
@@ -607,10 +607,10 @@ func _group_restore() -> void:
 	# Four frames is far inside the 0.25 s slide: a restore that animated would
 	# still be out at the perch here.
 	var slot := sys.get_node("CartridgeSlot") as XRToolsSnapZone
-	_check(cart.global_position.distance_to(slot.snap_pose_for(cart).origin) < 0.003,
+	_ok(cart.global_position.distance_to(slot.snap_pose_for(cart).origin) < 0.003,
 		"restore/a restored cart does not slide in")
-	_check(sys._model.is_tray_down(), "restore/it comes back with the tray home")
-	_check(sys._snapped_cartridge == cart, "restore/and the machine reading it")
+	_ok(sys._model.is_tray_down(), "restore/it comes back with the tray home")
+	_ok(sys._snapped_cartridge == cart, "restore/and the machine reading it")
 
 	# The cradle is ALSO persisted as an articulated control, and that half of the
 	# reload runs before the media half — outside _restoring_media, writing the
@@ -621,15 +621,15 @@ func _group_restore() -> void:
 	var records: Array = persistence._serialize_articulated_controls(sys)
 	sys._model.lift_tray()
 	await _wait(30)
-	_check(not sys._model.is_tray_down(), "restore/the tray lifts before the reload")
+	_ok(not sys._model.is_tray_down(), "restore/the tray lifts before the reload")
 	# Without a bank there is nothing to catch playing and the case below is green
 	# whatever the model does, so say so here rather than let it pass silently.
-	_check(not sys._model._sfx_tray_down.is_empty(),
+	_ok(not sys._model._sfx_tray_down.is_empty(),
 		"restore/the cradle has a tray sound that could be heard")
 	sys._model._sfx_last.erase("tray")
 	persistence._restore_articulated_controls(sys, records)
-	_check(sys._model.is_tray_down(), "restore/a saved cradle comes back latched")
-	_check(not sys._model._sfx_last.has("tray"),
+	_ok(sys._model.is_tray_down(), "restore/a saved cradle comes back latched")
+	_ok(not sys._model._sfx_last.has("tray"),
 		"restore/and lands without clicking the tray shut")
 	await _clear()
 
@@ -641,13 +641,13 @@ func _group_other() -> void:
 	var slot := sys.get_node("CartridgeSlot") as XRToolsSnapZone
 	var cart := await _cart("atari2600")
 
-	_check(not sys.has_push_tray_bay(), "other/a plain deck has no push tray")
-	_check(slot.preview_offset == Vector3.ZERO,
+	_ok(not sys.has_push_tray_bay(), "other/a plain deck has no push tray")
+	_ok(slot.preview_offset == Vector3.ZERO,
 		"other/and offers its cart at the seat, as before")
 
 	slot.pick_up_object(cart)
 	await _wait(40)
-	_check(sys._snapped_cartridge == cart,
+	_ok(sys._snapped_cartridge == cart,
 		"other/a cart it takes is read straight away")
 	await _clear()
 
@@ -699,23 +699,23 @@ func _drop_lid_room() -> void:
 func _group_lid() -> void:
 	# A procedural spring lid: the saved HINGE carries the pose home.
 	var gc := await _saved_lid_room("gamecube_primitive", "gamecube")
-	_check(gc != null, "lid/the saved room comes back")
+	_ok(gc != null, "lid/the saved room comes back")
 	if gc != null:
-		_check(gc._disc_bay.lid_hinge.get_rotation_deg() > 1.0,
+		_ok(gc._disc_bay.lid_hinge.get_rotation_deg() > 1.0,
 			"lid/a spring lid comes back standing open")
-		_check(gc._tray_open, "lid/and the machine says it is open")
-		_check(gc._tray.is_open(), "lid/so does the well")
-		_check((gc.get_node("CartridgeSlot") as XRToolsSnapZone).enabled,
+		_ok(gc._tray_open, "lid/and the machine says it is open")
+		_ok(gc._tray.is_open(), "lid/so does the well")
+		_ok((gc.get_node("CartridgeSlot") as XRToolsSnapZone).enabled,
 			"lid/which is what lets a disc go in")
 	await _clear()
 
 	# A bespoke lid: the saved lid_angle carries the pose home instead.
 	var ps := await _saved_lid_room("playstation", "playstation")
 	if ps != null:
-		_check(ps.get_lid_angle_deg() > 1.0,
+		_ok(ps.get_lid_angle_deg() > 1.0,
 			"lid/a bespoke lid comes back standing open")
-		_check(ps._tray_open, "lid/and that machine says it is open too")
-		_check(ps._tray.is_open(), "lid/well included")
+		_ok(ps._tray_open, "lid/and that machine says it is open too")
+		_ok(ps._tray.is_open(), "lid/well included")
 	await _clear()
 
 	# The control. Without it every check above passes on a machine that simply
@@ -734,8 +734,8 @@ func _group_lid() -> void:
 			_spawned.append(n)
 			break
 	if back != null:
-		_check(not back._tray_open, "lid/a lid saved SHUT comes back shut")
-		_check(not (back.get_node("CartridgeSlot") as XRToolsSnapZone).enabled,
+		_ok(not back._tray_open, "lid/a lid saved SHUT comes back shut")
+		_ok(not (back.get_node("CartridgeSlot") as XRToolsSnapZone).enabled,
 			"lid/with its bay closed")
 	await _clear()
 	_drop_lid_room()
@@ -795,7 +795,7 @@ func _group_seat() -> void:
 	var gc := await _console("gamecube_primitive", "gamecube")
 	gc._on_eject_pressed()
 	await _wait(80)
-	_check(gc._tray != null and gc._tray.is_open(), "seat/the well is open")
+	_ok(gc._tray != null and gc._tray.is_open(), "seat/the well is open")
 	if gc._tray == null:
 		await _clear()
 		return
@@ -803,12 +803,12 @@ func _group_seat() -> void:
 	var square := await _seat_disc(gc, 0.0, true)
 	for yaw: float in [55.0, -110.0]:
 		var turned := await _seat_disc(gc, yaw, true)
-		_check(absf(angle_difference(deg_to_rad(_spin_between(square, turned)),
+		_ok(absf(angle_difference(deg_to_rad(_spin_between(square, turned)),
 			deg_to_rad(yaw))) < 0.02,
 			"seat/a disc handed in at %+.0f seats at %+.0f" % [yaw, yaw])
 		# ...and it is no less flat in the well for it. A seat that took the
 		# whole hand pose would pass the line above and leave the disc tilted.
-		_check(turned.y.dot(square.y) > 0.9999,
+		_ok(turned.y.dot(square.y) > 0.9999,
 			"seat/and lies exactly as flat as a square one")
 
 	# The control. A restore is a state the room was already in, not a hand, so
@@ -816,7 +816,7 @@ func _group_seat() -> void:
 	# pass on a well that simply never squares anything.
 	var r0 := await _seat_disc(gc, 0.0, false)
 	var r1 := await _seat_disc(gc, 55.0, false)
-	_check(absf(_spin_between(r0, r1)) < 0.02,
+	_ok(absf(_spin_between(r0, r1)) < 0.02,
 		"seat/a restore ignores the pose and seats as authored")
 	await _clear()
 

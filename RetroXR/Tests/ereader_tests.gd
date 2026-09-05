@@ -65,7 +65,7 @@ func _ready() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-func _check(ok: bool, what: String) -> void:
+func _ok(ok: bool, what: String) -> void:
 	_checks += 1
 	if not ok:
 		_failed += 1
@@ -73,7 +73,7 @@ func _check(ok: bool, what: String) -> void:
 
 
 func _eq(got: Variant, want: Variant, what: String) -> void:
-	_check(got == want, "%s (got %s, want %s)" % [what, got, want])
+	_ok(got == want, "%s (got %s, want %s)" % [what, got, want])
 
 
 func _want(group: String) -> bool:
@@ -196,9 +196,9 @@ func _group_data() -> void:
 			var span: float = csize.x if horizontal else csize.y
 			var other: float = csize.y if horizontal else csize.x
 			if str(kinds[i]) == EReaderCards.KIND_LONG:
-				_check(span > other, "data/ %s: the long strip is on the card's longer edge" % shape)
+				_ok(span > other, "data/ %s: the long strip is on the card's longer edge" % shape)
 			else:
-				_check(span < other, "data/ %s: the short strip is on the card's shorter edge" % shape)
+				_ok(span < other, "data/ %s: the short strip is on the card's shorter edge" % shape)
 		# Two strips never share an edge, or the second is unreachable.
 		var seen: Dictionary = {}
 		for e: Variant in shape_edges:
@@ -206,10 +206,10 @@ func _group_data() -> void:
 		_eq(seen.size(), shape_edges.size(), "data/ %s: its strips are on different edges" % shape)
 
 	# Sizes, against what GBACartEReaderScan actually decodes.
-	_check(EReaderCards.is_scannable_size(1872), "data/ 1872 is a short strip")
-	_check(EReaderCards.is_scannable_size(2912), "data/ 2912 is a long strip")
-	_check(not EReaderCards.is_scannable_size(2911), "data/ 2911 is not scannable")
-	_check(not EReaderCards.is_scannable_size(0), "data/ an empty file is not scannable")
+	_ok(EReaderCards.is_scannable_size(1872), "data/ 1872 is a short strip")
+	_ok(EReaderCards.is_scannable_size(2912), "data/ 2912 is a long strip")
+	_ok(not EReaderCards.is_scannable_size(2911), "data/ 2911 is not scannable")
+	_ok(not EReaderCards.is_scannable_size(0), "data/ an empty file is not scannable")
 	_eq(EReaderCards.kind_of_size(2912), EReaderCards.KIND_LONG, "data/ 2912 is KIND_LONG")
 	_eq(EReaderCards.kind_of_size(1872), EReaderCards.KIND_SHORT, "data/ 1872 is KIND_SHORT")
 	_eq(EReaderCards.kind_of_size(2076), "", "data/ an accepted size that is not a strip has no kind")
@@ -259,9 +259,9 @@ func _group_geom() -> void:
 	# The scanner looks along the unit's -Z, so a card reads with its art towards
 	# the player -- the same side the reader wears its name on.
 	var face_up := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h, 0.0))
-	_check(CardSwipeSlit.is_face_up(face_up, slit),
+	_ok(CardSwipeSlit.is_face_up(face_up, slit),
 		"geom/ art towards the player is face up")
-	_check(not CardSwipeSlit.is_face_up(upright, slit),
+	_ok(not CardSwipeSlit.is_face_up(upright, slit),
 		"geom/ art turned away from the player is face down")
 
 	# A card is PRESENTED before it is read, and the Area3D fires long before
@@ -270,18 +270,18 @@ func _group_geom() -> void:
 	# measured, a card held flat a millimetre above the groove answers "side",
 	# and the same card turned in its own plane answers "bottom".
 	var flat := Transform3D(Basis(Vector3.RIGHT, PI * 0.5), slit * Vector3(0.0, 0.001, 0.0))
-	_check(not CardSwipeSlit.is_presenting(flat, size, slit),
+	_ok(not CardSwipeSlit.is_presenting(flat, size, slit),
 		"geom/ a card carried in flat is not presenting")
 	var flat_turned := Transform3D(Basis(Vector3.RIGHT, PI * 0.5) * Basis(Vector3.BACK, PI * 0.5),
 		slit * Vector3(0.0, 0.001, 0.0))
-	_check(not CardSwipeSlit.is_presenting(flat_turned, size, slit),
+	_ok(not CardSwipeSlit.is_presenting(flat_turned, size, slit),
 		"geom/ nor is the same card turned in its own plane")
 
 	# Nearness is the card's CORNER, not an edge midpoint, so a card resting on
 	# the groove counts however it is turned.
-	_check(is_zero_approx(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)),
+	_ok(is_zero_approx(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)),
 		"geom/ a tilted card resting on the groove is at zero distance")
-	_check(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)
+	_ok(CardSwipeSlit.corner_distance(_offered(45.0, size), size, slit)
 			< CardSwipeSlit.edge_depths(_offered(45.0, size), size, slit)[EReaderCards.EDGE_BOTTOM],
 		"geom/ and its nearest midpoint sits higher than its corner")
 
@@ -302,7 +302,7 @@ func _group_geom() -> void:
 	# face-down across the roof, offering nothing.
 	var flat_offset := Transform3D(Basis(Vector3.RIGHT, PI * 0.5),
 		slit * Vector3(0.0, 0.001, half_w))
-	_check(not CardSwipeSlit.is_presenting(flat_offset, size, slit),
+	_ok(not CardSwipeSlit.is_presenting(flat_offset, size, slit),
 		"geom/ a flat card with one edge on the line is still not presenting")
 
 	# Corner-first is a tie between two edges, and whichever the table listed
@@ -311,7 +311,7 @@ func _group_geom() -> void:
 	# rejects it -- only the gap between the two edges meeting at that corner can.
 	# 55 degrees is where a 63 x 88 card is genuinely diagonal: measured, its two
 	# nearest edge midpoints are 0.6 mm apart there.
-	_check(not CardSwipeSlit.is_presenting(_offered(55.0, size), size, slit),
+	_ok(not CardSwipeSlit.is_presenting(_offered(55.0, size), size, slit),
 		"geom/ a card offered corner-first waits rather than guessing")
 
 	# But an ordinary imperfect hand is not a diagonal, and must not be made to
@@ -320,36 +320,36 @@ func _group_geom() -> void:
 	# 28 degrees was refused -- a 40-degree hole a hand falls into constantly.
 	for deg: float in [10.0, 25.0, 40.0, 45.0]:
 		var pose := _offered(deg, size)
-		_check(CardSwipeSlit.is_presenting(pose, size, slit),
+		_ok(CardSwipeSlit.is_presenting(pose, size, slit),
 			"geom/ a card %d degrees off upright still presents" % int(deg))
 		_eq(CardSwipeSlit.presented_edge(pose, size, slit), EReaderCards.EDGE_BOTTOM,
 			"geom/ and at %d degrees it is still the bottom edge" % int(deg))
 	for deg: float in [70.0, 90.0]:
 		var pose := _offered(deg, size)
-		_check(CardSwipeSlit.is_presenting(pose, size, slit),
+		_ok(CardSwipeSlit.is_presenting(pose, size, slit),
 			"geom/ a card %d degrees over presents too" % int(deg))
 		_eq(CardSwipeSlit.presented_edge(pose, size, slit), EReaderCards.EDGE_SIDE,
 			"geom/ and by %d degrees it is the side edge" % int(deg))
 
 	# What a real presentation looks like: upright, edge on the line.
 	var offered := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h, 0.0))
-	_check(CardSwipeSlit.is_presenting(offered, size, slit),
+	_ok(CardSwipeSlit.is_presenting(offered, size, slit),
 		"geom/ an upright card with its edge on the groove is presenting")
 	var offered_side := Transform3D(Basis(Vector3.UP, PI) * Basis(Vector3.BACK, PI * 0.5),
 		Vector3(0.0, half_w, 0.0))
-	_check(CardSwipeSlit.is_presenting(offered_side, size, slit),
+	_ok(CardSwipeSlit.is_presenting(offered_side, size, slit),
 		"geom/ and so is one offered side edge down")
 	# Still inside the trigger box, but a whole card away from the line.
 	var high := Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, half_h + 0.02, 0.0))
-	_check(not CardSwipeSlit.is_presenting(high, size, slit),
+	_ok(not CardSwipeSlit.is_presenting(high, size, slit),
 		"geom/ merely overlapping the groove is not presenting")
 
-	_check(is_equal_approx(CardSwipeSlit.travel_of(moved, slit), 0.04), "geom/ travel is measured along the groove")
-	_check(is_zero_approx(CardSwipeSlit.travel_of(upright, slit)), "geom/ a centred card is at travel zero")
+	_ok(is_equal_approx(CardSwipeSlit.travel_of(moved, slit), 0.04), "geom/ travel is measured along the groove")
+	_ok(is_zero_approx(CardSwipeSlit.travel_of(upright, slit)), "geom/ a centred card is at travel zero")
 
-	_check(is_equal_approx(CardSwipeSlit.stand_half(EReaderCards.EDGE_BOTTOM, size), half_h),
+	_ok(is_equal_approx(CardSwipeSlit.stand_half(EReaderCards.EDGE_BOTTOM, size), half_h),
 		"geom/ a bottom-edge card stands by its height")
-	_check(is_equal_approx(CardSwipeSlit.stand_half(EReaderCards.EDGE_SIDE, size), half_w),
+	_ok(is_equal_approx(CardSwipeSlit.stand_half(EReaderCards.EDGE_SIDE, size), half_w),
 		"geom/ a side-edge card stands by its width")
 
 	# seated_basis is the orientation oracle: whatever edge was presented must end
@@ -363,13 +363,13 @@ func _group_geom() -> void:
 		var seated := Transform3D(b, Vector3(0.0, stand, 0.0))
 		_eq(CardSwipeSlit.presented_edge(seated, size, slit), edge,
 			"geom/ seating %s keeps %s in the groove" % [edge, edge])
-		_check(CardSwipeSlit.is_face_up(seated, slit),
+		_ok(CardSwipeSlit.is_face_up(seated, slit),
 			"geom/ seating %s face up stays face up" % edge)
 		var b_down := CardSwipeSlit.seated_basis(edge, false, slit)
 		var seated_down := Transform3D(b_down, Vector3(0.0, stand, 0.0))
 		_eq(CardSwipeSlit.presented_edge(seated_down, size, slit), edge,
 			"geom/ seating %s face down keeps %s in the groove" % [edge, edge])
-		_check(not CardSwipeSlit.is_face_up(seated_down, slit),
+		_ok(not CardSwipeSlit.is_face_up(seated_down, slit),
 			"geom/ seating %s face down stays face down" % edge)
 
 
@@ -377,7 +377,7 @@ func _group_geom() -> void:
 
 func _group_catalog() -> void:
 	const ID := "ereader"
-	_check(ExpansionCatalog.ROWS.has(ID), "catalog/ the e-Reader has a row")
+	_ok(ExpansionCatalog.ROWS.has(ID), "catalog/ the e-Reader has a row")
 	_eq(ExpansionCatalog.host_of(ID), "game_boy_advance", "catalog/ it bolts to a GBA")
 	_eq(ExpansionCatalog.media_of(ID), "ereader", "catalog/ its media is the card")
 	_eq(ExpansionCatalog.loader_of(ID), MediaDimensions.LOADER_SWIPE, "catalog/ it is a swipe loader")
@@ -386,24 +386,24 @@ func _group_catalog() -> void:
 	# The unit id is the media systemid, which is what makes the e-Reader tile its
 	# own card. With them apart, items_for falls through to the generic console
 	# path and the tile offers a Primitive System, a pad and a composite lead.
-	_check(ExpansionCatalog.has_own_card(ID), "catalog/ the reader owns its card")
+	_ok(ExpansionCatalog.has_own_card(ID), "catalog/ the reader owns its card")
 
 	# The card page filters its rows by extension, and "raw" is declared as a
 	# SECONDARY extension on mGBA's entry -- the entry's own supported_extensions
 	# is the GBA's. A page that asked the entry rather than the database saw no
 	# extension a card could have and listed none of the 3217 on disk.
-	_check("raw" in CoreInfoDatabase.extensions_for_systemid("ereader"),
+	_ok("raw" in CoreInfoDatabase.extensions_for_systemid("ereader"),
 		"catalog/ a dotcode strip is an extension the platform accepts")
 	var entry_exts: Array[String] = []
 	for entry: Dictionary in CoreInfoDatabase.shared().get_by_systemid("ereader"):
 		for e: String in str(entry.get("supported_extensions", "")).split("|"):
 			entry_exts.append(e.strip_edges().to_lower())
-	_check("raw" not in entry_exts,
+	_ok("raw" not in entry_exts,
 		"catalog/ and its core's own entry does not carry it")
 	# Readers and nothing else on the tile -- whichever revisions are installed.
 	var readers := ["expansion:ereader", "expansion:ereader_plus", "expansion:ereader_usa"]
 	for item: Dictionary in SpawnCatalog.items_for(ID):
-		_check(str(item.get("spawn", "")) in readers,
+		_ok(str(item.get("spawn", "")) in readers,
 			"catalog/ its tile offers only readers, not %s" % str(item.get("label", "")))
 
 	# One unit per reader revision, because a reader IS its dump and the dumps are
@@ -412,7 +412,7 @@ func _group_catalog() -> void:
 			["ereader_usa", "PSAE"]]:
 		var rid := str(rev[0])
 		var code := str(rev[1])
-		_check(ExpansionCatalog.ROWS.has(rid), "catalog/ %s has a row" % rid)
+		_ok(ExpansionCatalog.ROWS.has(rid), "catalog/ %s has a row" % rid)
 		_eq(str(ExpansionCatalog.ROWS[rid].get("rom_code", "")), code,
 			"catalog/ %s is the %s dump" % [rid, code])
 		# Its program is a LIBRARY file now, so the row names no firmware at all
@@ -453,7 +453,7 @@ func _group_catalog() -> void:
 		_eq(ExpansionCatalog.save_owner_of(rid), ExpansionCatalog.SAVE_OWNER_UNIT,
 			"catalog/ %s owns its own flash" % rid)
 		var save := SramPaths.unit_save_path("mgba", rid)
-		_check(not save.is_empty(), "catalog/ %s resolves to a save file" % rid)
+		_ok(not save.is_empty(), "catalog/ %s resolves to a save file" % rid)
 		seen_save[save] = true
 	# One file each: the three are different hardware, and a + reader restored
 	# from an original's flash is the calibration bug the fork already fixed.
@@ -462,21 +462,21 @@ func _group_catalog() -> void:
 	# And the two later revisions have no tile of their own: three tiles over one
 	# shelf of cards would be two empty libraries.
 	for rid: String in ["ereader_plus", "ereader_usa"]:
-		_check(not ExpansionCatalog.has_own_card(rid),
+		_ok(not ExpansionCatalog.has_own_card(rid),
 			"catalog/ %s does not claim a card of its own" % rid)
-		_check(ExpansionCatalog.ids_carded_on("ereader").has(rid),
+		_ok(ExpansionCatalog.ids_carded_on("ereader").has(rid),
 			"catalog/ %s is carded on the e-Reader" % rid)
 
 	# LOADER_SWIPE must be its own value: sharing one with LOADER_NONE would build
 	# the well bay this unit must not have.
-	_check(MediaDimensions.LOADER_SWIPE != MediaDimensions.LOADER_NONE
+	_ok(MediaDimensions.LOADER_SWIPE != MediaDimensions.LOADER_NONE
 		and MediaDimensions.LOADER_SWIPE != MediaDimensions.LOADER_SLOT
 		and MediaDimensions.LOADER_SWIPE != MediaDimensions.LOADER_TRAY,
 		"catalog/ LOADER_SWIPE is distinct from every other loader")
 
 	var boot := ExpansionCatalog.boot_for("game_boy_advance", [ID])
 	_eq(str(boot.get("core", "")), "mgba", "catalog/ it boots on mgba")
-	_check(not boot.has("subsystem"),
+	_ok(not boot.has("subsystem"),
 		"catalog/ no subsystem — mgba's retro_load_game_special is a stub")
 
 	# The Super Game Boy still resolves through the core's system directory, and
@@ -486,13 +486,13 @@ func _group_catalog() -> void:
 	# firmware_rom_path into the other.
 	_eq(ExpansionCatalog.firmware_of("super_game_boy"), ["SGB1.sfc"] as Array,
 		"catalog/ a Super Game Boy still names its firmware")
-	_check(ExpansionCatalog.firmware_rom_path("super_game_boy").ends_with("SGB1.sfc"),
+	_ok(ExpansionCatalog.firmware_rom_path("super_game_boy").ends_with("SGB1.sfc"),
 		"catalog/ and still runs it out of the system directory")
 
 	# The card systemid is where the unit is offered, and it must be the media's.
 	_eq(ExpansionCatalog.card_systemid(ID), "ereader", "catalog/ it is carded on the e-Reader tile")
-	_check(SystemIcons.has_icon("ereader"), "catalog/ the e-Reader tile has its own art")
-	_check(SystemIcons.has_content_icon("ereader"), "catalog/ the card has its own art")
+	_ok(SystemIcons.has_icon("ereader"), "catalog/ the e-Reader tile has its own art")
+	_ok(SystemIcons.has_content_icon("ereader"), "catalog/ the card has its own art")
 
 
 ## Write a fake GBA dump into a system's real ROM folder and hand back its path.
@@ -559,19 +559,19 @@ func _group_program() -> void:
 	var plain := _plant_dump(GBA, ORDINARY, "AGBJ")
 
 	# Recognised by its header, and the ordinary ROM beside it is not.
-	_check(AdapterRoms.is_adapter_rom(GBA, dump),
+	_ok(AdapterRoms.is_adapter_rom(GBA, dump),
 		"program/ a PEAJ dump on the GBA shelf is a reader")
-	_check(not AdapterRoms.is_adapter_rom(GBA, plain),
+	_ok(not AdapterRoms.is_adapter_rom(GBA, plain),
 		"program/ an ordinary GBA ROM is not")
 
 	# The gate and the program both come off a file, with no install anywhere.
-	_check(ExpansionCatalog.firmware_present("ereader"),
+	_ok(ExpansionCatalog.firmware_present("ereader"),
 		"program/ a dump on the shelf makes the reader spawnable")
 	var program := ExpansionCatalog.firmware_rom_path("ereader")
-	_check(not program.is_empty(), "program/ and names a program to run")
+	_ok(not program.is_empty(), "program/ and names a program to run")
 	_eq(ExpansionCatalog.adapter_for_rom(program), "ereader",
 		"program/ which is itself a Card e-Reader dump")
-	_check(not program.contains("system"),
+	_ok(not program.contains("system"),
 		"program/ out of the library, not the core's system directory")
 
 	# The tile offers the reader it has a dump for -- the point of the gate.
@@ -579,15 +579,15 @@ func _group_program() -> void:
 	for item: Dictionary in SpawnCatalog.items_for("ereader"):
 		if str(item.get("spawn", "")) == "expansion:ereader":
 			offered = true
-	_check(offered, "program/ the e-Reader tile offers that reader")
+	_ok(offered, "program/ the e-Reader tile offers that reader")
 
 	# A dump is HARDWARE and must not be listed as a game; the ordinary ROM
 	# beside it must be, or the exclusion is just a broken scan.
 	var listed: Dictionary = {}
 	for r: Dictionary in RomLibrary.scan_roms(GBA, ["gba"] as Array[String]):
 		listed[str(r["path"])] = true
-	_check(not listed.has(dump), "program/ the dump is not offered as a game")
-	_check(listed.has(plain), "program/ while the ordinary ROM beside it still is")
+	_ok(not listed.has(dump), "program/ the dump is not offered as a game")
+	_ok(listed.has(plain), "program/ while the ordinary ROM beside it still is")
 
 	# The probe is memoised. This is a promise about COST: scan_roms opens no
 	# files at all without it, and it runs on the main thread every time a
@@ -612,7 +612,7 @@ func _group_program() -> void:
 	var card_paths: Dictionary = {}
 	for r: Dictionary in RomLibrary.scan_roms(EReaderCards.SYSTEMID, [] as Array[String]):
 		card_paths[str(r["path"])] = true
-	_check(not card_paths.has(beside), "program/ a dump filed with the cards is not a card")
+	_ok(not card_paths.has(beside), "program/ a dump filed with the cards is not a card")
 	DirAccess.remove_absolute(beside)
 	AdapterRoms.invalidate()
 	EReaderCards.invalidate()
@@ -728,18 +728,18 @@ func _group_swipe() -> void:
 	# Half the pass, then look: the card must be exempt from its host WHILE it is
 	# being drawn through, which is when the two would otherwise fight.
 	await _drag(card, slit, -0.05, 0.0, 6, stand)
-	_check(card.get_collision_exceptions().has(_slit_host),
+	_ok(card.get_collision_exceptions().has(_slit_host),
 		"swipe/ mid-pass the card does not collide with the machine")
 	await _drag(card, slit, 0.0, 0.05, 6, stand)
 	await _wait(2)
-	_check(_entered > 0, "swipe/ the groove detects the card")
+	_ok(_entered > 0, "swipe/ the groove detects the card")
 	# While a pass is running the card must not be fighting the machine it is
 	# being drawn through: they share a collision layer, and a card rides with its
 	# edge ON the case, so the solver pushes it out on the same step this
 	# constraint teleports it back. That is the jitter, and the exception is
 	# lifted again by _finish -- a card that kept it would fall through the
 	# machine for the rest of the session.
-	_check(not card.get_collision_exceptions().has(_slit_host),
+	_ok(not card.get_collision_exceptions().has(_slit_host),
 		"swipe/ the card and the machine collide again once the pass is over")
 	_eq(_swipes, 1, "swipe/ a full pass reads exactly once")
 	_eq(_swipe_edge, EReaderCards.EDGE_BOTTOM, "swipe/ it reports the edge in the groove")
@@ -780,7 +780,7 @@ func _group_swipe() -> void:
 	await _drag(card, slit, -0.015, -0.05, 6, stand)
 	await _wait(2)
 	_eq(_swipes, 0, "swipe/ a pass backed out reads nothing")
-	_check(_aborts >= 1, "swipe/ a pass backed out aborts")
+	_ok(_aborts >= 1, "swipe/ a pass backed out aborts")
 	card.queue_free()
 	slit.queue_free()
 	await _wait(2)
@@ -884,11 +884,11 @@ func _group_swipe() -> void:
 	if groove != null:
 		var gshape := groove.get_child(0) as CollisionShape3D
 		var gbox := gshape.shape as BoxShape3D
-		_check(gbox.size.z >= card_size.z * 10.0,
+		_ok(gbox.size.z >= card_size.z * 10.0,
 			"swipe/ the groove watches well clear of its own plane")
-		_check(gbox.size.y >= card_size.y * 0.9,
+		_ok(gbox.size.y >= card_size.y * 0.9,
 			"swipe/ and up the height of a card")
-		_check(gbox.size.x > unit.size().x,
+		_ok(gbox.size.x > unit.size().x,
 			"swipe/ and past both ends, which a pass has to clear")
 	unit.queue_free()
 	await _wait(2)
@@ -934,16 +934,16 @@ func _group_library() -> void:
 	_eq(str(from_short.get("key", "")), "Hoppip (USA)", "library/ the short strip finds the SAME card")
 	_eq(str(from_short.get("shape", "")), EReaderCards.SHAPE_LONG_SHORT,
 		"library/ and it is the long+short shape")
-	_check(EReaderCards.card_for_path(dir.path_join("nothing.raw"), dir).is_empty(),
+	_ok(EReaderCards.card_for_path(dir.path_join("nothing.raw"), dir).is_empty(),
 		"library/ a path not in the library finds no card")
 
 	# Every card is the same portrait trading card, whatever its strips are: the
 	# size is a constant, and the shape says only which edges are coded.
-	_check(MediaDimensions.CARD_SIZE_EREADER.y > MediaDimensions.CARD_SIZE_EREADER.x,
+	_ok(MediaDimensions.CARD_SIZE_EREADER.y > MediaDimensions.CARD_SIZE_EREADER.x,
 		"library/ a card is taller than it is wide")
-	_check(MediaDimensions.cart_size("ereader", solo) == MediaDimensions.CARD_SIZE_EREADER,
+	_ok(MediaDimensions.cart_size("ereader", solo) == MediaDimensions.CARD_SIZE_EREADER,
 		"library/ a single-long card is that size")
-	_check(MediaDimensions.cart_size("ereader", long_a) == MediaDimensions.CARD_SIZE_EREADER,
+	_ok(MediaDimensions.cart_size("ereader", long_a) == MediaDimensions.CARD_SIZE_EREADER,
 		"library/ and so is a long+short one")
 
 	# The strip summary a card's row shows under its title.
@@ -982,10 +982,10 @@ func _group_library() -> void:
 		"library/ a card object finds its card from rom_path alone")
 	_eq(str(cart.get_card_data().get("shape", "")), EReaderCards.SHAPE_LONG_SHORT,
 		"library/ and it sees both of its strips")
-	_check(cart.get_card_size() == MediaDimensions.CARD_SIZE_EREADER,
+	_ok(cart.get_card_size() == MediaDimensions.CARD_SIZE_EREADER,
 		"library/ a long+short card is sized as a trading card")
 	cart.systemid = "nes"
-	_check(cart.get_card_data().is_empty(),
+	_ok(cart.get_card_data().is_empty(),
 		"library/ an ordinary cartridge is not a card")
 	cart.queue_free()
 

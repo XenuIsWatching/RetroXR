@@ -74,7 +74,7 @@ func _group_pack() -> void:
 	# diverged and only one of them is being exercised by everything below.
 	for label: String in ["zip", "pck"]:
 		var r := ModPackReader.open(zip_path if label == "zip" else pck_path)
-		_ok("pack/%s opens" % label, r.error.is_empty(), r.error)
+		_ok(r.error.is_empty(), "pack/%s opens" % label, r.error)
 		var files := r.files()
 		files.sort()
 		_eq("pack/%s lists res:// paths" % label, files,
@@ -83,13 +83,13 @@ func _group_pack() -> void:
 			r.read("res://mods/t.one/m.gd").get_string_from_utf8(), "extends RetroMod")
 		_eq("pack/%s parses json" % label,
 			str(r.read_json("res://mods/t.one/mod.json").get("id", "")), "t.one")
-		_ok("pack/%s misses cleanly" % label, r.read("res://nope").is_empty())
+		_ok(r.read("res://nope").is_empty(), "pack/%s misses cleanly" % label)
 		r.close()
 
 	var bad := ModPackReader.open(_dir.path_join("nope.zip"))
-	_ok("pack/absent file errors", not bad.error.is_empty())
+	_ok(not bad.error.is_empty(), "pack/absent file errors")
 	var wrong := ModPackReader.open(_dir.path_join("pack.txt"))
-	_ok("pack/unknown extension refused", not wrong.error.is_empty())
+	_ok(not wrong.error.is_empty(), "pack/unknown extension refused")
 
 
 # ── manifest/ ─────────────────────────────────────────────────────────────────
@@ -99,34 +99,32 @@ func _group_manifest() -> void:
 		"id": "a.b", "api_version": 1, "entry": "res://mods/a.b/m.gd",
 		"name": "Nice", "version": "1.2.3", "priority": 5,
 	})
-	_ok("manifest/valid parses", good.error.is_empty(), good.error)
+	_ok(good.error.is_empty(), "manifest/valid parses", good.error)
 	_eq("manifest/own root", good.own_root(), "res://mods/a.b/")
 	_eq("manifest/priority kept", good.priority, 5)
 
-	_ok("manifest/no id refused",
-		not ModManifest.parse({"api_version": 1, "entry": "x"}).error.is_empty())
-	_ok("manifest/upper-case id refused",
-		not ModManifest.parse({"id": "Bad", "api_version": 1,
-			"entry": "res://mods/Bad/m.gd"}).error.is_empty())
-	_ok("manifest/no api_version refused",
-		not ModManifest.parse({"id": "a.b", "entry": "res://mods/a.b/m.gd"}).error.is_empty())
+	_ok(not ModManifest.parse({"api_version": 1, "entry": "x"}).error.is_empty(),
+		"manifest/no id refused")
+	_ok(not ModManifest.parse({"id": "Bad", "api_version": 1, "entry": "res://mods/Bad/m.gd"}).error.is_empty(),
+		"manifest/upper-case id refused")
+	_ok(not ModManifest.parse({"id": "a.b", "entry": "res://mods/a.b/m.gd"}).error.is_empty(),
+		"manifest/no api_version refused")
 	# A future mod is refused by version, not by crashing on its contents. This
 	# is the break marker doing its job.
 	var future := ModManifest.parse({"id": "a.b", "api_version": 9999,
 		"entry": "res://mods/a.b/m.gd"})
-	_ok("manifest/future api refused", not future.error.is_empty())
-	_ok("manifest/future says which", future.error.contains("newer"), future.error)
-	_ok("manifest/entry outside namespace refused",
-		not ModManifest.parse({"id": "a.b", "api_version": 1,
-			"entry": "res://Scripts/evil.gd"}).error.is_empty())
+	_ok(not future.error.is_empty(), "manifest/future api refused")
+	_ok(future.error.contains("newer"), "manifest/future says which", future.error)
+	_ok(not ModManifest.parse({"id": "a.b", "api_version": 1, "entry": "res://Scripts/evil.gd"}).error.is_empty(),
+		"manifest/entry outside namespace refused")
 
 	var here := ModManifest.parse({"id": "a.b", "api_version": 1,
 		"entry": "res://mods/a.b/m.gd", "platforms": [OS.get_name()]})
-	_ok("manifest/runs on this platform", here.runs_here())
+	_ok(here.runs_here(), "manifest/runs on this platform")
 	var elsewhere := ModManifest.parse({"id": "a.b", "api_version": 1,
 		"entry": "res://mods/a.b/m.gd", "platforms": ["Nintendo64"]})
-	_ok("manifest/other platform excluded", not elsewhere.runs_here())
-	_ok("manifest/no platforms means all", good.runs_here())
+	_ok(not elsewhere.runs_here(), "manifest/other platform excluded")
+	_ok(good.runs_here(), "manifest/no platforms means all")
 
 
 # ── inventory/ ────────────────────────────────────────────────────────────────
@@ -134,41 +132,34 @@ func _group_manifest() -> void:
 func _group_inventory() -> void:
 	var m := ModManifest.parse({"id": "a.b", "api_version": 1,
 		"entry": "res://mods/a.b/m.gd"})
-	_ok("inventory/own files accepted",
-		m.inventory_error(PackedStringArray(["res://mods/a.b/m.gd"])).is_empty())
-	_ok("inventory/empty container refused",
-		not m.inventory_error(PackedStringArray()).is_empty())
-	_ok("inventory/nothing of its own refused",
-		not m.inventory_error(PackedStringArray(["res://mods/other/x.gd"])).is_empty())
-	_ok("inventory/unclaimed outside path refused",
-		not m.inventory_error(PackedStringArray(
-			["res://mods/a.b/m.gd", "res://Textures/x.png"])).is_empty())
-	_ok("inventory/another mod's namespace refused",
-		not m.inventory_error(PackedStringArray(
-			["res://mods/a.b/m.gd", "res://mods/victim/m.gd"])).is_empty())
+	_ok(m.inventory_error(PackedStringArray(["res://mods/a.b/m.gd"])).is_empty(),
+		"inventory/own files accepted")
+	_ok(not m.inventory_error(PackedStringArray()).is_empty(), "inventory/empty container refused")
+	_ok(not m.inventory_error(PackedStringArray(["res://mods/other/x.gd"])).is_empty(),
+		"inventory/nothing of its own refused")
+	_ok(not m.inventory_error(PackedStringArray( ["res://mods/a.b/m.gd", "res://Textures/x.png"])).is_empty(),
+		"inventory/unclaimed outside path refused")
+	_ok(not m.inventory_error(PackedStringArray( ["res://mods/a.b/m.gd", "res://mods/victim/m.gd"])).is_empty(),
+		"inventory/another mod's namespace refused")
 
 	# The three files that would damage the RUNNING game rather than merely fail
 	# — a mod's own export carries these, so this is not a hypothetical.
 	for path: String in ModManifest.FORBIDDEN:
 		var err := m.inventory_error(PackedStringArray(["res://mods/a.b/m.gd", path]))
-		_ok("inventory/refuses %s" % path.get_file(), not err.is_empty())
+		_ok(not err.is_empty(), "inventory/refuses %s" % path.get_file())
 
 	# An SDK leak IS an unclaimed outside path — the namespace rule is what
 	# stops an author's stale copy of a shipped class replacing the real one.
-	_ok("inventory/SDK leak refused", not m.inventory_error(PackedStringArray(
-		["res://mods/a.b/m.gd", "res://Scripts/Objects/widgets/vr_hinge.gd"])).is_empty())
+	_ok(not m.inventory_error(PackedStringArray( ["res://mods/a.b/m.gd", "res://Scripts/Objects/widgets/vr_hinge.gd"])).is_empty(),
+		"inventory/SDK leak refused")
 
 	var claiming := ModManifest.parse({"id": "a.b", "api_version": 1,
 		"entry": "res://mods/a.b/m.gd", "claims": ["res://Textures/x.png"]})
-	_ok("inventory/claimed path accepted",
-		claiming.inventory_error(PackedStringArray(
-			["res://mods/a.b/m.gd", "res://Textures/x.png"])).is_empty())
+	_ok(claiming.inventory_error(PackedStringArray( ["res://mods/a.b/m.gd", "res://Textures/x.png"])).is_empty(),
+		"inventory/claimed path accepted")
 	# ...but claiming does NOT buy a pass on the fatal three.
-	_ok("inventory/claim cannot buy project.binary",
-		not ModManifest.parse({"id": "a.b", "api_version": 1,
-			"entry": "res://mods/a.b/m.gd", "claims": ["res://project.binary"]}
-		).inventory_error(PackedStringArray(
-			["res://mods/a.b/m.gd", "res://project.binary"])).is_empty())
+	_ok(not ModManifest.parse({"id": "a.b", "api_version": 1, "entry": "res://mods/a.b/m.gd", "claims": ["res://project.binary"]} ).inventory_error(PackedStringArray( ["res://mods/a.b/m.gd", "res://project.binary"])).is_empty(),
+		"inventory/claim cannot buy project.binary")
 
 	# A claim on a path the game does not ship ADDS a file; only a claim that
 	# lands on a shipped one shadows it, and only that needs replace_files.
@@ -193,30 +184,29 @@ func _group_registry() -> void:
 		"t.reg:box", {"platform": "nes", "label": "Box", "script": _SCRIPT}, owner), "")
 	_eq("registry/resolves", str(SystemModelRegistry.resolve("t.reg:box", "nes").get("id", "")),
 		"t.reg:box")
-	_ok("registry/is available", SystemModelRegistry.is_available("t.reg:box"))
-	_ok("registry/marked as a mod row", SystemModelRegistry.is_mod_row("t.reg:box"))
+	_ok(SystemModelRegistry.is_available("t.reg:box"), "registry/is available")
+	_ok(SystemModelRegistry.is_mod_row("t.reg:box"), "registry/marked as a mod row")
 	_eq("registry/owner recorded", SystemModelRegistry.owner_of("t.reg:box"), owner)
 
 	# A shipped platform's DEFAULT must not change because a mod added a row.
 	_eq("registry/shipped default unchanged",
 		str(SystemModelRegistry.resolve("", "nes").get("id", "")), "nes")
 
-	_ok("registry/duplicate refused", not SystemModelRegistry.register_mod_row(
-		"t.reg:box", {"platform": "nes", "label": "X", "script": _SCRIPT}, owner).is_empty())
-	_ok("registry/shipped id refused", not SystemModelRegistry.register_mod_row(
-		"nes", {"platform": "nes", "label": "X", "script": _SCRIPT}, owner).is_empty())
+	_ok(not SystemModelRegistry.register_mod_row( "t.reg:box", {"platform": "nes", "label": "X", "script": _SCRIPT}, owner).is_empty(),
+		"registry/duplicate refused")
+	_ok(not SystemModelRegistry.register_mod_row( "nes", {"platform": "nes", "label": "X", "script": _SCRIPT}, owner).is_empty(),
+		"registry/shipped id refused")
 
 	# validate_row is shared with model_registry_probe, so these are the same
 	# rules the shipped table is held to.
-	_ok("registry/no platform refused", not SystemModelRegistry.register_mod_row(
-		"t.reg:a", {"label": "A", "script": _SCRIPT}, owner).is_empty())
-	_ok("registry/both scene and script refused", not SystemModelRegistry.register_mod_row(
-		"t.reg:b", {"platform": "nes", "label": "B", "script": _SCRIPT,
-			"scene": "res://Scenes/Objects/system_models/nes.tscn"}, owner).is_empty())
-	_ok("registry/neither refused", not SystemModelRegistry.register_mod_row(
-		"t.reg:c", {"platform": "nes", "label": "C"}, owner).is_empty())
-	_ok("registry/missing file refused", not SystemModelRegistry.register_mod_row(
-		"t.reg:d", {"platform": "nes", "label": "D", "script": "res://nope.gd"}, owner).is_empty())
+	_ok(not SystemModelRegistry.register_mod_row( "t.reg:a", {"label": "A", "script": _SCRIPT}, owner).is_empty(),
+		"registry/no platform refused")
+	_ok(not SystemModelRegistry.register_mod_row( "t.reg:b", {"platform": "nes", "label": "B", "script": _SCRIPT, "scene": "res://Scenes/Objects/system_models/nes.tscn"}, owner).is_empty(),
+		"registry/both scene and script refused")
+	_ok(not SystemModelRegistry.register_mod_row( "t.reg:c", {"platform": "nes", "label": "C"}, owner).is_empty(),
+		"registry/neither refused")
+	_ok(not SystemModelRegistry.register_mod_row( "t.reg:d", {"platform": "nes", "label": "D", "script": "res://nope.gd"}, owner).is_empty(),
+		"registry/missing file refused")
 
 	_eq("registry/override registers", SystemModelRegistry.override_mod_row(
 		"wii", {"platform": "wii", "label": "Modded Wii", "script": _SCRIPT}, owner), "")
@@ -224,17 +214,16 @@ func _group_registry() -> void:
 		str(SystemModelRegistry.resolve("wii", "wii").get("id", "")), "wii")
 	_eq("registry/override replaces the label",
 		str(SystemModelRegistry.resolve("wii", "wii").get("label", "")), "Modded Wii")
-	_ok("registry/override of an unknown id refused",
-		not SystemModelRegistry.override_mod_row("nope", {"platform": "x", "label": "L",
-			"script": _SCRIPT}, owner).is_empty())
+	_ok(not SystemModelRegistry.override_mod_row("nope", {"platform": "x", "label": "L", "script": _SCRIPT}, owner).is_empty(),
+		"registry/override of an unknown id refused")
 
 	# Mod models must stay OUT of the boot warm, or boot time becomes a function
 	# of how many mods are installed.
-	_ok("registry/mod row not in the warm set",
-		not SystemModelRegistry.stand_in_ids().has("t.reg:box"))
+	_ok(not SystemModelRegistry.stand_in_ids().has("t.reg:box"),
+		"registry/mod row not in the warm set")
 
 	SystemModelRegistry.drop_mod(owner)
-	_ok("registry/drop removes the row", SystemModelRegistry.row_for("t.reg:box").is_empty())
+	_ok(SystemModelRegistry.row_for("t.reg:box").is_empty(), "registry/drop removes the row")
 	_eq("registry/drop restores the shipped row",
 		str(SystemModelRegistry.resolve("wii", "wii").get("label", "")), "Wii")
 	# The whole point of the fallback: a save naming a model that has gone still
@@ -250,27 +239,27 @@ func _group_rooms() -> void:
 	_eq("rooms/arcade path", RoomCatalog.path_of("arcade"), "res://Scenes/MainScene.tscn")
 	_eq("rooms/bedroom loading title", RoomCatalog.title_of("bedroom"), "90s BEDROOM")
 	_eq("rooms/bedroom menu title", RoomCatalog.menu_title_of("bedroom"), "90s Bedroom")
-	_ok("rooms/arcade keeps slots", RoomCatalog.has_slots("arcade"))
-	_ok("rooms/den keeps none", not RoomCatalog.has_slots("den"))
+	_ok(RoomCatalog.has_slots("arcade"), "rooms/arcade keeps slots")
+	_ok(not RoomCatalog.has_slots("den"), "rooms/den keeps none")
 	_eq("rooms/slot rooms", RoomCatalog.slot_rooms(), ["arcade", "bedroom", "passthrough"])
-	_ok("rooms/unknown room is absent", not RoomCatalog.has("nope"))
+	_ok(not RoomCatalog.has("nope"), "rooms/unknown room is absent")
 
 	var owner := "t.room"
 	_eq("rooms/registers", RoomCatalog.register_mod_room("t.room:attic", {
 		"path": "res://Scenes/DenScene.tscn", "menu_title": "The Attic"}, owner), "")
-	_ok("rooms/mod room exists", RoomCatalog.has("t.room:attic"))
-	_ok("rooms/marked as a mod room", RoomCatalog.is_mod_room("t.room:attic"))
+	_ok(RoomCatalog.has("t.room:attic"), "rooms/mod room exists")
+	_ok(RoomCatalog.is_mod_room("t.room:attic"), "rooms/marked as a mod room")
 	_eq("rooms/menu title kept", RoomCatalog.menu_title_of("t.room:attic"), "The Attic")
 	_eq("rooms/loading title derived", RoomCatalog.title_of("t.room:attic"), "THE ATTIC")
-	_ok("rooms/defaults to keeping slots", RoomCatalog.has_slots("t.room:attic"))
-	_ok("rooms/shipped id refused", not RoomCatalog.register_mod_room(
-		"arcade", {"path": "res://Scenes/DenScene.tscn"}, owner).is_empty())
-	_ok("rooms/missing scene refused", not RoomCatalog.register_mod_room(
-		"t.room:void", {"path": "res://Scenes/Nope.tscn"}, owner).is_empty())
-	_ok("rooms/no path refused",
-		not RoomCatalog.register_mod_room("t.room:void2", {}, owner).is_empty())
+	_ok(RoomCatalog.has_slots("t.room:attic"), "rooms/defaults to keeping slots")
+	_ok(not RoomCatalog.register_mod_room( "arcade", {"path": "res://Scenes/DenScene.tscn"}, owner).is_empty(),
+		"rooms/shipped id refused")
+	_ok(not RoomCatalog.register_mod_room( "t.room:void", {"path": "res://Scenes/Nope.tscn"}, owner).is_empty(),
+		"rooms/missing scene refused")
+	_ok(not RoomCatalog.register_mod_room("t.room:void2", {}, owner).is_empty(),
+		"rooms/no path refused")
 	RoomCatalog.drop_mod(owner)
-	_ok("rooms/drop removes it", not RoomCatalog.has("t.room:attic"))
+	_ok(not RoomCatalog.has("t.room:attic"), "rooms/drop removes it")
 	_eq("rooms/shipped rooms survive a drop", RoomCatalog.ids().size(), 5)
 
 	# Pad art tracked no owner until the overlay tables were shared, so a mod's
@@ -278,12 +267,12 @@ func _group_rooms() -> void:
 	var art_owner := "t.art"
 	var art_row := {"anchors": {"a": Vector2(0.5, 0.5)}, "rows": [["a"]]}
 	ConsolePadArt.register_mod_row("t.art:pad", art_row, art_owner)
-	_ok("pad art/mod row registers", ConsolePadArt.has("t.art:pad"))
+	_ok(ConsolePadArt.has("t.art:pad"), "pad art/mod row registers")
 	_eq("pad art/owner recorded", ConsolePadArt.owner_of("t.art:pad"), art_owner)
-	_ok("pad art/row is served", not ConsolePadArt.row("t.art:pad").is_empty())
+	_ok(not ConsolePadArt.row("t.art:pad").is_empty(), "pad art/row is served")
 	ConsolePadArt.drop_mod(art_owner)
-	_ok("pad art/drop removes it", not ConsolePadArt.has("t.art:pad"))
-	_ok("pad art/shipped art survives a drop", ConsolePadArt.has("nes"))
+	_ok(not ConsolePadArt.has("t.art:pad"), "pad art/drop removes it")
+	_ok(ConsolePadArt.has("nes"), "pad art/shipped art survives a drop")
 
 
 # ── objects/ ──────────────────────────────────────────────────────────────────
@@ -295,26 +284,26 @@ func _group_objects() -> void:
 		scene = "res://Scenes/Objects/system.tscn"
 	_eq("objects/registers", ScenePersistence.register_mod_object(
 		"t.obj:crate", scene, owner), "")
-	_ok("objects/known", ScenePersistence.is_mod_object("t.obj:crate"))
+	_ok(ScenePersistence.is_mod_object("t.obj:crate"), "objects/known")
 	_eq("objects/scene recorded", ScenePersistence.mod_object_scene("t.obj:crate"), scene)
-	_ok("objects/shipped type refused", not ScenePersistence.register_mod_object(
-		"table", scene, owner).is_empty())
-	_ok("objects/duplicate refused", not ScenePersistence.register_mod_object(
-		"t.obj:crate", scene, owner).is_empty())
-	_ok("objects/missing scene refused", not ScenePersistence.register_mod_object(
-		"t.obj:void", "res://nope.tscn", owner).is_empty())
+	_ok(not ScenePersistence.register_mod_object( "table", scene, owner).is_empty(),
+		"objects/shipped type refused")
+	_ok(not ScenePersistence.register_mod_object( "t.obj:crate", scene, owner).is_empty(),
+		"objects/duplicate refused")
+	_ok(not ScenePersistence.register_mod_object( "t.obj:void", "res://nope.tscn", owner).is_empty(),
+		"objects/missing scene refused")
 
 	# The instance must carry the stamp _serialize_node recognises, or it saves
 	# as its base class and loses the scene it came from.
 	var inst := ScenePersistence._instantiate_mod_object("t.obj:crate")
-	_ok("objects/instantiates", inst != null)
+	_ok(inst != null, "objects/instantiates")
 	if inst != null:
 		_eq("objects/carries its type stamp",
 			str(inst.get_meta(ScenePersistence.MOD_TYPE_META)), "t.obj:crate")
 		inst.free()
 
 	ScenePersistence.drop_mod_objects(owner)
-	_ok("objects/drop removes it", not ScenePersistence.is_mod_object("t.obj:crate"))
+	_ok(not ScenePersistence.is_mod_object("t.obj:crate"), "objects/drop removes it")
 
 
 # ── media/ ────────────────────────────────────────────────────────────────────
@@ -324,22 +313,22 @@ func _group_media() -> void:
 	_eq("media/registers", MediaDimensions.register_mod_media(sid, {
 		"cart_size": Vector3(0.1, 0.2, 0.01)}), "")
 	_eq("media/cart size", MediaDimensions.cart_size(sid), Vector3(0.1, 0.2, 0.01))
-	_ok("media/has a cart size", MediaDimensions.has_cart_size(sid))
-	_ok("media/cartridge system is not a disc one", not MediaDimensions.is_disc_system(sid))
+	_ok(MediaDimensions.has_cart_size(sid), "media/has a cart size")
+	_ok(not MediaDimensions.is_disc_system(sid), "media/cartridge system is not a disc one")
 	_eq("media/no disc means no loader", MediaDimensions.disc_loader(sid),
 		MediaDimensions.LOADER_NONE)
 
 	var disc := "t_disc_platform"
 	MediaDimensions.register_mod_media(disc, {"disc_diameter": 0.12})
-	_ok("media/disc system", MediaDimensions.is_disc_system(disc))
+	_ok(MediaDimensions.is_disc_system(disc), "media/disc system")
 	_eq("media/tray by default", MediaDimensions.disc_loader(disc), MediaDimensions.LOADER_TRAY)
 	var slot := "t_slot_platform"
 	MediaDimensions.register_mod_media(slot, {"disc_diameter": 0.12, "slot_load": true})
 	_eq("media/slot load", MediaDimensions.disc_loader(slot), MediaDimensions.LOADER_SLOT)
-	_ok("media/slot without a disc refused",
-		not MediaDimensions.register_mod_media("t_bad", {"slot_load": true}).is_empty())
-	_ok("media/bad cart size refused",
-		not MediaDimensions.register_mod_media("t_bad2", {"cart_size": "big"}).is_empty())
+	_ok(not MediaDimensions.register_mod_media("t_bad", {"slot_load": true}).is_empty(),
+		"media/slot without a disc refused")
+	_ok(not MediaDimensions.register_mod_media("t_bad2", {"cart_size": "big"}).is_empty(),
+		"media/bad cart size refused")
 	# A shipped platform must be untouched by any of this.
 	_eq("media/shipped nes unchanged", MediaDimensions.disc_loader("nes"),
 		MediaDimensions.LOADER_NONE)
@@ -358,21 +347,20 @@ func _group_shaders() -> void:
 	# Landing place 1: a shell that says nothing gets the stock CRT. Asserted on
 	# the base class, which is what every shipped cabinet uses.
 	var shell := RetroTVShell.new()
-	_ok("shaders/stock is the default", shell.screen_shader() == null)
+	_ok(shell.screen_shader() == null, "shaders/stock is the default")
 	shell.free()
 
 	# Landing place 2: a built-in by name, and the SAME resource rather than a
 	# second copy — asking for one must not cost a compile.
 	var crt := ModShaders.get_shader("crt")
-	_ok("shaders/crt by name", crt != null)
-	_ok("shaders/same resource twice", crt == ModShaders.get_shader("crt"))
-	_ok("shaders/is the shipped crt",
-		crt == load("res://Shaders/crt_effect.gdshader"))
+	_ok(crt != null, "shaders/crt by name")
+	_ok(crt == ModShaders.get_shader("crt"), "shaders/same resource twice")
+	_ok(crt == load("res://Shaders/crt_effect.gdshader"), "shaders/is the shipped crt")
 	for shader_name: String in ModShaders.names():
-		_ok("shaders/%s resolves" % shader_name, ModShaders.get_shader(shader_name) != null)
+		_ok(ModShaders.get_shader(shader_name) != null, "shaders/%s resolves" % shader_name)
 	# An unknown name must not hand back a null that lands in a material and
 	# paints nothing, with no clue why.
-	_ok("shaders/unknown name is not known", not ModShaders.has("no_such_shader"))
+	_ok(not ModShaders.has("no_such_shader"), "shaders/unknown name is not known")
 
 
 # ── removal/ ──────────────────────────────────────────────────────────────────
@@ -395,7 +383,7 @@ func _group_removal() -> void:
 	# Dropping an entry creates dangling references. Not scrubbing them turns
 	# "one missing prop" straight back into "the whole slot is invalid".
 	var remote := _entry_of(kept, "tv_remote")
-	_ok("removal/dangling reference scrubbed", remote.get("system") == null)
+	_ok(remote.get("system") == null, "removal/dangling reference scrubbed")
 	_eq("removal/slot still validates",
 		ScenePersistence._objects_validation_error(kept), "")
 
@@ -403,18 +391,17 @@ func _group_removal() -> void:
 	# equivalent — this path runs on every load.
 	var clean: Array = [{"id": 0, "type": "table", "position": [0, 0, 0],
 		"rotation": [0, 0, 0]}]
-	_ok("removal/untouched when nothing is missing",
-		ScenePersistence._prune_unknown_types(clean, "test") == clean)
+	_ok(ScenePersistence._prune_unknown_types(clean, "test") == clean,
+		"removal/untouched when nothing is missing")
 
 	# And the guard that must NOT be weakened: structural corruption is still
 	# all-or-nothing. Only an unrecognised type is survivable.
-	_ok("removal/negative id still refused", not ScenePersistence._objects_validation_error(
-		[{"id": -1, "type": "table"}]).is_empty())
-	_ok("removal/duplicate id still refused", not ScenePersistence._objects_validation_error(
-		[{"id": 0, "type": "table"}, {"id": 0, "type": "table"}]).is_empty())
-	_ok("removal/reference to a never-existing id still refused",
-		not ScenePersistence._objects_validation_error(
-			[{"id": 0, "type": "tv_remote", "system": 77}]).is_empty())
+	_ok(not ScenePersistence._objects_validation_error( [{"id": -1, "type": "table"}]).is_empty(),
+		"removal/negative id still refused")
+	_ok(not ScenePersistence._objects_validation_error( [{"id": 0, "type": "table"}, {"id": 0, "type": "table"}]).is_empty(),
+		"removal/duplicate id still refused")
+	_ok(not ScenePersistence._objects_validation_error( [{"id": 0, "type": "tv_remote", "system": 77}]).is_empty(),
+		"removal/reference to a never-existing id still refused")
 
 	# Through a REAL slot file, not just the pure function.
 	#
@@ -432,8 +419,8 @@ func _group_removal() -> void:
 			"objects": objects}))
 		f.close()
 		var read: Variant = store._read_objects(slot_path)
-		_ok("removal/a real slot with a missing mod still loads", read != null,
-			"the whole slot was refused")
+		_ok(read != null,
+			"removal/a real slot with a missing mod still loads", "the whole slot was refused")
 		if read is Array:
 			_eq("removal/and comes back without the missing props",
 				_types_of(read as Array), ["table", "tv_remote"])
@@ -476,15 +463,15 @@ func _group_netplay() -> void:
 
 	var ours := PackedStringArray(["a@1.0.0", "b@2.0.0"])
 	var same := PackedStringArray(["a@1.0.0", "b@2.0.0"])
-	_ok("netplay/identical sets match", ours == same)
-	_ok("netplay/order-independent by sorting", ours == PackedStringArray(["a@1.0.0", "b@2.0.0"]))
-	_ok("netplay/a different version is a mismatch",
-		ours != PackedStringArray(["a@1.0.0", "b@2.0.1"]))
+	_ok(ours == same, "netplay/identical sets match")
+	_ok(ours == PackedStringArray(["a@1.0.0", "b@2.0.0"]), "netplay/order-independent by sorting")
+	_ok(ours != PackedStringArray(["a@1.0.0", "b@2.0.1"]),
+		"netplay/a different version is a mismatch")
 
 	var msg := Mods.fingerprint_mismatch(ours, PackedStringArray(["a@1.0.0"]))
-	_ok("netplay/names what is missing", msg.contains("b@2.0.0"), msg)
+	_ok(msg.contains("b@2.0.0"), "netplay/names what is missing", msg)
 	var msg2 := Mods.fingerprint_mismatch(PackedStringArray(["a@1.0.0"]), ours)
-	_ok("netplay/names what is extra", msg2.contains("extra"), msg2)
+	_ok(msg2.contains("extra"), "netplay/names what is extra", msg2)
 
 
 # ── consistency/ ──────────────────────────────────────────────────────────────
@@ -541,8 +528,8 @@ func _group_consistency() -> void:
 							MediaDimensions.disc_loader(sid)])
 			f = dir.get_next()
 		dir.list_dir_end()
-	_ok("consistency/descriptors were actually read", checked > 50,
-		"only %d read — the check would pass vacuously" % checked)
+	_ok(checked > 50,
+		"consistency/descriptors were actually read", "only %d read — the check would pass vacuously" % checked)
 	_eq("consistency/media_type agrees with disc_loader", ", ".join(disagree), "")
 
 
@@ -592,7 +579,7 @@ func _cleanup() -> void:
 
 # ── assertions ────────────────────────────────────────────────────────────────
 
-func _ok(name: String, cond: bool, detail: String = "") -> void:
+func _ok(cond: bool, name: String, detail: String = "") -> void:
 	if cond:
 		_pass += 1
 		print("[test] PASS  %s" % name)
@@ -603,4 +590,4 @@ func _ok(name: String, cond: bool, detail: String = "") -> void:
 
 
 func _eq(name: String, got: Variant, want: Variant) -> void:
-	_ok(name, got == want, "got %s, want %s" % [str(got), str(want)])
+	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])

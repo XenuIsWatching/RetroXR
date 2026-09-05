@@ -95,7 +95,7 @@ func _wants(group: String) -> bool:
 	return _only.is_empty() or _only == group
 
 
-func _ok(name: String, cond: bool, detail: String = "") -> void:
+func _ok(cond: bool, name: String, detail: String = "") -> void:
 	if cond:
 		_pass += 1
 		print("[test] PASS  %s%s" % [name, "  (" + detail + ")" if detail else ""])
@@ -313,12 +313,11 @@ func _settle_profile(limit: int) -> Dictionary:
 ##    system can no longer hide it.
 func _assert_settles(name: String, limit: int, still_mm: float) -> void:
 	var prof := await _settle_profile(limit)
-	_ok("contact/%s settles" % name, prof["slept"],
-		"still awake after %d ticks, moving %.3f mm/tick"
-			% [prof["tick"], float(prof["worst_awake"]) * 1000.0])
+	_ok(prof["slept"],
+		"contact/%s settles" % name, "still awake after %d ticks, moving %.3f mm/tick" % [prof["tick"], float(prof["worst_awake"]) * 1000.0])
 	var residual := await _awake_residual(240)
-	_ok("contact/%s is still when it is settled" % name, residual * 1000.0 < still_mm,
-		"%.4f mm/tick held awake (slept at tick %d)" % [residual * 1000.0, prof["tick"]])
+	_ok(residual * 1000.0 < still_mm,
+		"contact/%s is still when it is settled" % name, "%.4f mm/tick held awake (slept at tick %d)" % [residual * 1000.0, prof["tick"]])
 
 
 ## Largest per-tick movement in the LAST STILL_WINDOW ticks of an awake hold of
@@ -527,8 +526,8 @@ func _group_contact() -> void:
 	await _assert_settles("a cord on a table", 1500, STILL_MM)
 	var top := base.y + 0.75
 	var sink := top - _lowest_y()
-	_ok("contact/lies on a table", sink < _rope.collision_radius + 0.005,
-		"rests %.1f mm above the surface" % (-sink * 1000.0))
+	_ok(sink < _rope.collision_radius + 0.005,
+		"contact/lies on a table", "rests %.1f mm above the surface" % (-sink * 1000.0))
 	# A cord pushed into its socket keeps a little standing pigtail where the
 	# slack folded — measured 48 mm, and a real springy lead does the same. What
 	# this bound rejects is the pre-compression buckle it was added for: a cord
@@ -536,8 +535,8 @@ func _group_contact() -> void:
 	var highest := -1e9
 	for p: Vector3 in _points():
 		highest = maxf(highest, p.y)
-	_ok("contact/the cord lies down, pigtail and all", highest < top + 0.12,
-		"tallest point %.0f mm above the surface" % ((highest - top) * 1000.0))
+	_ok(highest < top + 0.12,
+		"contact/the cord lies down, pigtail and all", "tallest point %.0f mm above the surface" % ((highest - top) * 1000.0))
 	await _drop_case()
 
 	# THE JITTER CASE. A cord half on a table and half over its edge is the shape
@@ -563,9 +562,8 @@ func _group_contact() -> void:
 	await _settle(120)
 	await _carry(corner_rope, corner_rope.end_node, base + Vector3(0.30, 0.03, 0), 90)
 	var corner_prof := await _settle_profile(1500)
-	_ok("contact/a cord over a table corner settles", corner_prof["slept"],
-		"still awake after %d ticks, moving %.3f mm/tick"
-			% [corner_prof["tick"], float(corner_prof["worst_awake"]) * 1000.0])
+	_ok(corner_prof["slept"],
+		"contact/a cord over a table corner settles", "still awake after %d ticks, moving %.3f mm/tick" % [corner_prof["tick"], float(corner_prof["worst_awake"]) * 1000.0])
 	# NOT the held-awake residual the other contacts use. This shape has a long
 	# free-hanging span, and wake()-ing it every tick feeds the edge contact's
 	# chatter into the span's pendulum mode: measured, the hold pumps a 0.4 m
@@ -575,15 +573,11 @@ func _group_contact() -> void:
 	# again in 30 ticks, 7 mm of drift). A sleep test too broken to re-latch, or
 	# a contact that genuinely churns, both still fail it.
 	var w := await _wake_once(600)
-	_ok("contact/a brushed corner cord lies back down",
-		bool(w["reslept"]) and float(w["drift"]) < 0.03,
-		"%s, drifted %.1f mm" % [
-			"asleep again after %d ticks" % int(w["tick"]) if w["reslept"]
-				else "still awake after %d ticks" % int(w["tick"]),
-			float(w["drift"]) * 1000.0])
+	_ok(bool(w["reslept"]) and float(w["drift"]) < 0.03,
+		"contact/a brushed corner cord lies back down", "%s, drifted %.1f mm" % [ "asleep again after %d ticks" % int(w["tick"]) if w["reslept"] else "still awake after %d ticks" % int(w["tick"]), float(w["drift"]) * 1000.0])
 	var cut := _deepest_in_box(slab_c, slab_s)
-	_ok("contact/the corner is wrapped, not cut", cut < 0.01,
-		"deepest %.1f mm inside the table" % (cut * 1000.0))
+	_ok(cut < 0.01,
+		"contact/the corner is wrapped, not cut", "deepest %.1f mm inside the table" % (cut * 1000.0))
 	await _drop_case()
 
 	# Wrapped over a ledge, anchored on both sides of it. The cord has to bend
@@ -606,8 +600,8 @@ func _group_contact() -> void:
 		base + Vector3(0, 0.80, 0.55), 90)
 	await _assert_settles("a cord wrapping a ledge", 1800, STILL_MM)
 	var into := _deepest_in_box(ledge_c, ledge_s)
-	_ok("contact/wrapping a ledge stays out of the solid", into < 0.01,
-		"deepest %.1f mm inside" % (into * 1000.0))
+	_ok(into < 0.01,
+		"contact/wrapping a ledge stays out of the solid", "deepest %.1f mm inside" % (into * 1000.0))
 	var over := false
 	var over_lowest := 1e9
 	for p: Vector3 in _points():
@@ -615,8 +609,8 @@ func _group_contact() -> void:
 			over_lowest = minf(over_lowest, p.y)
 			if p.y < base.y + 0.73:
 				over = true
-	_ok("contact/the overhang drapes down the face", over,
-		"lowest overhang %.0f mm" % ((over_lowest - base.y) * 1000.0))
+	_ok(over,
+		"contact/the overhang drapes down the face", "lowest overhang %.0f mm" % ((over_lowest - base.y) * 1000.0))
 	await _drop_case()
 
 	# Draped over a horizontal pipe. A round surface is where a plane-cache
@@ -631,8 +625,8 @@ func _group_contact() -> void:
 	_rope_between(base + Vector3(0, 1.16, -0.40), base + Vector3(0, 1.16, 0.40), 21)
 	await _assert_settles("a cord draped on a pipe", 1800, STILL_MM)
 	var into_pipe := _deepest_in_cylinder(pipe, 0.12, 0.8)
-	_ok("contact/draping a pipe stays out of it", into_pipe < 0.02,
-		"deepest %.1f mm inside" % (into_pipe * 1000.0))
+	_ok(into_pipe < 0.02,
+		"contact/draping a pipe stays out of it", "deepest %.1f mm inside" % (into_pipe * 1000.0))
 	# "Not inside the pipe" is only half the claim: a cord that ignores collision
 	# entirely falls PAST it and reads a clean zero. It has to be lying ON it —
 	# and on the CROWN, not brushing a flank on its way underneath.
@@ -643,7 +637,7 @@ func _group_contact() -> void:
 		var r := Vector2(pt.y - pipe.y, pt.z - pipe.z).length()
 		if absf(r - 0.12) < 0.02:
 			on_crown = true
-	_ok("contact/the cord rests on top of the pipe", on_crown)
+	_ok(on_crown, "contact/the cord rests on top of the pipe")
 	await _drop_case()
 
 	# Over a thin upright post: the cord must end up hanging down BOTH sides
@@ -660,7 +654,7 @@ func _group_contact() -> void:
 				left = true
 			elif p.x > base.x + 0.05:
 				right = true
-	_ok("contact/a cord over a post hangs both sides", left and right)
+	_ok(left and right, "contact/a cord over a post hangs both sides")
 	# "Both sides" alone cannot fail: with collision off the cord hangs straight
 	# THROUGH the post and still has particles either side of it. The cord also
 	# has to be leaning on the post — and not be inside it.
@@ -674,9 +668,8 @@ func _group_contact() -> void:
 				on_post = true
 		elif p.y >= base.y + 0.995 and p.y < base.y + 1.03 and d < 0.05:
 			on_post = true            # resting across the top counts too
-	_ok("contact/the cord leans on the post, not through it",
-		on_post and into_post < 0.01,
-		"deepest %.1f mm inside" % (into_post * 1000.0))
+	_ok(on_post and into_post < 0.01,
+		"contact/the cord leans on the post, not through it", "deepest %.1f mm inside" % (into_post * 1000.0))
 	await _drop_case()
 
 	# Bridging two supports with a gap between them: it should sag into the gap
@@ -689,11 +682,10 @@ func _group_contact() -> void:
 	_rope_between(base + Vector3(-0.5, 0.76, 0), base + Vector3(0.5, 0.76, 0), 30)
 	await _settle(900)
 	var sag := base.y + 0.75 - _lowest_y()
-	_ok("contact/a bridged cord sags without reaching the floor",
-		_lowest_y() > base.y + 0.1, "lowest point %.0f mm above the floor"
-			% ((_lowest_y() - base.y) * 1000.0))
-	_ok("contact/a bridged cord does sag into the gap", sag > 0.01,
-		"sagged %.0f mm" % (sag * 1000.0))
+	_ok(_lowest_y() > base.y + 0.1,
+		"contact/a bridged cord sags without reaching the floor", "lowest point %.0f mm above the floor" % ((_lowest_y() - base.y) * 1000.0))
+	_ok(sag > 0.01,
+		"contact/a bridged cord does sag into the gap", "sagged %.0f mm" % (sag * 1000.0))
 	await _drop_case()
 
 	# 2.4 m of cord piled on a 0.4 m span, both ends on the surface — a spare lead
@@ -744,15 +736,14 @@ func _group_handling() -> void:
 	# that measurement; before the alignment-step cap in AlignAnchorPlug this
 	# read 53x, because the far plug had been carried through the floor and the
 	# last segment was strung down to it through the void.
-	_ok("handling/a yanked lead follows without turning elastic", worst_stretch < 3.0,
-		"worst segment %.2f x rest mid-yank" % worst_stretch)
-	_ok("handling/a yanked lead recovers its length once the hand stops",
-		_lead_stretch(rope) < 1.25, "%.2f x rest held still" % _lead_stretch(rope))
+	_ok(worst_stretch < 3.0,
+		"handling/a yanked lead follows without turning elastic", "worst segment %.2f x rest mid-yank" % worst_stretch)
+	_ok(_lead_stretch(rope) < 1.25,
+		"handling/a yanked lead recovers its length once the hand stops", "%.2f x rest held still" % _lead_stretch(rope))
 	plug.freeze = false
 	var slept := await _wait_until_asleep(rope, 900)
-	_ok("handling/a yanked lead settles when dropped", slept >= 0,
-		"asleep after %d frames" % slept if slept >= 0
-			else "never slept, moving %.3f mm/frame" % (_last_wait_motion * 1000.0))
+	_ok(slept >= 0,
+		"handling/a yanked lead settles when dropped", "asleep after %d frames" % slept if slept >= 0 else "never slept, moving %.3f mm/frame" % (_last_wait_motion * 1000.0))
 	lead.queue_free()
 	await get_tree().physics_frame
 
@@ -776,15 +767,15 @@ func _group_handling() -> void:
 			drag_peak = maxf(drag_peak, p.y - base.y)
 	for f in 60:
 		await get_tree().physics_frame
-	_ok("handling/a dragged lead's cord stays on the floor", drag_peak < 0.35,
-		"highest point %.0f mm mid-drag" % (drag_peak * 1000.0))
+	_ok(drag_peak < 0.35,
+		"handling/a dragged lead's cord stays on the floor", "highest point %.0f mm mid-drag" % (drag_peak * 1000.0))
 	var span: float = far.global_position.distance_to(plug.global_position)
-	_ok("handling/a dragged lead's far plug is towed along, not left behind",
-		span < 2.1, "plugs %.2f m apart after a 2.5 m drag" % span)
+	_ok(span < 2.1,
+		"handling/a dragged lead's far plug is towed along, not left behind", "plugs %.2f m apart after a 2.5 m drag" % span)
 	plug.freeze = false
 	slept = await _wait_until_asleep(rope, 900)
-	_ok("handling/a dragged lead lies down afterwards", slept >= 0,
-		"asleep after %d frames" % slept if slept >= 0 else "never slept")
+	_ok(slept >= 0,
+		"handling/a dragged lead lies down afterwards", "asleep after %d frames" % slept if slept >= 0 else "never slept")
 	lead.queue_free()
 	await get_tree().physics_frame
 
@@ -813,16 +804,16 @@ func _group_handling() -> void:
 		await get_tree().physics_frame
 	for f in 60:
 		await get_tree().physics_frame
-	_ok("handling/a lead pulled from a slot comes through", far.global_position.x - base.x > 0.15,
-		"far plug at x=%.2f m, slot at 0" % (far.global_position.x - base.x))
+	_ok(far.global_position.x - base.x > 0.15,
+		"handling/a lead pulled from a slot comes through", "far plug at x=%.2f m, slot at 0" % (far.global_position.x - base.x))
 	var wall_cut := maxf(_deepest_in_box_of(rope, wall_a_c, wall_s),
 		_deepest_in_box_of(rope, wall_b_c, wall_s))
-	_ok("handling/the slot walls are slid past, not cut", wall_cut < 0.01,
-		"deepest %.1f mm inside a wall" % (wall_cut * 1000.0))
+	_ok(wall_cut < 0.01,
+		"handling/the slot walls are slid past, not cut", "deepest %.1f mm inside a wall" % (wall_cut * 1000.0))
 	plug.freeze = false
 	slept = await _wait_until_asleep(rope, 900)
-	_ok("handling/a lead pulled from a slot settles", slept >= 0,
-		"asleep after %d frames" % slept if slept >= 0 else "never slept")
+	_ok(slept >= 0,
+		"handling/a lead pulled from a slot settles", "asleep after %d frames" % slept if slept >= 0 else "never slept")
 	lead.queue_free()
 	await get_tree().physics_frame
 
@@ -862,21 +853,20 @@ func _group_handling() -> void:
 				pierced = true
 	for f in 60:
 		await get_tree().physics_frame
-	_ok("handling/a carry cannot pull the far plug through a wall", far_into < 0.005,
-		"plug centre %.1f mm inside the partition at the worst frame" % (far_into * 1000.0))
-	_ok("handling/the cord goes over the wall, never through it",
-		not pierced and not _pierces_below_top(rope, part_c, part_s))
+	_ok(far_into < 0.005,
+		"handling/a carry cannot pull the far plug through a wall", "plug centre %.1f mm inside the partition at the worst frame" % (far_into * 1000.0))
+	_ok(not pierced and not _pierces_below_top(rope, part_c, part_s),
+		"handling/the cord goes over the wall, never through it")
 	var part_cut := _deepest_in_box_of(rope, part_c, part_s)
-	_ok("handling/the cord ends up around the wall, not inside it", part_cut < 0.01,
-		"deepest %.1f mm inside" % (part_cut * 1000.0))
+	_ok(part_cut < 0.01,
+		"handling/the cord ends up around the wall, not inside it", "deepest %.1f mm inside" % (part_cut * 1000.0))
 	plug.freeze = false
 	# 1800, not the 900 the other tow cases get: the release leaves the lead
 	# draped over the partition with a plug swinging on each side, and the swing
 	# has twice the pendulum to damp before the wake threshold lets it latch.
 	slept = await _wait_until_asleep(rope, 1800)
-	_ok("handling/a lead carried over a wall settles", slept >= 0,
-		"asleep after %d frames" % slept if slept >= 0
-			else "never slept, moving %.3f mm/frame" % (_last_wait_motion * 1000.0))
+	_ok(slept >= 0,
+		"handling/a lead carried over a wall settles", "asleep after %d frames" % slept if slept >= 0 else "never slept, moving %.3f mm/frame" % (_last_wait_motion * 1000.0))
 	lead.queue_free()
 	await get_tree().physics_frame
 
@@ -901,13 +891,13 @@ func _group_handling() -> void:
 		wrap_into = maxf(wrap_into, 0.05 - d)
 		if absf(d - 0.05) < 0.02:
 			wrap_touch = true
-	_ok("handling/a wrapped cord turns ON the post", wrap_touch and wrap_into < 0.01,
-		"deepest %.1f mm inside" % (wrap_into * 1000.0))
-	_ok("handling/a wrapped cord holds its length under tension", _max_stretch() < 1.25,
-		"worst segment %.2f x rest" % _max_stretch())
+	_ok(wrap_touch and wrap_into < 0.01,
+		"handling/a wrapped cord turns ON the post", "deepest %.1f mm inside" % (wrap_into * 1000.0))
+	_ok(_max_stretch() < 1.25,
+		"handling/a wrapped cord holds its length under tension", "worst segment %.2f x rest" % _max_stretch())
 	var prof := await _settle_profile(1500)
-	_ok("handling/a wrapped cord settles under tension", prof["slept"],
-		"still awake after %d ticks" % prof["tick"])
+	_ok(prof["slept"],
+		"handling/a wrapped cord settles under tension", "still awake after %d ticks" % prof["tick"])
 	await _drop_case()
 
 
@@ -930,10 +920,9 @@ func _group_integrity() -> void:
 	for i in range(pts.size() - 1):
 		span += pts[i].distance_to(pts[i + 1])
 	var elong: float = span / (float(_rope.segment_count) * _rope.segment_length)
-	_ok("integrity/hanging under its own weight does not stretch", stretch < 1.25,
-		"worst segment %.3f x rest, whole cord %.3f x" % [stretch, elong])
-	_ok("integrity/the cord as a whole keeps its length", elong < 1.12,
-		"%.3f x rest" % elong)
+	_ok(stretch < 1.25,
+		"integrity/hanging under its own weight does not stretch", "worst segment %.3f x rest, whole cord %.3f x" % [stretch, elong])
+	_ok(elong < 1.12, "integrity/the cord as a whole keeps its length", "%.3f x rest" % elong)
 	await _drop_case()
 
 	# XPBD compliance is an explicit physical mode, not an iteration-dependent
@@ -947,9 +936,8 @@ func _group_integrity() -> void:
 	compliant.stretch_compliance = 0.00001
 	await _settle(300)
 	var compliant_stretch := _max_stretch()
-	_ok("integrity/compliance produces bounded physical extension",
-		compliant_stretch > 1.01 and compliant_stretch < 2.0,
-		"worst segment %.3f x rest" % compliant_stretch)
+	_ok(compliant_stretch > 1.01 and compliant_stretch < 2.0,
+		"integrity/compliance produces bounded physical extension", "worst segment %.3f x rest" % compliant_stretch)
 	await _drop_case()
 
 	# Abuse: anchors 20x further apart than the cord is long, then shaken. The
@@ -962,7 +950,7 @@ func _group_integrity() -> void:
 		for i in BATCH:
 			far_end.position.x += 0.35 if i % 2 == 0 else -0.35
 			rope.step(1.0 / 90.0)
-	_ok("integrity/over-extended and shaken stays finite", _all_finite())
+	_ok(_all_finite(), "integrity/over-extended and shaken stays finite")
 	await _drop_case()
 
 	# Energy has to leave the system. Compared as movement early vs late, which
@@ -972,8 +960,8 @@ func _group_integrity() -> void:
 	var early := await _max_step(60)
 	await _settle(600)
 	var late := await _max_step(60)
-	_ok("integrity/a swinging cord loses energy", late < early * 0.05,
-		"%.2f mm/tick early, %.4f mm/tick late" % [early * 1000.0, late * 1000.0])
+	_ok(late < early * 0.05,
+		"integrity/a swinging cord loses energy", "%.2f mm/tick early, %.4f mm/tick late" % [early * 1000.0, late * 1000.0])
 	await _drop_case()
 
 	# Two identical ropes, stepped identically, must land on identical points.
@@ -993,9 +981,8 @@ func _group_integrity() -> void:
 	if first.size() == second.size():
 		for i in first.size():
 			worst = maxf(worst, (first[i] - first_base).distance_to(second[i] - base))
-	_ok("integrity/the same cord twice settles the same way",
-		first.size() == second.size() and worst < 1e-9,
-		"worst difference %.9f m" % worst)
+	_ok(first.size() == second.size() and worst < 1e-9,
+		"integrity/the same cord twice settles the same way", "worst difference %.9f m" % worst)
 	await _drop_case()
 
 
@@ -1020,8 +1007,7 @@ func _group_anchors() -> void:
 			var pts := rope.get_points()
 			drift = maxf(drift, pts[0].distance_to(a.global_position))
 			drift = maxf(drift, pts[rope.segment_count].distance_to(b.global_position))
-	_ok("anchors/a pinned end never leaves its anchor", drift < 1e-6,
-		"worst drift %.9f m" % drift)
+	_ok(drift < 1e-6, "anchors/a pinned end never leaves its anchor", "worst drift %.9f m" % drift)
 	var saved_layout := rope.get_points()
 	rope._init_points()
 	var restored_ok := rope.restore_points(saved_layout)
@@ -1029,12 +1015,11 @@ func _group_anchors() -> void:
 	var restore_error := 0.0
 	for i in saved_layout.size():
 		restore_error = maxf(restore_error, saved_layout[i].distance_to(restored_layout[i]))
-	_ok("anchors/a saved particle layout restores exactly",
-		restored_ok and restore_error < 1e-9,
-		"worst immediate error %.9f m" % restore_error)
+	_ok(restored_ok and restore_error < 1e-9,
+		"anchors/a saved particle layout restores exactly", "worst immediate error %.9f m" % restore_error)
 	var corrupt := saved_layout.duplicate()
 	corrupt[1] += Vector3(10.0, 0, 0)
-	_ok("anchors/a corrupt saved layout is rejected", not rope.restore_points(corrupt))
+	_ok(not rope.restore_points(corrupt), "anchors/a corrupt saved layout is rejected")
 	await _drop_case()
 
 	# An anchor that jumps further than it could have travelled is a teleport —
@@ -1055,14 +1040,14 @@ func _group_anchors() -> void:
 	moved.position = base + Vector3(1.5, 0.2, 0)     # a 1.6 m jump, through the cabinet
 	await _settle(900)
 	var wedged := _deepest_in_box(cab_c, cab_s)
-	_ok("anchors/a teleported cord is freed from what it re-laid through",
-		wedged < 0.01, "deepest %.1f mm inside the cabinet" % (wedged * 1000.0))
+	_ok(wedged < 0.01,
+		"anchors/a teleported cord is freed from what it re-laid through", "deepest %.1f mm inside the cabinet" % (wedged * 1000.0))
 	var on_cab := false
 	for p: Vector3 in _points():
 		if absf(p.x - cab_c.x) < 0.25 and absf(p.z - cab_c.z) < 0.3 \
 				and p.y > base.y + 0.9 and p.y < base.y + 0.94:
 			on_cab = true
-	_ok("anchors/the freed cord drapes over the cabinet", on_cab)
+	_ok(on_cab, "anchors/the freed cord drapes over the cabinet")
 	await _drop_case()
 
 	# A legacy save has no particle layout: both anchors appear in their restored
@@ -1081,12 +1066,12 @@ func _group_anchors() -> void:
 	await _settle(1800)
 	var restore_wedged := _deepest_in_box(restore_table_c, restore_table_s)
 	var restore_stretch := _lead_stretch(rope)
-	_ok("anchors/a restored lay through a tabletop repairs and sleeps",
-		rope.is_sleeping(), "sleeping=%s" % str(rope.is_sleeping()))
-	_ok("anchors/a repaired restored lay leaves the tabletop",
-		restore_wedged < 0.01, "deepest %.1f mm inside" % (restore_wedged * 1000.0))
-	_ok("anchors/a repaired restored lay does not remain severely stretched",
-		restore_stretch < 1.5, "worst segment %.2fx rest" % restore_stretch)
+	_ok(rope.is_sleeping(),
+		"anchors/a restored lay through a tabletop repairs and sleeps", "sleeping=%s" % str(rope.is_sleeping()))
+	_ok(restore_wedged < 0.01,
+		"anchors/a repaired restored lay leaves the tabletop", "deepest %.1f mm inside" % (restore_wedged * 1000.0))
+	_ok(restore_stretch < 1.5,
+		"anchors/a repaired restored lay does not remain severely stretched", "worst segment %.2fx rest" % restore_stretch)
 	await _drop_case()
 
 	# set_rope_length is the one setter that rewrites the rest table. Halving it
@@ -1105,16 +1090,14 @@ func _group_anchors() -> void:
 	# into the old near-zero-radius coil within this window. Eight percent still
 	# tightly bounds solver stretch while leaving an enormous gap to the original
 	# stale-rest-table failure, which remained near the full 1.8 m length.
-	_ok("anchors/a halved rope cannot reach past its new length",
-		reach_after < new_rest * 1.08,
-		"%.0f mm reach against %.0f mm of cord" % [reach_after * 1000.0, new_rest * 1000.0])
+	_ok(reach_after < new_rest * 1.08,
+		"anchors/a halved rope cannot reach past its new length", "%.0f mm reach against %.0f mm of cord" % [reach_after * 1000.0, new_rest * 1000.0])
 	# The regression this exists for: set_rope_length once wrote the length and
 	# nothing else, so the solver kept using the old rest table and the reach did
 	# not move at all. A tail that coils rather than hanging taut is why this is
 	# "much shorter" rather than "exactly half".
-	_ok("anchors/halving the rope really shortens it",
-		reach_after < reach_before * 0.6,
-		"%.0f mm -> %.0f mm" % [reach_before * 1000.0, reach_after * 1000.0])
+	_ok(reach_after < reach_before * 0.6,
+		"anchors/halving the rope really shortens it", "%.0f mm -> %.0f mm" % [reach_before * 1000.0, reach_after * 1000.0])
 	await _drop_case()
 
 
@@ -1130,24 +1113,24 @@ func _group_sleep() -> void:
 	_box(base + Vector3(0, 0.70, 0), Vector3(2.0, 0.10, 2.0))
 	var rope := _rope_between(base + Vector3(-0.3, 0.95, 0), base + Vector3(0.3, 0.95, 0))
 	await _settle(900)
-	_ok("sleep/a settled cord sleeps", rope.is_sleeping())
+	_ok(rope.is_sleeping(), "sleep/a settled cord sleeps")
 
 	# Still asleep after being left alone — the anti-jitter claim in the cheap
 	# form, and the one that catches a cord that re-wakes itself forever.
 	await _settle(300)
-	_ok("sleep/a sleeping cord stays asleep", rope.is_sleeping())
+	_ok(rope.is_sleeping(), "sleep/a sleeping cord stays asleep")
 
 	# The smallest move a hand can make must bring it back.
 	var a: Node3D = rope.start_node
 	a.position += Vector3(0.002, 0, 0)
 	await _settle(2)
-	_ok("sleep/moving an anchor wakes it", not rope.is_sleeping())
+	_ok(not rope.is_sleeping(), "sleep/moving an anchor wakes it")
 
 	await _settle(900)
-	_ok("sleep/it settles again", rope.is_sleeping())
+	_ok(rope.is_sleeping(), "sleep/it settles again")
 	rope.nudge_point(int(rope.segment_count / 2), Vector3(0, -0.05, 0))
 	await _settle(2)
-	_ok("sleep/nudging a point wakes it", not rope.is_sleeping())
+	_ok(not rope.is_sleeping(), "sleep/nudging a point wakes it")
 	await _drop_case()
 
 
@@ -1180,18 +1163,16 @@ func _group_loose() -> void:
 	var lowest := 1e9
 	for p: Vector3 in rope.get_points():
 		lowest = minf(lowest, p.y)
-	_ok("loose/a dropped lead comes to rest on the table",
-		lowest > base.y + 0.74 and lowest < base.y + 0.80,
-		"lowest point %.0f mm, table top at %.0f mm"
-			% [(lowest - base.y) * 1000.0, 750.0])
+	_ok(lowest > base.y + 0.74 and lowest < base.y + 0.80,
+		"loose/a dropped lead comes to rest on the table", "lowest point %.0f mm, table top at %.0f mm" % [(lowest - base.y) * 1000.0, 750.0])
 	# Waited for rather than asserted at a fixed frame count: this case is ticked by
 	# the ENGINE (the plugs are rigid bodies), so how many frames a settle takes
 	# depends on what else the suite is doing that frame. Asserting is_sleeping()
 	# at exactly 420 frames passed alone and failed in a full run — a flake, which
 	# is worse than a failure because it teaches everyone to re-run the suite.
 	var slept_at := await _wait_until_asleep(rope, 900)
-	_ok("loose/a dropped lead settles", slept_at >= 0,
-		"asleep after %d frames" % slept_at if slept_at >= 0 else "never slept")
+	_ok(slept_at >= 0,
+		"loose/a dropped lead settles", "asleep after %d frames" % slept_at if slept_at >= 0 else "never slept")
 	lead.queue_free()
 	await get_tree().physics_frame
 
@@ -1216,10 +1197,10 @@ func _group_loose() -> void:
 		if p.y < base.y + 0.55:
 			hanging = true
 	var through := _deepest_in_box_of(rope, base + Vector3(-0.5, 0.70, 0), Vector3(1.0, 0.10, 1.6))
-	_ok("loose/a lead over an edge keeps its grip on the table", on_table)
-	_ok("loose/a lead over an edge hangs down the other side", hanging)
-	_ok("loose/a lead over an edge does not cut through the table", through < 0.01,
-		"deepest %.1f mm inside" % (through * 1000.0))
+	_ok(on_table, "loose/a lead over an edge keeps its grip on the table")
+	_ok(hanging, "loose/a lead over an edge hangs down the other side")
+	_ok(through < 0.01,
+		"loose/a lead over an edge does not cut through the table", "deepest %.1f mm inside" % (through * 1000.0))
 	lead.queue_free()
 	await get_tree().physics_frame
 
@@ -1235,9 +1216,8 @@ func _group_loose() -> void:
 	var lowest2 := 1e9
 	for p: Vector3 in rope.get_points():
 		lowest2 = minf(lowest2, p.y)
-	_ok("loose/a lead dropped from height does not go through the plate",
-		lowest2 > base.y + 0.48,
-		"lowest point %.0f mm, plate at 500 mm" % ((lowest2 - base.y) * 1000.0))
+	_ok(lowest2 > base.y + 0.48,
+		"loose/a lead dropped from height does not go through the plate", "lowest point %.0f mm, plate at 500 mm" % ((lowest2 - base.y) * 1000.0))
 	lead.queue_free()
 	await get_tree().physics_frame
 
@@ -1357,11 +1337,10 @@ func _group_edges() -> void:
 		rope.step(1.0 / 90.0)
 		woke_without_support = woke_without_support or not rope.is_sleeping()
 	var unsupported_y := _lowest_y()
-	_ok("edges/removing support wakes a sleeping cord", slept_on_support and woke_without_support,
-		"lowest %.0f -> %.0f mm" % [(supported_y - base.y) * 1000.0,
-			(unsupported_y - base.y) * 1000.0])
-	_ok("edges/a cord falls when its support is removed", unsupported_y < supported_y - 0.05,
-		"fell %.1f mm" % ((supported_y - unsupported_y) * 1000.0))
+	_ok(slept_on_support and woke_without_support,
+		"edges/removing support wakes a sleeping cord", "lowest %.0f -> %.0f mm" % [(supported_y - base.y) * 1000.0, (unsupported_y - base.y) * 1000.0])
+	_ok(unsupported_y < supported_y - 0.05,
+		"edges/a cord falls when its support is removed", "fell %.1f mm" % ((supported_y - unsupported_y) * 1000.0))
 	await _drop_case()
 
 	# The inverse operation: furniture pushed into a sleeping cord has to wake and
@@ -1389,11 +1368,10 @@ func _group_edges() -> void:
 	var mover_c := base + Vector3(0, 0.65, 0)
 	var mover_s := Vector3(1.0, 0.60, 0.8)
 	var mover_depth := _deepest_in_box(mover_c, mover_s)
-	_ok("edges/furniture wakes a sleeping cord when pushed into it", woke_for_furniture,
-		"highest %.0f -> %.0f mm" % [(before_high - base.y) * 1000.0,
-			(after_high - base.y) * 1000.0])
-	_ok("edges/moving furniture pushes the cord out of its volume", mover_depth < 0.01,
-		"deepest %.1f mm inside" % (mover_depth * 1000.0))
+	_ok(woke_for_furniture,
+		"edges/furniture wakes a sleeping cord when pushed into it", "highest %.0f -> %.0f mm" % [(before_high - base.y) * 1000.0, (after_high - base.y) * 1000.0])
+	_ok(mover_depth < 0.01,
+		"edges/moving furniture pushes the cord out of its volume", "deepest %.1f mm inside" % (mover_depth * 1000.0))
 	await _drop_case()
 
 	# An edge contact legitimately has two answers: the tabletop normal and the
@@ -1425,12 +1403,10 @@ func _group_edges() -> void:
 			corner_wakes += 1
 		corner_was_asleep = rope.is_sleeping()
 		corner_prev = corner_now
-	_ok("edges/a sleeping corner cord is not woken by alternating edge normals",
-		corner_settle["slept"] and corner_wakes == 0,
-		"%d false wakes in 120 ticks" % corner_wakes)
-	_ok("edges/a sleeping corner cord does not kick at the environment-poll cadence",
-		corner_worst * 1000.0 < STILL_MM,
-		"worst movement %.3f mm/tick" % (corner_worst * 1000.0))
+	_ok(corner_settle["slept"] and corner_wakes == 0,
+		"edges/a sleeping corner cord is not woken by alternating edge normals", "%d false wakes in 120 ticks" % corner_wakes)
+	_ok(corner_worst * 1000.0 < STILL_MM,
+		"edges/a sleeping corner cord does not kick at the environment-poll cadence", "worst movement %.3f mm/tick" % (corner_worst * 1000.0))
 	await _drop_case()
 
 	# A mounted controller, sensor bar, or seated plug owns an authored exit
@@ -1454,9 +1430,8 @@ func _group_edges() -> void:
 		rope.step(1.0 / 90.0)
 	var host_points := rope.get_points()
 	var host_exit := (host_points[1] - host_points[0]).normalized()
-	_ok("edges/a host attachment holds its strain-relief exit direction",
-		host_exit.dot(Vector3.RIGHT) > 0.8,
-		"first segment alignment %.3f" % host_exit.dot(Vector3.RIGHT))
+	_ok(host_exit.dot(Vector3.RIGHT) > 0.8,
+		"edges/a host attachment holds its strain-relief exit direction", "first segment alignment %.3f" % host_exit.dot(Vector3.RIGHT))
 	await _drop_case()
 
 	base = _new_case()
@@ -1476,9 +1451,8 @@ func _group_edges() -> void:
 		rope.step(1.0 / 90.0)
 	var socket_points := rope.get_points()
 	var socket_exit := (socket_points[1] - socket_points[0]).normalized()
-	_ok("edges/a socketed plug keeps its strain-relief exit direction",
-		socket_exit.dot(Vector3.RIGHT) > 0.8,
-		"first segment alignment %.3f" % socket_exit.dot(Vector3.RIGHT))
+	_ok(socket_exit.dot(Vector3.RIGHT) > 0.8,
+		"edges/a socketed plug keeps its strain-relief exit direction", "first segment alignment %.3f" % socket_exit.dot(Vector3.RIGHT))
 	await _drop_case()
 
 	# Build an exact-length 180-degree hairpin immediately after the boot. The old
@@ -1528,11 +1502,8 @@ func _group_edges() -> void:
 	var stiff_before := (stiff_points[3] - stiff_points[2]).normalized()
 	var stiff_after := (stiff_points[4] - stiff_points[3]).normalized()
 	var stiff_turn := rad_to_deg(acos(clampf(stiff_before.dot(stiff_after), -1.0, 1.0)))
-	_ok("edges/a 180-degree hinge is limited and resists by bend stiffness",
-		soft_restored and stiff_restored
-			and soft_turn <= rope.bend_limit_degrees + 2.0
-			and stiff_turn < soft_turn - 4.0,
-		"soft %.1f degrees, stiff %.1f degrees" % [soft_turn, stiff_turn])
+	_ok(soft_restored and stiff_restored and soft_turn <= rope.bend_limit_degrees + 2.0 and stiff_turn < soft_turn - 4.0,
+		"edges/a 180-degree hinge is limited and resists by bend stiffness", "soft %.1f degrees, stiff %.1f degrees" % [soft_turn, stiff_turn])
 	await _drop_case()
 
 	# The shipped controller lead has a loose spherical plug at its far end. Its
@@ -1579,11 +1550,8 @@ func _group_edges() -> void:
 	controller_rope.end_endpoint_role = VerletRope.ENDPOINT_AUTO
 	controller_rope.start_exit_axis = controller_attach.global_basis.inverse() * Vector3.RIGHT
 	controller_rope.end_exit_axis = controller_plug.cable_exit_axis
-	_ok("edges/endpoint roles and axes are independent",
-		controller_rope.start_endpoint_role == VerletRope.ENDPOINT_HOST
-			and controller_rope.end_endpoint_role == VerletRope.ENDPOINT_AUTO
-			and controller_rope.start_exit_axis != controller_rope.end_exit_axis,
-		"start role/axis remain distinct from end role/axis")
+	_ok(controller_rope.start_endpoint_role == VerletRope.ENDPOINT_HOST and controller_rope.end_endpoint_role == VerletRope.ENDPOINT_AUTO and controller_rope.start_exit_axis != controller_rope.end_exit_axis,
+		"edges/endpoint roles and axes are independent", "start role/axis remain distinct from end role/axis")
 	controller_rope._init_points()
 	var controller_slept_at := -1
 	for frame in 1200:
@@ -1591,13 +1559,8 @@ func _group_edges() -> void:
 		if controller_rope.is_sleeping() and controller.sleeping and controller_plug.sleeping:
 			controller_slept_at = frame
 			break
-	_ok("edges/a settled controller lead sleeps its loose plug",
-		controller_slept_at >= 0,
-		"all asleep after %d frames" % controller_slept_at
-			if controller_slept_at >= 0 else
-			"rope=%s controller=%s plug=%s metrics=%s" % [
-				controller_rope.is_sleeping(), controller.sleeping,
-				controller_plug.sleeping, controller_rope.get_sleep_metrics()])
+	_ok(controller_slept_at >= 0,
+		"edges/a settled controller lead sleeps its loose plug", "all asleep after %d frames" % controller_slept_at if controller_slept_at >= 0 else "rope=%s controller=%s plug=%s metrics=%s" % [ controller_rope.is_sleeping(), controller.sleeping, controller_plug.sleeping, controller_rope.get_sleep_metrics()])
 	var controller_prev := controller_rope.get_points()
 	var controller_wakes := 0
 	var controller_worst := 0.0
@@ -1612,10 +1575,8 @@ func _group_edges() -> void:
 			controller_wakes += 1
 		controller_was_asleep = controller_rope.is_sleeping()
 		controller_prev = controller_now
-	_ok("edges/a rested controller lead stays still beside the table edge",
-		controller_wakes == 0 and controller_worst * 1000.0 < STILL_MM,
-		"%d wakes, %.3f mm/tick worst movement" % [
-			controller_wakes, controller_worst * 1000.0])
+	_ok(controller_wakes == 0 and controller_worst * 1000.0 < STILL_MM,
+		"edges/a rested controller lead stays still beside the table edge", "%d wakes, %.3f mm/tick worst movement" % [ controller_wakes, controller_worst * 1000.0])
 	controller_cable.queue_free()
 	controller.queue_free()
 	await get_tree().physics_frame
@@ -1644,10 +1605,10 @@ func _group_edges() -> void:
 			comp_rope.get_fray_start_point(c).distance_to(pa.global_transform * pa.cable_anchor))
 		anchor_error = maxf(anchor_error,
 			comp_rope.get_fray_end_point(c).distance_to(pb.global_transform * pb.cable_anchor))
-	_ok("edges/a six-plug composite builds three cords and six fray branches", topology_ok,
-		"%d particles" % comp_rope.get_points().size())
-	_ok("edges/all six composite branches are pinned to their plugs", anchor_error < 0.00001,
-		"worst anchor error %.3f mm" % (anchor_error * 1000.0))
+	_ok(topology_ok,
+		"edges/a six-plug composite builds three cords and six fray branches", "%d particles" % comp_rope.get_points().size())
+	_ok(anchor_error < 0.00001,
+		"edges/all six composite branches are pinned to their plugs", "worst anchor error %.3f mm" % (anchor_error * 1000.0))
 	composite.queue_free()
 	await get_tree().physics_frame
 
@@ -1680,9 +1641,8 @@ func _group_edges() -> void:
 	rope.step(1.0 / 90.0)
 	var cross_pts := rope.get_points()
 	var crossing_gap := _segment_distance(cross_pts[0], cross_pts[1], cross_pts[2], cross_pts[3])
-	_ok("edges/self-collision separates crossing segments, not only particles",
-		crossing_gap >= rope.collision_radius * 1.8,
-		"segment gap %.2f mm" % (crossing_gap * 1000.0))
+	_ok(crossing_gap >= rope.collision_radius * 1.8,
+		"edges/self-collision separates crossing segments, not only particles", "segment gap %.2f mm" % (crossing_gap * 1000.0))
 	await _drop_case()
 
 	# ObjectIDs protect the anchor lookup after a node is freed, but the endpoint's
@@ -1702,9 +1662,9 @@ func _group_edges() -> void:
 		rope.step(1.0 / 90.0)
 		woke_after_removal = woke_after_removal or not rope.is_sleeping()
 	var endpoint_after: Vector3 = rope.get_points()[rope.segment_count]
-	_ok("edges/removing an anchor wakes the rope", woke_after_removal)
-	_ok("edges/a removed anchor releases its endpoint", endpoint_after.y < endpoint_before.y - 0.05,
-		"endpoint fell %.1f mm" % ((endpoint_before.y - endpoint_after.y) * 1000.0))
+	_ok(woke_after_removal, "edges/removing an anchor wakes the rope")
+	_ok(endpoint_after.y < endpoint_before.y - 0.05,
+		"edges/a removed anchor releases its endpoint", "endpoint fell %.1f mm" % ((endpoint_before.y - endpoint_after.y) * 1000.0))
 	await _drop_case()
 
 
@@ -1747,5 +1707,5 @@ func _group_budget() -> void:
 	var us_per := float(Time.get_ticks_usec() - started) / float(ticks * ropes.size())
 	# A ceiling, not a target: this is a debug build on a desktop, and the point
 	# is to catch a solver that got several times slower, not to police µs.
-	_ok("budget/solver cost per rope-tick", us_per < 400.0, "%.0f us" % us_per)
+	_ok(us_per < 400.0, "budget/solver cost per rope-tick", "%.0f us" % us_per)
 	await _drop_case()
