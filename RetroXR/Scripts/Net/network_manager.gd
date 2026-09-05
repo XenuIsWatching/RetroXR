@@ -579,22 +579,14 @@ func on_local_spawn(obj: Node3D) -> void:
 		_object_sync.local_spawn(obj)
 
 
-## Host VCR transport changed — broadcast the new state for drift sync (M5).
-func report_vcr_state(vcr: Node) -> void:
+## A host deck's transport changed — broadcast it so peers can follow (M5).
+##
+## One entry point for the VCR, the DVD player and the CD/cassette player: they
+## all publish the same net_get_state Dictionary, so they do not need a report
+## function each.
+func report_media_state(deck: Node) -> void:
 	if _active and _object_sync != null:
-		_object_sync.send_vcr_state(vcr)
-
-
-## Host DVD transport/menu changed — broadcast the new state for drift sync (Phase 5).
-func report_dvd_state(dvd: Node) -> void:
-	if _active and _object_sync != null:
-		_object_sync.send_dvd_state(dvd)
-
-
-## Host CD/cassette transport changed — broadcast the new state for drift sync.
-func report_audio_state(player: Node) -> void:
-	if _active and _object_sync != null:
-		_object_sync.send_audio_state(player)
+		_object_sync.send_media_state(deck)
 
 
 # ── Netplay facade (M4) ───────────────────────────────────────────────────────

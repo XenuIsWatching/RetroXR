@@ -284,7 +284,7 @@ const NET_DRIFT_TOLERANCE := 0.75   # seconds off host before a corrective seek
 ## Host: push the current transport state to peers (no-op offline/client).
 func _net_push_state() -> void:
 	if NetworkManager.is_host() and not NetworkManager.is_event_applying():
-		NetworkManager.report_vcr_state(self)
+		NetworkManager.report_media_state(self)
 
 
 ## Current transport state for the sync layer.
@@ -297,7 +297,10 @@ func net_get_state() -> Dictionary:
 
 
 ## Client: mirror the host's transport state on the LOCAL player.
-func net_apply_state(playing: bool, paused: bool, pos: float) -> void:
+func net_apply_state(state: Dictionary) -> void:
+	var playing := bool(state.get("playing", false))
+	var paused := bool(state.get("paused", false))
+	var pos := float(state.get("pos", 0.0))
 	if not playing:
 		if is_playing:
 			stop()

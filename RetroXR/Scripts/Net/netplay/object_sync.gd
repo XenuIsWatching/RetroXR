@@ -580,7 +580,7 @@ func _process(delta: float) -> void:
 		_vcr_accum += delta
 		if _vcr_accum >= VCR_HEARTBEAT:
 			_vcr_accum = 0.0
-			_host_vcr_heartbeat()
+			_host_media_heartbeat()
 	else:
 		_client_lerp_targets(delta)
 		_held_accum += delta
@@ -1064,7 +1064,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 				a["tv"].set_tv_scale(float(a.get("scale", 1.0)))
 		EV_VCR_CMD:
 			# Transport is host-authoritative; the host executes the command and
-			# its state broadcast (send_vcr_state) drives every peer's local
+			# its state broadcast (send_media_state) drives every peer's local
 			# playback (M5 drift sync). Run un-suppressed so the transport hook's
 			# _net_push_state() actually broadcasts.
 			if _nm.is_host() and _valid(a, ["vcr"]):
@@ -1114,7 +1114,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 				a["dvd"].net_release_disc()
 		EV_DVD_CMD:
 			# DVD transport/menu is host-authoritative: the host executes the
-			# command and its state broadcast (send_dvd_state) drives every
+			# command and its state broadcast (send_media_state) drives every
 			# peer's local playback. Run un-suppressed so the command hook's
 			# _net_push_state() actually broadcasts.
 			if _nm.is_host() and _valid(a, ["dvd"]):
@@ -1148,7 +1148,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 				a["player"].remove_media()
 		EV_AUDIO_CMD:
 			# Audio transport is host-authoritative: the host executes and its
-			# state broadcast (send_audio_state) drives every peer's local
+			# state broadcast (send_media_state) drives every peer's local
 			# playback. Run un-suppressed so the command hook's _net_push_state()
 			# actually broadcasts.
 			if _nm.is_host() and _valid(a, ["player"]):
@@ -1220,95 +1220,36 @@ func _decode_args(wire: Dictionary) -> Dictionary:
 # State goes out reliably on every transport change (vcr_player hooks) plus a
 # heartbeat while playing; peers seek when they drift past the tolerance.
 
-## Called via the NetworkManager facade from vcr_player transport hooks (host).
-func send_vcr_state(vcr: Node) -> void:
+## Broadcast one deck's transport state (host only).
+##
+## The VCR, the DVD player and the CD/cassette player used to have a send
+## function, an RPC and a net_apply_state arity each — three of everything for
+## one idea — and the heartbeat below picked between them by sniffing which keys
+## the returned Dictionary happened to carry. The payload IS the deck's own
+## state dictionary, so one path carries all three and a deck that grows a field
+## does not need a new RPC signature.
+func send_media_state(deck: Node) -> void:
 	if not _nm.is_host():
 		return
-	var id := id_of(vcr)
-	if id < 0 or not vcr.has_method("net_get_state"):
+	var id := id_of(deck)
+	if id < 0 or not deck.has_method("net_get_state"):
 		return
-	var s: Dictionary = vcr.net_get_state()
-	_vcr_state.rpc(id, bool(s["playing"]), bool(s["paused"]), float(s["pos"]))
+	_media_state.rpc(id, deck.net_get_state())
 
 
-func _host_vcr_heartbeat() -> void:
+func _host_media_heartbeat() -> void:
 	for id: int in _registry:
 		var node: Node = _registry[id]
-		if is_instance_valid(node) and node.has_method("net_get_state") \
-				and bool(node.get("is_playing")):
-			# Route by state shape: DVD states carry a title/chapter, audio states a
-			# track index, VCR states a scalar position (keeps the sync layer
-			# agnostic of the concrete class).
-			var st: Dictionary = node.net_get_state()
-			if st.has("title"):
-				send_dvd_state(node)
-			elif st.has("track"):
-				send_audio_state(node)
-			else:
-				send_vcr_state(node)
+		if is_instance_valid(node) and node.has_method("net_get_state") 				and bool(node.get("is_playing")):
+			send_media_state(node)
 
 
 @rpc("authority", "call_remote", "reliable", 0)
-func _vcr_state(net_id: int, playing: bool, paused: bool, pos: float) -> void:
+func _media_state(net_id: int, state: Dictionary) -> void:
 	var node: Node = _registry.get(net_id)
 	if is_instance_valid(node) and node.has_method("net_apply_state"):
 		_applying = true
-		node.call("net_apply_state", playing, paused, pos)
-		_applying = false
-
-
-# ── DVD playback sync (Phase 5) ───────────────────────────────────────────────
-# Like the VCR, but the state carries the DVD's structural position (title +
-# chapter + time) so peers can follow the host across menu→title transitions and
-# chapter jumps. Menu-highlight state is NOT replicated (host is menu authority).
-
-## Called via the NetworkManager facade from DVDPlayer transport/menu hooks (host).
-func send_dvd_state(dvd: Node) -> void:
-	if not _nm.is_host():
-		return
-	var id := id_of(dvd)
-	if id < 0 or not dvd.has_method("net_get_state"):
-		return
-	var s: Dictionary = dvd.net_get_state()
-	_dvd_state.rpc(id, bool(s["playing"]), bool(s["paused"]), int(s["title"]),
-		int(s["chapter"]), int(s["time"]), int(s["length"]), bool(s["menu"]),
-		int(s["audio"]), int(s["sub"]))
-
-
-@rpc("authority", "call_remote", "reliable", 0)
-func _dvd_state(net_id: int, playing: bool, paused: bool, title: int,
-		chapter: int, time_ms: int, length_ms: int, menu: bool,
-		audio_id: int, sub_id: int) -> void:
-	var node: Node = _registry.get(net_id)
-	if is_instance_valid(node) and node.has_method("net_apply_state"):
-		_applying = true
-		node.call("net_apply_state", playing, paused, title, chapter, time_ms, length_ms,
-			menu, audio_id, sub_id)
-		_applying = false
-
-
-# ── Audio playback sync (CD / cassette) ───────────────────────────────────────
-# Like the VCR, but the state carries the current track index so peers follow the
-# host across track skips / auto-advance. Albums play from each peer's own local
-# copy (verify-by-name — never transferred; see _resolve_file_fields).
-
-## Called via the NetworkManager facade from RetroAudioPlayer transport hooks (host).
-func send_audio_state(player: Node) -> void:
-	if not _nm.is_host():
-		return
-	var id := id_of(player)
-	if id < 0 or not player.has_method("net_get_state"):
-		return
-	var s: Dictionary = player.net_get_state()
-	_audio_state.rpc(id, bool(s["playing"]), bool(s["paused"]), int(s["track"]), float(s["pos"]))
-
-
-@rpc("authority", "call_remote", "reliable", 0)
-func _audio_state(net_id: int, playing: bool, paused: bool, track: int, pos: float) -> void:
-	var node: Node = _registry.get(net_id)
-	if is_instance_valid(node) and node.has_method("net_apply_state"):
-		_applying = true
-		node.call("net_apply_state", playing, paused, track, pos)
+		node.call("net_apply_state", state)
 		_applying = false
 
 

@@ -496,7 +496,7 @@ func _net_forward_cmd(cmd: String) -> bool:
 ## Host: broadcast the current transport state for peer drift sync.
 func _net_push_state() -> void:
 	if NetworkManager.is_host() and not NetworkManager.is_event_applying():
-		NetworkManager.report_audio_state(self)
+		NetworkManager.report_media_state(self)
 
 
 ## Current transport state for the sync layer. The "track" key is the state-shape
@@ -511,7 +511,11 @@ func net_get_state() -> Dictionary:
 
 
 ## Client: mirror the host's transport state on the LOCAL player.
-func net_apply_state(playing: bool, paused: bool, track: int, pos: float) -> void:
+func net_apply_state(state: Dictionary) -> void:
+	var playing := bool(state.get("playing", false))
+	var paused := bool(state.get("paused", false))
+	var track := int(state.get("track", 0))
+	var pos := float(state.get("pos", 0.0))
 	if not playing:
 		if is_playing:
 			stop()

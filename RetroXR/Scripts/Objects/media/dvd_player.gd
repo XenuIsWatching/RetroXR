@@ -588,7 +588,7 @@ func _net_forward_cmd(cmd: String) -> bool:
 ## offline / on clients / while applying a remote event).
 func _net_push_state() -> void:
 	if NetworkManager.is_host() and not NetworkManager.is_event_applying():
-		NetworkManager.report_dvd_state(self)
+		NetworkManager.report_media_state(self)
 
 
 ## Current transport state for the sync layer.
@@ -610,8 +610,16 @@ func net_get_state() -> Dictionary:
 
 
 ## Client: mirror the host's transport state on the LOCAL player.
-func net_apply_state(playing: bool, paused: bool, title: int, chapter: int,
-		time_ms: int, length_ms: int, menu: bool, audio_id: int, sub_id: int) -> void:
+func net_apply_state(state: Dictionary) -> void:
+	var playing := bool(state.get("playing", false))
+	var paused := bool(state.get("paused", false))
+	var title := int(state.get("title", 0))
+	var chapter := int(state.get("chapter", 0))
+	var time_ms := int(state.get("time", 0))
+	var length_ms := int(state.get("length", 0))
+	var menu := bool(state.get("menu", false))
+	var audio_id := int(state.get("audio", -1))
+	var sub_id := int(state.get("sub", -1))
 	if not playing:
 		if is_playing:
 			stop()
