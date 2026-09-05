@@ -221,7 +221,7 @@ SCRIPT ERROR: Parse Error: Could not find type "VerletRope" in the current scope
 | `verlet-rope` | `VerletRope` — the simulated cables | `verlet-rope/` | `RetroXR/verlet-rope/` |
 | `vlc-godot` | `VlcPlayer` — video for the VCR and DVD player | `vlc-godot/` | `RetroXR/vlc-godot/` |
 | `godot-pdfium` | `PDFRenderer` — renders manual pages | `godot-pdfium/` | `RetroXR/godot-pdfium/` |
-| `metaxr-audio` | HRTF spatial audio on Quest | `metaxr-audio-godot/` | `RetroXR/metaxr-audio/` |
+| `metaxr-audio` | HRTF spatial audio on Quest | `metaxr-audio/` | `RetroXR/metaxr-audio/` |
 
 **Each needs its own `scons` invocation.** They share the `godot-cpp` submodule, and
 godot-cpp's `SConstruct` can only run once per process, so a single scons run can never

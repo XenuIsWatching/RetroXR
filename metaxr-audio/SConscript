@@ -1,0 +1,66 @@
+# type: ignore
+
+Import('env', 'output_dir')
+
+env = env.Clone()
+
+# godot-cpp defaults debug_symbols to dev_build, so a plain target=template_debug
+# links with none at all and a crash in this library resolves to nothing. Turn it
+# on for every non-release target; an explicit debug_symbols=no still wins. Has to
+# happen before godot-cpp's SConstruct, which is where the option is read.
+from SCons.Script import ARGUMENTS
+if ARGUMENTS.get("target", "template_debug") != "template_release":
+    ARGUMENTS.setdefault("debug_symbols", "yes")
+
+env = SConscript("../../libretro-godot/godot-cpp/SConstruct")
+
+
+# godot-cpp hardcodes C++17 with no option to override it, and its own sources
+# build from this same env, so appending a newer -std leaves both flags on every
+# command line and MSVC warns D9025 once per translation unit. Drop it; the
+# per-platform Append below sets ours.
+env["CXXFLAGS"] = [f for f in env["CXXFLAGS"]
+                   if not str(f).startswith(("/std:c++", "-std=c++"))]
+
+is_windows = env["platform"] == "windows"
+is_android = env["platform"] == "android"
+is_linux   = env["platform"] == "linux"
+
+if is_windows:
+    env.Append(CXXFLAGS=["/std:c++latest"])
+    env.Append(LINKFLAGS=['/IGNORE:4099'])
+
+if is_android or is_linux:
+    env.Append(CXXFLAGS=["-std=c++20"])
+    # Clang contracts a*b+c into an FMA by default on ARM while MSVC does not,
+    # which makes the same source produce different audio per platform and turns
+    # any cross-platform comparison into a hunt for phantom SDK bugs. See the
+    # note in meta-xr-audio-known-issues.md.
+    env.Append(CXXFLAGS=["-ffp-contract=off"])
+    env.Append(LIBS=["dl"])
+
+# The Meta library is resolved with dlopen/LoadLibrary at runtime, never linked.
+# A frozen, undocumented third-party blob must not be able to stop the extension
+# loading: MetaXRAudioServer reports is_available() == false and callers fall
+# back to Godot's own AudioStreamPlayer3D panning.
+
+sources = Glob("src/*.cpp")
+
+lib_prefix = "lib" if (is_android or is_linux) else ""
+library = env.SharedLibrary(
+    "{}/{}metaxr-audio.{}.{}.{}{}".format(
+        output_dir, lib_prefix, env["platform"], env["target"], env["arch"], env["SHLIBSUFFIX"]),
+    source=sources)
+
+# Stage the vendored Meta binary next to the extension.
+if is_windows:
+    dll = env.InstallAs("{}/MetaXRAudioUnity.dll".format(output_dir),
+                        "external/metaxraudio/lib/win-x64/MetaXRAudioUnity.dll")
+    env.Depends(library, dll)
+
+if is_android:
+    so = env.InstallAs("{}/libMetaXRAudioUnity.so".format(output_dir),
+                       "external/metaxraudio/lib/android-arm64/libMetaXRAudioUnity.so")
+    env.Depends(library, so)
+
+Default(library)

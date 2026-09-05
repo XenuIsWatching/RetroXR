@@ -54,7 +54,7 @@ EXTENSIONS = [
     # not report a successful extension build that another Mac cannot load.
     ("vlc-godot", "vlc-godot", "RetroXR/vlc-godot", ("windows", "linux", "android")),
     ("godot-pdfium", "godot-pdfium", "RetroXR/godot-pdfium", ALL_PLATFORMS),
-    ("metaxr-audio", "metaxr-audio-godot", "RetroXR/metaxr-audio", ("windows", "android")),
+    ("metaxr-audio", "metaxr-audio", "RetroXR/metaxr-audio", ("windows", "android")),
 ]
 
 ARCH = {

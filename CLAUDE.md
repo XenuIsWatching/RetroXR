@@ -126,11 +126,6 @@ Five other C++ GDExtensions live beside libretro-godot, each with the same layou
 deploying to `RetroXR/<name>/`). Build each **from its own directory** (each has its own
 `VariantDir('Temp')`), or all at once with `Tools/build.py`.
 
-**The one name that does not follow the pattern is metaxr-audio**: its source directory is
-`metaxr-audio-godot/` while its output directory is `RetroXR/metaxr-audio/`. `Tools/build.py`
-knows this (the source dir is the second field of its `EXTENSIONS` table); a hand-written
-`cd metaxr-audio` does not.
-
 - **archive-godot** — `RommArchiveExtractor`, a bounded-memory ZIP reader used by RomM
   downloads. It streams archive members directly to temporary files, validates their sizes
   and CRCs, then promotes them into place. It is pure godot-cpp and deliberately separate
