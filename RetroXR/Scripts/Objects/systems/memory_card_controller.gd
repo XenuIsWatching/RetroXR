@@ -18,7 +18,7 @@
 ## both.
 ##
 ## ── Single slot and multi slot part company too ──────────────────────────────
-## Single-slot hardware backs its card through SAVE_RAM and _sram_path_for_run
+## Single-slot hardware backs its card through SAVE_RAM and sram_path_for_run
 ## returns the path for SetSramPath. Dolphin exposes no SAVE_RAM at all -- it
 ## owns its card files -- so every seated card is mounted through the core's own
 ## per-slot option and the same function returns "", which is already how it says
@@ -69,10 +69,10 @@ func get_snapped_memcard(slot := 0) -> Node3D:
 ## How many card slots this console shows. Public so menu code can walk them
 ## without knowing which console it is looking at.
 func get_memcard_slot_count() -> int:
-	return _card_slot_count()
+	return card_slot_count()
 
 
-func _on_memcard_inserted(card: Node3D, slot: int) -> void:
+func on_memcard_inserted(card: Node3D, slot: int) -> void:
 	_snapped_memcards[slot] = card
 	_host.add_collision_exception_with(card)
 	if _host.is_powered_on:
@@ -87,7 +87,7 @@ func _on_memcard_inserted(card: Node3D, slot: int) -> void:
 		{"sys": self, "card": card, "slot": slot})
 
 
-func _on_memcard_removed(slot: int) -> void:
+func on_memcard_removed(slot: int) -> void:
 	if _snapped_memcards[slot]:
 		_host.remove_collision_exception_with(_snapped_memcards[slot])
 		_snapped_memcards[slot] = null
@@ -128,7 +128,7 @@ func _on_memcard_removed(slot: int) -> void:
 ## presence key of its own, so a second slot has nothing to say here — which is
 ## fine, because no console with two slots runs on pcsx_rearmed.
 func _set_card_presence(slot: int, inserted: bool) -> void:
-	if not _host.is_powered_on or _card_family() != "playstation":
+	if not _host.is_powered_on or card_family() != "playstation":
 		return
 	if slot != 0 or not _host.resolve_core_name().begins_with("pcsx_rearmed"):
 		return
@@ -167,7 +167,7 @@ func restore_memory_card(card: Node3D, slot := 0) -> void:
 ## The core just wrote SAVE_RAM to disk. Fires only on a real change (the
 ## dirty check lives in C++), so this is "the game saved", not a timer tick.
 ## `final` is the last flush for this file — shutdown, or a card/cart swap.
-func _on_sram_flushed(path: String, _size: int, final: bool) -> void:
+func on_sram_flushed(path: String, _size: int, final: bool) -> void:
 	if path.is_empty():
 		return
 	# A card never syncs as a FILE: SaveSync keys one record per file holding one
@@ -288,8 +288,8 @@ var _card_mtimes: Array[int] = [0, 0]
 var _card_poll_until := 0.0
 
 
-func _start_card_polling() -> void:
-	if _card_slot_count() <= 1:
+func start_card_polling() -> void:
+	if card_slot_count() <= 1:
 		return   # single-slot hardware has sram_flushed and needs none of this
 	if _card_poll_timer == null:
 		_card_poll_timer = Timer.new()
@@ -303,7 +303,7 @@ func _start_card_polling() -> void:
 
 ## Keep polling for a while after the machine goes off, then stop. The last write
 ## lands during teardown, after this function's caller has already returned.
-func _stop_card_polling_soon() -> void:
+func stop_card_polling_soon() -> void:
 	if _card_poll_timer == null:
 		return
 	_card_poll_until = Time.get_unix_time_from_system() + CARD_POLL_AFTER_OFF_SEC
@@ -315,11 +315,11 @@ func _poll_cards() -> void:
 		_card_poll_timer.stop()
 		_card_poll_until = 0.0
 		return
-	for slot in _card_slot_count():
+	for slot in card_slot_count():
 		var card := get_snapped_memcard(slot)
 		if card == null:
 			continue
-		var path := SramPaths.find_card(str(card.get("card_id")), _card_family())
+		var path := SramPaths.find_card(str(card.get("card_id")), card_family())
 		if path.is_empty():
 			continue
 		var mtime := FileAccess.get_modified_time(path)
@@ -377,13 +377,13 @@ func _sram_slot() -> String:
 ##
 ## A bespoke shell can still overrule the descriptor through its model.
 func _uses_memory_cards() -> bool:
-	return _card_slot_count() > 0
+	return card_slot_count() > 0
 
 
 ## How many card slots this console shows. The shell has the last word when it
 ## has an opinion at all — see SystemModel.card_slot_count, where -1 means it has
 ## none and 0 means it is asserting there are no slots.
-func _card_slot_count() -> int:
+func card_slot_count() -> int:
 	# Reachable from the options panel, which can ask before a model is loaded.
 	if _host.get_model() == null:
 		return 0
@@ -397,13 +397,13 @@ func _card_slot_count() -> int:
 
 
 ## Which family of card this console takes, or "" when it takes none.
-func _card_family() -> String:
+func card_family() -> String:
 	var info := SystemInfo.for_system(_host.systemid)
 	return info.card_family if info != null else ""
 
 
 ## Where this run's save image lives, or "" when nothing backs it. Pure — see
-## _sram_path_for_run() for the variant that creates a card before returning.
+## sram_path_for_run() for the variant that creates a card before returning.
 ##
 ## Card systems resolve to the SEATED CARD, not the game: one image shared by
 ## everything played with that card in, which is what lets a game read the saves
@@ -417,7 +417,7 @@ func _compose_sram_path(resolved_core: String, slot := 0) -> String:
 	if _uses_memory_cards():
 		var card := get_snapped_memcard(slot)
 		if card and "card_id" in card:
-			return SramPaths.card_save_path(_card_family(),
+			return SramPaths.card_save_path(card_family(),
 				str(card.get("card_id")))
 		return ""
 	# A unit with its own battery answers before anything in its bay, and before
@@ -492,7 +492,7 @@ func _card_path_for_run(resolved_core: String, slot: int) -> String:
 	# look exactly like the saves were wiped, and the next flush would make that
 	# permanent. Run with nothing backing it instead, which the core reports as
 	# unformatted media, and leave the player somewhere to recover from.
-	var family := _card_family()
+	var family := card_family()
 	if SramPaths.find_card(card_id, family).is_empty() \
 			and not bool(card.get("minted")):
 		push_warning("[RetroSystem] memory card '%s' has no image on disk — "
@@ -516,15 +516,15 @@ func _card_path_for_run(resolved_core: String, slot: int) -> String:
 ## exposes no SAVE_RAM at all — it owns its card files — so every seated card is
 ## mounted here through the core's own per-slot option and this returns "", which
 ## is already how this function says "nothing goes through SAVE_RAM".
-func _sram_path_for_run(resolved_core: String) -> String:
+func sram_path_for_run(resolved_core: String) -> String:
 	var cards := _uses_memory_cards()
 	_host.get_libretro_node().SetRemovableStorage(cards)
 	if not cards:
 		return _compose_sram_path(resolved_core)
 	var paths: Array[String] = []
-	for slot in _card_slot_count():
+	for slot in card_slot_count():
 		paths.append(_card_path_for_run(resolved_core, slot))
-	if _card_slot_count() <= 1:
+	if card_slot_count() <= 1:
 		return paths[0] if not paths.is_empty() else ""
 	_mount_core_cards(resolved_core, paths)
 	return ""
@@ -547,8 +547,8 @@ func _mount_core_cards(resolved_core: String, paths: Array[String]) -> void:
 ## one path a card being seated, pulled or renamed goes through, so the two
 ## families cannot drift apart over what a swap means.
 func _remount_cards() -> void:
-	var path := _sram_path_for_run(_host.resolve_core_name())
-	if _card_slot_count() <= 1:
+	var path := sram_path_for_run(_host.resolve_core_name())
+	if card_slot_count() <= 1:
 		_host.get_libretro_node().SetSramPath(path)
 
 

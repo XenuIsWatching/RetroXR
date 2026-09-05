@@ -427,17 +427,17 @@ func _ready() -> void:
 		_freeze_in_place.call_deferred()
 	for i in _memcard_slots.size():
 		_memcard_slots[i].snap_filter = _accepts_card
-		_memcard_slots[i].has_picked_up.connect(_memcards._on_memcard_inserted.bind(i))
+		_memcard_slots[i].has_picked_up.connect(_memcards.on_memcard_inserted.bind(i))
 		# has_dropped carries no argument, so the slot has to be closed over.
 		_memcard_slots[i].has_dropped.connect(
-			func() -> void: _memcards._on_memcard_removed(i))
+			func() -> void: _memcards.on_memcard_removed(i))
 	_power_button.button_pressed.connect(toggle_power)
 	_reset_button.button_pressed.connect(reset)
 	_eject_button.button_pressed.connect(_on_eject_pressed)
 	_libretro.options_ready.connect(_on_options_ready)
 	_libretro.rumble_state_changed.connect(_on_rumble_state_changed)
 	_libretro.disk_control_ready.connect(_on_disk_control_ready)
-	_libretro.sram_flushed.connect(_memcards._on_sram_flushed)
+	_libretro.sram_flushed.connect(_memcards.on_sram_flushed)
 	_libretro.content_load_failed.connect(_on_content_load_failed)
 	# Wire controller port snap signals
 	for i in range(4):
@@ -716,7 +716,7 @@ func _load_system_model() -> void:
 	# The model is configured LAST and only for the slots that exist, because a
 	# shell may gate its slots behind a door — the Wii's are under the memory
 	# flap — and that gate has to win over this blanket enable.
-	var card_slots := _card_slot_count()
+	var card_slots := card_slot_count()
 	for i in _memcard_slots.size():
 		var active := i < card_slots
 		_memcard_slots[i].visible = active
@@ -1965,7 +1965,7 @@ func power_on() -> void:
 			BiosBoot.pinned_options(resolved_core, systemid, empty_slot))
 	_apply_forced_core_options(resolved_dir, resolved_core)
 	AppPrefs.apply_hw_render_for(resolved_core)
-	_libretro.SetSramPath(_sram_path_for_run(resolved_core))
+	_libretro.SetSramPath(sram_path_for_run(resolved_core))
 	# Before StartContent: identification happens as the core comes up, so the
 	# claim has to be in place by then. Returns false when another cabinet already
 	# holds the session, nobody is signed in, or the system has no RA console —
@@ -2006,7 +2006,7 @@ func _after_core_started() -> void:
 	_audio.rebind()
 	is_powered_on = true
 	set_process(true)
-	_start_card_polling()
+	start_card_polling()
 	_update_power_button_visual()
 	_model.on_power_on()
 	# Learn whether this core exposes the disk-control interface (multi-disc
@@ -2221,7 +2221,7 @@ func _stop_core() -> void:
 	is_powered_on = false
 	# StopContent returned but the core has not finished: a card the core owns is
 	# written during the teardown that follows. Keep watching for a while.
-	_stop_card_polling_soon()
+	stop_card_polling_soon()
 	_has_disk_control = false
 	_disc_index = 0
 	_disc_ejected = false
@@ -2607,7 +2607,7 @@ func net_start_core(core: String, port_mask: int, start_frame: int, options: Dic
 	# SRAM: netplay override (session-injected identical bytes) or the normal
 	# local composition when the session didn't set one (offline-like start).
 	if not _memcards.apply_netplay_sram():
-		_libretro.SetSramPath(_sram_path_for_run(resolved_core))
+		_libretro.SetSramPath(sram_path_for_run(resolved_core))
 	_apply_forced_core_options(_resolve_dir(), resolved_core)
 	AppPrefs.apply_hw_render_for(resolved_core)
 	_libretro.SetNetplayMode(true, port_mask, start_frame)
@@ -2835,7 +2835,7 @@ func _removable_media_options(core: String) -> Dictionary:
 	# The PlayStation FAMILY, not merely any console with card slots. These keys
 	# are pcsx_rearmed's own and mean nothing to another console's core, so a
 	# GameCube must not write them into a .opt on the strength of having slots.
-	if _card_family() != "playstation" or not core.begins_with("pcsx_rearmed"):
+	if card_family() != "playstation" or not core.begins_with("pcsx_rearmed"):
 		return {}
 	return {
 		"pcsx_rearmed_memcard1": "libretro" if get_snapped_memcard(0) else "none",
@@ -4119,7 +4119,7 @@ func _accepts_plug(obj: Node3D) -> bool:
 func _accepts_card(obj: Node3D) -> bool:
 	if obj == null or not ("family" in obj):
 		return false
-	return str(obj.get("family")) == _card_family()
+	return str(obj.get("family")) == card_family()
 
 
 ## Returns the currently snapped cartridge, or null (used by save/load).
@@ -4845,26 +4845,26 @@ func net_sram_file_bytes() -> PackedByteArray:
 
 ## Which card family this machine takes, and how many slots — read by the
 ## power-on option path and by the snap filter.
-func _card_family() -> String:
-	return _memcards._card_family()
+func card_family() -> String:
+	return _memcards.card_family()
 
 
-func _card_slot_count() -> int:
-	return _memcards._card_slot_count()
+func card_slot_count() -> int:
+	return _memcards.card_slot_count()
 
 
 ## The path to hand the core for a run about to start. "" means nothing goes
 ## through SAVE_RAM, which is a real answer and not a failure.
-func _sram_path_for_run(resolved_core: String) -> String:
-	return _memcards._sram_path_for_run(resolved_core)
+func sram_path_for_run(resolved_core: String) -> String:
+	return _memcards.sram_path_for_run(resolved_core)
 
 
-func _start_card_polling() -> void:
-	_memcards._start_card_polling()
+func start_card_polling() -> void:
+	_memcards.start_card_polling()
 
 
-func _stop_card_polling_soon() -> void:
-	_memcards._stop_card_polling_soon()
+func stop_card_polling_soon() -> void:
+	_memcards.stop_card_polling_soon()
 
 # ---------------------------------------------------------------------------
 # Save states

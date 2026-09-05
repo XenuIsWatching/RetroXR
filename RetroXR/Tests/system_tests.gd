@@ -1497,8 +1497,8 @@ func _test_memcard_presence() -> void:
 	# A PlayStation shows ONE slot, whatever the cabinet has room for. The second
 	# zone exists in the scene for the consoles that take two, and must stay shut
 	# on this one.
-	_eq("memcard/a PlayStation has one slot", psx._card_slot_count(), 1)
-	_eq("memcard/of the PlayStation family", psx._card_family(), "playstation")
+	_eq("memcard/a PlayStation has one slot", psx.card_slot_count(), 1)
+	_eq("memcard/of the PlayStation family", psx.card_family(), "playstation")
 
 	# A card seated before the machine starts.
 	var card := Node3D.new()
@@ -1533,8 +1533,8 @@ func _test_memcard_presence() -> void:
 	var gc := preload("res://Scenes/Objects/system.tscn").instantiate() as RetroSystem
 	gc.systemid = "gamecube"
 	add_child(gc)
-	_eq("memcard/a GameCube has two slots", gc._card_slot_count(), 2)
-	_eq("memcard/of the GameCube family", gc._card_family(), "gamecube")
+	_eq("memcard/a GameCube has two slots", gc.card_slot_count(), 2)
+	_eq("memcard/of the GameCube family", gc.card_family(), "gamecube")
 	_ok("memcard/and is told no pcsx_rearmed keys",
 		gc._removable_media_options("pcsx_rearmed").is_empty())
 
@@ -1564,7 +1564,7 @@ func _test_memcard_presence() -> void:
 	# Paths are keyed by FAMILY, so a Wii and a GameCube reach the same card.
 	_eq("memcard/a Wii and a GameCube share a card folder",
 		SramPaths.cards_dir(wii_info.card_family),
-		SramPaths.cards_dir(gc._card_family()))
+		SramPaths.cards_dir(gc.card_family()))
 	_ok("memcard/which is not the PlayStation's",
 		SramPaths.cards_dir("gamecube") != SramPaths.cards_dir("playstation"))
 
