@@ -217,9 +217,9 @@ var _spawn_menu_ctrl: Node = null
 var _left_vr_ctrl: XRController3D = null
 var _right_vr_ctrl: XRController3D = null
 
-# Reference-counted pointer blocking — prevents multi-instance conflicts.
-var _blocking_left: bool = false
-var _blocking_right: bool = false
+## Hides the ray pointer on whichever hand is holding this, so a grab
+## gesture cannot also fire the pointer at whatever is behind it.
+var _pointer_block := VrPointerBlock.new()
 
 # Accelerometer derivation
 var _prev_velocity := Vector3.ZERO
@@ -902,10 +902,7 @@ func _drop_all() -> void:
 
 func _exit_tree() -> void:
 	_stop_power_haptic()
-	if _blocking_left and is_instance_valid(_left_vr_ctrl):
-		_update_pointer_block(_left_vr_ctrl, false)
-	if _blocking_right and is_instance_valid(_right_vr_ctrl):
-		_update_pointer_block(_right_vr_ctrl, false)
+	_pointer_block.release(_left_vr_ctrl, _right_vr_ctrl)
 	if _locomotion_manager != null:
 		_locomotion_manager.clear_owner(_vr_block_owner())
 		_locomotion_manager.set_block(_desktop_block_owner(),
@@ -937,26 +934,7 @@ func _update_locomotion_block() -> void:
 
 
 func _update_pointer_block(ctrl: XRController3D, should_block: bool) -> void:
-	if not is_instance_valid(ctrl):
-		return
-	var is_left := ctrl.tracker == &"left_hand"
-	var currently_blocking: bool = _blocking_left if is_left else _blocking_right
-	if should_block == currently_blocking:
-		return
-	if is_left:
-		_blocking_left = should_block
-	else:
-		_blocking_right = should_block
-	var pointer: Node3D = ctrl.get_node_or_null("FunctionPointer")
-	if not pointer:
-		return
-	var delta_count := 1 if should_block else -1
-	var count: int = maxi(0, pointer.get_meta("block_count", 0) + delta_count)
-	pointer.set_meta("block_count", count)
-	pointer.visible = count == 0
-	var ray: RayCast3D = pointer.get_node_or_null("RayCast") as RayCast3D
-	if ray:
-		ray.enabled = count == 0
+	_pointer_block.set_block(ctrl, should_block)
 
 
 func _desktop_block_owner() -> StringName:

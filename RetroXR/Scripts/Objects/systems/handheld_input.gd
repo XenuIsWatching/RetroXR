@@ -66,8 +66,9 @@ const ICON_CAPTURE := 0xEC17
 const ICON_SIZE := 0.030
 ## Height of the hint popup above the handheld, in metres.
 const HINT_HEIGHT := 0.20
-var _blocking_left := false
-var _blocking_right := false
+## Hides the ray pointer on whichever hand is holding this, so a grab
+## gesture cannot also fire the pointer at whatever is behind it.
+var _pointer_block := VrPointerBlock.new()
 
 # Rumble state (mirrors retro_controller.gd).
 var _rumble_weak := 0.0
@@ -280,10 +281,7 @@ func _drop_all() -> void:
 
 
 func _exit_tree() -> void:
-	if _blocking_left and is_instance_valid(_left_vr_ctrl):
-		_update_pointer_block(_left_vr_ctrl, false)
-	if _blocking_right and is_instance_valid(_right_vr_ctrl):
-		_update_pointer_block(_right_vr_ctrl, false)
+	_pointer_block.release(_left_vr_ctrl, _right_vr_ctrl)
 	XRToolsRumbleManager.clear(self)
 	if _pad_rumble_active:
 		for device in GamepadBindings.usable_pads():
@@ -313,28 +311,9 @@ func _update_locomotion_block() -> void:
 		_spawn_menu_ctrl.set("disabled", left_held)
 
 
-## Reference-counted pointer blocking (same contract as retro_controller.gd).
+## Delegates to VrPointerBlock, which owns the shared refcount.
 func _update_pointer_block(ctrl: XRController3D, should_block: bool) -> void:
-	if not is_instance_valid(ctrl):
-		return
-	var is_left := ctrl.tracker == &"left_hand"
-	var currently: bool = _blocking_left if is_left else _blocking_right
-	if should_block == currently:
-		return
-	if is_left:
-		_blocking_left = should_block
-	else:
-		_blocking_right = should_block
-	var pointer: Node3D = ctrl.get_node_or_null("FunctionPointer")
-	if not pointer:
-		return
-	var delta := 1 if should_block else -1
-	var count: int = maxi(0, pointer.get_meta("block_count", 0) + delta)
-	pointer.set_meta("block_count", count)
-	pointer.visible = count == 0
-	var ray: RayCast3D = pointer.get_node_or_null("RayCast") as RayCast3D
-	if ray:
-		ray.enabled = count == 0
+	_pointer_block.set_block(ctrl, should_block)
 
 
 # ── Input forwarding (adapted from retro_controller.gd) ───────────────────────

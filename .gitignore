@@ -155,3 +155,5 @@ Tools/azahar-libretro-vr/
 # an author works in RetroXR/mods/<id>/ so their scenes resolve against the real
 # classes and uids, then packs from there. Also excluded from the export presets.
 RetroXR/mods/
+
+.desloppify/

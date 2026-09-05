@@ -92,9 +92,9 @@ const ICON_SIZE := 0.030
 ## Height of the hint popup above the pad, in metres.
 const HINT_HEIGHT := 0.20
 
-# Reference-counted pointer blocking — prevents multi-instance conflicts.
-var _blocking_left: bool = false
-var _blocking_right: bool = false
+## Hides the ray pointer on whichever hand is holding this, so a grab
+## gesture cannot also fire the pointer at whatever is behind it.
+var _pointer_block := VrPointerBlock.new()
 
 ## Keyboard action → RETRO_JOYPAD bit index for desktop mode.
 const DESKTOP_BUTTON_MAP: Dictionary = {
@@ -409,32 +409,9 @@ func _update_locomotion_block() -> void:
 		_spawn_menu_ctrl.set("disabled", left_held)
 
 
-## Reference-counted pointer blocking. Multiple pickables can independently
-## block the same pointer without conflicting. The pointer is re-enabled only
-## when ALL blockers release.
+## Delegates to VrPointerBlock, which owns the shared refcount.
 func _update_pointer_block(ctrl: XRController3D, should_block: bool) -> void:
-	if not is_instance_valid(ctrl):
-		return
-	var is_left := ctrl.tracker == &"left_hand"
-	var currently_blocking: bool = _blocking_left if is_left else _blocking_right
-	if should_block == currently_blocking:
-		return
-	if is_left:
-		_blocking_left = should_block
-	else:
-		_blocking_right = should_block
-	var pointer: Node3D = ctrl.get_node_or_null("FunctionPointer")
-	if not pointer:
-		return
-	var delta_count := 1 if should_block else -1
-	var count: int = maxi(0, pointer.get_meta("block_count", 0) + delta_count)
-	pointer.set_meta("block_count", count)
-	pointer.visible = count == 0
-	# FunctionPickup._process_pointer_highlight queries the RayCast directly,
-	# bypassing pointer.enabled. Disable it too so ray-grab is fully blocked.
-	var ray: RayCast3D = pointer.get_node_or_null("RayCast") as RayCast3D
-	if ray:
-		ray.enabled = count == 0
+	_pointer_block.set_block(ctrl, should_block)
 
 
 ## The combo test itself lives on HeldHint so the check and the row advertising
@@ -488,10 +465,7 @@ func _exit_tree() -> void:
 	if is_instance_valid(_cable_instance):
 		_cable_instance.queue_free()
 	# Release any active pointer blocks so other objects aren't stuck.
-	if _blocking_left and is_instance_valid(_left_vr_ctrl):
-		_update_pointer_block(_left_vr_ctrl, false)
-	if _blocking_right and is_instance_valid(_right_vr_ctrl):
-		_update_pointer_block(_right_vr_ctrl, false)
+	_pointer_block.release(_left_vr_ctrl, _right_vr_ctrl)
 	XRToolsRumbleManager.clear(self)
 	if _pad_rumble_active:
 		for device in GamepadBindings.usable_pads():
