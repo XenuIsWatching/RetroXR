@@ -27,6 +27,18 @@ const _LEGACY_TV_MODELS := {
 var _speakers_seated: bool = false
 
 
+
+## The shell body this set is wearing, or null for the stock cabinet.
+##
+## Owned here because this helper is the only thing that ever builds one — it
+## used to be stored on RetroTV, which never read it, purely so the other
+## helpers could see it. They ask the set, and the set asks here.
+var _shell: RetroTVShell = null
+
+
+func shell() -> RetroTVShell:
+	return _shell
+
 func setup(tv: RetroTV) -> void:
 	_tv = tv
 
@@ -59,19 +71,19 @@ func load_shell() -> void:
 	if packed == null:
 		push_warning("RetroTV: failed to load shell scene: %s" % path)
 		return
-	_tv._shell = packed.instantiate() as RetroTVShell
-	if _tv._shell == null:
+	_shell = packed.instantiate() as RetroTVShell
+	if _shell == null:
 		push_warning("RetroTV: shell scene root is not a RetroTVShell: %s" % path)
 		return
-	_tv.add_child(_tv._shell)
+	_tv.add_child(_shell)
 	_tv.get_node("TVBody").hide()
 
-	var shell: RetroTVShell = _tv._shell
-	seat(_tv._screen_mesh, shell.screen_seat())
+	var shell: RetroTVShell = _shell
+	seat(_tv.screen_mesh(), shell.screen_seat())
 	seat(_tv._tube_collar, shell.screen_seat())
-	_tv._panel.seat_av_row(shell.port_seat())
-	_tv._panel.seat_vga_port(shell.vga_port_seat())
-	seat(_tv._ambilight, shell.ambilight_seat())
+	_tv.panel().seat_av_row(shell.port_seat())
+	_tv.panel().seat_vga_port(shell.vga_port_seat())
+	seat(_tv.ambilight(), shell.ambilight_seat())
 
 	# Both or neither: one seated speaker and one still on the stock tube's edge
 	# would be a lopsided stereo image nobody authored. place_default_speakers
@@ -122,8 +134,8 @@ func load_shell() -> void:
 func _bezel_buttons() -> Array[Node3D]:
 	return [
 		_tv._tv_toggle_btn, _tv._source_btn, _tv._ch_down_btn, _tv._ch_up_btn,
-		_tv._vol_down_btn, _tv._vol_up_btn, _tv._mute_btn,
-		_tv._audio_mode_btn, _tv._crt_btn, _tv._aspect_btn, _tv._stereo_btn,
+		_tv._vol_down_btn, _tv._vol_up_btn, _tv.mute_btn(),
+		_tv.audio_mode_btn(), _tv._crt_btn, _tv._aspect_btn, _tv.stereo_btn(),
 	]
 
 
@@ -168,9 +180,9 @@ func speaker_positions() -> PackedVector3Array:
 		return out
 	# No markers (a scene predating them): the defaults, computed in place.
 	var frame := _tv.global_transform.basis
-	var face: Vector3 = _tv._screen_mesh.global_position + frame.z * 0.005
-	var right: Vector3 = frame.x * (_tv._screen_size_m.x * 0.5 + 0.055)
-	var down: Vector3 = -frame.y * (_tv._screen_size_m.y * 0.35)
+	var face: Vector3 = _tv.screen_mesh().global_position + frame.z * 0.005
+	var right: Vector3 = frame.x * (_tv.screen_size_m().x * 0.5 + 0.055)
+	var down: Vector3 = -frame.y * (_tv.screen_size_m().y * 0.35)
 	out.push_back(face - right + down)
 	out.push_back(face + right + down)
 	return out
@@ -189,12 +201,12 @@ func speaker_positions() -> PackedVector3Array:
 ## juggling, and the scale that ScreenSeat gave the tube is already inside
 ## _screen_size_m.
 func place_default_speakers() -> void:
-	if _tv._shell == null or _speakers_seated:
+	if _shell == null or _speakers_seated:
 		return
 	if _tv._speaker_l == null or _tv._speaker_r == null:
 		return
-	var half_w: float = _tv._screen_size_m.x * 0.5 + 0.055
-	var drop_m: float = _tv._screen_size_m.y * 0.35
-	var face: Vector3 = _tv._screen_mesh.position + Vector3(0.0, 0.0, 0.005)
+	var half_w: float = _tv.screen_size_m().x * 0.5 + 0.055
+	var drop_m: float = _tv.screen_size_m().y * 0.35
+	var face: Vector3 = _tv.screen_mesh().position + Vector3(0.0, 0.0, 0.005)
 	_tv._speaker_l.position = face + Vector3(-half_w, -drop_m, 0.0)
 	_tv._speaker_r.position = face + Vector3(half_w, -drop_m, 0.0)

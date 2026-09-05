@@ -500,11 +500,11 @@ func _d_legacy_tv_models() -> void:
 	_spawned.append(old_monitor)
 	await _wait(40)
 	_check_eq(old_tv.tv_model, "", "the removed television migrates to the stock body")
-	_check(old_tv._shell == null and old_tv.get_node("TVBody").visible,
+	_check(old_tv.shell() == null and old_tv.get_node("TVBody").visible,
 		"the migrated television retains stock primitive geometry")
 	_check_eq(old_monitor.tv_model, "crt_plain",
 		"the removed VGA monitor migrates to the primitive monitor")
-	_check(old_monitor._shell != null and old_monitor._vga_port.enabled,
+	_check(old_monitor.shell() != null and old_monitor.vga_port().enabled,
 		"the migrated monitor retains its VGA connector")
 
 
@@ -854,7 +854,7 @@ func _d_off() -> void:
 func _d_ambilight() -> void:
 	var tv := _tv()
 	await _wait(30)
-	var light: ScreenCastLight = tv._ambilight
+	var light := tv.ambilight()
 	var src := StubSource.new()
 	src.texture = _a_texture()
 	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)

@@ -100,7 +100,7 @@ func collect() -> void:
 	# so plugging either would evict the other. Its socket IS an RcaPort (VgaPort
 	# extends it), so it needs no special case anywhere that walks these.
 	var vga_trio: Array[RcaPort] = []
-	var vga := _tv._vga_port as RcaPort
+	var vga := _tv.vga_port() as RcaPort
 	if vga != null:
 		vga_trio.append(vga)
 	_av_ports.append(vga_trio)
@@ -111,17 +111,17 @@ func collect() -> void:
 ## How many composite inputs this cabinet actually carries sockets for. The stock
 ## body and both televisions take all four; a shell with a smaller back panel says so.
 func panel_inputs() -> int:
-	if _tv._shell == null:
+	if _tv.shell() == null:
 		return RetroTV.COMPOSITE_INPUTS
 	# Floored at ZERO, not at one: a cabinet is allowed to carry no phono sockets at
 	# all, and the computer monitor is one. See TVShell.av_inputs.
-	return clampi(_tv._shell.av_inputs, 0, RetroTV.COMPOSITE_INPUTS)
+	return clampi(_tv.shell().av_inputs, 0, RetroTV.COMPOSITE_INPUTS)
 
 
 ## Whether this cabinet carries the aerial socket. The stock body does; a fitted
 ## shell says so itself.
 func has_aerial() -> bool:
-	return _tv._shell == null or _tv._shell.has_aerial
+	return _tv.shell() == null or _tv.shell().has_aerial
 
 
 ## Turn off the inputs this cabinet has no room for: no socket, and nothing printed.
@@ -155,7 +155,7 @@ func video_port(input: int) -> RcaPort:
 ## above the jacks. The plate is the cabinet's call — a moulded CRT back is curved,
 ## and a flat rectangle across it either floats off the curve or cuts in.
 func print_legends() -> void:
-	var plate: bool = _tv._shell == null or _tv._shell.av_legend_plate
+	var plate: bool = _tv.shell() == null or _tv.shell().av_legend_plate
 	for i in panel_inputs():
 		var legend := AvLegend.attach(_tv, _av_ports[i])
 		if legend == null:
@@ -210,9 +210,9 @@ func seat_av_row(at: Variant) -> void:
 	var base: Transform3D = at
 	var socket_step := Vector3(-AV_ROW_PITCH, 0.0, 0.0)
 	var group_step := Vector3(-AV_GROUP_PITCH, 0.0, 0.0)
-	if _tv._shell != null:
-		socket_step = _tv._shell.av_socket_step
-		group_step = _tv._shell.av_group_step
+	if _tv.shell() != null:
+		socket_step = _tv.shell().av_socket_step
+		group_step = _tv.shell().av_group_step
 	for i in RetroTV.COMPOSITE_INPUTS:
 		for j in (_av_ports[i] as Array).size():
 			var offset: Vector3 = group_step * float(i) + socket_step * float(j)
@@ -244,13 +244,13 @@ func seat_av_row(at: Variant) -> void:
 ## zone stops it drawing and nothing else, so an invisible socket left enabled goes
 ## on catching plugs.
 func seat_vga_port(at: Variant) -> void:
-	if _tv._vga_port == null:
+	if _tv.vga_port() == null:
 		return
 	var on: bool = at is Transform3D
 	if on:
-		_tv._vga_port.transform = at
-	_tv._vga_port.visible = on
-	_tv._vga_port.enabled = on
+		_tv.vga_port().transform = at
+	_tv.vga_port().visible = on
+	_tv.vga_port().enabled = on
 
 
 ## Snaps a captive cable plug into one of this TV's video sockets (used by save/load
@@ -292,8 +292,8 @@ func socket_holding(plug: Node3D) -> XRToolsSnapZone:
 		for port: RcaPort in group:
 			if port.picked_up_object == plug:
 				return port
-	if _tv._vga_port != null and _tv._vga_port.picked_up_object == plug:
-		return _tv._vga_port
+	if _tv.vga_port() != null and _tv.vga_port().picked_up_object == plug:
+		return _tv.vga_port()
 	return null
 
 
@@ -304,8 +304,8 @@ func port_holding(plug: Node3D) -> XRToolsSnapZone:
 		var port := video_port(i)
 		if port != null and port.picked_up_object == plug:
 			return port
-	if _tv._vga_port != null and _tv._vga_port.picked_up_object == plug:
-		return _tv._vga_port
+	if _tv.vga_port() != null and _tv.vga_port().picked_up_object == plug:
+		return _tv.vga_port()
 	return null
 
 
@@ -317,7 +317,7 @@ func input_holding(plug: Node3D) -> int:
 		var port := video_port(i)
 		if port != null and port.picked_up_object == plug:
 			return i
-	if _tv._vga_port != null and _tv._vga_port.picked_up_object == plug:
+	if _tv.vga_port() != null and _tv.vga_port().picked_up_object == plug:
 		return RetroTV.Source.VGA
 	return RetroTV.Source.COMPOSITE_1
 
@@ -327,7 +327,7 @@ func input_holding(plug: Node3D) -> int:
 func on_plug_snapped(plug: Node3D, input: int) -> void:
 	# Hand the incoming host a clean screen so the C++ video handler doesn't
 	# capture our CRT wrapper as the "original" material to restore later.
-	_tv._display.drop_sampled()
+	_tv.display().drop_sampled()
 	if plug is CablePlug:
 		var plugged := plug as CablePlug
 		_snapped_plugs[input] = plugged
@@ -353,7 +353,7 @@ func on_plug_snapped(plug: Node3D, input: int) -> void:
 			# remembers the "no" — every host must, since it can arrive while the
 			# machine is off — would never hear it lifted.
 			# …and it must be silent too until SOURCE picks it, for the same reason.
-			_tv._audio.apply_volume()
+			_tv.audio().apply_volume()
 			NetworkManager.report_event(NetObjectSync.EV_TV_PLUG,
 				{"owner": system, "tv": _tv, "ch": plugged.channel, "in": input})
 
@@ -368,10 +368,10 @@ func source_found(source: Node3D) -> void:
 		return                  # nothing of ours is actually joined to it
 	# Hand the incoming host a clean screen, exactly as the plug path does, so the
 	# video handler doesn't capture our CRT wrapper as the material to restore.
-	_tv._display.drop_sampled()
+	_tv.display().drop_sampled()
 	_connected_systems[input] = source
-	source.set_audio_volume(_tv._audio.volume_for(input))
-	_tv._audio.apply_channel_mode()
+	source.set_audio_volume(_tv.audio().volume_for(input))
+	_tv.audio().apply_channel_mode()
 	# Same rule as the captive-lead path, and stated the same way: a deck cabled up
 	# to an input nobody is watching waits its turn rather than painting over the one
 	# they are, and hears so when its turn comes.
@@ -386,7 +386,7 @@ func source_lost(source: Node3D) -> void:
 			found = true
 	if not found:
 		return                  # already replaced by something else
-	_tv._display.drop_sampled()
+	_tv.display().drop_sampled()
 
 
 ## Which input a device's signal is arriving on, or -1 if none of ours reaches it.
@@ -436,7 +436,7 @@ func _input_for_device(dev: Node3D) -> int:
 func on_plug_released(input: int) -> void:
 	# Unwrap before the host tears down so it restores over its own material,
 	# not our CRT wrapper.
-	_tv._display.drop_sampled()
+	_tv.display().drop_sampled()
 	var plugged: CablePlug = _snapped_plugs[input]
 	if plugged:
 		_tv.remove_collision_exception_with(plugged)
@@ -470,7 +470,7 @@ func rf_tuned() -> bool:
 
 ## The host feeding the selected input, if there is one and it is still alive.
 func selected_system() -> Node3D:
-	var input := _tv._selected_input()
+	var input := _tv.selected_input()
 	if input < 0:
 		return null
 	var system: Node3D = _connected_systems[input]

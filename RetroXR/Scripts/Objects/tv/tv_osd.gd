@@ -52,8 +52,24 @@ var _routed_active: bool = false
 var _routed_mat: Material = null
 
 
-func setup(tv: RetroTV) -> void:
+## The five OSD nodes are handed over once, rather than reached for on every
+## draw. They live in the set's .tscn — this helper cannot declare them — but it
+## is the only thing that ever touches them, so it should hold them.
+var _label: Label3D = null
+var _vol_label: Label3D = null
+var _viewport: SubViewport = null
+var _text_2d: Label = null
+var _vol_text_2d: Label = null
+
+
+func setup(tv: RetroTV, label: Label3D, vol_label: Label3D, viewport: SubViewport,
+		text_2d: Label, vol_text_2d: Label) -> void:
 	_tv = tv
+	_label = label
+	_vol_label = vol_label
+	_viewport = viewport
+	_text_2d = text_2d
+	_vol_text_2d = vol_text_2d
 
 
 ## Show a persistent OSD message (stays until replaced or hidden).
@@ -87,10 +103,10 @@ func _fit_osd_font_size(text: String, base_size: int, min_size: int) -> int:
 
 
 func _set_osd_text(text: String) -> void:
-	_tv._osd_label.text = text
-	_tv._osd_label.font_size = _fit_osd_font_size(text, OSD_BASE_FONT_SIZE_3D, OSD_MIN_FONT_SIZE_3D)
-	_tv._osd_text_2d.text = text
-	_tv._osd_text_2d.add_theme_font_size_override(
+	_label.text = text
+	_label.font_size = _fit_osd_font_size(text, OSD_BASE_FONT_SIZE_3D, OSD_MIN_FONT_SIZE_3D)
+	_text_2d.text = text
+	_text_2d.add_theme_font_size_override(
 			"font_size", _fit_osd_font_size(text, OSD_BASE_FONT_SIZE_2D, OSD_MIN_FONT_SIZE_2D))
 	_refresh_osd_texture(text)
 
@@ -135,16 +151,16 @@ func _fit_font_size_to_width(font: Font, text: String, avail: float, unit: float
 # the composited one, the screen quad's own extent for the Label3D fallback —
 # so a shell with a different tube gets a bar that still spans it.
 func _set_vol_osd_text(text: String) -> void:
-	_tv._vol_osd_label.text = text
-	var size_3d := _fit_font_size_to_width(_tv._vol_osd_label.font,
-			text, _vol_osd_label_width(), _tv._vol_osd_label.pixel_size)
+	_vol_label.text = text
+	var size_3d := _fit_font_size_to_width(_vol_label.font,
+			text, _vol_osd_label_width(), _vol_label.pixel_size)
 	if size_3d > 0:
-		_tv._vol_osd_label.font_size = size_3d
-	_tv._vol_osd_text_2d.text = text
-	var size_2d := _fit_font_size_to_width(_tv._vol_osd_text_2d.get_theme_font("font"),
+		_vol_label.font_size = size_3d
+	_vol_text_2d.text = text
+	var size_2d := _fit_font_size_to_width(_vol_text_2d.get_theme_font("font"),
 			text, _vol_osd_text_2d_width(), 1.0)
 	if size_2d > 0:
-		_tv._vol_osd_text_2d.add_theme_font_size_override("font_size", size_2d)
+		_vol_text_2d.add_theme_font_size_override("font_size", size_2d)
 	_refresh_osd_texture(text)
 
 
@@ -152,25 +168,25 @@ func _set_vol_osd_text(text: String) -> void:
 ## viewport edge. Before the first layout pass that rect is still empty, so fall
 ## back to the inset the constant describes.
 func _vol_osd_text_2d_width() -> float:
-	var w := _tv._vol_osd_text_2d.size.x
+	var w := _vol_text_2d.size.x
 	if w > 0.0:
 		return w
-	return _tv._osd_viewport.size.x * (1.0 - 2.0 * VOL_OSD_SIDE_MARGIN)
+	return _viewport.size.x * (1.0 - 2.0 * VOL_OSD_SIDE_MARGIN)
 
 
 ## The Label3D runs rightward from its own origin, so its room is whatever lies
 ## between that origin and the far margin of the screen quad it hangs on.
 func _vol_osd_label_width() -> float:
-	if _tv._screen_mesh.mesh == null:
+	if _tv.screen_mesh().mesh == null:
 		return 0.0
-	var quad_w := _tv._screen_mesh.mesh.get_aabb().size.x
-	return quad_w * (0.5 - VOL_OSD_SIDE_MARGIN) - _tv._vol_osd_label.position.x
+	var quad_w := _tv.screen_mesh().mesh.get_aabb().size.x
+	return quad_w * (0.5 - VOL_OSD_SIDE_MARGIN) - _vol_label.position.x
 
 
 func _refresh_osd_texture(text: String) -> void:
 	# One-shot re-render of the OSD texture (skipped headless — no GPU).
 	if text != "" and DisplayServer.get_name() != "headless":
-		_tv._osd_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	route()
 
 
@@ -178,9 +194,9 @@ func _refresh_osd_texture(text: String) -> void:
 ## the VCR's VHS material), else to the fallback Label3Ds. Both the corner OSD
 ## and the volume bars share the same OSD viewport texture.
 func route() -> void:
-	var main_active := _tv._osd_label.text != ""
-	var vol_active := _tv._vol_osd_label.text != ""
-	var mat := _tv._screen_mesh.get_surface_override_material(0)
+	var main_active := _label.text != ""
+	var vol_active := _vol_label.text != ""
+	var mat := _tv.screen_mesh().get_surface_override_material(0)
 	# Idle on the same glass as last time: every write below would be a repeat.
 	var active := main_active or vol_active
 	if not active and _routed and not _routed_active and mat == _routed_mat:
@@ -191,15 +207,15 @@ func route() -> void:
 	var sm: ShaderMaterial = null
 	if mat is ShaderMaterial:
 		var candidate := mat as ShaderMaterial
-		if candidate == _tv._display._crt_material or candidate.shader == RetroTV.VCR_SHADER \
+		if candidate == _tv.display()._crt_material or candidate.shader == RetroTV.VCR_SHADER \
 				or candidate.shader == RetroTV.WINDOW_SHADER \
 				or candidate.shader == RetroTV.STATIC_SHADER:
 			sm = candidate
 	if sm != null:
-		sm.set_shader_parameter("osd_tex", _tv._osd_viewport.get_texture())
+		sm.set_shader_parameter("osd_tex", _viewport.get_texture())
 		sm.set_shader_parameter("osd_enabled", main_active or vol_active)
-		_tv._osd_label.visible = false
-		_tv._vol_osd_label.visible = false
+		_label.visible = false
+		_vol_label.visible = false
 	else:
-		_tv._osd_label.visible = main_active
-		_tv._vol_osd_label.visible = vol_active
+		_label.visible = main_active
+		_vol_label.visible = vol_active

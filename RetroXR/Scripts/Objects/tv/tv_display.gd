@@ -148,13 +148,13 @@ func update_screen_source() -> void:
 	# phosphor all stopped at the TV input while working on composite, and the
 	# aspect button appeared dead. Static is still a material of the tuner's own:
 	# snow fills the whole tube whatever shape the picture would have been.
-	if _tv._tv_enabled and _tv.current_source == RetroTV.Source.TV and _tv._tuner != null:
-		var tex := _tv._tuner.picture_texture()
+	if _tv.is_on() and _tv.current_source == RetroTV.Source.TV and _tv.tuner() != null:
+		var tex := _tv.tuner().picture_texture()
 		if tex != null:
 			_show_sampled(_crt_screen_material(), tex)
 			return
-		var snow := _tv._tuner.static_material()
-		if _tv._screen_mesh.get_surface_override_material(0) != snow:
+		var snow := _tv.tuner().static_material()
+		if _tv.screen_mesh().get_surface_override_material(0) != snow:
 			drop_sampled()
 			_paint(snow)
 		return
@@ -164,15 +164,15 @@ func update_screen_source() -> void:
 	# ordinary state of whichever of the two channels the switch is not using, so the
 	# blue no-signal screen would read as a fault every time you stepped past it.
 	# When the channel does match, the host owns the glass and this falls through.
-	if _tv._tv_enabled and _tv.current_source == RetroTV.Source.RF and not _tv._panel.rf_tuned():
+	if _tv.is_on() and _tv.current_source == RetroTV.Source.RF and not _tv.panel().rf_tuned():
 		var snow := rf_static()
-		if _tv._screen_mesh.get_surface_override_material(0) != snow:
+		if _tv.screen_mesh().get_surface_override_material(0) != snow:
 			drop_sampled()
 			_paint(snow)
 		return
 
 	# The selected input's picture, sampled into a material this set owns.
-	if _tv._tv_enabled and _pull_from_selected():
+	if _tv.is_on() and _pull_from_selected():
 		return
 
 	# Nothing to show. Every material on the glass is the set's own now, so this no
@@ -180,8 +180,8 @@ func update_screen_source() -> void:
 	# it is. What stood here read the installed material back to guess whether some
 	# host was still live, counted any ShaderMaterial as a picture, and kept a list
 	# of which blank states were safe to reclaim while the set was off.
-	if not _tv._tv_enabled:
-		if _tv._screen_mesh.get_surface_override_material(0) != _dark_material:
+	if not _tv.is_on():
+		if _tv.screen_mesh().get_surface_override_material(0) != _dark_material:
 			drop_sampled()
 			_paint(_dark_material)
 		return
@@ -195,13 +195,13 @@ func update_screen_source() -> void:
 func play_power_on_anim() -> void:
 	if _poweron_tween:
 		_poweron_tween.kill()
-	_tv._screen_mesh.scale = Vector3(1.0, 0.02, 1.0)
+	_tv.screen_mesh().scale = Vector3(1.0, 0.02, 1.0)
 	# Snap to the thin line instantly — don't let physics interpolation smooth
 	# the collapse (the expansion itself is tweened below).
-	_tv._screen_mesh.reset_physics_interpolation()
+	_tv.screen_mesh().reset_physics_interpolation()
 	_poweron_tween = create_tween()
 	_poweron_tween.tween_interval(0.07)
-	_poweron_tween.tween_property(_tv._screen_mesh, "scale", Vector3.ONE, 0.3) \
+	_poweron_tween.tween_property(_tv.screen_mesh(), "scale", Vector3.ONE, 0.3) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
@@ -209,7 +209,7 @@ func stop_power_on_anim() -> void:
 	if _poweron_tween:
 		_poweron_tween.kill()
 		_poweron_tween = null
-	_tv._screen_mesh.scale = Vector3.ONE
+	_tv.screen_mesh().scale = Vector3.ONE
 
 
 # ── CRT filter ─────────────────────────────────────────────────────────────────
@@ -224,12 +224,12 @@ func stop_power_on_anim() -> void:
 ## (crt_filter.gdshaderinc), switched by _tv.crt_enabled, whether that shader is the
 ## set's own or one a source asked for.
 func update_crt() -> void:
-	var mat := _tv._screen_mesh.get_surface_override_material(0) as ShaderMaterial
+	var mat := _tv.screen_mesh().get_surface_override_material(0) as ShaderMaterial
 	if mat == null:
 		return
 	var powered: Variant = mat.get_shader_parameter("crt_powered")
-	if powered == null or bool(powered) != _tv._tv_enabled:
-		mat.set_shader_parameter("crt_powered", _tv._tv_enabled)
+	if powered == null or bool(powered) != _tv.is_on():
+		mat.set_shader_parameter("crt_powered", _tv.is_on())
 	# Writing a uniform a shader does not declare is harmless, so this does not
 	# have to know which of the display shaders is currently showing.
 	var cur: Variant = mat.get_shader_parameter("_tv.crt_enabled")
@@ -253,7 +253,7 @@ func update_crt() -> void:
 ## re-wrapping every time it changed its mind — which is why the old path needed
 ## _extract_texture, _crt_wrapped and an unwrap ordered against every handover.
 func _pull_from_selected() -> bool:
-	var host := _tv._panel.selected_system()
+	var host := _tv.panel().selected_system()
 	var tex: Texture2D = null
 	# Being ON this input is not the same as SENDING a picture to it. The set
 	# files a machine on a video input as soon as any cord lands there, on
@@ -302,7 +302,7 @@ func _pull_from_selected() -> bool:
 ## a picture reaches the glass, whether it came from a machine, a deck, or the
 ## set's own no-signal screen.
 func _show_sampled(mat: ShaderMaterial, tex: Texture2D) -> void:
-	if _tv._screen_mesh.get_surface_override_material(0) != mat:
+	if _tv.screen_mesh().get_surface_override_material(0) != mat:
 		drop_sampled()
 		_paint(mat)
 	# Against _crt_source_tex rather than the material, because the phosphor
@@ -333,7 +333,7 @@ func _crt_screen_material() -> ShaderMaterial:
 		# A cabinet may paint its screen with a shader of its own. Null is the
 		# normal answer and every shipped shell gives it, so this is the stock
 		# CRT unless a mod set has genuinely different glass.
-		var custom: Shader = _tv._shell.screen_shader() if _tv._shell != null else null
+		var custom: Shader = _tv.shell().screen_shader() if _tv.shell() != null else null
 		_crt_material.shader = custom if custom != null else RetroTV.CRT_SHADER
 		# Written unconditionally: a shader that does not declare this uniform
 		# ignores it harmlessly, and one that does needs it set before first draw
@@ -406,7 +406,7 @@ func _stereo_screen_material() -> ShaderMaterial:
 func update_phosphor() -> void:
 	if _crt_material == null or _crt_source_tex == null:
 		return
-	if _tv._screen_mesh.get_surface_override_material(0) != _crt_material:
+	if _tv.screen_mesh().get_surface_override_material(0) != _crt_material:
 		return
 
 	var amount: float = float(_crt_params.get("crt_persistence", 0.0))
@@ -450,7 +450,7 @@ func update_phosphor() -> void:
 ## The one showing, not merely one connected: a VB left plugged into an input nobody
 ## has selected must not put the other input's picture through a per-eye split.
 func _source_is_sbs() -> bool:
-	var system := _tv._panel.selected_system()
+	var system := _tv.panel().selected_system()
 	return system != null \
 		and system.has_method("is_stereo_output") \
 		and system.is_stereo_output()
@@ -467,7 +467,7 @@ func has_stereo_source() -> bool:
 func _stereo_source_active() -> bool:
 	if _source_is_sbs():
 		return true
-	var override := _tv._screen_mesh.get_surface_override_material(0)
+	var override := _tv.screen_mesh().get_surface_override_material(0)
 	if override is ShaderMaterial and override != _stereo_material \
 			and (override as ShaderMaterial).shader == RetroTV.WINDOW_SHADER:
 		var es: Variant = (override as ShaderMaterial).get_shader_parameter("eye_shift")
@@ -479,11 +479,11 @@ func _stereo_source_active() -> bool:
 ## also stop processing and drop off the pointable layer so an invisible
 ## button can't eat pokes or laser clicks.
 func update_stereo_button() -> void:
-	if _tv._stereo_btn == null:
+	if _tv.stereo_btn() == null:
 		return
 	var active := _stereo_source_active()
-	if _tv._stereo_btn.visible != active:
-		_tv._stereo_btn.set_active(active)
+	if _tv.stereo_btn().visible != active:
+		_tv.stereo_btn().set_active(active)
 
 
 ## Push every tunable CRT uniform onto a material carrying the CRT display stage
@@ -510,8 +510,8 @@ func known_display_materials() -> Array[ShaderMaterial]:
 	]
 	for candidate: Variant in _stage_materials.values():
 		candidates.append(candidate)
-	if _tv._screen_mesh != null:
-		candidates.append(_tv._screen_mesh.get_surface_override_material(0))
+	if _tv.screen_mesh() != null:
+		candidates.append(_tv.screen_mesh().get_surface_override_material(0))
 	for candidate: Variant in candidates:
 		if candidate is ShaderMaterial:
 			var mat := candidate as ShaderMaterial
@@ -524,7 +524,7 @@ func known_display_materials() -> Array[ShaderMaterial]:
 ## slider. They keep the mask/raster fixed to the glass and vary the shared wear
 ## map between otherwise identical televisions.
 func _apply_derived_crt_params(mat: ShaderMaterial) -> void:
-	mat.set_shader_parameter("crt_powered", _tv._tv_enabled)
+	mat.set_shader_parameter("crt_powered", _tv.is_on())
 	var wear_variant := int(get_instance_id() % 4)
 	mat.set_shader_parameter("crt_glass_wear_flip", Vector2(
 		float(wear_variant & 1), float((wear_variant >> 1) & 1)))
@@ -532,11 +532,11 @@ func _apply_derived_crt_params(mat: ShaderMaterial) -> void:
 	# screen's WORLD width: scaling the TV up adds triads instead of stretching
 	# them, exactly as a physically bigger tube would.
 	var pitch_m: float = maxf(float(_crt_params.get("crt_mask_pitch_mm", 2.0)), 0.05) * 0.001
-	var triads: float = (_tv._screen_size_m.x * _tv.scale_factor) / pitch_m
+	var triads: float = (_tv.screen_size_m().x * _tv.scale_factor) / pitch_m
 	mat.set_shader_parameter("crt_mask_triads", triads)
 	# Slot/shadow phosphor cells run about 1.5x taller than they are wide.
 	mat.set_shader_parameter("crt_mask_rows",
-		triads * (_tv._screen_size_m.y / _tv._screen_size_m.x) / 1.5)
+		triads * (_tv.screen_size_m().y / _tv.screen_size_m().x) / 1.5)
 
 	# Active lines in the signal, taken from the source itself. A fixed count is
 	# the point: the raster belongs to the signal, so walking backwards must not
@@ -560,7 +560,7 @@ func _apply_derived_crt_params(mat: ShaderMaterial) -> void:
 
 ## The installed material carrying the CRT display stage, if any.
 func _active_crt_material() -> ShaderMaterial:
-	var override := _tv._screen_mesh.get_surface_override_material(0)
+	var override := _tv.screen_mesh().get_surface_override_material(0)
 	if override is ShaderMaterial:
 		var sh := (override as ShaderMaterial).shader
 		if sh != null and _is_tv_display_shader(sh):
@@ -621,7 +621,7 @@ func set_crt_params(values: Dictionary) -> void:
 	_crt_derived_key = []
 	# Seeded before _ready (scene restore instantiates then sets): the values are
 	# in place and get pushed when the filter first wraps a source.
-	if _tv._screen_mesh == null:
+	if _tv.screen_mesh() == null:
 		return
 	for mat: ShaderMaterial in known_display_materials():
 		apply_crt_params(mat)
@@ -634,7 +634,7 @@ func set_crt_params(values: Dictionary) -> void:
 ## handler used emission, a deck used albedo or its own video_tex uniform, the
 ## set's wrapper used source_tex. One convention now, because the set writes them.
 func screen_texture() -> Texture2D:
-	var mat := _tv._screen_mesh.get_surface_override_material(0)
+	var mat := _tv.screen_mesh().get_surface_override_material(0)
 	if mat is ShaderMaterial:
 		return (mat as ShaderMaterial).get_shader_parameter("source_tex") as Texture2D
 	if mat is StandardMaterial3D:
@@ -648,9 +648,9 @@ func screen_texture() -> Texture2D:
 ## fit is computed against the real glass rather than assumed. Whichever axis is
 ## too generous gets shrunk about the centre and the rest becomes bar.
 func _aspect_fit() -> Vector2:
-	if _tv._screen_size_m.x <= 0.0 or _tv._screen_size_m.y <= 0.0:
+	if _tv.screen_size_m().x <= 0.0 or _tv.screen_size_m().y <= 0.0:
 		return Vector2.ONE
-	var glass := _tv._screen_size_m.x / _tv._screen_size_m.y
+	var glass := _tv.screen_size_m().x / _tv.screen_size_m().y
 	var want := RetroTV.ASPECT_16_9 if _tv.widescreen else RetroTV.ASPECT_4_3
 	if is_equal_approx(glass, want):
 		return Vector2.ONE
@@ -667,7 +667,7 @@ func apply_aspect() -> void:
 	for mat in [_crt_material, _stereo_material]:
 		if mat != null:
 			(mat as ShaderMaterial).set_shader_parameter("fit_scale", fit)
-	var override := _tv._screen_mesh.get_surface_override_material(0) as ShaderMaterial
+	var override := _tv.screen_mesh().get_surface_override_material(0) as ShaderMaterial
 	if override != null and override.shader == RetroTV.CRT_SHADER:
 		override.set_shader_parameter("fit_scale", fit)
 
@@ -681,7 +681,7 @@ func aspect_needs_fit() -> bool:
 
 ## Returns the screen MeshInstance3D so Libretro can render onto it
 func get_screen_mesh() -> MeshInstance3D:
-	return _tv._screen_mesh
+	return _tv.screen_mesh()
 
 
 # ── Who may paint the glass ───────────────────────────────────────────────────
@@ -712,11 +712,11 @@ var _refused: Object = null
 func can_paint(who: Object) -> bool:
 	if who == _tv:
 		return true
-	if not _tv._tv_enabled or who == null:
+	if not _tv.is_on() or who == null:
 		return false
-	if _tv.current_source == RetroTV.Source.RF and not _tv._panel.rf_tuned():
+	if _tv.current_source == RetroTV.Source.RF and not _tv.panel().rf_tuned():
 		return false
-	return who == _tv._panel.selected_system()
+	return who == _tv.panel().selected_system()
 
 
 ## Put a material on the glass. Refused, loudly, unless `who` may paint.
@@ -729,7 +729,7 @@ func paint_screen(who: Object, mat: Material) -> bool:
 		return false
 	_refused = null
 	_screen_owner = who
-	_tv._screen_mesh.set_surface_override_material(0, mat)
+	_tv.screen_mesh().set_surface_override_material(0, mat)
 	return true
 
 
@@ -757,7 +757,7 @@ func _paint(mat: Material) -> void:
 		var shader_mat := mat as ShaderMaterial
 		if shader_mat.shader != null and _is_tv_display_shader(shader_mat.shader):
 			apply_crt_params(shader_mat)
-	_tv._screen_mesh.set_surface_override_material(0, mat)
+	_tv.screen_mesh().set_surface_override_material(0, mat)
 
 ## Snow for an aerial channel with nothing on it. Built on first use, like the tuner
 ## — a set that never leaves the composite inputs should not pay for it.
@@ -777,20 +777,20 @@ func tick_ambilight() -> void:
 	# Not gated on the light being visible: the light hides itself while off
 	# (ScreenCastLight._apply_energy), so that test would keep a doused set
 	# dark for ever - which is what it did between 92294bee and this line.
-	if not _tv._ambilight:
+	if not _tv.ambilight():
 		return
-	var override := _tv._screen_mesh.get_surface_override_material(0)
-	if not _tv._tv_enabled or override == _dark_material:
-		_tv._ambilight.turn_off()
+	var override := _tv.screen_mesh().get_surface_override_material(0)
+	if not _tv.is_on() or override == _dark_material:
+		_tv.ambilight().turn_off()
 		return
 	if _crt_source_tex == _blue_texture:
-		_tv._ambilight.show_solid(RetroTV.BLUE_SCREEN_COLOR)
+		_tv.ambilight().show_solid(RetroTV.BLUE_SCREEN_COLOR)
 		return
 	if override is ShaderMaterial and (override as ShaderMaterial).shader == RetroTV.STATIC_SHADER:
-		_tv._ambilight.show_solid(RetroTV.STATIC_LIGHT_COLOR)
+		_tv.ambilight().show_solid(RetroTV.STATIC_LIGHT_COLOR)
 		return
 	var tex := screen_texture()
 	if not tex:
-		_tv._ambilight.turn_off()
+		_tv.ambilight().turn_off()
 		return
-	_tv._ambilight.show_picture(tex, screen_light_rect(override))
+	_tv.ambilight().show_picture(tex, screen_light_rect(override))

@@ -114,7 +114,6 @@ static func drop_mod_shells(owner_id: String) -> void:
 			_mod_shells.erase(shell_id)
 
 
-var _shell: RetroTVShell = null
 
 # What is on the glass: the CRT stage, the phosphor trail, the stereo window, the
 # aspect fit and the paint guard — see tv_display.gd.
@@ -213,6 +212,84 @@ var _tv_enabled: bool = true
 var current_source: int = Source.COMPOSITE_1
 var _tuner: TVTuner = null
 
+
+# ── The helpers, and how they reach each other ────────────────────────────────
+#
+# RetroTV composes five helpers and each needs one or two of the others. They
+# used to reach through the host's own fields by name, which meant every helper
+# knew where RetroTV keeps its siblings. These accessors are that seam.
+
+## The shell body this set is wearing, or null for the stock cabinet. Built and
+## owned by TvFit; forwarded because callers ask the set, not its layout pass.
+func shell() -> RetroTVShell:
+	return _fit.shell() if _fit != null else null
+
+
+## The three front-panel buttons more than one helper touches — the layout pass
+## places them, and the audio and display helpers light them. The rest of the
+## row is TvFit's alone and stays there.
+func mute_btn() -> VRButton:
+	return _mute_btn
+
+
+func audio_mode_btn() -> VRButton:
+	return _audio_mode_btn
+
+
+func stereo_btn() -> VRButton:
+	return _stereo_btn
+
+
+## The glass. Named rather than reached for: the helpers paint it, measure it and
+## hang the OSD off it, and none of them should know the field it is kept in.
+func screen_mesh() -> MeshInstance3D:
+	return _screen_mesh
+
+
+## Picture size in metres, remeasured whenever the screen is resized.
+func screen_size_m() -> Vector2:
+	return _screen_size_m
+
+
+## The light this set throws into the room.
+func ambilight() -> ScreenCastLight:
+	return _ambilight
+
+
+## The VGA socket — present only on a monitor, so callers check it for null.
+func vga_port() -> VgaPort:
+	return _vga_port
+
+
+func display() -> TvDisplay:
+	return _display
+
+
+func panel() -> TvPanel:
+	return _panel
+
+
+func osd() -> TvOsd:
+	return _osd
+
+
+func audio() -> TvAudio:
+	return _audio
+
+
+## The built-in tuner, or null while Source.TV has never been selected — it is
+## created on first use, so a set that never leaves the composite inputs costs
+## nothing. Callers must expect null.
+func tuner() -> TVTuner:
+	return _tuner
+
+
+## Whether the set is switched on. Read by the display and audio helpers to
+## decide whether to paint or to make a sound.
+func is_on() -> bool:
+	return _tv_enabled
+
+
 ## Which channel the set is tuned to while Source.RF is showing — 3 or 4, stepped by
 ## the CH keys. A console fed through an RF switch only appears when this matches the
 ## channel its own switch is set to; anything else is static, as it would be.
@@ -250,7 +327,8 @@ func _init() -> void:
 	_osd = TvOsd.new()
 	_osd.name = "TvOsd"
 	add_child(_osd)
-	_osd.setup(self)
+	_osd.setup(self, _osd_label, _vol_osd_label, _osd_viewport,
+		_osd_text_2d, _vol_osd_text_2d)
 	_audio = TvAudio.new()
 	_audio.name = "TvAudio"
 	add_child(_audio)
@@ -965,7 +1043,7 @@ func set_audio_mode(mode: int) -> void:
 ## composite block but it is still an input with a host on it, and a bound of
 ## COMPOSITE_INPUTS would hide that host from _selected_system — which is what owns
 ## the volume keys and the power button.
-func _selected_input() -> int:
+func selected_input() -> int:
 	return -1 if current_source == Source.TV else current_source
 
 

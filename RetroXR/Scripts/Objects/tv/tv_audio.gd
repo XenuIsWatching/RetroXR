@@ -67,14 +67,14 @@ func apply_channel_mode() -> void:
 	# Every connected host, not just the one showing: the speaker switch is a
 	# property of the SET, so an input switched to later has to already be routed
 	# the way the switch says rather than reverting to stereo for one press.
-	for system in _tv._panel._connected_systems:
+	for system in _tv.panel()._connected_systems:
 		if system != null and is_instance_valid(system) \
 				and system.has_method("set_audio_channel_mode"):
 			system.set_audio_channel_mode(_tv.audio_mode)
 	# The tuner is the one source the set does own an emitter for, so it takes the
 	# same routing directly rather than being asked to do it.
-	if _tv._tuner:
-		_tv._tuner.set_channel_mode(_tv.audio_mode)
+	if _tv.tuner():
+		_tv.tuner().set_channel_mode(_tv.audio_mode)
 
 
 ## Stereo gets the two-speaker symbol; a mono mode gets a single speaker leaning
@@ -90,14 +90,14 @@ func update_mode_button() -> void:
 		2:
 			TransportGlyphs.set_glyph(_tv, "AudioModeButton", "audio_mono",
 				TransportGlyphs.TV_SIZE, 1.0)
-	if _tv._audio_mode_btn:
-		_tv._audio_mode_btn.set_color(Color(0.35, 0.55, 0.9) if _tv.audio_mode == 0
+	if _tv.audio_mode_btn():
+		_tv.audio_mode_btn().set_color(Color(0.35, 0.55, 0.9) if _tv.audio_mode == 0
 			else Color(0.9, 0.65, 0.25))
 
 
 ## What the set's own amplifier is passing: silence while off or muted.
 func _effective_volume() -> float:
-	return 0.0 if (not _tv._tv_enabled or _muted) else _volume
+	return 0.0 if (not _tv.is_on() or _muted) else _volume
 
 
 ## …and what reaches one input, which is nothing at all unless that input is the
@@ -116,12 +116,12 @@ func volume_for(source: int) -> float:
 func apply_volume() -> void:
 	# Every slot, not just the composite ones: a console reached through an RF switch
 	# is on Source.RF and has to be silenced with the rest when it is not showing.
-	for i in _tv._panel._connected_systems.size():
-		var system: Node3D = _tv._panel._connected_systems[i]
+	for i in _tv.panel()._connected_systems.size():
+		var system: Node3D = _tv.panel()._connected_systems[i]
 		if system != null and is_instance_valid(system):
 			system.set_audio_volume(volume_for(i))
-	if _tv._tuner:
-		_tv._tuner.set_volume(volume_for(RetroTV.Source.TV))
+	if _tv.tuner():
+		_tv.tuner().set_volume(volume_for(RetroTV.Source.TV))
 
 
 ## A volume key clears mute (like a real set) so the change is audible.
@@ -134,9 +134,9 @@ func _clear_mute_silently() -> void:
 func on_volume_down() -> void:
 	_clear_mute_silently()
 	_volume = maxf(0.0, _volume - 0.1)
-	if _tv._tv_enabled:
-		_tv._osd.show_volume()
-	if _tv._tv_enabled:
+	if _tv.is_on():
+		_tv.osd().show_volume()
+	if _tv.is_on():
 		apply_volume()
 	NetworkManager.report_event(NetObjectSync.EV_TV_VOL_DOWN, {"tv": _tv})
 
@@ -144,9 +144,9 @@ func on_volume_down() -> void:
 func on_volume_up() -> void:
 	_clear_mute_silently()
 	_volume = minf(1.0, _volume + 0.1)
-	if _tv._tv_enabled:
-		_tv._osd.show_volume()
-	if _tv._tv_enabled:
+	if _tv.is_on():
+		_tv.osd().show_volume()
+	if _tv.is_on():
 		apply_volume()
 	NetworkManager.report_event(NetObjectSync.EV_TV_VOL_UP, {"tv": _tv})
 
@@ -156,8 +156,8 @@ func on_volume_up() -> void:
 ## Red while muted, matching the remote's own mute tint. Driven from here rather
 ## than the button so the remote's mute lands on the same cap.
 func update_mute_button() -> void:
-	if _tv._mute_btn:
-		_tv._mute_btn.set_color(Color(1.0, 0.35, 0.35) if _muted else Color(0.35, 0.35, 0.35))
+	if _tv.mute_btn():
+		_tv.mute_btn().set_color(Color(1.0, 0.35, 0.35) if _muted else Color(0.35, 0.35, 0.35))
 
 
 func on_mute_toggle() -> void:
