@@ -64,6 +64,9 @@ static func load_values(root: String, core_name: String) -> Dictionary:
 
 
 ## Write {key: value} back, creating the directory if needed.
+## Not JsonStore: a .opt file is libretro's own `key = "value"` format, read by
+## the core itself, so it cannot become JSON. The atomic-write argument applies
+## just as much, but the fix there would be a staged write of THIS format.
 static func save_values(root: String, core_name: String, values: Dictionary) -> bool:
 	DirAccess.make_dir_recursive_absolute(opt_dir(root))
 	var path := opt_path(root, core_name)
@@ -148,24 +151,14 @@ static func seeded_path(root: String) -> String:
 
 
 static func _load_seeded(root: String) -> Dictionary:
-	var f := FileAccess.open(seeded_path(root), FileAccess.READ)
-	if f == null:
-		return {}
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	f.close()
-	if parsed is Dictionary and (parsed as Dictionary).get("seeded") is Dictionary:
-		return (parsed as Dictionary)["seeded"]
-	return {}
+	var seeded: Variant = JsonStore.read_dict(
+		seeded_path(root), "CoreOptionsStore").get("seeded")
+	return seeded as Dictionary if seeded is Dictionary else {}
 
 
 static func _save_seeded(root: String, seeded: Dictionary) -> void:
-	DirAccess.make_dir_recursive_absolute(root)
-	var f := FileAccess.open(seeded_path(root), FileAccess.WRITE)
-	if f == null:
-		push_warning("CoreOptionsStore: cannot write %s" % seeded_path(root))
-		return
-	f.store_string(JSON.stringify({"version": 1, "seeded": seeded}, "\t"))
-	f.close()
+	JsonStore.write_dict(seeded_path(root), {"version": 1, "seeded": seeded},
+		"CoreOptionsStore")
 
 
 ## Set one key and persist, leaving every other key alone.
