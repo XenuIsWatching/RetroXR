@@ -212,6 +212,19 @@ class MockEventObject extends Node3D:
 		applying_seen = sync != null and sync.is_applying()
 	func restore_cartridge(obj: Node) -> void: restored["cart"] = obj
 	func restore_tape(obj: Node) -> void: restored["tape"] = obj
+
+	# The removal half of the same contract. object_sync asks the owner to give
+	# the media up rather than reaching for its child by name, so the mock has to
+	# answer these the way a real machine or deck does.
+	func net_release_cartridge() -> void: _drop("CartridgeSlot")
+	func net_release_tape() -> void: _drop("TapeSlot")
+	func net_release_disc() -> void: _drop("DiscSlot")
+	func net_release_controller_port(port: int) -> void:
+		_drop("ControllerPort%d" % (port + 1))
+	func _drop(slot_name: String) -> void:
+		var slot := get_node_or_null(slot_name) as MockSlot
+		if slot != null:
+			slot.drop_object()
 	func restore_memory_card(obj: Node, slot := 0) -> void:
 		restored["card"] = obj
 		restored["card_slot"] = slot

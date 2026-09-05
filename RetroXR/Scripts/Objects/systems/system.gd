@@ -4148,6 +4148,15 @@ func restore_cartridge(cartridge: Node3D) -> void:
 	_restoring_media = false
 
 
+## The counterpart to restore_cartridge, for a remote peer taking the cart out.
+##
+## Releases the snap zone rather than running the local eject ride: the media is
+## already gone on the peer that moved it, and object_sync positions it here.
+## Which child holds the cartridge stays this machine's business.
+func net_release_cartridge() -> void:
+	_cartridge_slot.drop_object()
+
+
 ## Restore a controller plug into a port after loading from a save file.
 func restore_controller_plug(port_index: int, plug: ControllerPlug) -> void:
 	if port_index < 0 or port_index >= _port_zones.size():

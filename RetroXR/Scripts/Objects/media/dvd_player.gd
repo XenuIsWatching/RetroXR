@@ -659,6 +659,15 @@ func restore_disc(disc: Node3D) -> void:
 	_slot.restore(disc)
 
 
+## The counterpart to restore_disc, for a remote peer taking the disc out.
+##
+## Releases the snap zone rather than running the local eject ride: the disc is
+## already gone on the peer that moved it, and object_sync positions it here.
+## Which child holds the disc stays this deck's business.
+func net_release_disc() -> void:
+	_disc_slot.drop_object()
+
+
 ## Reconnect the cable to a TV programmatically (EV_TV_PLUG + save restore). If
 ## the cable hasn't finished spawning yet, defer until it has.
 ## Kept for scene_persistence, which still records which set a deck was playing

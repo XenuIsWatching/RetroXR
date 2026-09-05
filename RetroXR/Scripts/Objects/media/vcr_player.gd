@@ -595,3 +595,12 @@ func restore_cable_connection(_tv: RetroTV) -> void:
 ## Seat a tape programmatically (event/save restore) — no ride, bypasses the filter.
 func restore_tape(tape: Node3D) -> void:
 	_slot.restore(tape)
+
+
+## The counterpart to restore_tape, for a remote peer taking the tape out.
+##
+## Releases the snap zone rather than running the local eject ride: the tape is
+## already gone on the peer that moved it, and object_sync positions it here.
+## Which child holds the tape stays this deck's business.
+func net_release_tape() -> void:
+	_tape_slot.drop_object()

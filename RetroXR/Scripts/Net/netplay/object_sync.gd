@@ -959,13 +959,13 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 				a["sys"].restore_cartridge(a["cart"])
 		EV_CART_REMOVE:
 			if _valid(a, ["sys"]):
-				a["sys"].get_node("CartridgeSlot").drop_object()
+				a["sys"].net_release_cartridge()
 		EV_TAPE_INSERT:
 			if _valid(a, ["vcr", "tape"]):
 				a["vcr"].restore_tape(a["tape"])
 		EV_TAPE_REMOVE:
 			if _valid(a, ["vcr"]):
-				a["vcr"].get_node("TapeSlot").drop_object()
+				a["vcr"].net_release_tape()
 		EV_TV_PLUG:
 			if _valid(a, ["owner", "tv"]):
 				# Multi-output systems carry the cable channel; VCR/DVD keep
@@ -994,10 +994,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 		EV_PORT_UNPLUG:
 			if _valid(a, ["sys"]):
 				var port := int(a.get("port", 0))
-				if a["sys"].has_method("net_release_controller_port"):
-					a["sys"].net_release_controller_port(port)
-				else:
-					a["sys"].get_node("ControllerPort%d" % (port + 1)).drop_object()
+				a["sys"].net_release_controller_port(port)
 		EV_SYS_POWER:
 			# Client intent — the host toggles for real. Run un-suppressed so
 			# the host's own hook broadcasts EV_SYS_POWER_STATE afterwards.
@@ -1114,7 +1111,7 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 				a["dvd"].restore_disc(a["disc"])
 		EV_DVD_REMOVE:
 			if _valid(a, ["dvd"]):
-				a["dvd"].get_node("DiscSlot").drop_object()
+				a["dvd"].net_release_disc()
 		EV_DVD_CMD:
 			# DVD transport/menu is host-authoritative: the host executes the
 			# command and its state broadcast (send_dvd_state) drives every
