@@ -879,14 +879,14 @@ func _held_pose(net_id: int, pos: Vector3, quat: Quaternion) -> void:
 ## Host: a pickable's grab authority just moved to `peer_id`. If it's a controller
 ## plugged into a live netplay port, hand that port to the new holder (pass-me).
 func _maybe_handoff_port(node: Node, peer_id: int) -> void:
-	if _nm.is_host() and _is_port_peripheral(node) and _nm.has_method("netplay_handoff"):
+	if _nm.is_host() and _is_port_peripheral(node):
 		_nm.netplay_handoff(node, peer_id)
 
 
 ## Host: a controller was dropped and nobody else holds it — release its netplay
 ## port to unowned (owner 0), so it goes neutral and any player can grab it next.
 func _maybe_release_port(node: Node) -> void:
-	if _nm.is_host() and _is_port_peripheral(node) and _nm.has_method("netplay_handoff"):
+	if _nm.is_host() and _is_port_peripheral(node):
 		_nm.netplay_handoff(node, 0)
 
 
@@ -1028,7 +1028,7 @@ func _event_apply(kind: int, wire: Dictionary) -> void:
 
 
 func _update_port_owner(kind: int, args: Dictionary, peer_id: int) -> void:
-	if not _nm.is_host() or not _nm.has_method("netplay_handoff_port"):
+	if not _nm.is_host():
 		return
 	if kind == NetEvents.EV_PORT_PLUG and _valid(args, ["sys", "ctrl"]):
 		_nm.netplay_handoff_port(args["sys"], int(args.get("port", 0)), peer_id)
@@ -1042,6 +1042,15 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 
 ## The arms marked host-authoritative run through _unsuppressed() rather than
 ## suppressed like the rest: see that method for why the hole has to be there.
+##
+## Where an arm still probes with has_method() it is because the receiver really
+## is heterogeneous, and the probe is the dispatch: `sys` is a bare test double
+## in several object_sync_tests cases, `book` and the file-backed objects span
+## five unrelated classes plus whatever a mod ships, and for those the status
+## line is an optional nicety that a plain node is right to not have. An arm
+## whose receiver is known — the TV, and NetworkManager itself — calls straight
+## through, because a missing method there is a bug that should be a loud crash
+## rather than a room that silently stops responding to one control.
 func _dispatch_event(kind: int, a: Dictionary) -> void:
 	match kind:
 		NetEvents.EV_CART_INSERT:
@@ -1123,13 +1132,13 @@ func _dispatch_event(kind: int, a: Dictionary) -> void:
 			if _valid(a, ["tv"]):
 				a["tv"].set_audio_mode(int(a.get("mode", 0)))
 		NetEvents.EV_TV_ASPECT:
-			if _valid(a, ["tv"]) and a["tv"].has_method("set_widescreen"):
+			if _valid(a, ["tv"]):
 				a["tv"].set_widescreen(bool(a.get("on", false)))
 		NetEvents.EV_TV_SOURCE:
-			if _valid(a, ["tv"]) and a["tv"].has_method("set_source"):
+			if _valid(a, ["tv"]):
 				a["tv"].set_source(int(a.get("source", 0)))
 		NetEvents.EV_TV_CHANNEL:
-			if _valid(a, ["tv"]) and a["tv"].has_method("net_set_channel_state"):
+			if _valid(a, ["tv"]):
 				a["tv"].net_set_channel_state(int(a.get("source", 0)),
 					int(a.get("rf", 3)), int(a.get("index", -1)))
 		NetEvents.EV_ROOM_LIGHTS:
@@ -1187,7 +1196,7 @@ func _dispatch_event(kind: int, a: Dictionary) -> void:
 		NetEvents.EV_DISK_OP:
 			# Client disc-swap intent — the host frame-schedules it for all
 			# peers through the netplay session (system.gd _request_disk_op).
-			if _nm.is_host() and _valid(a, ["sys"]) and _nm.has_method("netplay_schedule_disk"):
+			if _nm.is_host() and _valid(a, ["sys"]):
 				_nm.netplay_schedule_disk(a["sys"], int(a.get("op", 0)),
 					str(a.get("md5", "")), int(a.get("index", 0)))
 		NetEvents.EV_DVD_INSERT:
