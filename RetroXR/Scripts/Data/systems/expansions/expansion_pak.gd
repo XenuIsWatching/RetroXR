@@ -39,6 +39,6 @@ const ROW := {
 
 ## No BOOT row: see expansion_catalog.gd's own note that a combination with
 ## none still stacks and still launches as the bare console would. This one
-## really has nothing to add there -- RetroSystem._expansion_pak_options is
+## really has nothing to add there -- ForcedCoreOptions.expansion_pak is
 ## the whole of what attaching it does.
 const BOOT := {}

@@ -3,7 +3,7 @@
 ## own on top, the same shape as the Power Base Converter -- except both ends
 ## are the same systemid here, so no card override is needed (media falls back
 ## to host). genesis_plus_gx sees the same cartridge either way; only the
-## forced FM option (RetroSystem._fm_sound_unit_options) changes whether the
+## forced FM option (ForcedCoreOptions.fm_sound_unit) changes whether the
 ## console has an FM chip to give it.
 ##
 ## One of the expansion units; see ExpansionCatalog for how a unit file is
