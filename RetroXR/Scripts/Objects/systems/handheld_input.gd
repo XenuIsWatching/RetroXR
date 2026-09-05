@@ -70,11 +70,8 @@ const HINT_HEIGHT := 0.20
 ## gesture cannot also fire the pointer at whatever is behind it.
 var _pointer_block := VrPointerBlock.new()
 
-# Rumble state (mirrors retro_controller.gd).
-var _rumble_weak := 0.0
-var _rumble_strong := 0.0
-var _rumble_event: XRToolsRumbleEvent = null
-var _pad_rumble_active := false
+## Haptics, shared with retro_controller.gd — see PadInputShared.
+var _rumble := PadInputShared.Rumble.new(self)
 
 var _locomotion_manager: LocomotionManager = null
 var _spawn_menu_ctrl: Node = null
@@ -107,16 +104,11 @@ func reload_bindings() -> void:
 
 
 func _find_vr_nodes() -> void:
-	_locomotion_manager = get_tree().root.find_child("LocomotionManager", true, false) as LocomotionManager
-	_spawn_menu_ctrl = get_tree().root.find_child("SpawnMenuController", true, false)
-	for node: Node in get_tree().root.find_children("*", "XRController3D", true, false):
-		var ctrl := node as XRController3D
-		if ctrl == null:
-			continue
-		if ctrl.tracker == &"left_hand":
-			_left_vr_ctrl = ctrl
-		elif ctrl.tracker == &"right_hand":
-			_right_vr_ctrl = ctrl
+	var rig := PadInputShared.find_rig(get_tree())
+	_locomotion_manager = rig["locomotion"]
+	_spawn_menu_ctrl = rig["spawn_menu"]
+	_left_vr_ctrl = rig["left"]
+	_right_vr_ctrl = rig["right"]
 	# A spawn-menu spawn is handed to the grabbing hand before this deferred lookup
 	# runs, so that grab found no manager and never blocked locomotion. Re-apply.
 	_update_locomotion_block()
@@ -244,29 +236,13 @@ func _rehold_hand(by: Node3D) -> void:
 ## cannot be missed when another is added. HeldHint counts once per hold, so
 ## testing every frame does not inflate it.
 func _is_combo_pressed(ctrl: XRController3D) -> bool:
-	if not HeldHint.is_combo_pressed(ctrl):
-		return false
-	if _hint:
-		_hint.note_used(&"drop_vr")
-	return true
+	return PadInputShared.combo_pressed(ctrl, _hint)
 
 
-# Diagnostic for the "drop combo doesn't fire" report: log the three combo
-# inputs whenever their combined state changes, so a logcat/console trace shows
-# whether detection (e.g. primary_click never reading pressed) or the drop
-# handling is at fault. State-change gated — silent while idle.
-var _combo_dbg_state := -1
+var _combo_dbg := PadInputShared.ComboDebug.new()
 
 func _combo_debug(ctrl: XRController3D) -> void:
-	if not is_instance_valid(ctrl):
-		return
-	var state := (1 if ctrl.get_float("grip") > 0.5 else 0) \
-		| (2 if ctrl.get_float("trigger") > 0.5 else 0) \
-		| (4 if ctrl.get_float("primary_click") > 0.5 else 0)
-	if state != _combo_dbg_state:
-		_combo_dbg_state = state
-		print("[drop-combo] %s grip=%d trigger=%d stick_click=%d" % [name,
-			state & 1, (state >> 1) & 1, (state >> 2) & 1])
+	_combo_dbg.log_change(ctrl, name)
 
 
 func _drop_all() -> void:
@@ -283,10 +259,7 @@ func _drop_all() -> void:
 func _exit_tree() -> void:
 	_pointer_block.release(_left_vr_ctrl, _right_vr_ctrl)
 	XRToolsRumbleManager.clear(self)
-	if _pad_rumble_active:
-		for device in GamepadBindings.usable_pads():
-			Input.stop_joy_vibration(device)
-		_pad_rumble_active = false
+	_rumble.stop_pads()
 	if _locomotion_manager != null:
 		_locomotion_manager.set_block(&"handheld_hold", LocomotionManager.CHANNEL_LEFT, false)
 		_locomotion_manager.set_block(&"handheld_hold", LocomotionManager.CHANNEL_RIGHT, false)
@@ -497,47 +470,21 @@ func _zero_port() -> void:
 
 
 static func _threshold_to_dpad(stick: Vector2) -> int:
-	var bits := 0
-	if stick.y >  DPAD_THRESHOLD: bits |= (1 << 4)
-	if stick.y < -DPAD_THRESHOLD: bits |= (1 << 5)
-	if stick.x < -DPAD_THRESHOLD: bits |= (1 << 6)
-	if stick.x >  DPAD_THRESHOLD: bits |= (1 << 7)
-	return bits
+	return PadInputShared.threshold_to_dpad(stick)
 
 
 # ── Rumble (adapted from retro_controller.gd; registered as the port-0
 #    "controller" so system.gd's rumble routing reaches us) ────────────────────
 
 func set_rumble(weak: float, strong: float) -> void:
-	_rumble_weak = weak
-	_rumble_strong = strong
-	_apply_rumble()
+	_rumble.set_levels(weak, strong, _holders(), _desktop_held)
 
 
 func _apply_rumble() -> void:
-	var combined: float = XRToolsRumbleManager.combine_magnitudes(_rumble_weak, _rumble_strong)
-	XRToolsRumbleManager.clear(self)
-	var secondary := _get_secondary_ctrl()
-	var is_held: bool = is_instance_valid(_holding_ctrl) or is_instance_valid(secondary) or _desktop_held
-	if not is_held or combined <= 0.0:
-		if _pad_rumble_active:
-			for device in GamepadBindings.usable_pads():
-				Input.stop_joy_vibration(device)
-			_pad_rumble_active = false
-		return
-	if is_instance_valid(_holding_ctrl) or is_instance_valid(secondary):
-		if _rumble_event == null:
-			_rumble_event = XRToolsRumbleEvent.new()
-			_rumble_event.indefinite = true
-		_rumble_event.magnitude = combined
-		var trackers: Array = []
-		if is_instance_valid(_holding_ctrl):
-			trackers.append(_holding_ctrl.tracker)
-		if is_instance_valid(secondary):
-			trackers.append(secondary.tracker)
-		if not trackers.is_empty():
-			XRToolsRumbleManager.add(self, _rumble_event, trackers)
-	if is_held:
-		for device in GamepadBindings.usable_pads():
-			Input.start_joy_vibration(device, _rumble_weak, _rumble_strong, 0.0)
-		_pad_rumble_active = true
+	_rumble.apply(_holders(), _desktop_held)
+
+
+## Every controller physically holding this handheld: the grabbing hand, plus
+## the second one on a two-hand grab.
+func _holders() -> Array:
+	return [_holding_ctrl, _get_secondary_ctrl()]
