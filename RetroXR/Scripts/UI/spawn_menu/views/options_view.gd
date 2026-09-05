@@ -195,6 +195,14 @@ func _interval_text(seconds: float) -> String:
 
 
 func _build_general_options(vbox: VBoxContainer) -> void:
+	_build_comfort_options(vbox)
+	_build_audio_and_movement_options(vbox)
+	_build_hud_options(vbox)
+
+
+## Turning, field of view, standing height and world scale - what a player
+## reaches for when the room does not fit them.
+func _build_comfort_options(vbox: VBoxContainer) -> void:
 	vbox.add_child(MenuStyle.spacer(10))
 
 	if MenuStyle.is_vr_mode():
@@ -429,6 +437,11 @@ func _build_general_options(vbox: VBoxContainer) -> void:
 		ap_apply.call(on)
 	))
 
+
+## The spatial-audio backend and how the player moves. Two unrelated
+## settings that share one separated block on the page; kept together
+## rather than cut mid-block to make the names tidier.
+func _build_audio_and_movement_options(vbox: VBoxContainer) -> void:
 	vbox.add_child(HSeparator.new())
 
 	# Spatial audio backend. Desktop only: in a headset the SDK's binaural
@@ -477,6 +490,10 @@ func _build_general_options(vbox: VBoxContainer) -> void:
 	)
 	vbox.add_child(move_drop)
 
+
+## What is drawn over the world: the light-gun crosshair, held-device
+## hints, and which of the hands and controllers are shown.
+func _build_hud_options(vbox: VBoxContainer) -> void:
 	vbox.add_child(HSeparator.new())
 
 	# Whether that movement still works in passthrough. XR only, like Turn Style:
@@ -601,6 +618,7 @@ func _build_general_options(vbox: VBoxContainer) -> void:
 ## as it happens, so this reports what the mod actually did rather than what its
 ## manifest claimed. For a feature whose entire security story is the player's
 ## informed consent, that difference is the point.
+
 func _build_mods_options(vbox: VBoxContainer) -> void:
 	vbox.add_child(MenuStyle.spacer(10))
 	vbox.add_child(MenuStyle.header("Mods"))
