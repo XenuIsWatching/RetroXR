@@ -21,7 +21,7 @@
 ##
 ## What this does NOT know is cabling. Which set the sound reaches, and which of
 ## that set's speakers each channel lands on, is the A/V cluster's business and
-## arrives through one call — _host._audio_route(). Reading _av_ports and
+## arrives through one call — _host.audio_route(). Reading _av_ports and
 ## _av_speaker_l/_r from here would have put a second owner on the routing.
 class_name SystemAudio
 extends Node
@@ -96,8 +96,8 @@ func set_volume(volume: float) -> void:
 ## Remembered so a core started later comes up on the set's current setting.
 func set_channel_mode(mode: int) -> void:
 	_channel_mode = clampi(mode, 0, 2)
-	if _host._libretro != null:
-		_host._libretro.SetAudioChannelMode(_channel_mode)
+	if _host.get_libretro_node() != null:
+		_host.get_libretro_node().SetAudioChannelMode(_channel_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +117,8 @@ func rebind() -> void:
 ## otherwise it made an AudioStreamPlayer3D that needs this system's tuning.
 func bind() -> void:
 	# A fresh handler starts on stereo, so a set left on mono has to say so again.
-	_host._libretro.SetAudioChannelMode(_channel_mode)
-	_voices = _host._libretro.GetAudioVoiceIds()
+	_host.get_libretro_node().SetAudioChannelMode(_channel_mode)
+	_voices = _host.get_libretro_node().GetAudioVoiceIds()
 	if not _voices.is_empty():
 		if Engine.has_singleton("MetaXRAudio"):
 			_mx = Engine.get_singleton("MetaXRAudio")
@@ -128,7 +128,7 @@ func bind() -> void:
 		_apply_bound_volume()
 		return
 
-	_player = _host._libretro.get_node_or_null("AudioStreamPlayer3D") as AudioStreamPlayer3D
+	_player = _host.get_libretro_node().get_node_or_null("AudioStreamPlayer3D") as AudioStreamPlayer3D
 	if _player == null:
 		return
 	_player.unit_size        = _host.audio_unit_size
@@ -179,7 +179,7 @@ func ensure_bound() -> void:
 	# unconditionally, before the handler has chosen anything, so it is already
 	# sitting there on the first attempt — keying the retry off it stopped the
 	# retry dead.
-	if not _host._libretro.IsAudioReady():
+	if not _host.get_libretro_node().IsAudioReady():
 		return
 	bind()
 	_bind_settled = true
@@ -229,10 +229,10 @@ func route_changed() -> void:
 ## necessarily in the middle of it — the GBA's sits 1.6 cm off in Z — and at the
 ## distance a handheld is held that is an audible angle.
 func _refresh_hardware_geometry() -> void:
-	var mid := _host._model.get_instance_id() if _host._model != null else 0
+	var mid := _host.get_model().get_instance_id() if _host.get_model() != null else 0
 	if mid == _geom_model_id:
 		return
-	var aabb := _host._body_aabb()
+	var aabb := _host.body_aabb()
 	if aabb.size.x <= 0.0:
 		return          # meshes not up yet; try again next frame
 	_geom_model_id = mid
@@ -290,7 +290,7 @@ func _apply_voice_distance_gain(centre: Vector3) -> void:
 ## voices are separate sample streams, so silencing one is a gain of zero on it —
 ## the same trick SpatialAudioEmitter.set_channel_gains uses on the decks.
 func _send_voice_gain(g: float) -> void:
-	var route: Dictionary = _host._audio_speakers()
+	var route: Dictionary = _host.audio_speakers()
 	var gl := g
 	var gr := g
 	if route.get("socketed", false):
@@ -313,7 +313,7 @@ func _send_voice_gain(g: float) -> void:
 ## on a captive lead carries its own speaker (the handhelds, the Virtual Boy) and
 ## is always live.
 func _is_live() -> bool:
-	var route: Dictionary = _host._audio_speakers()
+	var route: Dictionary = _host.audio_speakers()
 	if not route.get("socketed", false):
 		return true
 	return int(route.get("left", -1)) >= 0 or int(route.get("right", -1)) >= 0
@@ -337,7 +337,7 @@ func _apply_player_volume() -> void:
 ## audio, and the hardware takes it back when the cable is pulled. Driven every
 ## frame because both the system and the TV can be picked up and carried.
 func update_position() -> void:
-	var route: Dictionary = _host._audio_route()
+	var route: Dictionary = _host.audio_route()
 	var tv: Node3D = route.get("tv", null) as Node3D
 	var socketed: bool = route.get("socketed", false)
 	var spk_l: int = int(route.get("left", -1))
@@ -396,7 +396,7 @@ func update_position() -> void:
 			# A handheld radiates out of its face, and its face is the shell's
 			# local +Y -- the same axis the tilt sensor above calls the screen
 			# normal. Sending that lets the SDK quieten it as you turn it away.
-			if _host._model != null and _host._model.is_handheld():
+			if _host.get_model() != null and _host.get_model().is_handheld():
 				emit_forward = _host.global_transform.basis.y.normalized()
 				emit_up = -_host.global_transform.basis.z.normalized()
 		# The mixer skips the SDK call when a position has not changed, so

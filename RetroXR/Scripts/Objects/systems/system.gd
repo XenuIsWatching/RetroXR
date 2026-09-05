@@ -594,6 +594,12 @@ func body_top_y() -> float:
 ## label, which are siblings of the body root. A model may narrow the measured
 ## body via name_label_body() — e.g. a clamshell returns just its base so the
 ## name lands on the base's front, not over the raised lid.
+## The bounding box of the machine's body, excluding parts a model excludes from
+## it (a clamshell's raised lid). Read by SystemAudio to place its emitter.
+func body_aabb() -> AABB:
+	return _body_aabb()
+
+
 func _body_aabb() -> AABB:
 	var meshes: Array[MeshInstance3D] = []
 	var src: Node = null
@@ -963,10 +969,23 @@ func _audio_tv() -> Node3D:
 ## something-is-plugged-in test: it is what separates a console that is silent
 ## until a cord reaches a set from a handheld whose captive lead always carries
 ## its own speaker.
+## Where this machine's sound goes: its speakers plus the set it reaches, if
+## any. Read by SystemAudio, which this node owns and drives.
+func audio_route() -> Dictionary:
+	return _audio_route()
+
+
 func _audio_route() -> Dictionary:
 	var route := _audio_speakers()
 	route["tv"] = _audio_tv()
 	return route
+
+
+## The speaker half of audio_route, without resolving the sink. Separate on
+## purpose: resolving the set is the expensive half, and two of SystemAudio's
+## three callers do not need it.
+func audio_speakers() -> Dictionary:
+	return _audio_speakers()
 
 
 ## The speaker half of _audio_route, without resolving the sink.
@@ -4747,12 +4766,25 @@ func _machine_toast() -> AchievementToast:
 	return _machine_toast_card if is_instance_valid(_machine_toast_card) else null
 
 
+## What is loaded, for a label or a save name — the cartridge's title, else the
+## ROM's. Read by the memory-card controller when naming a backup.
+func content_label() -> String:
+	return _content_label()
+
+
 func _content_label() -> String:
 	if _snapped_cartridge and "game_label" in _snapped_cartridge:
 		var lbl := str(_snapped_cartridge.get("game_label"))
 		if not lbl.is_empty():
 			return lbl
 	return rom_path.get_file().get_basename()
+
+
+## Which platform this machine is currently being: a cartridge's own systemid
+## when one is seated, else the machine's. The controllers this node owns ask
+## for it when naming a save.
+func resolve_systemid() -> String:
+	return _resolve_systemid()
 
 
 func _resolve_systemid() -> String:
@@ -4769,6 +4801,12 @@ func _resolve_systemid() -> String:
 # here is the surface other code already talks to by name: ScenePersistence and
 # CardSaveOps ask this node for its seated cards, NetplaySession asks it for its
 # SRAM, and the snap zones were wired to it in _ready.
+
+## The memory-card bays, in slot order. A read-only window for the controller
+## this node owns; the zones themselves stay this node's to wire.
+func memcard_slots() -> Array[XRToolsSnapZone]:
+	return _memcard_slots
+
 
 var _memcards: MemoryCardController = null
 

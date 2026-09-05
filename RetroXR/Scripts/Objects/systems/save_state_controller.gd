@@ -68,7 +68,7 @@ func can_capture_state() -> Dictionary:
 		return {"ok": false, "reason": "the machine is off"}
 	if not _capture_id.is_empty():
 		return {"ok": false, "reason": "a save state is already being written"}
-	if _cores_without_states.has(_host._resolve_core()):
+	if _cores_without_states.has(_host.resolve_core_name()):
 		return {"ok": false, "reason": "this core cannot save states"}
 	return {"ok": true, "reason": ""}
 
@@ -85,26 +85,26 @@ func capture_state(into_id := "") -> void:
 		return
 
 	_capture_id = into_id if not into_id.is_empty() else StatePaths.mint_id()
-	_capture_core = _host._resolve_core()
+	_capture_core = _host.resolve_core_name()
 	_capture_rom = _host.rom_path
 	# The frame the player was looking at when they pressed, not the one that
 	# happens to be up when the core finishes serializing. This is the CPU buffer
 	# the texture was uploaded from, so it is a memcpy and not a GPU readback —
 	# and it MUST be duplicated, because the core writes the next frame into
 	# those same pixels.
-	var live: Image = _host._libretro.GetVideoImage()
+	var live: Image = _host.get_libretro_node().GetVideoImage()
 	_capture_shot = live.duplicate() as Image if live != null and not live.is_empty() else null
 
 	_capture_gen += 1
 	var gen := _capture_gen
-	_host._libretro.savestate_ready.connect(_on_savestate_ready, CONNECT_ONE_SHOT)
+	_host.get_libretro_node().savestate_ready.connect(_on_savestate_ready, CONNECT_ONE_SHOT)
 	get_tree().create_timer(STATE_ANSWER_TIMEOUT).timeout.connect(
 		func() -> void:
 			if _capture_gen == gen and not _capture_id.is_empty():
-				if _host._libretro.savestate_ready.is_connected(_on_savestate_ready):
-					_host._libretro.savestate_ready.disconnect(_on_savestate_ready)
+				if _host.get_libretro_node().savestate_ready.is_connected(_on_savestate_ready):
+					_host.get_libretro_node().savestate_ready.disconnect(_on_savestate_ready)
 				_finish_capture(false, "the machine stopped before the state was written"))
-	_host._libretro.RequestSaveState()
+	_host.get_libretro_node().RequestSaveState()
 
 
 func _on_savestate_ready(data: PackedByteArray, frame: int) -> void:
@@ -169,7 +169,7 @@ func load_state(state_id: String) -> void:
 	if not _load_id.is_empty():
 		_host.state_loaded.emit(state_id, false, "a save state is already loading")
 		return
-	var core := _host._resolve_core()
+	var core := _host.resolve_core_name()
 	if core.is_empty() or _host.rom_path.is_empty():
 		_host.state_loaded.emit(state_id, false, "no game is inserted")
 		return
@@ -198,19 +198,19 @@ func _issue_load(data: PackedByteArray, frame: int, gen: int) -> void:
 	if data.is_empty():
 		_finish_load(false, "that save state could not be read")
 		return
-	_host._libretro.savestate_loaded.connect(_on_savestate_loaded, CONNECT_ONE_SHOT)
+	_host.get_libretro_node().savestate_loaded.connect(_on_savestate_loaded, CONNECT_ONE_SHOT)
 	get_tree().create_timer(STATE_ANSWER_TIMEOUT).timeout.connect(
 		func() -> void:
 			if _load_gen == gen and not _load_id.is_empty():
-				if _host._libretro.savestate_loaded.is_connected(_on_savestate_loaded):
-					_host._libretro.savestate_loaded.disconnect(_on_savestate_loaded)
+				if _host.get_libretro_node().savestate_loaded.is_connected(_on_savestate_loaded):
+					_host.get_libretro_node().savestate_loaded.disconnect(_on_savestate_loaded)
 				_finish_load(false, "the machine never answered"))
 	if not _host.is_powered_on:
 		_host.power_on()
 	# Issued whether or not the core is up yet: the emulation thread drains this
 	# queue at the top of its loop, which by construction is after the core has
 	# loaded. A start that fails answers false through the same signal.
-	_host._libretro.RequestLoadState(data, frame)
+	_host.get_libretro_node().RequestLoadState(data, frame)
 
 
 func _on_savestate_loaded(ok: bool) -> void:

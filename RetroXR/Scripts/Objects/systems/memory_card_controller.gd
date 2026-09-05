@@ -130,7 +130,7 @@ func _on_memcard_removed(slot: int) -> void:
 func _set_card_presence(slot: int, inserted: bool) -> void:
 	if not _host.is_powered_on or _card_family() != "playstation":
 		return
-	if slot != 0 or not _host._resolve_core().begins_with("pcsx_rearmed"):
+	if slot != 0 or not _host.resolve_core_name().begins_with("pcsx_rearmed"):
 		return
 	# Through _host.set_core_option rather than at the Libretro node, so the value the
 	# options panel shows and the value the core is running on cannot drift, and
@@ -157,9 +157,9 @@ func refresh_memcard_path(slot := -1) -> void:
 
 ## Restore a memory card into a slot after loading from a save file.
 func restore_memory_card(card: Node3D, slot := 0) -> void:
-	if slot < 0 or slot >= _host._memcard_slots.size():
+	if slot < 0 or slot >= _host.memcard_slots().size():
 		return
-	_host._memcard_slots[slot].pick_up_object(card)
+	_host.memcard_slots()[slot].pick_up_object(card)
 
 
 # --- Battery saves (SRAM) ---
@@ -186,12 +186,12 @@ func _on_sram_flushed(path: String, _size: int, final: bool) -> void:
 		return
 	if not SaveSync.is_enabled(path):
 		return
-	var sid := _host._resolve_systemid()
+	var sid := _host.resolve_systemid()
 	var rom_id := SaveSync.rom_id_for(sid, _host.rom_path)
 	if rom_id <= 0:
 		return
-	SaveSync.on_sram_flushed(path, rom_id, _host._resolve_core(), _sram_slot(),
-		_host._content_label(), final)
+	SaveSync.on_sram_flushed(path, rom_id, _host.resolve_core_name(), _sram_slot(),
+		_host.content_label(), final)
 
 
 ## Back up whichever saves on the seated card changed, each under the game that
@@ -211,10 +211,10 @@ func _on_sram_flushed(path: String, _size: int, final: bool) -> void:
 func _sync_card_saves(fmt: CardFormat, slot: int, path: String) -> void:
 	if fmt == null or path.is_empty() or not SaveSync.is_available():
 		return
-	var rom_id := SaveSync.rom_id_for(_host._resolve_systemid(), _host.rom_path)
+	var rom_id := SaveSync.rom_id_for(_host.resolve_systemid(), _host.rom_path)
 	if rom_id <= 0:
 		return
-	var core := _host._resolve_core()
+	var core := _host.resolve_core_name()
 	var data := FileAccess.get_file_as_bytes(path)
 	for s: Dictionary in _changed_card_saves(fmt, slot, data):
 		var save_slot := str(s["slot"])
@@ -365,13 +365,13 @@ func _sram_slot() -> String:
 	var slot_battery := _expansion_holding_battery()
 	if slot_battery != null:
 		return "unit:%s" % slot_battery.expansion_id
-	if _host._snapped_cartridge and "save_id" in _host._snapped_cartridge:
-		return str(_host._snapped_cartridge.get("save_id"))
+	if _host.get_snapped_cartridge() and "save_id" in _host.get_snapped_cartridge():
+		return str(_host.get_snapped_cartridge().get("save_id"))
 	return ""
 
 
 ## True when this console saves to a removable card. Keyed on the console's own
-## _host.systemid rather than _host._resolve_systemid(), which reads the seated disc: a
+## _host.systemid rather than _host.resolve_systemid(), which reads the seated disc: a
 ## PlayStation has a card slot whatever is in the drive, and the slot has to be
 ## configured before any media is loaded.
 ##
@@ -385,9 +385,9 @@ func _uses_memory_cards() -> bool:
 ## none and 0 means it is asserting there are no slots.
 func _card_slot_count() -> int:
 	# Reachable from the options panel, which can ask before a model is loaded.
-	if _host._model == null:
+	if _host.get_model() == null:
 		return 0
-	var from_model: int = _host._model.card_slot_count()
+	var from_model: int = _host.get_model().card_slot_count()
 	if from_model >= 0:
 		return mini(from_model, RetroSystem.MEMCARD_SLOT_NODES.size())
 	var info := SystemInfo.for_system(_host.systemid)
@@ -428,9 +428,9 @@ func _compose_sram_path(resolved_core: String, slot := 0) -> String:
 	var battery := _expansion_holding_battery()
 	if battery != null:
 		return SramPaths.unit_save_path(resolved_core, battery.expansion_id)
-	if _host._snapped_cartridge and "save_id" in _host._snapped_cartridge:
+	if _host.get_snapped_cartridge() and "save_id" in _host.get_snapped_cartridge():
 		return SramPaths.cart_save_path(resolved_core, _host.rom_path,
-			str(_host._snapped_cartridge.get("save_id")))
+			str(_host.get_snapped_cartridge().get("save_id")))
 	# Nothing in the console's own slot, but the machine may still be running
 	# something: a 64DD disk or a Mega-CD disc sits in the EXPANSION's bay, and
 	# that stack is what _apply_expansion_launch booted from. Read the medium from
@@ -518,7 +518,7 @@ func _card_path_for_run(resolved_core: String, slot: int) -> String:
 ## is already how this function says "nothing goes through SAVE_RAM".
 func _sram_path_for_run(resolved_core: String) -> String:
 	var cards := _uses_memory_cards()
-	_host._libretro.SetRemovableStorage(cards)
+	_host.get_libretro_node().SetRemovableStorage(cards)
 	if not cards:
 		return _compose_sram_path(resolved_core)
 	var paths: Array[String] = []
@@ -547,9 +547,9 @@ func _mount_core_cards(resolved_core: String, paths: Array[String]) -> void:
 ## one path a card being seated, pulled or renamed goes through, so the two
 ## families cannot drift apart over what a swap means.
 func _remount_cards() -> void:
-	var path := _sram_path_for_run(_host._resolve_core())
+	var path := _sram_path_for_run(_host.resolve_core_name())
 	if _card_slot_count() <= 1:
-		_host._libretro.SetSramPath(path)
+		_host.get_libretro_node().SetSramPath(path)
 
 
 ## Netplay: override the SRAM source for the next net_start_core (see
@@ -564,7 +564,7 @@ func net_set_sram(path: String, data: PackedByteArray) -> void:
 ## Host: the current .srm file bytes for the seated content (shipped to peers
 ## in the netplay cold-start payload). Empty when no file exists yet.
 func net_sram_file_bytes() -> PackedByteArray:
-	var path := _compose_sram_path(_host._resolve_core())
+	var path := _compose_sram_path(_host.resolve_core_name())
 	if path.is_empty() or not FileAccess.file_exists(path):
 		return PackedByteArray()
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -581,9 +581,9 @@ func net_sram_file_bytes() -> PackedByteArray:
 func apply_netplay_sram() -> bool:
 	if not _net_sram_override:
 		return false
-	_host._libretro.SetSramPath(_net_sram_path)
+	_host.get_libretro_node().SetSramPath(_net_sram_path)
 	if not _net_sram_data.is_empty():
-		_host._libretro.SetSramData(_net_sram_data)
+		_host.get_libretro_node().SetSramData(_net_sram_data)
 	_net_sram_override = false
 	_net_sram_data = PackedByteArray()
 	return true
