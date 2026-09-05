@@ -89,6 +89,19 @@ static func drop_mod_objects(owner_id: String) -> void:
 
 
 ## Build a registered mod prop and stamp it so it serializes back as itself.
+## Build one of the plain object types from its token, or null for a type this
+## table does not carry.
+##
+## Public because the spawn menu needs the same answer: it used to keep its own
+## preload of each of these scenes and its own match arm naming the same token,
+## so a new prop had to be registered twice and an object registered once either
+## vanished on the next load or could not be spawned at all.
+static func instantiate(type: String) -> Node3D:
+	if not PLAIN_SCENES.has(type):
+		return null
+	return (PLAIN_SCENES[type] as PackedScene).instantiate() as Node3D
+
+
 static func _instantiate_mod_object(type: String) -> Node3D:
 	var path := mod_object_scene(type)
 	if path.is_empty() or not ResourceLoader.exists(path):

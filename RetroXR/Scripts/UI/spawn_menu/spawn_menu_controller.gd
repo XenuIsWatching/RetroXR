@@ -14,8 +14,6 @@ const DISC_SCENE            := preload("res://Scenes/Objects/media/disc.tscn")
 const UMD_DISC_SCENE        := preload("res://Scenes/Objects/media/umd_disc.tscn")
 const BOOK_SCENE            := preload("res://Scenes/Objects/media/pdf_book.tscn")
 const POSTER_SCENE := preload("res://Scenes/Objects/media/poster.tscn")
-const STORAGE_BOX_SCENE     := preload("res://Scenes/Objects/appliances/storage_box.tscn")
-const TABLE_SCENE           := preload("res://Scenes/Objects/furniture/table.tscn")
 const RETRO_CONTROLLER_SCENE := preload("res://Scenes/Objects/controllers/retro_controller.tscn")
 # Stand-in Virtual Boy pad: carries the console POWER switch, like the real one.
 const VB_CONTROLLER_SCENE   := preload("res://Scenes/Objects/controllers/vb/vb_controller.tscn")
@@ -27,7 +25,6 @@ const PS1_DUALSHOCK_SCENE   := preload("res://Scenes/Objects/controllers/playsta
 const RETRO_MOUSE_SCENE     := preload("res://Scenes/Objects/peripherals/retro_mouse.tscn")
 # The Super NES Mouse: its own shell and connector, and it fits only a SNES.
 const SNES_MOUSE_SCENE      := preload("res://Scenes/Objects/peripherals/snes_mouse.tscn")
-const RETRO_KEYBOARD_SCENE  := preload("res://Scenes/Objects/peripherals/retro_keyboard.tscn")
 const RETRO_MULTITAP_SCENE  := preload("res://Scenes/Objects/controllers/retro_multitap.tscn")
 # A wireless receiver for one real gamepad — plugged into a port instead of held.
 const PAD_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/pad_receiver.tscn")
@@ -35,17 +32,10 @@ const PAD_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/pad_rec
 const KEYBOARD_RECEIVER_SCENE := preload("res://Scenes/Objects/controllers/keyboard_receiver.tscn")
 const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse_receiver.tscn")
 const LIGHT_GUN_SCENE       := preload("res://Scenes/Objects/peripherals/light_gun.tscn")
-const WIIMOTE_SCENE         := preload("res://Scenes/Objects/controllers/wii/wiimote.tscn")
-const NUNCHUK_SCENE         := preload("res://Scenes/Objects/controllers/wii/nunchuk.tscn")
-const MOTION_PLUS_SCENE     := preload("res://Scenes/Objects/controllers/wii/motion_plus.tscn")
-const SENSOR_BAR_SCENE      := preload("res://Scenes/Objects/system_models/wii/sensor_bar.tscn")
 const RF_SWITCH_SCENE       := preload("res://Scenes/Objects/appliances/rf_switch.tscn")
-const VCR_SCENE             := preload("res://Scenes/Objects/appliances/vcr_player.tscn")
 const MEMCARD_SCENE         := preload("res://Scenes/Objects/media/memory_card.tscn")
 const GC_MEMCARD_SCENE      := preload("res://Scenes/Objects/media/gc_memory_card.tscn")
 const TAPE_SCENE            := preload("res://Scenes/Objects/media/vcr_tape.tscn")
-const TV_REMOTE_SCENE       := preload("res://Scenes/Objects/appliances/tv_remote.tscn")
-const DVD_PLAYER_SCENE      := preload("res://Scenes/Objects/appliances/dvd_player.tscn")
 const COMPOSITE_CABLE_SCENE := preload("res://Scenes/Objects/cables/composite_cable.tscn")
 const MONO_CABLE_SCENE      := preload("res://Scenes/Objects/cables/mono_composite_cable.tscn")
 const POWER_CORD_SCENE      := preload("res://Scenes/Objects/cables/power_cord.tscn")
@@ -60,13 +50,9 @@ const LINK_CABLE_SCENE      := preload("res://Scenes/Objects/cables/link_cable.t
 const GB_LINK_CABLE_SCENE   := preload("res://Scenes/Objects/cables/gb_link_cable.tscn")
 const GC_GBA_CABLE_SCENE    := preload("res://Scenes/Objects/cables/gc_gba_cable.tscn")
 const PSX_LINK_CABLE_SCENE  := preload("res://Scenes/Objects/cables/psx_link_cable.tscn")
-const SPEAKER_PAIR_SCENE    := preload("res://Scenes/Objects/appliances/speaker_pair.tscn")
 const DVD_DISC_SCENE        := preload("res://Scenes/Objects/media/dvd_disc.tscn")
-const CD_PLAYER_SCENE       := preload("res://Scenes/Objects/appliances/cd_player.tscn")
-const CASSETTE_PLAYER_SCENE := preload("res://Scenes/Objects/appliances/cassette_player.tscn")
 const AUDIO_DISC_SCENE      := preload("res://Scenes/Objects/media/audio_disc.tscn")
 const AUDIO_CASSETTE_SCENE  := preload("res://Scenes/Objects/media/audio_cassette.tscn")
-const RECORD_PLAYER_SCENE   := preload("res://Scenes/Objects/appliances/record_player.tscn")
 const VINYL_RECORD_SCENE    := preload("res://Scenes/Objects/media/vinyl_record.tscn")
 
 @onready var _viewport_node: XRToolsViewport2DIn3D = $SpawnMenuViewport
@@ -696,7 +682,6 @@ func _apply_menu_locomotion_blocks(left_blocked: bool, right_blocked: bool) -> v
 	_locomotion_manager.set_block(&"spawn_menu_right", LocomotionManager.CHANNEL_RIGHT, right_blocked and not disabled)
 
 
-
 func _get_menu() -> SpawnMenu2D:
 	var vp := _viewport_node.get_node_or_null("Viewport") as SubViewport
 	if vp and vp.get_child_count() > 0:
@@ -1155,20 +1140,6 @@ func _on_spawn_requested(type: String) -> void:
 			obj = TV_SCENE.instantiate() as Node3D
 		"cartridge":
 			obj = CART_SCENE.instantiate() as Node3D
-		"trash_can":
-			obj = STORAGE_BOX_SCENE.instantiate() as Node3D
-		"table":
-			obj = TABLE_SCENE.instantiate() as Node3D
-		"vcr_player":
-			obj = VCR_SCENE.instantiate() as Node3D
-		"dvd_player":
-			obj = DVD_PLAYER_SCENE.instantiate() as Node3D
-		"cd_player":
-			obj = CD_PLAYER_SCENE.instantiate() as Node3D
-		"cassette_player":
-			obj = CASSETTE_PLAYER_SCENE.instantiate() as Node3D
-		"record_player":
-			obj = RECORD_PLAYER_SCENE.instantiate() as Node3D
 		"composite_cable":
 			obj = COMPOSITE_CABLE_SCENE.instantiate() as Node3D
 		"mono_composite_cable":
@@ -1193,10 +1164,6 @@ func _on_spawn_requested(type: String) -> void:
 			obj = GC_GBA_CABLE_SCENE.instantiate() as Node3D
 		"psx_link_cable":
 			obj = PSX_LINK_CABLE_SCENE.instantiate() as Node3D
-		"speaker_pair":
-			obj = SPEAKER_PAIR_SCENE.instantiate() as Node3D
-		"tv_remote":
-			obj = TV_REMOTE_SCENE.instantiate() as Node3D
 		"memory_card":
 			obj = MEMCARD_SCENE.instantiate() as Node3D
 		"retro_controller":
@@ -1215,24 +1182,14 @@ func _on_spawn_requested(type: String) -> void:
 			obj = RETRO_MOUSE_SCENE.instantiate() as Node3D
 		"snes_mouse":
 			obj = SNES_MOUSE_SCENE.instantiate() as Node3D
-		"retro_keyboard":
-			obj = RETRO_KEYBOARD_SCENE.instantiate() as Node3D
 		"retro_multitap":
 			obj = RETRO_MULTITAP_SCENE.instantiate() as Node3D
 		# No port to pick: a remote is wireless and pairs with SYNC, and a nunchuk
 		# plugs into a remote rather than into a console.
-		"wiimote":
-			obj = WIIMOTE_SCENE.instantiate() as Node3D
-		"nunchuk":
-			obj = NUNCHUK_SCENE.instantiate() as Node3D
 		# Nor this: the dongle clips into a remote's expansion port, and the
 		# Nunchuk then clips into the dongle rather than into the remote.
-		"motion_plus":
-			obj = MOTION_PLUS_SCENE.instantiate() as Node3D
 		# Also no port to pick, for the opposite reason: its plug fits exactly one
 		# socket in the room, the Wii's own sensor bar jack.
-		"sensor_bar":
-			obj = SENSOR_BAR_SCENE.instantiate() as Node3D
 		# A lead with a box in the middle, so it spawns like a lead — both its
 		# connectors are free and it picks its own sockets up off the floor.
 		"rf_switch":
@@ -1246,10 +1203,14 @@ func _on_spawn_requested(type: String) -> void:
 			gun.show_laser_dot = _aim_crosshair_enabled
 			obj = gun
 		_:
-			# Any other type is treated as a bare systemid (default model).
-			var sys := SYSTEM_SCENE.instantiate() as RetroSystem
-			sys.systemid = type
-			obj = sys
+			# Everything ScenePersistence can restore is spawned from that same
+			# table, so a new prop is one row there rather than a row and an arm.
+			obj = ScenePersistence.instantiate(type)
+			if obj == null:
+				# Any other type is treated as a bare systemid (default model).
+				var sys := SYSTEM_SCENE.instantiate() as RetroSystem
+				sys.systemid = type
+				obj = sys
 	if obj:
 		_place_spawned(obj, type)
 
