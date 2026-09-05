@@ -315,7 +315,7 @@ func _latch(ctrl: XRController3D, action: String, tip: Vector3) -> void:
 ## The grab box, whichever child carries it. Resolved on demand because the NES
 ## builds its rig in code and adds the shape after the hinge is already in the tree.
 func _grab_box() -> CollisionShape3D:
-	if _grab_shape != null and is_instance_valid(_grab_shape):
+	if is_instance_valid(_grab_shape):
 		return _grab_shape
 	for child in get_children():
 		var cs := child as CollisionShape3D

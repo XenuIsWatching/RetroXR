@@ -188,7 +188,7 @@ func _on_volume(v: float) -> void:
 ## The same contract every volume control in the project speaks: the sink holds a
 ## 0..1 level and hands it to the source, which owns the actual voices.
 func _push_volume() -> void:
-	if _source != null and is_instance_valid(_source) \
+	if is_instance_valid(_source) \
 			and _source.has_method("set_audio_volume"):
 		_source.set_audio_volume(_volume)
 
@@ -242,6 +242,6 @@ func restore_box_poses(poses: Array) -> void:
 ## holding a freed pickable and XRToolsPickable._exit_tree walks a dangling grab
 ## driver — the same trap CompositeCable.drop_and_free records.
 func drop_and_free() -> void:
-	if _line_in != null and is_instance_valid(_line_in):
+	if is_instance_valid(_line_in):
 		_line_in.drop_object()
 	Vanish.free_node(self)

@@ -104,7 +104,7 @@ func _log_seating(verb: String, plug: RcaPlug) -> void:
 		verb,
 		channel_name(),
 		_device_label(dev),
-		"" if plug != null and is_instance_valid(plug) else "  (plug already gone)",
+		"" if is_instance_valid(plug) else "  (plug already gone)",
 	])
 	# A socket whose walk up the tree found no owner accepts plugs and routes
 	# nothing — the failure is invisible at the socket and only shows up as a
@@ -125,7 +125,7 @@ static func _device_label(dev: Node) -> String:
 
 ## Tell the lead that what it carries may have changed.
 func _announce(plug: RcaPlug) -> void:
-	if plug != null and is_instance_valid(plug) and plug.cable != null \
+	if is_instance_valid(plug) and plug.cable != null \
 			and is_instance_valid(plug.cable):
 		plug.cable.on_plug_seating_changed()
 

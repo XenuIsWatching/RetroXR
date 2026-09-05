@@ -79,7 +79,7 @@ func _bind(body: RigidBody3D, ray: RayCast3D) -> void:
 
 
 func is_stuck() -> bool:
-	return target != null and is_instance_valid(target)
+	return is_instance_valid(target)
 
 
 func _physics_process(_delta: float) -> void:

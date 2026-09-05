@@ -79,7 +79,7 @@ func _on_dropped_signal(_pickable: Node3D) -> void:
 ## follows it; this is the same rule for the other handle.
 func drop_and_free() -> void:
 	var root := get_parent()
-	if root != null and is_instance_valid(root) and root.has_method("drop_and_free"):
+	if is_instance_valid(root) and root.has_method("drop_and_free"):
 		root.call("drop_and_free")
 	else:
 		Vanish.free_node(self)

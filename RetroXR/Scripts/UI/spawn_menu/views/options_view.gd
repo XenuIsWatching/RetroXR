@@ -1173,7 +1173,7 @@ func _on_cleanup_scanned(found: Dictionary) -> void:
 ## says what is happening rather than looking inert.
 func _set_cleanup_busy(busy: bool) -> void:
 	_cleanup_busy = busy
-	if _cleanup_scan_btn != null and is_instance_valid(_cleanup_scan_btn):
+	if is_instance_valid(_cleanup_scan_btn):
 		_cleanup_scan_btn.disabled = busy
 
 

@@ -199,7 +199,7 @@ func _process(delta: float) -> void:
 	# Emanate the sound from the connected TV so it's spatialised there, aimed the
 	# way its picture points -- a set heard from behind should be muted by its own
 	# cabinet.
-	if _emitter and connected_tv != null and is_instance_valid(connected_tv):
+	if _emitter and is_instance_valid(connected_tv):
 		_emit_through(connected_tv)
 	elif _emitter:
 		_emitter.clear_speaker_positions()

@@ -68,7 +68,7 @@ func apply_channel_mode() -> void:
 	# property of the SET, so an input switched to later has to already be routed
 	# the way the switch says rather than reverting to stereo for one press.
 	for system in _tv.panel()._connected_systems:
-		if system != null and is_instance_valid(system) \
+		if is_instance_valid(system) \
 				and system.has_method("set_audio_channel_mode"):
 			system.set_audio_channel_mode(_tv.audio_mode)
 	# The tuner is the one source the set does own an emitter for, so it takes the
@@ -118,7 +118,7 @@ func apply_volume() -> void:
 	# is on Source.RF and has to be silenced with the rest when it is not showing.
 	for i in _tv.panel()._connected_systems.size():
 		var system: Node3D = _tv.panel()._connected_systems[i]
-		if system != null and is_instance_valid(system):
+		if is_instance_valid(system):
 			system.set_audio_volume(volume_for(i))
 	if _tv.tuner():
 		_tv.tuner().set_volume(volume_for(RetroTV.Source.TV))

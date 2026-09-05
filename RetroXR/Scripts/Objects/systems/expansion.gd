@@ -642,7 +642,7 @@ func _on_media_out(slot := 0) -> void:
 	if slot >= _media.size():
 		return
 	var was: Node3D = _media[slot]
-	if was != null and is_instance_valid(was) and _slot == null:
+	if is_instance_valid(was) and _slot == null:
 		remove_collision_exception_with(was)
 	_media[slot] = null
 	_notify_host_media()

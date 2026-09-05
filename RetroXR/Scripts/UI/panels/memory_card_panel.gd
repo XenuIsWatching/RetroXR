@@ -72,7 +72,7 @@ func _ensure_ui_connected() -> void:
 
 ## Say what just happened, in front of the panel rather than inside it.
 func _notice(text: String, seconds := MenuToasts.DWELL_OK) -> void:
-	if _toasts != null and is_instance_valid(_toasts):
+	if is_instance_valid(_toasts):
 		_toasts.notice(text, seconds)
 
 

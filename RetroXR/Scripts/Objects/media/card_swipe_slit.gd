@@ -409,7 +409,7 @@ func _finish(complete: bool) -> void:
 	var edge := _edge
 	var armed := _armed
 	var body := card as PhysicsBody3D
-	if body != null and is_instance_valid(body) and _host != null:
+	if is_instance_valid(body) and _host != null:
 		body.remove_collision_exception_with(_host)
 	# The card is KEPT when a pass ends inside the groove -- it is still in the
 	# trigger volume, and body_entered will not fire again until it leaves. What

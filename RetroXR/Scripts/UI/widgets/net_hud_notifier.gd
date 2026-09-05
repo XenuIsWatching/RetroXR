@@ -61,7 +61,7 @@ func _ready() -> void:
 
 
 func _speaking() -> bool:
-	return _stack != null and is_instance_valid(_stack) \
+	return is_instance_valid(_stack) \
 		and _nm != null and _nm.has_method("is_host") and _nm.is_host()
 
 

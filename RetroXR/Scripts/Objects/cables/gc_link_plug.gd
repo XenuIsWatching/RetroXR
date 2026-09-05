@@ -66,5 +66,5 @@ func on_unplugged() -> void:
 
 
 func _tell_cable() -> void:
-	if cable != null and is_instance_valid(cable) and cable.has_method("on_plug_seating_changed"):
+	if is_instance_valid(cable) and cable.has_method("on_plug_seating_changed"):
 		cable.on_plug_seating_changed()

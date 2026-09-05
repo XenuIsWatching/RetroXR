@@ -136,7 +136,7 @@ static func attach(device: Node3D, ports: Array) -> AvLegend:
 	var live: Array[RcaPort] = []
 	for p in ports:
 		var port := p as RcaPort
-		if port != null and is_instance_valid(port):
+		if is_instance_valid(port):
 			live.append(port)
 	if live.is_empty():
 		return null

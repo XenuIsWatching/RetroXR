@@ -338,7 +338,7 @@ func _open_panel() -> void:
 
 func _stow_panel() -> void:
 	_is_open = false
-	if _popout != null and is_instance_valid(_popout):
+	if is_instance_valid(_popout):
 		_popout.hide_panel()
 	_panel.visible = false
 	if not float_panel or _floated_to == null:

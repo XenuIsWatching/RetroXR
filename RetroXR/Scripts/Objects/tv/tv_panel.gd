@@ -411,7 +411,7 @@ func _input_for_device(dev: Node3D) -> int:
 	# as one on a composite lead is.
 	for i in _av_ports.size():
 		var captive: CablePlug = _snapped_plugs[i]
-		if captive != null and is_instance_valid(captive) and captive.get_system() == dev:
+		if is_instance_valid(captive) and captive.get_system() == dev:
 			return i
 
 	# Everything else comes off the graph, which walks every cable the device is
@@ -474,4 +474,4 @@ func selected_system() -> Node3D:
 	if input < 0:
 		return null
 	var system: Node3D = _connected_systems[input]
-	return system if system != null and is_instance_valid(system) else null
+	return system if is_instance_valid(system) else null

@@ -757,7 +757,7 @@ func _on_firmware_started(key: String, label: String, total: int) -> void:
 func _on_firmware_progress(key: String, received: int, total: int) -> void:
 	var frac := 0.0 if total <= 0 else clampf(float(received) / float(total), 0.0, 1.0)
 	var btn := _bios_job_buttons.get(key) as Button
-	if btn != null and is_instance_valid(btn):
+	if is_instance_valid(btn):
 		btn.text = "%d%%" % int(frac * 100.0)
 	_romm_notify_or_queue(key, String.chr(MenuIcons.BUSY),
 		_job_text(key, total), 0.0, frac)
@@ -1691,7 +1691,7 @@ static func _paint_delete_button(btn: Button, armed: bool, core_name: String) ->
 ## may have been freed by a rebuild in between, which is why it is checked.
 func _disarm_firmware_delete(core_name: String = "") -> void:
 	_bios_delete_armed = ""
-	if _bios_delete_armed_btn != null and is_instance_valid(_bios_delete_armed_btn):
+	if is_instance_valid(_bios_delete_armed_btn):
 		_paint_delete_button(_bios_delete_armed_btn, false, core_name)
 	_bios_delete_armed_btn = null
 

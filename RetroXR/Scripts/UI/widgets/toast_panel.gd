@@ -208,7 +208,7 @@ func _place() -> void:
 	var inset := BOTTOM_INSET * _base_m_per_px()
 	var y := -_host.screen_size.y * 0.5 + inset + _viewport.screen_size.y * 0.5
 
-	if _host_curve != null and is_instance_valid(_host_curve):
+	if is_instance_valid(_host_curve):
 		# flat_x 0 — the stack is centred, so this only pushes it along the
 		# surface normal and leaves the yaw at zero.
 		transform = _host_curve.surface_pose(0.0, y, Z_OFFSET)

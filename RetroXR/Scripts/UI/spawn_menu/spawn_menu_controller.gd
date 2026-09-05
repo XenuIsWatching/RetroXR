@@ -439,7 +439,7 @@ func _open_options_for(host: Node3D) -> void:
 
 ## Count one use of the menu verb, so its row eventually retires.
 func _note_menu_verb_used() -> void:
-	if _menu_hint != null and is_instance_valid(_menu_hint):
+	if is_instance_valid(_menu_hint):
 		_menu_hint.note_used(&"menu_open")
 
 

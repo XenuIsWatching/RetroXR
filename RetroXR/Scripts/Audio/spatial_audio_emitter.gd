@@ -125,7 +125,7 @@ func rebuild_backend() -> void:
 			_mx.destroy_voice(_voice_r)
 		_voice_l = -1
 		_voice_r = -1
-	elif _player != null and is_instance_valid(_player):
+	elif is_instance_valid(_player):
 		_player.stop()
 		_player.queue_free()
 		_player = null
@@ -193,7 +193,7 @@ func _process(_delta: float) -> void:
 		# most emitters here rewrite a position that never moved.
 		if _voice_r < 0:
 			l_pos = origin      # one voice: the middle, not the left speaker
-		if _listener != null and is_instance_valid(_listener):
+		if is_instance_valid(_listener):
 			var lp: Vector3 = _listener.get_listener_position()
 			l_pos = hold_off_head(l_pos, lp)
 			r_pos = hold_off_head(r_pos, lp)
@@ -209,7 +209,7 @@ func _process(_delta: float) -> void:
 		# Gain from the TRUE origin, not the held-off one: the hold-off exists to
 		# keep the HRTF usable, and should not also make a source quieter.
 		_apply_distance_gain(origin)
-	elif _player != null and is_instance_valid(_player):
+	elif is_instance_valid(_player):
 		_player.global_position = origin
 
 
@@ -228,7 +228,7 @@ func _process(_delta: float) -> void:
 ## handheld ends up centimetres from the head and the unclamped law runs away
 ## there.
 func _apply_distance_gain(origin: Vector3) -> void:
-	if _listener != null and is_instance_valid(_listener):
+	if is_instance_valid(_listener):
 		_dist_factor = distance_gain(origin, _listener.get_listener_position(),
 			unit_size, max_distance)
 	_send_gain(_volume * _dist_factor)
@@ -282,7 +282,7 @@ func set_channel_gains(l: float, r: float) -> void:
 	_ch_gain_r = clampf(r, 0.0, 1.0)
 	if _use_sdk:
 		_send_gain(_volume * _dist_factor)
-	elif _player != null and is_instance_valid(_player):
+	elif is_instance_valid(_player):
 		var live: float = maxf(_ch_gain_l, _ch_gain_r)
 		_player.volume_db = _MUTE_DB if _volume * live <= 0.0 \
 			else linear_to_db(_volume * live)
@@ -430,7 +430,7 @@ func flush() -> void:
 		_mx.flush_voice(_voice_l)
 		if _voice_r >= 0:
 			_mx.flush_voice(_voice_r)
-	elif _player != null and is_instance_valid(_player):
+	elif is_instance_valid(_player):
 		# The generator has no flush; restarting the stream is the equivalent.
 		_player.stop()
 		_player.play()

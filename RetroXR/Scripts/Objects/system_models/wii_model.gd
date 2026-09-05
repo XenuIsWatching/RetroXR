@@ -340,7 +340,7 @@ func _on_sd_door_moved(deg: float) -> void:
 	_door_open = open
 	if _sd_bay != null:
 		_sd_bay.visible = open
-	if _sync_btn != null and is_instance_valid(_sync_btn):
+	if is_instance_valid(_sync_btn):
 		_sync_btn.set_active(open)
 
 
@@ -413,7 +413,7 @@ func _apply_ctrl_gate() -> void:
 		grp.visible = _ctrl_open
 	for z in _port_zones:
 		var zone := z as Node3D
-		if zone != null and is_instance_valid(zone):
+		if is_instance_valid(zone):
 			zone.set("enabled", _ctrl_open)
 			zone.visible = _ctrl_open
 
@@ -480,7 +480,7 @@ func _apply_mem_gate() -> void:
 		grp.visible = _mem_open
 	for z in _mem_zones:
 		var zone := z as Node3D
-		if zone != null and is_instance_valid(zone):
+		if is_instance_valid(zone):
 			zone.set("enabled", _mem_open)
 			zone.visible = _mem_open
 

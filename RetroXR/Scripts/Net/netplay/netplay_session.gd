@@ -429,7 +429,7 @@ func _requires_lockstep_input() -> bool:
 			for controller: Variant in controllers:
 				if controller is KeyboardReceiver:
 					return true
-				if controller != null and is_instance_valid(controller) \
+				if is_instance_valid(controller) \
 						and not controller is InputReceiver \
 						and controller.has_method("is_picked_up"):
 					return true

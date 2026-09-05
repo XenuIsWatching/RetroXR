@@ -373,7 +373,7 @@ func _update_platter(delta: float) -> void:
 	var step := -_platter_omega * delta
 	_platter.rotate_object_local(Vector3.UP, step)
 	var lp := _tray.get_media() if _tray else null
-	if lp != null and is_instance_valid(lp) and lp is Node3D:
+	if is_instance_valid(lp) and lp is Node3D:
 		(lp as Node3D).rotate_object_local(Vector3.UP, step)
 
 

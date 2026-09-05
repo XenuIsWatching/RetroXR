@@ -143,7 +143,7 @@ func _local_for(host: XRToolsViewport2DIn3D, toggle_rect: Rect2,
 
 
 func _ensure_ui() -> DropdownOptions2D:
-	if _ui != null and is_instance_valid(_ui):
+	if is_instance_valid(_ui):
 		return _ui
 
 	if _viewport == null:

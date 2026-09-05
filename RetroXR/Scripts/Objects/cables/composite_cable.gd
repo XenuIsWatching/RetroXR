@@ -593,7 +593,7 @@ func _seat_of(plug: RcaPlug) -> Dictionary:
 		if owner_node != null:
 			return {"owner": owner_node, "port": String(port.name)}
 		return {}
-	if "seated_system" in plug and plug.seated_system != null 			and is_instance_valid(plug.seated_system) and plug.seated_port_index >= 0:
+	if "seated_system" in plug and is_instance_valid(plug.seated_system) and plug.seated_port_index >= 0:
 		# Named by the convention RetroSystem's own scene uses for these zones
 		# (ControllerPort1..4, one-based). The plug is handed an index rather
 		# than the zone, so the name is rebuilt from it here; if that convention
@@ -674,7 +674,7 @@ func _apply_seating(seats: Array) -> void:
 		var plug: RcaPlug = _plugs[e][c]
 		var dev: Node3D = seat.get("device")
 		var port_name: String = str(seat.get("port", ""))
-		if dev != null and is_instance_valid(dev) and not port_name.is_empty():
+		if is_instance_valid(dev) and not port_name.is_empty():
 			var port := port_named(dev, port_name)
 			if port != null:
 				port.pick_up_object(plug)

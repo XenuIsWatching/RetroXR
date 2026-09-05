@@ -320,7 +320,7 @@ func populate_system(video_out: bool, show_video_out: bool, ignore_grav: bool,
 func scroll_active(pixels: float) -> void:
 	if _active_scroll:
 		_active_scroll.scroll_vertical += int(pixels)
-	elif _cart_ui != null and is_instance_valid(_cart_ui):
+	elif is_instance_valid(_cart_ui):
 		# The Cartridge tab: its own ribbon strip decides which list scrolls.
 		_cart_ui.scroll_active(pixels)
 

@@ -1081,7 +1081,7 @@ func _rebuild_romm_rows() -> void:
 
 	_romm_refresh_region_options(regions_seen)
 
-	if _romm_list != null and is_instance_valid(_romm_list):
+	if is_instance_valid(_romm_list):
 		_romm_list.set_row_count(_romm_rows.size())
 
 	_romm_update_empty_label()
@@ -1548,7 +1548,7 @@ func _on_rom_delete_pressed(index: int, state: Button) -> void:
 		get_tree().create_timer(3.0).timeout.connect(func() -> void:
 			if _romm_delete_armed == index:
 				_romm_delete_armed = -1
-				if _romm_list != null and is_instance_valid(_romm_list):
+				if is_instance_valid(_romm_list):
 					_romm_list.rebind_visible()
 		)
 		return
@@ -2094,7 +2094,7 @@ func _on_romm_auth_failed(detail: String) -> void:
 ## whether or not the server answers, so the rows have to say which of them can
 ## still be acted on — and say it again when it comes back.
 func _on_romm_reachability_changed(reachable: bool) -> void:
-	if _romm_list != null and is_instance_valid(_romm_list):
+	if is_instance_valid(_romm_list):
 		_romm_list.rebind_visible()
 	_romm_update_empty_label()
 	if reachable:
@@ -2248,7 +2248,7 @@ func _on_romm_dl_progress(rom_id: int, received: int, total: int) -> void:
 		"%s%s · %d%% · %s / %s" % [_romm_dl_label(rom_id),
 			"" if attempt <= 0 else "  (attempt %d)" % attempt, pct,
 			MenuStyle.human_bytes(received), MenuStyle.human_bytes(total)], frac)
-	if _romm_list != null and is_instance_valid(_romm_list):
+	if is_instance_valid(_romm_list):
 		_romm_list.rebind_index(_romm_dl_row_index)
 
 
@@ -2332,14 +2332,14 @@ func _on_romm_cache_changed() -> void:
 
 
 func _on_romm_art_ready(_rom_id: int, _texture: Texture2D) -> void:
-	if _romm_list != null and is_instance_valid(_romm_list):
+	if is_instance_valid(_romm_list):
 		_romm_list.rebind_visible()
 
 
 ## A wheel or label finished decoding. Only the visible rows are re-bound, and
 ## the cache's per-frame budget means at most two of these land in one frame.
 func _on_scraped_art_ready(_key: String, _texture: Texture2D) -> void:
-	if _romm_list != null and is_instance_valid(_romm_list):
+	if is_instance_valid(_romm_list):
 		_romm_list.rebind_visible()
 
 
@@ -2418,7 +2418,7 @@ func _on_scrape_accepted(rom_path: String, systemid: String, result: Dictionary)
 		# 9,927 of them on this library, and then _rebuild_romm_rows did it a
 		# second time. The name and metadata that DO change are handled by the
 		# single _populate_cartridges_tab this accept already runs below.
-		if _romm_list != null and is_instance_valid(_romm_list):
+		if is_instance_valid(_romm_list):
 			_romm_list.rebind_visible()
 	scraper_client.media_download_completed.connect(_media_dl_refresh_cb)
 

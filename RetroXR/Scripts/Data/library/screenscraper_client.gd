@@ -571,7 +571,7 @@ func _wait_for_rate_limit() -> void:
 
 
 func _cleanup_scrape_http() -> void:
-	if _scrape_http != null and is_instance_valid(_scrape_http):
+	if is_instance_valid(_scrape_http):
 		_scrape_http.queue_free()
 	_scrape_http = null
 

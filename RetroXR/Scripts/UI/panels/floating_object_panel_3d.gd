@@ -45,10 +45,10 @@ func _process(_delta: float) -> void:
 	if not visible:
 		return
 	var target := _target_node()
-	if target != null and is_instance_valid(target):
+	if is_instance_valid(target):
 		global_position = _anchor()
 	_ensure_lock_row()
-	if _camera != null and is_instance_valid(_camera):
+	if is_instance_valid(_camera):
 		look_at(_camera.global_position, Vector3.UP)
 		rotate_object_local(Vector3.UP, PI)
 
@@ -101,7 +101,7 @@ var _lock_grown := false
 ## a panel that rebuilds its own UI (the cartridge menu does) drops the row with
 ## it, and this puts it back.
 func _ensure_lock_row() -> void:
-	if _lock_btn != null and is_instance_valid(_lock_btn) and _lock_btn.is_inside_tree():
+	if is_instance_valid(_lock_btn) and _lock_btn.is_inside_tree():
 		_refresh_lock_row()
 		return
 	var target := _target_node()

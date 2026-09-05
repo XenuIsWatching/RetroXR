@@ -284,9 +284,9 @@ func refresh_label() -> void:
 ## freeing only the body would leave a cord hanging off a freed anchor — the same
 ## rule RetroController's cable follows.
 func drop_and_free() -> void:
-	if _cable_plug != null and is_instance_valid(_cable_plug):
+	if is_instance_valid(_cable_plug):
 		_cable_plug.drop()
-	if _cable_instance != null and is_instance_valid(_cable_instance):
+	if is_instance_valid(_cable_instance):
 		_cable_instance.queue_free()
 	# The cord goes at once, the body shrinks away: a VerletRope is a particle
 	# sim, so scaling its anchor would drag the cord rather than shrink it.

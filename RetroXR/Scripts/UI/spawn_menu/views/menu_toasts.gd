@@ -73,7 +73,7 @@ static func create() -> MenuToasts:
 ## the host Viewport2Din3D is one hop out through the viewport, and that is only
 ## resolvable once this is in the tree.
 func _ensure_panel() -> void:
-	if _panel != null and is_instance_valid(_panel):
+	if is_instance_valid(_panel):
 		return
 	var vp := get_viewport()
 	if vp == null:
@@ -85,7 +85,7 @@ func _ensure_panel() -> void:
 ## pass and after any other bars raised in the same frame; refresh() is
 ## idempotent, so extra calls cost nothing.
 func refresh() -> void:
-	if _panel != null and is_instance_valid(_panel):
+	if is_instance_valid(_panel):
 		_panel.refresh.call_deferred()
 
 
@@ -151,7 +151,7 @@ func clear(key: String) -> void:
 		return
 	var toast: Dictionary = _toasts[key]
 	var bar: PanelContainer = toast.get("bar")
-	if bar != null and is_instance_valid(bar):
+	if is_instance_valid(bar):
 		remove_child(bar)
 		bar.queue_free()
 	_toasts.erase(key)
@@ -179,12 +179,12 @@ func _update(key: String, icon_text: String, msg: String, progress: float = -1.0
 	var lbl: Label = toast.get("label")
 	var icn: Label = toast.get("icon")
 	var bar: ProgressBar = toast.get("progress")
-	if lbl != null and is_instance_valid(lbl):
+	if is_instance_valid(lbl):
 		lbl.text = msg
 		_apply_wrap(lbl)
-	if icn != null and is_instance_valid(icn):
+	if is_instance_valid(icn):
 		icn.text = icon_text
-	if bar != null and is_instance_valid(bar):
+	if is_instance_valid(bar):
 		bar.visible = progress >= 0.0
 		bar.value = clampf(progress, 0.0, 1.0) * 100.0
 	# The quad is sized to the widest bar, and the text just changed.
@@ -207,7 +207,7 @@ func _add(key: String, icon_text: String, msg: String, progress: float) -> void:
 
 ## Show or replace the single bar at the bottom of the stack.
 func status(msg: String) -> void:
-	if _status_bar != null and is_instance_valid(_status_bar):
+	if is_instance_valid(_status_bar):
 		if _status_label != null:
 			_status_label.text = msg
 			_apply_wrap(_status_label)
@@ -226,14 +226,14 @@ func status(msg: String) -> void:
 
 ## Update the text only, if the bar is up. Connected to the scraper's progress.
 func status_update(msg: String) -> void:
-	if _status_label != null and is_instance_valid(_status_label):
+	if is_instance_valid(_status_label):
 		_status_label.text = msg
 		_apply_wrap(_status_label)
 		refresh()
 
 
 func status_clear() -> void:
-	if _status_bar != null and is_instance_valid(_status_bar):
+	if is_instance_valid(_status_bar):
 		if _status_bar.get_parent() != null:
 			_status_bar.get_parent().remove_child(_status_bar)
 		_status_bar.queue_free()
@@ -325,7 +325,7 @@ func _make_bar(icon_text: String, msg: String, progress: float,
 func _enforce_cap() -> void:
 	# The status bar shares the stack but is not a toast: never hidden by the
 	# cap, never counted toward it, and pinned to the bottom.
-	if _status_bar != null and is_instance_valid(_status_bar) \
+	if is_instance_valid(_status_bar) \
 			and _status_bar.get_parent() == self:
 		move_child(_status_bar, -1)
 
@@ -342,7 +342,7 @@ func _enforce_cap() -> void:
 		bars[i].visible = i >= overflow
 
 	if overflow <= 0:
-		if _overflow_bar != null and is_instance_valid(_overflow_bar):
+		if is_instance_valid(_overflow_bar):
 			_overflow_bar.queue_free()
 		_overflow_bar = null
 		_overflow_label = null

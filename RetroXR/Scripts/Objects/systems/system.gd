@@ -948,7 +948,7 @@ func _audio_tv() -> Node3D:
 		var live: bool = _av_speaker_l >= 0 or _av_speaker_r >= 0
 		return _av_tv if live and is_instance_valid(_av_tv) else null
 	for chan: VideoChannel in _channels:
-		if chan.tv != null and is_instance_valid(chan.tv):
+		if is_instance_valid(chan.tv):
 			return chan.tv as RetroTV
 	return null
 
@@ -1049,7 +1049,7 @@ func sends_video_to(tv: Node3D) -> bool:
 ## than being mirrored (Super Game Boy), and that is the model's own glass to
 ## decide about.
 func picture_on_tv() -> bool:
-	return _channels.size() == 1 and connected_tv != null and is_instance_valid(connected_tv)
+	return _channels.size() == 1 and is_instance_valid(connected_tv)
 
 
 ## Somewhere for the picture to go: this machine's own panel, or a television
@@ -1058,7 +1058,7 @@ func _has_display() -> bool:
 	if _screen_target() != null:
 		return true
 	for chan: VideoChannel in _channels:
-		if chan.tv != null and is_instance_valid(chan.tv):
+		if is_instance_valid(chan.tv):
 			return true
 	return false
 
@@ -1098,9 +1098,10 @@ func get_rf_channel() -> int:
 ## nothing else would prompt the set to re-read it.
 func on_rf_channel_changed() -> void:
 	for chan: VideoChannel in _channels:
-		if chan.tv != null and is_instance_valid(chan.tv) 				and chan.tv.has_method("on_rf_channel_changed"):
+		if is_instance_valid(chan.tv) \
+				and chan.tv.has_method("on_rf_channel_changed"):
 			chan.tv.call("on_rf_channel_changed")
-	if _av_video_tv != null and is_instance_valid(_av_video_tv) \
+	if is_instance_valid(_av_video_tv) \
 			and _av_video_tv.has_method("on_rf_channel_changed"):
 		_av_video_tv.on_rf_channel_changed()
 
@@ -1135,7 +1136,7 @@ func on_tv_disconnected(plug: CablePlug = null) -> void:
 	if ch < 0 or ch >= _channels.size():
 		ch = 0
 	var tv_obj = _channels[ch].tv
-	var tv: RetroTV = tv_obj as RetroTV if (tv_obj != null and is_instance_valid(tv_obj)) else null
+	var tv: RetroTV = tv_obj as RetroTV if (is_instance_valid(tv_obj)) else null
 	_channels[ch].tv = null
 	if ch == 0:
 		connected_tv = null
@@ -1212,7 +1213,7 @@ func get_channel_count() -> int:
 
 func _remove_touch_surface(ch: int) -> void:
 	var surf: TVTouchSurface = _channels[ch].touch_surface
-	if surf != null and is_instance_valid(surf):
+	if is_instance_valid(surf):
 		surf.queue_free()
 	_channels[ch].touch_surface = null
 
@@ -1414,7 +1415,7 @@ func _apply_av_feed(video_devs: Array[RetroTV], audio_dev: Node3D, l: int, r: in
 	# leaves the set on its blue no-signal screen, as it would.
 	var showing: RetroTV = video_dev
 	if showing != _av_video_tv:
-		if _av_video_tv != null and is_instance_valid(_av_video_tv):
+		if is_instance_valid(_av_video_tv):
 			on_tv_disconnected(null)
 		_av_video_tv = showing
 		if showing != null:
@@ -1433,7 +1434,7 @@ func _apply_av_feed(video_devs: Array[RetroTV], audio_dev: Node3D, l: int, r: in
 	if audio_dev != null and not sinks.has(audio_dev):
 		sinks.append(audio_dev)
 	for old_sink in _av_sinks:
-		if old_sink != null and is_instance_valid(old_sink) and not sinks.has(old_sink):
+		if is_instance_valid(old_sink) and not sinks.has(old_sink):
 			old_sink.on_av_source_lost(self)
 	for sink in sinks:
 		if not _av_sinks.has(sink):
@@ -1740,7 +1741,7 @@ func _release_plug(port: XRToolsSnapZone, plug: CablePlug) -> void:
 		return
 	port.enabled = false
 	port.drop_object()
-	if plug != null and is_instance_valid(plug):
+	if is_instance_valid(plug):
 		plug.global_position = port.global_position \
 			+ port.global_transform.basis.z.normalized() * PULLED_CLEAR
 		PhysicsServer3D.body_set_state(plug.get_rid(),
@@ -1896,7 +1897,7 @@ func power_on() -> void:
 		# Name the actual state. "No display" covers two very different faults and
 		# the loud one — audio cords in, video cord out — looks identical to a
 		# console that is simply broken, because you can hear it running.
-		if _av_tv != null and is_instance_valid(_av_tv):
+		if is_instance_valid(_av_tv):
 			print("[RetroSystem] Powering on with SOUND but no PICTURE: audio reaches %s, "
 				% _av_tv.name + "no video cord is linked. Check the yellow lead at BOTH ends.")
 		else:
@@ -2157,7 +2158,7 @@ func _resolve_content(core: String) -> bool:
 		# The cartridge outlives the run — an eject re-reads rom_path from it, and
 		# so does a scene reload — so leaving it holding the .zip we just deleted
 		# would fail the same way on the next insert.
-		if _snapped_cartridge != null and is_instance_valid(_snapped_cartridge) \
+		if is_instance_valid(_snapped_cartridge) \
 				and "rom_path" in _snapped_cartridge:
 			_snapped_cartridge.set("rom_path", resolved)
 	return true
@@ -3097,7 +3098,7 @@ func expansion_boot() -> Dictionary:
 ## rom_path, which the launch path overwrites with whatever the stack boots
 ## from. Asking twice must give the same answer.
 func _host_media_path() -> String:
-	if _snapped_cartridge != null and is_instance_valid(_snapped_cartridge) \
+	if is_instance_valid(_snapped_cartridge) \
 			and "rom_path" in _snapped_cartridge:
 		return str(_snapped_cartridge.get("rom_path"))
 	return ""

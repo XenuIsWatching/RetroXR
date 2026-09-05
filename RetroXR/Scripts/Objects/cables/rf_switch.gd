@@ -167,7 +167,7 @@ func _tether(plug: RcaPlug, attach: Node3D, reach: float) -> Vector3:
 ## so is_picked_up() reads false for the whole hold, while every path that takes an
 ## object freezes the body.
 func _body_is_held() -> bool:
-	return _body != null and is_instance_valid(_body) and _body.freeze
+	return is_instance_valid(_body) and _body.freeze
 
 
 # ── save / restore ────────────────────────────────────────────────────────────

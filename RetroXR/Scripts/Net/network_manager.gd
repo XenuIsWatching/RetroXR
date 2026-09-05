@@ -1057,7 +1057,7 @@ func _apply_poses(poses: Dictionary) -> void:
 # ── World / avatars ───────────────────────────────────────────────────────────
 
 func _resolve_world_root() -> Node:
-	if world_root != null and is_instance_valid(world_root):
+	if is_instance_valid(world_root):
 		return world_root
 	return get_tree().current_scene
 

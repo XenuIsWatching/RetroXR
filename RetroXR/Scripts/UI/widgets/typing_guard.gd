@@ -104,7 +104,7 @@ func _apply(typing: bool) -> void:
 ## Re-resolved when stale: the manager belongs to the player rig, so a scene
 ## change frees it while this autoload lives on.
 func _locomotion() -> LocomotionManager:
-	if _loco != null and is_instance_valid(_loco):
+	if is_instance_valid(_loco):
 		return _loco
 	_loco = get_tree().root.find_child("LocomotionManager", true, false) as LocomotionManager
 	return _loco

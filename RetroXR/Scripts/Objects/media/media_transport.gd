@@ -109,7 +109,7 @@ func _apply_av_feed(tv: RetroTV, video: bool, l: int, r: int) -> void:
 	# No picture to move on or off anything: a set reads get_video_texture() and
 	# stops getting one the moment the cord leaves the socket.
 	if previous != tv:
-		if previous != null and is_instance_valid(previous):
+		if is_instance_valid(previous):
 			previous.hide_osd()
 			previous.on_av_source_lost(self)
 		if tv != null:
