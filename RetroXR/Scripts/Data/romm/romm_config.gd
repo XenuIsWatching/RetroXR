@@ -102,16 +102,29 @@ func is_configured() -> bool:
 
 
 ## Normalize whatever the user typed into a usable base URL.
-## Adds http:// when no scheme is given, strips trailing slashes.
+## Strips trailing slashes, and adds a scheme when none was given.
+##
+## That scheme is https. AUTH_BASIC puts the account's username and password in
+## every request header, so guessing http for a bare hostname sent them in
+## cleartext by default — over whatever network stands between the headset and
+## the server. A player whose RomM really is plain http can still type the
+## scheme, and is_encrypted() lets the options panel say so.
 static func normalize_url(raw: String) -> String:
 	var url := raw.strip_edges()
 	if url.is_empty():
 		return ""
 	if not (url.begins_with("http://") or url.begins_with("https://")):
-		url = "http://" + url
+		url = "https://" + url
 	while url.ends_with("/"):
 		url = url.substr(0, url.length() - 1)
 	return url
+
+
+## False when the configured server is plain http, so the panel can say that
+## credentials will cross the network unprotected. An empty URL is not a
+## complaint — there is nothing configured to warn about yet.
+func is_encrypted() -> bool:
+	return base_url.is_empty() or base_url.begins_with("https://")
 
 
 ## Authorization header value, or "" when unauthenticated.

@@ -134,7 +134,9 @@ func _test_pair_url() -> void:
 	_eq("pair/scheme url", scheme["url"], "http://192.168.0.106:8080")
 	_eq("pair/scheme code", scheme["code"], "MXWT-SDZE")
 
-	# The QR frequently omits the scheme; both forms must land identically.
+	# The QR frequently omits the scheme, and keeps the http default that a typed
+	# hostname no longer gets — the payload came from the server being looked at,
+	# and pairing trades a code for a token rather than sending a password.
 	var bare := RommPairUrl.parse("192.168.0.106:8080/pair?code=MXWT-SDZE")
 	_eq("pair/schemeless url", bare["url"], "http://192.168.0.106:8080")
 	_eq("pair/schemeless code", bare["code"], "MXWT-SDZE")
@@ -381,6 +383,24 @@ func _test_password_not_persisted() -> void:
 	reloaded.username = cfg.username
 	_ok("auth/a restart drops the password", reloaded.password.is_empty())
 	_ok("auth/and is not reported as configured", not reloaded.is_configured())
+
+	# A bare hostname must not become http: basic sign-in puts the password in
+	# every request header, so the default scheme decides whether it crosses the
+	# network in the clear.
+	_eq("auth/a bare host defaults to https",
+		RommConfig.normalize_url("romm.local:8080"), "https://romm.local:8080")
+	_eq("auth/an explicit http scheme is kept",
+		RommConfig.normalize_url("http://192.168.1.9"), "http://192.168.1.9")
+	_eq("auth/trailing slashes still go",
+		RommConfig.normalize_url("https://romm.example/"), "https://romm.example")
+
+	var plain := RommConfig.new()
+	plain.base_url = RommConfig.normalize_url("http://192.168.1.9")
+	_ok("auth/plain http reports unencrypted", not plain.is_encrypted())
+	var tls := RommConfig.new()
+	tls.base_url = RommConfig.normalize_url("romm.example")
+	_ok("auth/https reports encrypted", tls.is_encrypted())
+	_ok("auth/an unset server is not a warning", RommConfig.new().is_encrypted())
 
 
 func _test_scopes() -> void:

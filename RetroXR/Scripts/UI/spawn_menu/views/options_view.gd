@@ -76,6 +76,7 @@ var _pages: Array[ScrollContainer] = []
 
 # Kept so a pairing (typed or scanned) can show its result in the fields the
 # player is looking at, rather than waiting for the view to be rebuilt.
+var _romm_scheme_note: Label = null
 var _romm_url_edit: LineEdit = null
 var _romm_token_edit: LineEdit = null
 var _qr_overlay: QrScanOverlay = null
@@ -1446,6 +1447,16 @@ func _build_scraper_options(vbox: VBoxContainer) -> void:
 ## called it, so a server, a token or a switch changed here stayed invisible to
 ## it until the app was restarted — the sync thread went on using the config it
 ## read at boot. Every write in this tab goes through here now.
+## Show or hide the unencrypted-connection note under the URL field.
+func _refresh_romm_scheme_note() -> void:
+	if _romm_scheme_note == null or not is_instance_valid(_romm_scheme_note):
+		return
+	var plain := not romm_config.is_encrypted()
+	_romm_scheme_note.visible = plain
+	if plain:
+		_romm_scheme_note.text = "! Unencrypted (http). Your sign-in is sent in the clear."
+
+
 func _save_romm_config() -> void:
 	romm_config.save_config()
 	SaveSync.setup(romm_config)
@@ -1500,9 +1511,17 @@ func _build_romm_options(vbox: VBoxContainer) -> void:
 		func(text: String) -> void:
 			romm_config.base_url = RommConfig.normalize_url(text)
 			_save_romm_config()
+			_refresh_romm_scheme_note()
 			if romm_art != null:
 				romm_art.setup(romm_config.base_url)
 	)
+
+	# A plain-http server is a legitimate choice on a home LAN, so this says what
+	# is happening rather than refusing it — but it must SAY it, because basic
+	# sign-in puts the account password in every request header.
+	_romm_scheme_note = MenuStyle.label("", 15, MenuStyle.COLOR_BTN_UPD)
+	vbox.add_child(_romm_scheme_note)
+	_refresh_romm_scheme_note()
 
 	# On this row rather than the API token: the QR carries the server address
 	# too, and this row stays visible in both sign-in modes. Quest 3/3S only —
