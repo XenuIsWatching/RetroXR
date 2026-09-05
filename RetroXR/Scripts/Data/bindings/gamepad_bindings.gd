@@ -92,15 +92,6 @@ const DEFAULT_STICK_MAP: Dictionary = {
 
 # ── File I/O ──────────────────────────────────────────────────────────────────
 
-static func _load_file() -> Dictionary:
-	return JsonStore.read_dict(SAVE_PATH, "GamepadBindings")
-
-
-static func _save_file(data: Dictionary) -> void:
-	JsonStore.write_dict(SAVE_PATH, data, "GamepadBindings")
-
-# ── Public API ────────────────────────────────────────────────────────────────
-
 ## Save global (fallback) gamepad bindings.
 static func save_global(button_map: Dictionary, stick_map: Dictionary) -> void:
 	var data := _load_file()
@@ -110,6 +101,31 @@ static func save_global(button_map: Dictionary, stick_map: Dictionary) -> void:
 	data["global"]["sticks"] = stick_map
 	_save_file(data)
 
+
+## Override bookkeeping is BindingStore's; see the rules on that class.
+static func has_system_override(systemid: String) -> bool:
+	return BindingStore.has_system_override(SAVE_PATH, "GamepadBindings", systemid)
+
+
+static func clear_system_override(systemid: String) -> void:
+	BindingStore.clear_system_override(SAVE_PATH, "GamepadBindings", systemid)
+
+
+static func overridden_systems() -> Array[String]:
+	return BindingStore.overridden_systems(SAVE_PATH, "GamepadBindings")
+
+
+static func _load_file() -> Dictionary:
+	return BindingStore.load_file(SAVE_PATH, "GamepadBindings")
+
+
+static func _save_file(data: Dictionary) -> void:
+	BindingStore.save_file(SAVE_PATH, "GamepadBindings", data)
+
+
+static func _merge(base: Dictionary, overlay1: Dictionary,
+		overlay2: Dictionary) -> Dictionary:
+	return BindingStore.merge(base, overlay1, overlay2)
 
 ## Merged bindings for one system: per-system overrides global, which overrides
 ## defaults. Keys "buttons", "sticks". Mirrors ControllerBindings.get_for_system.
@@ -145,37 +161,6 @@ static func save_for_system(systemid: String, button_map: Dictionary, stick_map:
 		"sticks":  stick_map,
 	}
 	_save_file(data)
-
-
-## True when this system carries a profile of its own. The profile IS the
-## override switch; clearing it is what turns the override off.
-static func has_system_override(systemid: String) -> bool:
-	if systemid.is_empty():
-		return false
-	var per_sys: Dictionary = _load_file().get("per_system", {}) as Dictionary
-	return per_sys.has(systemid)
-
-
-## Drop a system's profile so it falls back to global again.
-static func clear_system_override(systemid: String) -> void:
-	if systemid.is_empty():
-		return
-	var data := _load_file()
-	var per_sys: Dictionary = data.get("per_system", {}) as Dictionary
-	if not per_sys.has(systemid):
-		return
-	per_sys.erase(systemid)
-	data["per_system"] = per_sys
-	_save_file(data)
-
-
-## Every systemid carrying a profile, for the per-platform tile badges.
-static func overridden_systems() -> Array[String]:
-	var out: Array[String] = []
-	var per_sys: Dictionary = _load_file().get("per_system", {}) as Dictionary
-	for sid: String in per_sys:
-		out.append(sid)
-	return out
 
 
 ## Encode a captured joypad InputEvent into a binding string ("" if unsupported).
@@ -412,12 +397,3 @@ static func _stick_to_dpad(v: Vector2) -> int:
 	return bits
 
 
-## Apply base, then overlay1, then overlay2 (last writer wins). Returns a new
-## dictionary.
-static func _merge(base: Dictionary, overlay1: Dictionary, overlay2: Dictionary = {}) -> Dictionary:
-	var result := base.duplicate()
-	for k: String in overlay1:
-		result[k] = overlay1[k]
-	for k: String in overlay2:
-		result[k] = overlay2[k]
-	return result
