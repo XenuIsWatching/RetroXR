@@ -149,15 +149,13 @@ func set_tuner(auto: bool, host: String) -> void:
 
 
 ## Write the source list back, preserving every key the user put there.
-func save() -> void:
+func save() -> bool:
 	var path := config_path()
-	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		push_error("[TVChannels] Failed to write: %s" % path)
-		return
-	file.store_string(JSON.stringify({"version": 1, "sources": sources}, "\t"))
+	if not JsonStore.write_dict(path, {"version": 1, "sources": sources},
+			"TVChannels"):
+		return false
 	print("[TVChannels] Saved %d source(s) to %s" % [sources.size(), path])
+	return true
 
 
 ## Write a commented starter file so a first run has something to edit rather
@@ -167,10 +165,6 @@ static func write_default_config() -> void:
 	if FileAccess.file_exists(path):
 		return
 	RomLibrary.ensure_tv_root()
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		push_error("[TVChannels] Failed to write default: %s" % path)
-		return
 	var defaults := {
 		"version": 1,
 		"sources": [
@@ -179,5 +173,5 @@ static func write_default_config() -> void:
 			 "link": "https://example.com/stream.m3u8"},
 		],
 	}
-	file.store_string(JSON.stringify(defaults, "\t"))
-	print("[TVChannels] Wrote starter channel list: %s" % path)
+	if JsonStore.write_dict(path, defaults, "TVChannels"):
+		print("[TVChannels] Wrote starter channel list: %s" % path)

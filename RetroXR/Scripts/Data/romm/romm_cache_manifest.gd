@@ -83,14 +83,12 @@ func load_manifest() -> void:
 	_rebuild_indexes()
 
 
-func save_manifest() -> void:
-	var path := manifest_path()
-	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f == null:
-		push_error("[RommCache] cannot write %s" % path)
-		return
-	f.store_string(JSON.stringify({"version": VERSION, "entries": _entries}, "\t"))
+## Returns false when the write did not land. This manifest is what stops the
+## cache re-downloading everything, so losing it costs bandwidth rather than
+## data — but silently is still the wrong way to lose it.
+func save_manifest() -> bool:
+	return JsonStore.write_dict(manifest_path(),
+		{"version": VERSION, "entries": _entries}, "RommCache")
 
 
 static func manifest_path() -> String:

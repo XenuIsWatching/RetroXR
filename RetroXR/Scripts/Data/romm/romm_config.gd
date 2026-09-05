@@ -221,14 +221,9 @@ func load_config() -> void:
 	print("[RommConfig] Loaded config (server=%s enabled=%s)" % [base_url, enabled])
 
 
-func save_config() -> void:
+func save_config() -> bool:
 	var path := config_path()
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		push_error("[RommConfig] Failed to write: %s" % path)
-		return
 
 	var data := {
 		"base_url": base_url,
@@ -246,7 +241,7 @@ func save_config() -> void:
 		"scopes": scopes,
 		"scopes_checked_at": scopes_checked_at,
 	}
-	file.store_string(JSON.stringify(data, "\t"))
+	return JsonStore.write_dict(path, data, "RommConfig")
 
 
 static func config_path() -> String:

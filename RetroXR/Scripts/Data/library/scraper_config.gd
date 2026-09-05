@@ -69,15 +69,10 @@ func load_config() -> void:
 	print("[ScraperConfig] Loaded config")
 
 
-func save_config() -> void:
+func save_config() -> bool:
 	var path := _config_path()
 	var dir_path := path.get_base_dir()
 	DirAccess.make_dir_recursive_absolute(dir_path)
-
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		push_error("[ScraperConfig] Failed to write: %s" % path)
-		return
 
 	var data := {
 		"ssid": ssid,
@@ -87,7 +82,7 @@ func save_config() -> void:
 		"web_server_enabled": web_server_enabled,
 		"web_server_pin": web_server_pin,
 	}
-	file.store_string(JSON.stringify(data, "\t"))
+	return JsonStore.write_dict(path, data, "ScraperConfig")
 	print("[ScraperConfig] Saved config")
 
 

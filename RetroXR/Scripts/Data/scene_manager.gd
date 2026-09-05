@@ -131,15 +131,9 @@ func _notification(what: int) -> void:
 
 
 func load_prefs() -> void:
-	if not FileAccess.file_exists(PREFS_FILE):
+	var data := JsonStore.read_dict(PREFS_FILE, "SceneManager")
+	if data.is_empty():
 		return
-	var f := FileAccess.open(PREFS_FILE, FileAccess.READ)
-	if not f:
-		return
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	if not parsed is Dictionary:
-		return
-	var data := parsed as Dictionary
 	# last_slot_id is the single-room form this file used to take, and it was
 	# always the arcade's. Read so an existing install comes back to its own room
 	# rather than to a clean one.
@@ -152,11 +146,11 @@ func load_prefs() -> void:
 			active_slots[str(room)] = str((slots as Dictionary)[room])
 
 
-func save_prefs() -> void:
-	DirAccess.make_dir_recursive_absolute("user://scenes")
-	var f := FileAccess.open(PREFS_FILE, FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify({"slots": active_slots}))
+## Returns false when the write did not land. This file records which slot each
+## room is standing on, so losing it silently sends the player back to a clean
+## room on the next launch.
+func save_prefs() -> bool:
+	return JsonStore.write_dict(PREFS_FILE, {"slots": active_slots}, "SceneManager")
 
 
 ## The slot `room_id` is standing on, "clean" if it has never been given one.

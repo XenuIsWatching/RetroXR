@@ -69,14 +69,9 @@ func load_config() -> void:
 	print("[RaConfig] Loaded (user=%s enabled=%s)" % [username, enabled])
 
 
-func save_config() -> void:
+func save_config() -> bool:
 	var path := config_path()
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		push_error("[RaConfig] Failed to write: %s" % path)
-		return
 
 	# No password key, deliberately. See the class comment.
 	var data := {
@@ -87,7 +82,7 @@ func save_config() -> void:
 		"show_notifications": show_notifications,
 		"rich_presence": rich_presence,
 	}
-	file.store_string(JSON.stringify(data, "\t"))
+	return JsonStore.write_dict(path, data, "RaConfig")
 
 
 static func config_path() -> String:
