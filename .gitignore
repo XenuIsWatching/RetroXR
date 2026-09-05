@@ -99,6 +99,7 @@ RetroXR/archive-godot/*.ilk
 RetroXR/archive-godot/*.lib
 RetroXR/archive-godot/*.pdb
 archive-godot/Temp/
+vlc-godot/Temp/
 
 # ── Compiled GDExtensions ─────────────────────────────────────────────────────
 # Our own six libraries are BUILD OUTPUT and are not carried in the repo — run

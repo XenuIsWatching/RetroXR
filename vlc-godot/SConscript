@@ -1,0 +1,64 @@
+# type: ignore
+
+Import('env', 'output_dir')
+
+env = env.Clone()
+
+from SCons.Script import ARGUMENTS
+if ARGUMENTS.get("platform") == "macos":
+    ARGUMENTS.setdefault("macos_deployment_target", "13.0")
+# godot-cpp defaults debug_symbols to dev_build, so a plain target=template_debug
+# links with none at all and a crash in this library resolves to nothing. Turn it
+# on for every non-release target; an explicit debug_symbols=no still wins. Has to
+# happen before godot-cpp's SConstruct, which is where the option is read.
+if ARGUMENTS.get("target", "template_debug") != "template_release":
+    ARGUMENTS.setdefault("debug_symbols", "yes")
+
+env = SConscript("../../libretro-godot/godot-cpp/SConstruct")
+
+# godot-cpp hardcodes C++17 with no option to override it, and its own sources
+# build from this same env, so appending a newer -std leaves both flags on every
+# command line and MSVC warns D9025 once per translation unit. Drop it; the
+# per-platform Append below sets ours.
+env["CXXFLAGS"] = [f for f in env["CXXFLAGS"]
+                   if not str(f).startswith(("/std:c++", "-std=c++"))]
+
+env.Append(CPPPATH=['../../vlc-godot/external/include/'])
+
+is_windows = env["platform"] == "windows"
+is_android = env["platform"] == "android"
+is_linux = env["platform"] == "linux"
+
+if is_windows:
+    env.Append(CXXFLAGS=['/std:c++latest'])
+    env.Append(LIBPATH=['../../vlc-godot/external/lib/'])
+    env.Append(LIBS=['libvlc'])
+    env.Append(LINKFLAGS=['/IGNORE:4099'])
+
+if is_linux:
+    # Link against the system libVLC (Fedora: vlc-devel provides /lib64/libvlc.so
+    # + headers; runtime needs only vlc-libs). libvlccore + the codec plugins are
+    # pulled in transitively / from VLC's system plugin dir, so HEVC/x265 works
+    # out of the box. The vendored vlc/*.h headers match the 3.x API.
+    env.Append(CXXFLAGS=['-std=c++20'])
+    env.Append(LIBS=['vlc'])
+
+if is_android:
+    env.Append(CXXFLAGS=['-std=c++20'])
+    # libVLC 3.x arm64: the monolithic libvlc.so (core + all plugins, extracted
+    # from the LibVLC Android AAR org.videolan.android:libvlc-all) lives in the
+    # shipped output dir and is bundled into the APK via the .gdextension
+    # [dependencies]; link the extension against that same copy (no duplicate).
+    env.Append(LIBPATH=[output_dir.lstrip('#') + '/'])
+    env.Append(LIBS=['vlc'])
+
+sources = Glob('src/*.cpp')
+
+lib_prefix = 'lib' if is_android else ''
+library = env.SharedLibrary(
+    '{}/{}vlc_godot.{}.{}.{}{}'.format(
+        output_dir, lib_prefix, env['platform'], env['target'], env['arch'],
+        env['SHLIBSUFFIX']),
+    source=sources)
+
+Default(library)

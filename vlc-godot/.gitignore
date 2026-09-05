@@ -9,4 +9,6 @@
 .sconsign.dblite
 *.log
 # vendored import libs ARE tracked (needed to build); allow them back:
-!vendor/lib/*.lib
+!external/lib/*.lib
+# SCons VariantDir, as in every sibling extension.
+Temp/
