@@ -41,18 +41,45 @@ func brings_own_body() -> bool:
 
 ## With the cabinet's box hidden, its collision has to be resized to this case or
 ## a hand grabs 300 x 100 x 250 mm of empty air around a smaller machine -- the
-## same correction wii_model.gd makes, for the same reason. The case stands from
-## y 0 to 0.073 (base 0.045, deck 0.028 above it) rather than straddling the
-## origin the way the cabinet's box does.
+## same correction wii_model.gd makes. Unlike the Wii this machine is STEPPED, so
+## it takes two boxes and not one: a 45 mm base over the whole 260 x 190
+## footprint, and the 28 mm deck on top of the middle 150 mm only.
+##
+## One box spanning the full 73 mm is what it was, and it made POWER and RESET
+## unclickable. Both sit on a SHOULDER, whose real surface is the base at 0.045 --
+## so a single box stood 28 mm of solid collision above each of them, and
+## InteractionResolver returned the console for a ray aimed at either.
+## Tools/models/shell_enclosure_audit.tscn measured 21.2 mm buried and named them
+## the only unreachable buttons in the registry; run it after touching this.
+const _BASE_BOX := Vector3(0.26, 0.045, 0.19)
+const _BASE_POS := Vector3(0.0, 0.0225, 0.0)
+const _DECK_BOX := Vector3(0.15, 0.028, 0.155)
+const _DECK_POS := Vector3(0.0, 0.059, -0.0075)
+
+
 func configure_collision(host: Node3D) -> void:
-	var box := Vector3(0.26, 0.073, 0.19)
-	var pos := Vector3(0.0, 0.0365, 0.0)
 	for path in ["CollisionShape3D", "PointerArea/CollisionShape3D"]:
 		var col := host.get_node_or_null(path) as CollisionShape3D
-		if col != null and col.shape is BoxShape3D:
-			col.shape = col.shape.duplicate()
-			(col.shape as BoxShape3D).size = box
-			col.position = pos
+		if col == null or not (col.shape is BoxShape3D):
+			continue
+		col.shape = col.shape.duplicate()
+		(col.shape as BoxShape3D).size = _BASE_BOX
+		col.position = _BASE_POS
+		_add_deck_box(col.get_parent() as CollisionObject3D)
+
+
+## The second shape, on the same body as the first. Named so a rebuild does not
+## stack a fresh deck box on top of the one already there.
+func _add_deck_box(body: CollisionObject3D) -> void:
+	if body == null or body.has_node("DeckCollisionShape3D"):
+		return
+	var deck := CollisionShape3D.new()
+	deck.name = "DeckCollisionShape3D"
+	var box := BoxShape3D.new()
+	box.size = _DECK_BOX
+	deck.shape = box
+	body.add_child(deck)
+	deck.position = _DECK_POS
 
 
 ## The cabinet authors its ports at z 0.125 and its buttons at y 0.06 / z 0.10 --
