@@ -390,14 +390,10 @@ func load_state() -> void:
 		_state = (parsed as Dictionary)["states"]
 
 
-func save_state() -> void:
-	DirAccess.make_dir_recursive_absolute(state_path().get_base_dir())
-	var f := FileAccess.open(state_path(), FileAccess.WRITE)
-	if f == null:
-		push_warning("[StateSync] Cannot write %s" % state_path())
-		return
-	f.store_string(JSON.stringify({"version": 1, "states": _state}, "\t"))
-	f.close()
+## Returns false when the ledger did not reach disk.
+func save_state() -> bool:
+	return JsonStore.write_dict(state_path(),
+		{"version": 1, "states": _state}, "StateSync")
 
 
 ## Forget a state's ledger entry. Called when the state is deleted locally, so a

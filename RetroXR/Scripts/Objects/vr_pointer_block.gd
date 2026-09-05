@@ -60,11 +60,17 @@ func set_block(ctrl: XRController3D, should_block: bool) -> void:
 
 ## Give both hands back. Call from _exit_tree: an object that leaves the tree
 ## still holding a block leaves the pointer's count above zero for good.
-func release(left_ctrl: XRController3D, right_ctrl: XRController3D) -> void:
+##
+## The parameters are Variant, not XRController3D, on purpose. By teardown the
+## controllers may already be freed, and GDScript rejects a freed object at a
+## TYPED parameter — "previously freed is not a subclass" — before the callee
+## can test it. The five peripherals used to guard is_instance_valid at each
+## call site; the guard belongs here now that the call does.
+func release(left_ctrl: Variant, right_ctrl: Variant) -> void:
 	if _blocking_left:
-		set_block(left_ctrl, false)
+		set_block(left_ctrl if is_instance_valid(left_ctrl) else null, false)
 	if _blocking_right:
-		set_block(right_ctrl, false)
+		set_block(right_ctrl if is_instance_valid(right_ctrl) else null, false)
 	# A controller that has already gone invalid can never be un-blocked through
 	# its pointer, so drop the claim regardless — otherwise a later release()
 	# would try again and a re-grab would think the hand was still held.

@@ -49,12 +49,8 @@ func save_gamelist(systemid: String) -> void:
 	var dir_path := path.get_base_dir()
 	DirAccess.make_dir_recursive_absolute(dir_path)
 
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		push_error("[GamelistManager] Failed to write: %s" % path)
+	if not JsonStore.write_dict(path, _gamelists[systemid], "GamelistManager"):
 		return
-
-	file.store_string(JSON.stringify(_gamelists[systemid], "\t"))
 	print("[GamelistManager] Saved %s" % path)
 
 

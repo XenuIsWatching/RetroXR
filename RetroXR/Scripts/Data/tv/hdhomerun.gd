@@ -306,14 +306,13 @@ func _crc32(data: PackedByteArray) -> int:
 ## Remember the address and the lineup, so a cold start with the tuner asleep
 ## still shows a channel list and a retry does not wait on discovery again.
 func _save_cache(channels: Array[Dictionary]) -> void:
-	var file := FileAccess.open(CACHE_PATH, FileAccess.WRITE)
-	if not file:
-		return
-	file.store_string(JSON.stringify({
+	# A disposable cache: an unwritable one costs a discovery round on the next
+	# cold start and nothing else, so the failure is not worth a complaint.
+	JsonStore.write_dict(CACHE_PATH, {
 		"host": _host,
 		"info": _info,
 		"channels": channels,
-	}, "\t"))
+	})
 
 
 static func load_cache() -> Dictionary:

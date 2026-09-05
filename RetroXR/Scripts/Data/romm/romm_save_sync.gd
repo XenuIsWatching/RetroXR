@@ -779,15 +779,11 @@ func load_state() -> void:
 		_hash_ids = (parsed as Dictionary)["rom_ids"]
 
 
-func save_state() -> void:
-	DirAccess.make_dir_recursive_absolute(state_path().get_base_dir())
-	var f := FileAccess.open(state_path(), FileAccess.WRITE)
-	if f == null:
-		push_warning("[RommSaveSync] Cannot write %s" % state_path())
-		return
-	f.store_string(JSON.stringify(
-		{"version": 1, "saves": _state, "rom_ids": _hash_ids}, "\t"))
-	f.close()
+## Returns false when the ledger did not reach disk. Losing it means every save
+## looks unsynced on the next launch, so it is worth knowing about.
+func save_state() -> bool:
+	return JsonStore.write_dict(state_path(),
+		{"version": 1, "saves": _state, "rom_ids": _hash_ids}, "RommSaveSync")
 
 
 # ── Matching a local ROM to the server's copy ─────────────────────────────────
