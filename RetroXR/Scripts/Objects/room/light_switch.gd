@@ -80,7 +80,7 @@ func _poke_allowed(tip: Vector3) -> bool:
 
 func _on_pressed() -> void:
 	set_lights_on(not lights_on)
-	NetworkManager.report_event(NetObjectSync.EV_ROOM_LIGHTS,
+	NetworkManager.report_event(NetEvents.EV_ROOM_LIGHTS,
 		{"switch": self, "on": lights_on})
 
 

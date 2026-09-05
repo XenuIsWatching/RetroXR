@@ -360,7 +360,7 @@ func _test_registry_lifecycle() -> void:
 	_ok(sync._register_host(card), "registry/a serializable object registers")
 	var id := sync.id_of(card)
 	_ok(id > 0 and sync.node_for_id(id) == card, "registry/the id resolves to that object")
-	sync._apply_event(NetObjectSync.EV_DISK_OP, {
+	sync._apply_event(NetEvents.EV_DISK_OP, {
 		"sys": {"$id": id}, "op": 1, "md5": "DISC", "index": 2,
 	})
 	_eq(nm.disk_calls, [[card, 1, "DISC", 2]],
@@ -376,9 +376,9 @@ func _test_registry_lifecycle() -> void:
 	sync._remote_held[id] = 7
 	_eq(sync.holder_peer(card), 7,
 		"registry/the authoritative remote holder is available to initial port ownership")
-	sync._update_port_owner(NetObjectSync.EV_PORT_PLUG,
+	sync._update_port_owner(NetEvents.EV_PORT_PLUG,
 		{"sys": card, "ctrl": fixed_control, "port": 2}, 7)
-	sync._update_port_owner(NetObjectSync.EV_PORT_UNPLUG, {"sys": card, "port": 2}, 7)
+	sync._update_port_owner(NetEvents.EV_PORT_UNPLUG, {"sys": card, "port": 2}, 7)
 	_eq(nm.handoff_calls, [[card, 2, 7], [card, 2, 0]],
 		"registry/plug and unplug events assign and release the netplay port")
 	sync.end_session()
@@ -718,7 +718,7 @@ func _test_controller_end_to_end(p: Pair) -> void:
 	host_pad.restore_port_connection(host_system, 0)
 	_ok(await _until(func() -> bool: return host_system.port_holder(0) == host_pad),
 		"controllers/the host's real plug seats in the real console port")
-	p.host_os.report_event(NetObjectSync.EV_PORT_PLUG,
+	p.host_os.report_event(NetEvents.EV_PORT_PLUG,
 		{"sys": host_system, "ctrl": host_pad, "port": 0})
 	_ok(await _until(func() -> bool:
 		return client_system.port_holder(0) == client_pad \
@@ -793,7 +793,7 @@ func _test_controller_end_to_end(p: Pair) -> void:
 	# Pulling the host plug and reporting the semantic event clears both actual
 	# snap zones and both controller-side connection records.
 	host_system.net_release_controller_port(0)
-	p.host_os.report_event(NetObjectSync.EV_PORT_UNPLUG,
+	p.host_os.report_event(NetEvents.EV_PORT_UNPLUG,
 		{"sys": host_system, "port": 0})
 	_ok(await _until(func() -> bool:
 		return host_system.port_holder(0) == null and client_system.port_holder(0) == null \
@@ -995,39 +995,39 @@ func _test_events(p: Pair) -> void:
 
 	# Platform front-panel controls: client intent executes on the host, while
 	# the host's resulting power state is what clients display.
-	p.client_os.report_event(NetObjectSync.EV_SYS_POWER, {"sys": client_obj})
+	p.client_os.report_event(NetEvents.EV_SYS_POWER, {"sys": client_obj})
 	_ok(await _until(func() -> bool: return host_obj.power_toggles == 1),
 		"events/a client's platform power button executes on the host")
-	p.host_os.report_event(NetObjectSync.EV_SYS_POWER_STATE,
+	p.host_os.report_event(NetEvents.EV_SYS_POWER_STATE,
 		{"sys": host_obj, "on": true})
 	_ok(await _until(func() -> bool: return client_obj.remote_power),
 		"events/the platform's resulting power state reaches the client")
-	p.client_os.report_event(NetObjectSync.EV_SYS_RESET, {"sys": client_obj})
+	p.client_os.report_event(NetEvents.EV_SYS_RESET, {"sys": client_obj})
 	_ok(await _until(func() -> bool: return host_obj.resets == 1),
 		"events/a client's platform reset button executes on the host")
 
 	# Every TV bezel/remote effect is explicit. Button depression itself remains
 	# local; power, sound, picture mode, source and tuning are shared state.
-	p.host_os.report_event(NetObjectSync.EV_TV_POWER, {"tv": host_obj})
+	p.host_os.report_event(NetEvents.EV_TV_POWER, {"tv": host_obj})
 	_ok(await _until(func() -> bool: return client_obj.tv_power_toggles == 1),
 		"events/TV power reaches the remote set")
-	p.host_os.report_event(NetObjectSync.EV_TV_VOL_UP, {"tv": host_obj})
+	p.host_os.report_event(NetEvents.EV_TV_VOL_UP, {"tv": host_obj})
 	_ok(await _until(func() -> bool: return client_obj.volume > 0.5),
 		"events/TV volume-up changes the remote volume")
-	p.host_os.report_event(NetObjectSync.EV_TV_VOL_DOWN, {"tv": host_obj})
+	p.host_os.report_event(NetEvents.EV_TV_VOL_DOWN, {"tv": host_obj})
 	_ok(await _until(func() -> bool: return is_equal_approx(client_obj.volume, 0.5)),
 		"events/TV volume-down changes the remote volume")
-	p.host_os.report_event(NetObjectSync.EV_TV_MUTE, {"tv": host_obj})
+	p.host_os.report_event(NetEvents.EV_TV_MUTE, {"tv": host_obj})
 	_ok(await _until(func() -> bool: return client_obj.muted),
 		"events/TV mute changes the remote audio gate")
-	p.host_os.report_event(NetObjectSync.EV_TV_CRT, {"tv": host_obj, "on": true})
-	p.host_os.report_event(NetObjectSync.EV_TV_STEREO, {"tv": host_obj, "mode": 2})
-	p.host_os.report_event(NetObjectSync.EV_TV_AUDIO_MODE, {"tv": host_obj, "mode": 1})
-	p.host_os.report_event(NetObjectSync.EV_TV_ASPECT, {"tv": host_obj, "on": true})
-	p.host_os.report_event(NetObjectSync.EV_TV_SOURCE, {"tv": host_obj, "source": 5})
-	p.host_os.report_event(NetObjectSync.EV_TV_CHANNEL,
+	p.host_os.report_event(NetEvents.EV_TV_CRT, {"tv": host_obj, "on": true})
+	p.host_os.report_event(NetEvents.EV_TV_STEREO, {"tv": host_obj, "mode": 2})
+	p.host_os.report_event(NetEvents.EV_TV_AUDIO_MODE, {"tv": host_obj, "mode": 1})
+	p.host_os.report_event(NetEvents.EV_TV_ASPECT, {"tv": host_obj, "on": true})
+	p.host_os.report_event(NetEvents.EV_TV_SOURCE, {"tv": host_obj, "source": 5})
+	p.host_os.report_event(NetEvents.EV_TV_CHANNEL,
 		{"tv": host_obj, "source": 1, "rf": 4, "index": 2})
-	p.host_os.report_event(NetObjectSync.EV_TV_SIZE, {"tv": host_obj, "scale": 1.35})
+	p.host_os.report_event(NetEvents.EV_TV_SIZE, {"tv": host_obj, "scale": 1.35})
 	_ok(await _until(func() -> bool:
 		return client_obj.crt and client_obj.stereo_mode == 2 \
 			and client_obj.audio_mode == 1 and client_obj.widescreen \
@@ -1036,20 +1036,20 @@ func _test_events(p: Pair) -> void:
 			and is_equal_approx(client_obj.scale_factor, 1.35)),
 		"events/TV CRT, stereo, audio, ratio, source, channel and size take effect")
 
-	p.host_os.report_event(NetObjectSync.EV_SYS_VIDEO_OUT,
+	p.host_os.report_event(NetEvents.EV_SYS_VIDEO_OUT,
 		{"sys": host_obj, "on": false})
-	p.host_os.report_event(NetObjectSync.EV_SYS_GRAVITY,
+	p.host_os.report_event(NetEvents.EV_SYS_GRAVITY,
 		{"sys": host_obj, "on": true})
 	_ok(await _until(func() -> bool:
 		return not client_obj.video_out and client_obj.floating),
 		"events/platform video-output and gravity toggles take effect")
-	p.host_os.report_event(NetObjectSync.EV_ROOM_LIGHTS,
+	p.host_os.report_event(NetEvents.EV_ROOM_LIGHTS,
 		{"switch": host_obj, "on": false})
-	p.host_os.report_event(NetObjectSync.EV_PULL_LIGHT,
+	p.host_os.report_event(NetEvents.EV_PULL_LIGHT,
 		{"cord": host_obj, "on": false})
-	p.host_os.report_event(NetObjectSync.EV_BLINDS,
+	p.host_os.report_event(NetEvents.EV_BLINDS,
 		{"blinds": host_obj, "drop": 0.25})
-	p.host_os.report_event(NetObjectSync.EV_TIME_OF_DAY,
+	p.host_os.report_event(NetEvents.EV_TIME_OF_DAY,
 		{"clock": host_obj, "time": 0.9})
 	_ok(await _until(func() -> bool:
 		return not client_obj.room_lights and not client_obj.pull_lit \
@@ -1057,19 +1057,19 @@ func _test_events(p: Pair) -> void:
 			and is_equal_approx(client_obj.day_time, 0.9)),
 		"events/wall lights, pull lamps, blinds and time-of-day take effect")
 
-	p.host_os.report_event(NetObjectSync.EV_TRAY, {"sys": host_obj, "open": true})
+	p.host_os.report_event(NetEvents.EV_TRAY, {"sys": host_obj, "open": true})
 	_ok(await _until(func() -> bool: return client_obj.tray_open),
 		"events/a host tray state reaches the client")
 	_ok(client_obj.applying_seen,
 		"events/remote state runs under echo suppression")
-	p.client_os.report_event(NetObjectSync.EV_BOOK_PAGE,
+	p.client_os.report_event(NetEvents.EV_BOOK_PAGE,
 		{"book": client_obj, "state": 2, "leaf": 7})
 	_ok(await _until(func() -> bool: return host_obj.pages == [[2, 7]]),
 		"events/a client event is applied authoritatively on the host")
 	_ok(host_obj.applying_seen, "events/client intent is also echo-suppressed on apply")
-	p.host_os.report_event(NetObjectSync.EV_BOOK_SIZE,
+	p.host_os.report_event(NetEvents.EV_BOOK_SIZE,
 		{"book": host_obj, "scale": 1.6})
-	p.host_os.report_event(NetObjectSync.EV_BOOK_HALF,
+	p.host_os.report_event(NetEvents.EV_BOOK_HALF,
 		{"book": host_obj, "on": true})
 	_ok(await _until(func() -> bool:
 		return is_equal_approx(client_obj.size_scale, 1.6) and client_obj.half_page_mode),
@@ -1077,15 +1077,15 @@ func _test_events(p: Pair) -> void:
 
 	# Insert/eject and cable/port button effects use matching registered objects
 	# on each peer, never the originating peer's Node pointer.
-	p.host_os.report_event(NetObjectSync.EV_CART_INSERT,
+	p.host_os.report_event(NetEvents.EV_CART_INSERT,
 		{"sys": host_obj, "cart": host_aux})
-	p.host_os.report_event(NetObjectSync.EV_TAPE_INSERT,
+	p.host_os.report_event(NetEvents.EV_TAPE_INSERT,
 		{"vcr": host_obj, "tape": host_aux})
-	p.host_os.report_event(NetObjectSync.EV_MEMCARD_INSERT,
+	p.host_os.report_event(NetEvents.EV_MEMCARD_INSERT,
 		{"sys": host_obj, "card": host_aux})
-	p.host_os.report_event(NetObjectSync.EV_DVD_INSERT,
+	p.host_os.report_event(NetEvents.EV_DVD_INSERT,
 		{"dvd": host_obj, "disc": host_aux})
-	p.host_os.report_event(NetObjectSync.EV_AUDIO_INSERT,
+	p.host_os.report_event(NetEvents.EV_AUDIO_INSERT,
 		{"player": host_obj, "media": host_aux})
 	_ok(await _until(func() -> bool:
 		return client_obj.restored.get("cart") == client_aux \
@@ -1094,11 +1094,11 @@ func _test_events(p: Pair) -> void:
 			and client_obj.restored.get("disc") == client_aux \
 			and client_obj.restored.get("media") == client_aux),
 		"events/cartridge, tape, memory-card, DVD and audio insertion take effect")
-	p.host_os.report_event(NetObjectSync.EV_CART_REMOVE, {"sys": host_obj})
-	p.host_os.report_event(NetObjectSync.EV_TAPE_REMOVE, {"vcr": host_obj})
-	p.host_os.report_event(NetObjectSync.EV_MEMCARD_REMOVE, {"sys": host_obj})
-	p.host_os.report_event(NetObjectSync.EV_DVD_REMOVE, {"dvd": host_obj})
-	p.host_os.report_event(NetObjectSync.EV_AUDIO_REMOVE, {"player": host_obj})
+	p.host_os.report_event(NetEvents.EV_CART_REMOVE, {"sys": host_obj})
+	p.host_os.report_event(NetEvents.EV_TAPE_REMOVE, {"vcr": host_obj})
+	p.host_os.report_event(NetEvents.EV_MEMCARD_REMOVE, {"sys": host_obj})
+	p.host_os.report_event(NetEvents.EV_DVD_REMOVE, {"dvd": host_obj})
+	p.host_os.report_event(NetEvents.EV_AUDIO_REMOVE, {"player": host_obj})
 	_ok(await _until(func() -> bool:
 		return (client_obj.get_node("CartridgeSlot") as MockSlot).drops == 1 \
 			and (client_obj.get_node("TapeSlot") as MockSlot).drops == 1 \
@@ -1111,8 +1111,8 @@ func _test_events(p: Pair) -> void:
 	# SENDER, where the caller still exists to be blamed. Before EV_NODE_KEYS it
 	# went out, failed every peer's _valid() guard, and told nobody.
 	var refused_before: int = p.host_os.events_refused
-	p.host_os.report_event(NetObjectSync.EV_CART_REMOVE, {})
-	p.host_os.report_event(NetObjectSync.EV_TAPE_REMOVE, {"vcr": null})
+	p.host_os.report_event(NetEvents.EV_CART_REMOVE, {})
+	p.host_os.report_event(NetEvents.EV_TAPE_REMOVE, {"vcr": null})
 	# The far side would drop these anyway, so watching the client proves
 	# nothing — what is asserted is that the SENDER refused them.
 	_eq(p.host_os.events_refused - refused_before, 2,
@@ -1122,17 +1122,17 @@ func _test_events(p: Pair) -> void:
 	_ok((client_obj.get_node("CartridgeSlot") as MockSlot).drops == 1,
 		"events/and never reaches the far side")
 
-	p.host_os.report_event(NetObjectSync.EV_TV_PLUG,
+	p.host_os.report_event(NetEvents.EV_TV_PLUG,
 		{"owner": host_obj, "tv": host_aux})
-	p.host_os.report_event(NetObjectSync.EV_TV_UNPLUG,
+	p.host_os.report_event(NetEvents.EV_TV_UNPLUG,
 		{"tv": host_obj, "in": 3})
-	p.host_os.report_event(NetObjectSync.EV_RCA_PLUG,
+	p.host_os.report_event(NetEvents.EV_RCA_PLUG,
 		{"cable": host_obj, "end": 1, "cord": 2, "dev": host_aux, "port": "VideoIn"})
-	p.host_os.report_event(NetObjectSync.EV_RCA_UNPLUG,
+	p.host_os.report_event(NetEvents.EV_RCA_UNPLUG,
 		{"cable": host_obj, "end": 1, "cord": 2})
-	p.host_os.report_event(NetObjectSync.EV_PORT_PLUG,
+	p.host_os.report_event(NetEvents.EV_PORT_PLUG,
 		{"sys": host_obj, "ctrl": host_aux, "port": 0})
-	p.host_os.report_event(NetObjectSync.EV_PORT_UNPLUG,
+	p.host_os.report_event(NetEvents.EV_PORT_UNPLUG,
 		{"sys": host_obj, "port": 0})
 	_ok(await _until(func() -> bool:
 		return client_obj.cable_calls.size() == 2 and client_obj.plug_calls.size() == 2 \
@@ -1141,15 +1141,15 @@ func _test_events(p: Pair) -> void:
 		"events/TV, RCA and controller cable changes take effect")
 
 	for cmd: String in ["play", "pause", "stop", "ff", "rew"]:
-		p.client_os.report_event(NetObjectSync.EV_VCR_CMD,
+		p.client_os.report_event(NetEvents.EV_VCR_CMD,
 			{"vcr": client_obj, "cmd": cmd})
 	for cmd: String in ["play", "pause", "stop", "menu_up", "menu_down", "menu_left",
 			"menu_right", "ok", "root", "next_ch", "prev_ch", "ff", "rew", "audio",
 			"subtitle"]:
-		p.client_os.report_event(NetObjectSync.EV_DVD_CMD,
+		p.client_os.report_event(NetEvents.EV_DVD_CMD,
 			{"dvd": client_aux, "cmd": cmd})
 	for cmd: String in ["play", "pause", "stop", "ff", "rew", "next", "prev"]:
-		p.client_os.report_event(NetObjectSync.EV_AUDIO_CMD,
+		p.client_os.report_event(NetEvents.EV_AUDIO_CMD,
 			{"player": client_obj, "cmd": cmd})
 	_ok(await _until(func() -> bool:
 		return host_obj.transport.size() == 12 and host_aux.transport.size() == 15),
@@ -1179,7 +1179,7 @@ func _test_relay(p: Pair) -> void:
 	p.host_os._bind(host_obj, 9010)
 	p.client_os._bind(client_obj, 9010)
 	third_os._bind(third_obj, 9010)
-	p.client_os.report_event(NetObjectSync.EV_BOOK_PAGE,
+	p.client_os.report_event(NetEvents.EV_BOOK_PAGE,
 		{"book": client_obj, "state": 3, "leaf": 11})
 	_ok(await _until(func() -> bool:
 		return host_obj.pages == [[3, 11]] and third_obj.pages == [[3, 11]]),

@@ -354,7 +354,7 @@ func on_plug_snapped(plug: Node3D, input: int) -> void:
 			# machine is off — would never hear it lifted.
 			# …and it must be silent too until SOURCE picks it, for the same reason.
 			_tv.audio().apply_volume()
-			NetworkManager.report_event(NetObjectSync.EV_TV_PLUG,
+			NetworkManager.report_event(NetEvents.EV_TV_PLUG,
 				{"owner": system, "tv": _tv, "ch": plugged.channel, "in": input})
 
 
@@ -448,7 +448,7 @@ func on_plug_released(input: int) -> void:
 				system.on_tv_disconnected()
 		_connected_systems[input] = null
 		_snapped_plugs[input] = null
-		NetworkManager.report_event(NetObjectSync.EV_TV_UNPLUG, {"tv": _tv, "in": input})
+		NetworkManager.report_event(NetEvents.EV_TV_UNPLUG, {"tv": _tv, "in": input})
 
 
 ## Read off the host duck-typed, and a host that has no opinion counts as a match:

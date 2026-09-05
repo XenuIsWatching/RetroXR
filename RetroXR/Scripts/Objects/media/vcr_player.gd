@@ -246,7 +246,7 @@ func toggle_options_ui(camera: Node3D) -> void:
 func _on_media_inserted(tape: Node3D) -> void:
 	if tape.has_method("get_video_path"):
 		video_path = tape.get_video_path()
-	NetworkManager.report_event(NetObjectSync.EV_TAPE_INSERT,
+	NetworkManager.report_event(NetEvents.EV_TAPE_INSERT,
 		{"vcr": self, "tape": tape})
 
 
@@ -255,7 +255,7 @@ func _on_media_inserted(tape: Node3D) -> void:
 func _on_media_removed() -> void:
 	stop()
 	video_path = ""
-	NetworkManager.report_event(NetObjectSync.EV_TAPE_REMOVE, {"vcr": self})
+	NetworkManager.report_event(NetEvents.EV_TAPE_REMOVE, {"vcr": self})
 
 
 func _on_eject_pressed() -> void:
@@ -268,7 +268,7 @@ func _on_eject_pressed() -> void:
 ## Returns true when the command was forwarded instead of handled locally.
 func _net_forward_cmd(cmd: String) -> bool:
 	if NetworkManager.is_client() and not NetworkManager.is_event_applying():
-		NetworkManager.report_event(NetObjectSync.EV_VCR_CMD, {"vcr": self, "cmd": cmd})
+		NetworkManager.report_event(NetEvents.EV_VCR_CMD, {"vcr": self, "cmd": cmd})
 		return true
 	return false
 

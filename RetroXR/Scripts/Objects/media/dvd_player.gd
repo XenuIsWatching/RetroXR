@@ -238,7 +238,7 @@ func _on_menu_pressed() -> void:
 func _on_media_inserted(disc: Node3D) -> void:
 	if disc.has_method("get_dvd_path"):
 		dvd_path = disc.get_dvd_path()
-	NetworkManager.report_event(NetObjectSync.EV_DVD_INSERT, {"dvd": self, "disc": disc})
+	NetworkManager.report_event(NetEvents.EV_DVD_INSERT, {"dvd": self, "disc": disc})
 
 
 ## MediaSlot reports the disc left (ejected, or pulled straight out). Stop playback
@@ -246,7 +246,7 @@ func _on_media_inserted(disc: Node3D) -> void:
 func _on_media_removed() -> void:
 	stop()
 	dvd_path = ""
-	NetworkManager.report_event(NetObjectSync.EV_DVD_REMOVE, {"dvd": self})
+	NetworkManager.report_event(NetEvents.EV_DVD_REMOVE, {"dvd": self})
 
 
 func _on_eject_pressed() -> void:
@@ -579,7 +579,7 @@ func has_subtitle_options() -> bool:
 ## acting locally. Returns true when forwarded (caller must then return).
 func _net_forward_cmd(cmd: String) -> bool:
 	if NetworkManager.is_client() and not NetworkManager.is_event_applying():
-		NetworkManager.report_event(NetObjectSync.EV_DVD_CMD, {"dvd": self, "cmd": cmd})
+		NetworkManager.report_event(NetEvents.EV_DVD_CMD, {"dvd": self, "cmd": cmd})
 		return true
 	return false
 

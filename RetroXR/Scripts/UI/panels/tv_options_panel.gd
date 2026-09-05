@@ -168,7 +168,7 @@ func _on_ignore_gravity_toggled(enabled: bool) -> void:
 func _on_scale_committed(factor: float) -> void:
 	if _tv and is_instance_valid(_tv):
 		_tv.set_tv_scale(factor)
-		NetworkManager.report_event(NetObjectSync.EV_TV_SIZE,
+		NetworkManager.report_event(NetEvents.EV_TV_SIZE,
 			{"tv": _tv, "scale": factor})
 
 

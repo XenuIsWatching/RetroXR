@@ -53,7 +53,7 @@ func set_mode(mode: int) -> void:
 	apply_channel_mode()
 	update_mode_button()
 	_tv.show_osd_timed(RetroTV.AUDIO_MODE_NAMES[_tv.audio_mode], 2.0)
-	NetworkManager.report_event(NetObjectSync.EV_TV_AUDIO_MODE,
+	NetworkManager.report_event(NetEvents.EV_TV_AUDIO_MODE,
 		{"tv": _tv, "mode": _tv.audio_mode})
 
 
@@ -138,7 +138,7 @@ func on_volume_down() -> void:
 		_tv.osd().show_volume()
 	if _tv.is_on():
 		apply_volume()
-	NetworkManager.report_event(NetObjectSync.EV_TV_VOL_DOWN, {"tv": _tv})
+	NetworkManager.report_event(NetEvents.EV_TV_VOL_DOWN, {"tv": _tv})
 
 
 func on_volume_up() -> void:
@@ -148,7 +148,7 @@ func on_volume_up() -> void:
 		_tv.osd().show_volume()
 	if _tv.is_on():
 		apply_volume()
-	NetworkManager.report_event(NetObjectSync.EV_TV_VOL_UP, {"tv": _tv})
+	NetworkManager.report_event(NetEvents.EV_TV_VOL_UP, {"tv": _tv})
 
 
 ## Toggle mute: silence (or restore) the connected device and show/clear a sticky
@@ -169,4 +169,4 @@ func on_mute_toggle() -> void:
 		_tv.show_osd("MUTE")
 	else:
 		_tv.hide_osd()
-	NetworkManager.report_event(NetObjectSync.EV_TV_MUTE, {"tv": _tv})
+	NetworkManager.report_event(NetEvents.EV_TV_MUTE, {"tv": _tv})

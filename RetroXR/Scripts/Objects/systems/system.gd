@@ -1642,7 +1642,7 @@ func set_ignore_gravity(on: bool) -> void:
 	elif not is_picked_up():
 		freeze = false
 		sleeping = false
-	NetworkManager.report_event(NetObjectSync.EV_SYS_GRAVITY, {"sys": self, "on": on})
+	NetworkManager.report_event(NetEvents.EV_SYS_GRAVITY, {"sys": self, "on": on})
 
 
 func _on_system_dropped(_pickable: Node3D) -> void:
@@ -1668,7 +1668,7 @@ func set_video_out_enabled(on: bool) -> void:
 		return
 	video_out_enabled = on
 	_apply_video_out()
-	NetworkManager.report_event(NetObjectSync.EV_SYS_VIDEO_OUT, {"sys": self, "on": on})
+	NetworkManager.report_event(NetEvents.EV_SYS_VIDEO_OUT, {"sys": self, "on": on})
 
 
 func _apply_video_out() -> void:
@@ -2260,7 +2260,7 @@ func toggle_power() -> void:
 				_report_netplay_blocked()
 		if NetworkManager.is_client():
 			# Non-netplay core: emulation runs on the host only — send the intent.
-			NetworkManager.report_event(NetObjectSync.EV_SYS_POWER, {"sys": self})
+			NetworkManager.report_event(NetEvents.EV_SYS_POWER, {"sys": self})
 			return
 	if is_powered_on:
 		power_off()
@@ -2269,7 +2269,7 @@ func toggle_power() -> void:
 	# Host in a session: tell clients the new state (placeholder screens).
 	if NetworkManager.is_active() and NetworkManager.is_host() \
 			and not NetworkManager.is_event_applying():
-		NetworkManager.report_event(NetObjectSync.EV_SYS_POWER_STATE,
+		NetworkManager.report_event(NetEvents.EV_SYS_POWER_STATE,
 			{"sys": self, "on": is_powered_on})
 
 
@@ -2783,7 +2783,7 @@ func reset() -> void:
 	if NetworkManager.is_active() and not NetworkManager.is_event_applying():
 		if NetworkManager.netplay_running() and NetworkManager.netplay_covers(self):
 			if NetworkManager.is_client():
-				NetworkManager.report_event(NetObjectSync.EV_SYS_RESET, {"sys": self})
+				NetworkManager.report_event(NetEvents.EV_SYS_RESET, {"sys": self})
 			elif not NetworkManager.netplay_pending_joins().is_empty():
 				# Somebody is stood there holding a pad this session cannot give
 				# them. A scheduled retro_reset would not admit them: it keeps the
@@ -2798,7 +2798,7 @@ func reset() -> void:
 		# Before lockstep starts, clients hold only a visual replica; reset the
 		# host's running core instead of returning because this copy is powered off.
 		if NetworkManager.is_client():
-			NetworkManager.report_event(NetObjectSync.EV_SYS_RESET, {"sys": self})
+			NetworkManager.report_event(NetEvents.EV_SYS_RESET, {"sys": self})
 			return
 	if not is_powered_on:
 		return
@@ -4054,7 +4054,7 @@ func _bind_port(lib_port: int, plug: Node3D, cabinet_index: int) -> void:
 	# Auto-select the core's per-port pad type (e.g. PCSX-ReARMed: DualShock vs
 	# the original digital pad). No-ops unless the core exposes such an option.
 	_apply_pad_type_option(lib_port, ctrl)
-	NetworkManager.report_event(NetObjectSync.EV_PORT_PLUG,
+	NetworkManager.report_event(NetEvents.EV_PORT_PLUG,
 		{"sys": self, "ctrl": ctrl, "port": slot})
 
 
@@ -4079,7 +4079,7 @@ func _unbind_port(lib_port: int, plug: Node3D, cabinet_index: int) -> void:
 		set_controller_port_device(lib_port, RETRO_DEVICE_NONE)
 	if is_instance_valid(plug) and plug.has_method("on_unplugged"):
 		plug.on_unplugged()
-	NetworkManager.report_event(NetObjectSync.EV_PORT_UNPLUG, {"sys": self, "port": slot})
+	NetworkManager.report_event(NetEvents.EV_PORT_UNPLUG, {"sys": self, "port": slot})
 
 
 ## Route a rumble request from the core to the RetroController currently
@@ -4424,7 +4424,7 @@ func _on_cartridge_inserted(cartridge: Node3D) -> void:
 		print("[RetroSystem] Hot swap: image slot %d -> %s" % [_disc_index, rom_path])
 		_request_disk_op(1, rom_path)
 		_protect_active_rom()
-	NetworkManager.report_event(NetObjectSync.EV_CART_INSERT,
+	NetworkManager.report_event(NetEvents.EV_CART_INSERT,
 		{"sys": self, "cart": cartridge})
 
 
@@ -4463,12 +4463,12 @@ func _on_cartridge_removed() -> void:
 		if _tray == null and _supports_disk_control() \
 				and not NetworkManager.is_event_applying():
 			_request_disk_op(DISK_OP_EJECT, "")
-		NetworkManager.report_event(NetObjectSync.EV_CART_REMOVE, {"sys": self})
+		NetworkManager.report_event(NetEvents.EV_CART_REMOVE, {"sys": self})
 		return
 	if is_powered_on:
 		power_off()
 	rom_path = ""
-	NetworkManager.report_event(NetObjectSync.EV_CART_REMOVE, {"sys": self})
+	NetworkManager.report_event(NetEvents.EV_CART_REMOVE, {"sys": self})
 
 
 ## Cached disk-control state from the emulation thread (async signal).
@@ -4523,7 +4523,7 @@ func _request_disk_op(op: int, path: String) -> void:
 			NetworkManager.netplay_schedule_disk(self, op, md5, _disc_index)
 		else:
 			print("[RetroSystem] Disc op %d intent -> host (md5 %s…)" % [op, md5.left(8)])
-			NetworkManager.report_event(NetObjectSync.EV_DISK_OP,
+			NetworkManager.report_event(NetEvents.EV_DISK_OP,
 				{"sys": self, "op": op, "md5": md5, "index": _disc_index})
 		# The core-side state flips on the scheduled frame; the mirror updates
 		# via disk_control_ready then.
@@ -4583,7 +4583,7 @@ func request_tray_state(open: bool) -> void:
 ## Local intent (OPEN button or pushing the lid shut): apply + replicate.
 func _request_tray_state(open: bool) -> void:
 	_set_tray_open(open)
-	NetworkManager.report_event(NetObjectSync.EV_TRAY,
+	NetworkManager.report_event(NetEvents.EV_TRAY,
 		{"sys": self, "open": _tray_open})
 
 

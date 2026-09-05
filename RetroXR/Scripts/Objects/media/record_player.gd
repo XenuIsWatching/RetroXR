@@ -465,7 +465,7 @@ func _end_touch() -> void:
 ## base's _net_forward_cmd has no room for one.
 func _net_forward_cmd_at(cmd: String, index: int) -> bool:
 	if NetworkManager.is_client() and not NetworkManager.is_event_applying():
-		NetworkManager.report_event(NetObjectSync.EV_AUDIO_CMD,
+		NetworkManager.report_event(NetEvents.EV_AUDIO_CMD,
 			{"player": self, "cmd": cmd, "index": index})
 		return true
 	return false

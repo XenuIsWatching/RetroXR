@@ -492,7 +492,7 @@ func _process(_delta: float) -> void:
 func set_crt_enabled(on: bool) -> void:
 	crt_enabled = on
 	_update_crt_button_color()
-	NetworkManager.report_event(NetObjectSync.EV_TV_CRT, {"tv": self, "on": on})
+	NetworkManager.report_event(NetEvents.EV_TV_CRT, {"tv": self, "on": on})
 
 
 func _on_crt_toggle() -> void:
@@ -510,7 +510,7 @@ func set_stereo_mode(mode: int) -> void:
 	stereo_mode = clampi(mode, 0, 2)
 	_update_stereo_button_color()
 	show_osd_timed(STEREO_MODE_NAMES[stereo_mode], 2.0)
-	NetworkManager.report_event(NetObjectSync.EV_TV_STEREO,
+	NetworkManager.report_event(NetEvents.EV_TV_STEREO,
 		{"tv": self, "mode": stereo_mode})
 
 
@@ -530,7 +530,7 @@ func set_widescreen(on: bool) -> void:
 	_display.apply_aspect()
 	_update_aspect_button()
 	show_osd_timed("16:9" if widescreen else "4:3", 1.5)
-	NetworkManager.report_event(NetObjectSync.EV_TV_ASPECT,
+	NetworkManager.report_event(NetEvents.EV_TV_ASPECT,
 		{"tv": self, "on": widescreen})
 
 
@@ -746,7 +746,7 @@ func set_channel_index(index: int) -> void:
 
 
 func _report_channel_state() -> void:
-	NetworkManager.report_event(NetObjectSync.EV_TV_CHANNEL, {
+	NetworkManager.report_event(NetEvents.EV_TV_CHANNEL, {
 		"tv": self,
 		"source": current_source,
 		"rf": rf_channel,
@@ -842,7 +842,7 @@ func set_source(source: int) -> void:
 		_tuner.set_active(false)
 
 	show_osd_timed(_source_banner(), 2.0)
-	NetworkManager.report_event(NetObjectSync.EV_TV_SOURCE,
+	NetworkManager.report_event(NetEvents.EV_TV_SOURCE,
 		{"tv": self, "source": current_source})
 
 
@@ -1084,7 +1084,7 @@ func _on_tv_toggle() -> void:
 	if _tuner:
 		_tuner.set_active(_tv_enabled and current_source == Source.TV)
 	_audio.apply_volume()
-	NetworkManager.report_event(NetObjectSync.EV_TV_POWER, {"tv": self})
+	NetworkManager.report_event(NetEvents.EV_TV_POWER, {"tv": self})
 
 
 ## Ignore-gravity: the device floats where it is put instead of falling. Restored

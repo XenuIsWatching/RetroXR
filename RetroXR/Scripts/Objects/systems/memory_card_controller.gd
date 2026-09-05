@@ -83,7 +83,7 @@ func on_memcard_inserted(card: Node3D, slot: int) -> void:
 		else:
 			_remount_cards()
 			_set_card_presence(slot, true)
-	NetworkManager.report_event(NetObjectSync.EV_MEMCARD_INSERT,
+	NetworkManager.report_event(NetEvents.EV_MEMCARD_INSERT,
 		{"sys": self, "card": card, "slot": slot})
 
 
@@ -104,7 +104,7 @@ func on_memcard_removed(slot: int) -> void:
 			# an unformatted one, so the game offered to format it instead of
 			# reporting no card at all.
 			_set_card_presence(slot, false)
-	NetworkManager.report_event(NetObjectSync.EV_MEMCARD_REMOVE,
+	NetworkManager.report_event(NetEvents.EV_MEMCARD_REMOVE,
 		{"sys": self, "slot": slot})
 
 

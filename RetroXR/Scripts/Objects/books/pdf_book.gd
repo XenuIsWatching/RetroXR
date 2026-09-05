@@ -548,7 +548,7 @@ func _consume_pending_page() -> void:
 ## Broadcast the page we landed on so other players' copies follow along.
 func _report_page() -> void:
 	if NetworkManager.is_active() and not NetworkManager.is_event_applying():
-		NetworkManager.report_event(NetObjectSync.EV_BOOK_PAGE,
+		NetworkManager.report_event(NetEvents.EV_BOOK_PAGE,
 			{"book": self, "state": int(_state), "leaf": _current_leaf})
 
 

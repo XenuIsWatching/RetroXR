@@ -225,7 +225,7 @@ func _on_pulled() -> void:
 	_apply()
 	pulled.emit(lit)
 	if light != null or not glow.is_empty():
-		NetworkManager.report_event(NetObjectSync.EV_PULL_LIGHT,
+		NetworkManager.report_event(NetEvents.EV_PULL_LIGHT,
 			{"cord": self, "on": lit})
 
 

@@ -245,7 +245,7 @@ func pull_step() -> void:
 		target = 1.0
 	target = clampf(target, 0.0, 1.0)
 	_animate_to(target)
-	NetworkManager.report_event(NetObjectSync.EV_BLINDS,
+	NetworkManager.report_event(NetEvents.EV_BLINDS,
 		{"blinds": self, "drop": target})
 
 
