@@ -1923,6 +1923,14 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				sys.pad_ordinal = int(data.get("pad_ordinal", 0))
 				sys._lid_angle_from_save = float(data.get("lid_angle", -1.0))
 				sys.ignore_gravity = bool(data.get("ignore_gravity", false))
+				# Before the caller adds it to the tree, like the fields above:
+				# _build_expansion_hardware runs from _ready and seeds a bay's
+				# default pak and its lid on a FRESH console. This save's own
+				# "expansions" and "expansion_cover" are the whole truth for a
+				# restored one, and a lid the player took off is recorded by
+				# their ABSENCE -- so without this the seed puts a new lid back
+				# on every load and nothing ever removes it.
+				sys._restoring_from_save = true
 				obj = sys
 			"tv":
 				var tv := TV_SCENE.instantiate() as RetroTV

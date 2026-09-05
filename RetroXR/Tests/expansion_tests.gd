@@ -288,6 +288,18 @@ func _group_fit() -> void:
 		"fit/ a console flagged as restoring seeds no default occupant of its own")
 	await _clear()
 
+	# And that the real deserializer sets that flag, which is a separate fact
+	# from the one above and the one that was actually broken: the assignment
+	# was missing from scene_persistence for a while and every case here still
+	# passed, because the fixture sets it by hand rather than calling the code
+	# that ships. A lid the player took off came back on every load.
+	var sp := ScenePersistence.new()
+	var rebuilt := sp._deserialize_object({"type": "system", "systemid": "nintendo_64"})
+	_check(rebuilt != null and bool(rebuilt.get("_restoring_from_save")),
+		"fit/ the deserializer flags a rebuilt system as restoring")
+	if rebuilt != null:
+		rebuilt.free()
+
 
 # ── join ──────────────────────────────────────────────────────────────────────
 
