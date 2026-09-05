@@ -1,9 +1,0 @@
-# type: ignore
-
-VariantDir('Temp', '.', duplicate=0)
-env = Environment()
-
-import os
-output_dir = os.environ.get('METAXR_AUDIO_OUTPUT_DIR', '#../RetroXR/metaxr-audio')
-
-SConscript('Temp/SConscript', exports=['env', 'output_dir'])
