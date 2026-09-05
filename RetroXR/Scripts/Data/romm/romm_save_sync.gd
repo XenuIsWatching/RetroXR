@@ -171,7 +171,7 @@ static func key_for(sram_path: String) -> String:
 ## the point of that switch. A first launch after upgrading can therefore queue
 ## a lot of uploads; the 20 s rate limit paces them.
 func is_enabled(sram_path: String) -> bool:
-	var rec := _record(sram_path)
+	var rec := record_for(sram_path)
 	if rec.has("enabled"):
 		return bool(rec["enabled"])
 	return config != null and config.backup_enabled
@@ -187,8 +187,11 @@ func set_enabled(sram_path: String, on: bool, rom_id: int = 0) -> void:
 	save_state()
 
 
+## The sync record for one save file, or an empty Dictionary.
+##
+## The live entry, not a copy: callers that hand it on duplicate it themselves.
 func record_for(sram_path: String) -> Dictionary:
-	return _record(sram_path)
+	return _state.get(key_for(sram_path), {})
 
 
 ## The state key for one save INSIDE a memory card.
@@ -455,10 +458,6 @@ func _list_done(callback: Callable, ok: bool, saves: Array) -> void:
 		callback.call(ok, saves)
 
 
-func _record(sram_path: String) -> Dictionary:
-	return _state.get(key_for(sram_path), {})
-
-
 # ── The decision ──────────────────────────────────────────────────────────────
 
 ## Pure, so it can be probed without a server.
@@ -515,7 +514,7 @@ func enqueue(sram_path: String, rom_id: int, core_name: String,
 		"key": k, "path": sram_path, "rom_id": rom_id, "core": core_name,
 		"slot": slot, "label": label,
 		"base_url": config.base_url, "headers": config.auth_headers(),
-		"record": _record(sram_path).duplicate(),
+		"record": record_for(sram_path).duplicate(),
 	})
 	_pump()
 

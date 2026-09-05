@@ -624,20 +624,20 @@ func _build_mods_options(vbox: VBoxContainer) -> void:
 			+ "restart."))
 		return
 
-	for rec: Dictionary in mods:
+	for rec: ModRecord in mods:
 		_build_mod_card(vbox, rec)
 	for u: Dictionary in unreadable:
 		_build_unreadable_card(vbox, u)
 
 
-func _build_mod_card(vbox: VBoxContainer, rec: Dictionary) -> void:
-	var manifest: ModManifest = rec["manifest"]
-	var status := int(rec["status"])
+func _build_mod_card(vbox: VBoxContainer, rec: ModRecord) -> void:
+	var manifest := rec.manifest
+	var status := rec.status
 	vbox.add_child(MenuStyle.spacer(14))
 
 	var head := MenuStyle.hbox(10)
 	vbox.add_child(head)
-	var thumb: Texture2D = rec["thumbnail"]
+	var thumb := rec.thumbnail
 	if thumb != null:
 		var art := TextureRect.new()
 		art.texture = thumb
@@ -662,7 +662,7 @@ func _build_mod_card(vbox: VBoxContainer, rec: Dictionary) -> void:
 		vbox.add_child(desc)
 
 	# What it actually registered, taken from ModApi rather than the manifest.
-	var api: ModApi = rec["api"]
+	var api := rec.api
 	if api != null:
 		vbox.add_child(MenuStyle.label("Adds: " + api.summary(), 16,
 			MenuStyle.COLOR_LICENSE))
@@ -674,8 +674,8 @@ func _build_mod_card(vbox: VBoxContainer, rec: Dictionary) -> void:
 			vbox.add_child(MenuStyle.label("    ! " + problem, 15,
 				MenuStyle.COLOR_BTN_UPD))
 
-	if not str(rec["reason"]).is_empty():
-		var reason := MenuStyle.label(str(rec["reason"]), 16,
+	if not rec.reason.is_empty():
+		var reason := MenuStyle.label(rec.reason, 16,
 			MenuStyle.COLOR_BTN_UPD if status == Mods.Status.REFUSED
 			or status == Mods.Status.FAILED else MenuStyle.COLOR_DESC)
 		reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -690,14 +690,14 @@ func _build_mod_card(vbox: VBoxContainer, rec: Dictionary) -> void:
 		vbox.add_child(MenuStyle.hint("    Adds file " + path))
 
 	vbox.add_child(MenuStyle.hint("%s  ·  %s  ·  %d files" % [
-		str(rec["path"]).get_file(), MenuStyle.human_bytes(int(rec["size"])),
-		int(rec["files"])]))
+		rec.path.get_file(), MenuStyle.human_bytes(rec.size),
+		rec.files]))
 
 	# A refused mod gets no switch: enabling it would change nothing, and a
 	# toggle that does nothing is worse than none.
 	if status == Mods.Status.REFUSED:
 		return
-	var id := str(rec["id"])
+	var id := rec.id
 	var sw := MenuStyle.switch_row(vbox, "Enabled", Mods.is_enabled(id))
 	sw.toggled.connect(func(on: bool) -> void:
 		Mods.set_enabled(id, on)

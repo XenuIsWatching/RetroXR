@@ -26,19 +26,14 @@ extends Node
 const STATE_PATH := "user://mods.json"
 const STATE_OWNER := "ModManager"
 
-## What happened to one mod this boot.
-enum Status {
-	DISABLED,       ## found, not enabled — the default for anything new
-	PENDING,        ## enabled since the last launch; mounts next restart
-	LOADED,         ## mounted and registered
-	REFUSED,        ## failed a check, so it was never mounted
-	FAILED,         ## mounted, but its entry script did not run
-}
+## What happened to one mod this boot. Defined on ModRecord, which carries it;
+## aliased here because the Mods page reads it as Mods.Status.
+const Status := ModRecord.Status
 
 ## Emitted once discovery and loading have finished, so the Mods page can build.
 signal mods_ready()
 
-## id -> ModRecord-ish Dictionary. See _record_for().
+## id -> ModRecord.
 var _mods: Dictionary = {}
 ## Containers whose id could not be read at all, keyed by file path.
 var _unreadable: Array[Dictionary] = []
@@ -88,7 +83,7 @@ func _discover() -> void:
 		# mounted. That is the whole point: the page shows art for a mod that is
 		# disabled and has never been loaded, which is exactly when the player is
 		# deciding whether to trust it.
-		rec["thumbnail"] = _read_thumbnail(reader, manifest)
+		rec.thumbnail = _read_thumbnail(reader, manifest)
 		_mods[manifest.id] = rec
 		reader.close()
 
@@ -97,9 +92,8 @@ func _discover() -> void:
 	for id: String in found:
 		if (found[id] as Array).size() > 1:
 			_duplicates[id] = found[id]
-			_mods[id]["status"] = Status.REFUSED
-			_mods[id]["reason"] = "installed twice: %s" % ", ".join(
-				(found[id] as Array).map(func(p): return str(p).get_file()))
+			(_mods[id] as ModRecord).refuse("installed twice: %s" % ", ".join(
+				(found[id] as Array).map(func(p): return str(p).get_file())))
 
 
 ## Find and parse the manifest, which is at res://mods/<id>/mod.json for exactly
@@ -137,25 +131,19 @@ func _read_thumbnail(reader: ModPackReader, manifest: ModManifest) -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
-func _record_for(manifest: ModManifest, path: String, files: PackedStringArray) -> Dictionary:
-	var rec := {
-		"id": manifest.id,
-		"manifest": manifest,
-		"path": path,
-		"size": _file_size(path),
-		"files": files.size(),
-		"status": Status.DISABLED,
-		"reason": "",
-		"api": null,
-		"thumbnail": null,
-	}
+func _record_for(manifest: ModManifest, path: String,
+		files: PackedStringArray) -> ModRecord:
+	var rec := ModRecord.new()
+	rec.id = manifest.id
+	rec.manifest = manifest
+	rec.path = path
+	rec.size = _file_size(path)
+	rec.files = files.size()
 	var inventory_err := manifest.inventory_error(files)
 	if not inventory_err.is_empty():
-		rec["status"] = Status.REFUSED
-		rec["reason"] = inventory_err
+		rec.refuse(inventory_err)
 	elif not manifest.runs_here():
-		rec["status"] = Status.REFUSED
-		rec["reason"] = "not built for %s" % OS.get_name()
+		rec.refuse("not built for %s" % OS.get_name())
 	return rec
 
 
@@ -175,51 +163,47 @@ func _load_enabled() -> void:
 	# Priority, then id, so a boot is deterministic and a mod that must layer
 	# over another can say so without depending on filenames.
 	order.sort_custom(func(a, b):
-		var pa: int = (a["manifest"] as ModManifest).priority
-		var pb: int = (b["manifest"] as ModManifest).priority
+		var pa: int = (a as ModRecord).manifest.priority
+		var pb: int = (b as ModRecord).manifest.priority
 		if pa != pb:
 			return pa < pb
-		return str(a["id"]) < str(b["id"]))
-	for rec: Dictionary in order:
+		return (a as ModRecord).id < (b as ModRecord).id)
+	for rec: ModRecord in order:
 		_mount_and_register(rec)
 
 
-func _should_load(rec: Dictionary) -> bool:
-	if int(rec["status"]) == Status.REFUSED:
+func _should_load(rec: ModRecord) -> bool:
+	if rec.status == ModRecord.Status.REFUSED:
 		return false
-	return bool(_enabled.get(str(rec["id"]), false))
+	return bool(_enabled.get(rec.id, false))
 
 
-func _mount_and_register(rec: Dictionary) -> void:
-	var manifest := rec["manifest"] as ModManifest
+func _mount_and_register(rec: ModRecord) -> void:
+	var manifest := rec.manifest
 	var shadowing := manifest.shadowing_claims()
 	# replace_files only when a claim actually lands on a shipped path. A mod
 	# claiming nothing therefore provably cannot touch one.
 	var replace := not shadowing.is_empty()
-	if not ProjectSettings.load_resource_pack(str(rec["path"]), replace):
-		rec["status"] = Status.FAILED
-		rec["reason"] = "the pack could not be mounted"
+	if not ProjectSettings.load_resource_pack(rec.path, replace):
+		rec.fail("the pack could not be mounted")
 		return
 	if not ResourceLoader.exists(manifest.entry):
-		rec["status"] = Status.FAILED
-		rec["reason"] = "entry script is missing: %s" % manifest.entry
+		rec.fail("entry script is missing: %s" % manifest.entry)
 		return
 	var script := ResourceLoader.load(manifest.entry) as GDScript
 	if script == null:
-		rec["status"] = Status.FAILED
-		rec["reason"] = "entry script did not compile: %s" % manifest.entry
+		rec.fail("entry script did not compile: %s" % manifest.entry)
 		return
 	var inst: Object = script.new()
 	if not (inst is RetroMod):
-		rec["status"] = Status.FAILED
-		rec["reason"] = "entry script does not extend RetroMod"
+		rec.fail("entry script does not extend RetroMod")
 		return
 	var api := ModApi.new(manifest, _hooks)
 	(inst as RetroMod).register(api)
-	rec["api"] = api
-	rec["status"] = Status.LOADED
+	rec.api = api
+	rec.status = ModRecord.Status.LOADED
 	if not shadowing.is_empty():
-		rec["reason"] = "replaces %d shipped file(s)" % shadowing.size()
+		rec.reason = "replaces %d shipped file(s)" % shadowing.size()
 	print("[mods] loaded %s %s — %s" % [manifest.id, manifest.version, api.summary()])
 
 
@@ -254,19 +238,19 @@ func set_enabled(id: String, enabled: bool) -> void:
 		return
 	_enabled[id] = enabled
 	_save_state()
-	var rec: Dictionary = _mods[id]
-	if int(rec["status"]) == Status.REFUSED:
+	var rec: ModRecord = _mods[id]
+	if rec.status == ModRecord.Status.REFUSED:
 		return
-	if enabled and int(rec["status"]) != Status.LOADED:
-		rec["status"] = Status.PENDING
-	elif not enabled and int(rec["status"]) == Status.LOADED:
-		rec["status"] = Status.PENDING
+	if enabled and rec.status != ModRecord.Status.LOADED:
+		rec.status = ModRecord.Status.PENDING
+	elif not enabled and rec.status == ModRecord.Status.LOADED:
+		rec.status = ModRecord.Status.PENDING
 
 
 ## True when a change has been made that only a restart can apply.
 func restart_pending() -> bool:
-	for rec: Dictionary in _mods.values():
-		if int(rec["status"]) == Status.PENDING:
+	for rec: ModRecord in _mods.values():
+		if rec.status == ModRecord.Status.PENDING:
 			return true
 	return false
 
@@ -281,16 +265,16 @@ func all_mods() -> Array:
 	out.sort_custom(func(a, b):
 		var rank := {Status.LOADED: 0, Status.PENDING: 1, Status.DISABLED: 2,
 			Status.FAILED: 3, Status.REFUSED: 4}
-		var ra: int = rank.get(int(a["status"]), 5)
-		var rb: int = rank.get(int(b["status"]), 5)
+		var ra: int = rank.get((a as ModRecord).status, 5)
+		var rb: int = rank.get((b as ModRecord).status, 5)
 		if ra != rb:
 			return ra < rb
-		return str(a["id"]) < str(b["id"]))
+		return (a as ModRecord).id < (b as ModRecord).id)
 	return out
 
 
-func mod(id: String) -> Dictionary:
-	return _mods.get(id, {}) as Dictionary
+func mod(id: String) -> ModRecord:
+	return _mods.get(id) as ModRecord
 
 
 ## Containers that could not be identified at all — a corrupt pack, or one whose
@@ -317,11 +301,10 @@ static func status_text(status: int) -> String:
 ## peer missing a mod is told so rather than sent it.
 func fingerprint() -> PackedStringArray:
 	var out := PackedStringArray()
-	for rec: Dictionary in _mods.values():
-		if int(rec["status"]) != Status.LOADED:
+	for rec: ModRecord in _mods.values():
+		if rec.status != ModRecord.Status.LOADED:
 			continue
-		var m := rec["manifest"] as ModManifest
-		out.append("%s@%s" % [m.id, m.version])
+		out.append("%s@%s" % [rec.manifest.id, rec.manifest.version])
 	out.sort()
 	return out
 
