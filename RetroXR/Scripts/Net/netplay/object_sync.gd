@@ -1676,6 +1676,9 @@ func _album_fetch_failed(net_id: int, reason: String) -> void:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+## The one private read left in this layer, and it stays: _grab_driver belongs to
+## the vendored XRToolsPickable, which exposes no accessor for who is holding it.
+## Adding one would mean patching the addon, which the next update would drop.
 func _is_zone_snapped(node: Node) -> bool:
 	var driver: Variant = node.get("_grab_driver")
 	if driver and driver.primary and driver.primary.by is XRToolsSnapZone:

@@ -261,6 +261,25 @@ func is_running() -> bool:
 	return _running
 
 
+## Who supplies each global port: port -> peer id. A copy, because the caller is
+## usually the UI and must not be able to reassign a port by editing what it got.
+func owners() -> Dictionary:
+	return _owners.duplicate()
+
+
+## The anchor system of the session, or null. A linked pair is one session over
+## two machines, so this is the machine the session was started from — use
+## machine_specs() when every machine matters.
+func system() -> Object:
+	return _system
+
+
+## What each machine in the group was launched with: a rom, empty media, or no
+## content at all. A copy; the specs themselves are read-only to callers.
+func machine_specs() -> Array:
+	return _machine_specs.duplicate()
+
+
 func is_active() -> bool:
 	return _running or _join_paused or not _await_core.is_empty() or not _ready_peers.is_empty()
 
@@ -401,12 +420,12 @@ func _requires_lockstep_input() -> bool:
 	for machine: Object in _group:
 		if machine == null:
 			continue
-		if "_model" in machine:
-			var model: Variant = machine.get("_model")
+		if machine.has_method("get_model"):
+			var model: Variant = machine.get_model()
 			if model != null and model.has_method("is_handheld") and model.is_handheld():
 				return true
-		if "_port_controllers" in machine:
-			var controllers: Array = machine.get("_port_controllers")
+		if machine.has_method("port_holders"):
+			var controllers: Array = machine.port_holders()
 			for controller: Variant in controllers:
 				if controller is KeyboardReceiver:
 					return true
@@ -1158,8 +1177,8 @@ func handoff_controller(controller: Object, new_owner: int) -> void:
 		return
 	if controller == null or not is_instance_valid(controller):
 		return
-	var machine: Object = controller.get("_connected_system")
-	var local_port := int(controller.get("_port_index"))
+	var machine: Object = controller.get_connected_system()
+	var local_port: int = controller.get_port_index()
 	handoff_port(machine, local_port, new_owner)
 
 

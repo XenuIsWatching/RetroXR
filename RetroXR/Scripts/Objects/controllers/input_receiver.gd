@@ -143,6 +143,13 @@ func get_connected_system() -> RetroSystem:
 	return _connected_system if is_instance_valid(_connected_system) else null
 
 
+## Which port of that console this receiver occupies, or -1 when unplugged.
+## The companion to get_connected_system: netplay needs both to say which global
+## port a controller supplies.
+func get_port_index() -> int:
+	return _port_index
+
+
 func restore_port_connection(system: RetroSystem, port_index: int) -> void:
 	if _cable_plug != null:
 		system.restore_controller_plug(port_index, _cable_plug)

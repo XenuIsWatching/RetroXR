@@ -619,7 +619,7 @@ func netplay_running() -> bool:
 func netplay_owners() -> Dictionary:
 	if _netplay == null or not _netplay.is_running():
 		return {}
-	return (_netplay._owners as Dictionary).duplicate()
+	return _netplay.owners()
 
 
 ## Which machine in the group a global port belongs to.
@@ -634,7 +634,18 @@ func netplay_port_of(global_port: int) -> int:
 
 ## The system currently under netplay, or null.
 func netplay_system() -> Object:
-	return _netplay._system if _netplay != null else null
+	return _netplay.system() if _netplay != null else null
+
+
+## The shared-room sync layer, or null before a session exists. Exposed so the
+## netplay UI stops reaching for this facade's own private member by name.
+func object_sync() -> NetObjectSync:
+	return _object_sync
+
+
+## The lockstep session, or null before one exists.
+func netplay_session() -> NetplaySession:
+	return _netplay
 
 
 ## True when a running netplay session covers `machine` — i.e. a cable seated on
@@ -682,8 +693,8 @@ func default_owners(system: Object) -> Dictionary:
 	for m in range(group.size()):
 		var machine: Object = group[m]
 		var found := false
-		if machine != null and "_port_controllers" in machine:
-			var pc: Array = machine.get("_port_controllers")
+		if machine != null and machine.has_method("port_holders"):
+			var pc: Array = machine.port_holders()
 			for i in range(pc.size()):
 				if pc[i] != null:
 					plugged.append(m * NetplaySession.PORTS_PER_MACHINE + i)
@@ -697,8 +708,8 @@ func default_owners(system: Object) -> Dictionary:
 		var machine: Object = group[NetplaySession.machine_of_port(global_port)]
 		var local_port := NetplaySession.port_on_machine(global_port)
 		var controller: Object = null
-		if machine != null and "_port_controllers" in machine:
-			var pc: Array = machine.get("_port_controllers")
+		if machine != null and machine.has_method("port_holders"):
+			var pc: Array = machine.port_holders()
 			if local_port < pc.size():
 				controller = pc[local_port]
 		var holder := _object_sync.holder_peer(controller) if _object_sync != null else 0

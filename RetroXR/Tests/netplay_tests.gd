@@ -2446,6 +2446,11 @@ class MockSys extends Node:
 	var link_refreshes := 0
 	var reset_visuals := 0
 	var _port_controllers: Array = []
+
+	## The session asks through the public accessors, so a mock answers them too.
+	func port_holders() -> Array: return _port_controllers
+	func get_model() -> Variant: return null
+
 	## The machines on this one's link bus, itself included, or empty when the
 	## machine is not cabled to anything. This is the seam the session asks
 	## through, so a probe needs no cables and no room.
@@ -2533,6 +2538,8 @@ class MockController extends Node:
 	var _connected_system: Object = null
 	var _port_index := -1
 	func is_picked_up() -> bool: return false
+	func get_connected_system() -> Object: return _connected_system
+	func get_port_index() -> int: return _port_index
 
 
 class MockPadReceiver extends InputReceiver:

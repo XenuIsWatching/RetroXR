@@ -3883,6 +3883,15 @@ func port_holder(port: int) -> Node:
 	return held if is_instance_valid(held) else null
 
 
+## Every port's holder, port order, null where nothing is plugged in.
+##
+## The companion to port_holder for callers that have to walk all of them —
+## netplay decides which ports a frame must carry. A copy, so a caller cannot
+## reshape the cache by holding onto it.
+func port_holders() -> Array:
+	return _port_controllers.duplicate()
+
+
 ## The Wii pairing component, or null on every other console. Wii Remotes look it
 ## up here after a save restore, when they have a system but not yet a link.
 func get_wii_link() -> WiiLink:

@@ -225,10 +225,10 @@ func note_rom_available(rom_path: String, systemid: String) -> void:
 
 func _room_rows() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	if _nm == null or not ("_object_sync" in _nm):
+	if _nm == null:
 		return out
-	var sync: Object = _nm.get("_object_sync")
-	if sync == null or not sync.has_method("content_manifest"):
+	var sync: NetObjectSync = _nm.object_sync()
+	if sync == null:
 		return out
 	for entry: Dictionary in sync.content_manifest():
 		var md5 := str(entry.get("md5", ""))
@@ -252,12 +252,12 @@ func _room_rows() -> Array[Dictionary]:
 ## and both block the session rather than decorating it.
 func _machine_rows() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	if _nm == null or not ("_netplay" in _nm):
+	if _nm == null:
 		return out
-	var session: Object = _nm.get("_netplay")
-	if session == null or not ("_machine_specs" in session):
+	var session: NetplaySession = _nm.netplay_session()
+	if session == null:
 		return out
-	for spec: Dictionary in (session.get("_machine_specs") as Array):
+	for spec: Dictionary in session.machine_specs():
 		if str(spec.get("mode", "")) != "rom":
 			continue
 		var md5 := str(spec.get("rom_md5", ""))
