@@ -1399,7 +1399,6 @@ GDScript UI → Libretro Node (instance) → Wrapper (per-node) → Core + Handl
 ```
 
 ### GDScript Side
-- `RetroXR/Scripts/libretro.gd` — Main controller script. Uses `@export var libretro_node: Libretro` to reference the `Libretro` node; falls back to `find_child("Libretro")` if unset.
 - `RetroXR/Scripts/Objects/systems/system.gd` — Per-arcade-cabinet controller. Has `@onready var _libretro: Libretro = $Libretro` wired to a child `Libretro` node in the scene tree.
 - `RetroXR/Scenes/Objects/system.tscn` — Cabinet scene. Contains a `Libretro` child node. Its `unique_id` is the value 4000000010, but Godot writes it SIGNED, so the file reads `unique_id=-294967286` — grep for that, not for the decimal above.
 - GDExtension registration at `MODULE_INITIALIZATION_LEVEL_SCENE`.

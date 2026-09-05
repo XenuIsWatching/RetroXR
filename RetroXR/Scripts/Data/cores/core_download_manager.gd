@@ -362,7 +362,6 @@ func _parse_listing_html(html: String, suffixes := PackedStringArray(),
 # Download state
 # ---------------------------------------------------------------------------
 
-## Returns one of: "Download", "Re-Download", "UPDATE", "BUSY"
 ## Remove an installed core's library and forget it.
 ##
 ## Deliberately narrow: the .dll/.so and the manifest row, nothing else. A core's
@@ -436,6 +435,7 @@ static func systems_using(core_name: String) -> PackedStringArray:
 	return out
 
 
+## Returns one of: "Download", "Re-Download", "UPDATE", "BUSY"
 func get_core_state(core_name: String, remote_date: String) -> String:
 	if is_queued(core_name):
 		return "BUSY"
