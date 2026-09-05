@@ -231,7 +231,7 @@ const _TRS_KIT: Array = [
 ## `system_name` is unused now — a hardware row is labelled by its registry row
 ## rather than by the system's name, so a platform with two models says which is
 ## which. Kept in the signature because the menu passes it.
-static func items_for(systemid: String, _system_name: String = "") -> Array:
+static func items_for(systemid: String) -> Array:
 	# An expansion with a card of its own IS this card, and is the whole of it.
 	#
 	# Almost every unit is also a systemid -- a 64DD's disks are "nintendo_64dd",

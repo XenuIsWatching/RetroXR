@@ -369,9 +369,11 @@ static func has_any_model(platform: String) -> bool:
 ## A platform whose only model happens to be plain (atari_lynx, wonderswan, …)
 ## returns false: nothing is being offered as an alternative to anything.
 ##
-## No row carries external assets today, so this is false everywhere. Kept for the
-## same reason `requires` is — it is how such a model would announce that the plain
-## one is still there behind it.
+## No row carries external assets today, so this is false everywhere. Dormant by
+## design rather than dead: it wakes the moment any model_registry row gains a
+## non-empty `requires` — the way a model built on a downloaded or mod-supplied
+## asset declares its dependency — and it is then what tells the spawn menu the
+## plain model is still there behind the one that cannot be built.
 static func has_plain_alternative(platform: String) -> bool:
 	var total := 0
 	var plain := 0

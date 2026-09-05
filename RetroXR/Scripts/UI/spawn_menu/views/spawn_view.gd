@@ -549,7 +549,7 @@ func _populate_systems_tab() -> void:
 	for systemid: String in ids:
 		var sysname: String = core_db.get_systemname_for_id(systemid)
 		var entry := {"systemid": systemid, "name": sysname}
-		var n := SpawnCatalog.items_for(systemid, sysname).size()
+		var n := SpawnCatalog.items_for(systemid).size()
 		if n > 1:
 			entry["badge"] = "%d items" % n
 		systems.append(entry)
@@ -563,7 +563,7 @@ func _populate_systems_tab() -> void:
 ## several items can be spawned in a row.
 func _populate_systems_detail(systemid: String, vbox: VBoxContainer) -> void:
 	vbox.add_child(MenuStyle.spacer(4))
-	for item: Dictionary in SpawnCatalog.items_for(systemid, core_db.get_systemname_for_id(systemid)):
+	for item: Dictionary in SpawnCatalog.items_for(systemid):
 		var btn := Button.new()
 		btn.text = "  +  " + str(item.get("label", "Console"))
 		btn.custom_minimum_size = Vector2(0, 80)

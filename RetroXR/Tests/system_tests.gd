@@ -351,7 +351,7 @@ func _gun_row(sysid: String) -> Dictionary:
 ## the next press is correctly ignored, and the button reads as dead.
 func _test_playstation_hardware() -> void:
 	var labels: Array = []
-	for it in SpawnCatalog.items_for("playstation", "PlayStation"):
+	for it in SpawnCatalog.items_for("playstation"):
 		labels.append(String((it as Dictionary).get("label", "")))
 	# A platform that models its own console AND its own pads has no use for the
 	# generic box or the generic pad; they are clutter on its card.
