@@ -64,6 +64,7 @@ func _ready() -> void:
 		_test_parse_query()
 		_test_cookie()
 		_test_extract_pin()
+		_test_auth_hardening()
 		_test_extract_filename()
 		_test_find_bytes()
 	if _wants("upload"):
@@ -205,6 +206,35 @@ func _test_cookie() -> void:
 	_eq("parse/a missing cookie is empty",
 		_srv._cookie("other=1", "sid"), "")
 	_eq("parse/an empty header is empty", _srv._cookie("", "sid"), "")
+
+
+## The session token must not be guessable, and the 4-digit PIN must not be
+## walkable. 10000 combinations falls to a script in seconds over a LAN.
+func _test_auth_hardening() -> void:
+	var seen := {}
+	for i in 200:
+		var tok: String = _srv._gen_token()
+		if i == 0:
+			_eq("auth/a token is 32 bytes of hex", tok.length(), 64)
+		seen[tok] = true
+	_eq("auth/every token is distinct", seen.size(), 200)
+
+	# randi() is seeded, so a fresh run reproduces its stream. Two independently
+	# seeded sequences agreeing would mean the token is derived from one.
+	seed(1)
+	var first: String = _srv._gen_token()
+	seed(1)
+	_ok("auth/tokens do not follow the seeded RNG", _srv._gen_token() != first)
+
+	var who := "10.0.0.5"
+	_srv._failures.clear()
+	for i in WebFileServer.MAX_PIN_ATTEMPTS - 1:
+		_srv._note_failure(who)
+	_ok("auth/a few wrong pins are tolerated", not _srv._locked_out(who))
+	_srv._note_failure(who)
+	_ok("auth/the attempt limit locks the address out", _srv._locked_out(who))
+	_ok("auth/another address is unaffected", not _srv._locked_out("10.0.0.6"))
+	_srv._failures.clear()
 
 
 func _test_extract_pin() -> void:

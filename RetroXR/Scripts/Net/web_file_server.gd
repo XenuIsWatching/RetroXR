@@ -238,10 +238,18 @@ func _is_authed(headers: Dictionary) -> bool:
 
 ## Validates the submitted PIN and, on success, issues a session cookie.
 func _handle_login(peer: StreamPeerTCP, body: PackedByteArray) -> void:
+	var who := _peer_address(peer)
+	if _locked_out(who):
+		# 429, not 401: the PIN may well be right, and a client that is being
+		# rate-limited should be told that rather than shown "bad pin" forever.
+		_send_text(peer, 429, "application/json", '{"error":"too many attempts"}')
+		return
 	var submitted := _extract_pin(body.get_string_from_utf8())
 	if pin.is_empty() or submitted != pin:
+		_note_failure(who)
 		_send_text(peer, 401, "application/json", '{"error":"bad pin"}')
 		return
+	_failures.erase(who)
 	var token := _gen_token()
 	_sessions[token] = true
 	var body_bytes := '{"ok":true}'.to_utf8_buffer()
@@ -250,6 +258,50 @@ func _handle_login(peer: StreamPeerTCP, body: PackedByteArray) -> void:
 	peer.put_data(hdr.to_utf8_buffer())
 	peer.put_data(body_bytes)
 
+
+
+# ── PIN throttling ────────────────────────────────────────────────────────────
+#
+# A 4-digit PIN is 10000 combinations, which a script walks in seconds over a
+# LAN. The PIN is short on purpose — it is typed on a phone, from a headset —
+# so the throttle is what makes it worth anything.
+
+## How many wrong PINs one address may submit before it is refused.
+const MAX_PIN_ATTEMPTS := 8
+## How long a locked-out address stays locked out.
+const PIN_LOCKOUT_SEC := 60.0
+
+## address -> {"count": int, "until": float}
+var _failures: Dictionary = {}
+
+
+func _peer_address(peer: StreamPeerTCP) -> String:
+	var host := peer.get_connected_host()
+	return host if not host.is_empty() else "?"
+
+
+func _locked_out(who: String) -> bool:
+	var rec: Dictionary = _failures.get(who, {})
+	var until := float(rec.get("until", 0.0))
+	if until <= 0.0:
+		return false            # counting attempts, not locked out
+	if Time.get_ticks_msec() / 1000.0 < until:
+		return true
+	# The window has passed; forget the address entirely so a slow typist is not
+	# punished for a mistake made a minute ago. Only ever cleared here, never on
+	# the still-counting path — doing that reset the tally on every check and the
+	# limit was never reached.
+	_failures.erase(who)
+	return false
+
+
+func _note_failure(who: String) -> void:
+	var rec: Dictionary = _failures.get(who, {"count": 0, "until": 0.0})
+	rec["count"] = int(rec.get("count", 0)) + 1
+	if int(rec["count"]) >= MAX_PIN_ATTEMPTS:
+		rec["until"] = Time.get_ticks_msec() / 1000.0 + PIN_LOCKOUT_SEC
+		rec["count"] = 0
+	_failures[who] = rec
 
 ## Pulls the PIN out of a login body (form-encoded `pin=1234` or JSON `{"pin":"1234"}`).
 func _extract_pin(body: String) -> String:
@@ -276,8 +328,14 @@ func _cookie(header: String, key: String) -> String:
 	return ""
 
 
+## A session token, from the crypto RNG.
+##
+## randi() is a seeded PRNG: its stream is reproducible, so a token could be
+## predicted from others rather than having to be stolen, and mixing in a
+## microsecond clock only narrows the search. Crypto has no such property, and
+## 32 bytes is past guessing.
 func _gen_token() -> String:
-	return "%016x%016x" % [randi() ^ (randi() << 16), Time.get_ticks_usec() ^ randi()]
+	return Crypto.new().generate_random_bytes(32).hex_encode()
 
 
 # ── API handlers ──────────────────────────────────────────────────────────────
