@@ -180,6 +180,15 @@ const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse
 ## Types whose entry carries nothing but a pose — instantiate and place, no
 ## properties to apply. Types that need more are match arms in
 ## _deserialize_object().
+##
+## One of THREE places an interactive object is registered, and they must be
+## edited together or the object half-exists:
+##   1. this table (or a _deserialize_object arm) — restoring it from a save
+##   2. spawn_menu_controller.gd's `match type` — spawning it from the menu
+##   3. net_events.gd's EV_* kinds — announcing what a player does to it
+## The keys here and in (2) are deliberately the same strings; an object that
+## spawns but is missing from (1) vanishes on the next load, and one missing
+## from (2) can only ever arrive from a save file.
 const PLAIN_SCENES := {
 	"tv_remote": TV_REMOTE_SCENE,
 	"trash_can": STORAGE_BOX_SCENE,

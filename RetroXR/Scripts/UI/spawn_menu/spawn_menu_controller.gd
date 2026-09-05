@@ -1146,6 +1146,10 @@ func _on_spawn_requested(type: String) -> void:
 			return
 		_place_spawned(prop, type)
 		return
+	# These tokens are the SAME strings ScenePersistence keys its restore table
+	# by, on purpose. A new object needs a row there as well, or it spawns and
+	# then vanishes on the next load; see the note on PLAIN_SCENES for the third
+	# site (net_events.gd) that goes with them.
 	match type:
 		"tv":
 			obj = TV_SCENE.instantiate() as Node3D

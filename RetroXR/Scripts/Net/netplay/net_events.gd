@@ -8,6 +8,11 @@
 ## by method. Objects announcing what happened to them should not have to know
 ## which subsystem is listening.
 ##
+## The third of the three places an interactive object is registered — the other
+## two are ScenePersistence.PLAIN_SCENES (restoring it) and
+## spawn_menu_controller.gd's `match type` (spawning it). An object whose actions
+## are not announced here works alone and does nothing on anyone else's machine.
+##
 ## The comment beside each kind is the argument dictionary report_event expects.
 ## NetObjectSync.EV_NODE_KEYS records which of those arguments must be a live
 ## node, and is checked before the event goes out.
