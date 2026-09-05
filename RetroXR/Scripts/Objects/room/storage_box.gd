@@ -94,13 +94,19 @@ func _process(_delta: float) -> void:
 ##   is freed, plug dropped out of any snap zone first
 ## - media snapped into its slots (cartridge/disc/tape/memory card) is freed
 ##   too — otherwise it stays frozen in mid-air where the slot was
-## - foreign plugs snapped into its ports belong to OTHER devices' cables and
-##   are only dropped, never freed
+## - a controller plugged into one of its ports goes with it, cable and all —
+##   a pad wired to a machine that no longer exists is not something to leave
+##   standing in the room
+## - other foreign plugs snapped into its ports belong to OTHER devices' cables
+##   and are only dropped, never freed
 ## - a composite lead patched into its sockets goes with it, both ends — see
 ##   _free_lead
 ## A captive plug is not deletable — freeing one would orphan the rope of the
 ## device that owns it — so it just falls out of the can.
-func _delete_with_dependents(pickable: XRToolsPickable) -> void:
+func _delete_with_dependents(pickable: XRToolsPickable, seen: Dictionary = {}) -> void:
+	if seen.has(pickable):
+		return
+	seen[pickable] = true
 	if pickable is CablePlug or pickable is ControllerPlug:
 		print("[StorageBox] '%s' is a cable plug — not deletable" % pickable.name)
 		return
@@ -121,7 +127,18 @@ func _delete_with_dependents(pickable: XRToolsPickable) -> void:
 			continue
 		var held: Node3D = occupant
 		zone.drop_object()
-		if held is CablePlug or held is ControllerPlug or held.is_in_group("controller_plug"):
+		if held is ControllerPlug:
+			# A controller is not a lead: its plug is the tail of a device, and
+			# binning the machine it is plugged into bins the controller too,
+			# cable and all. Leaving the plug behind left a pad wired to nothing
+			# and a rope trailing off it. The controller frees its own cable in
+			# _exit_tree, so the plug goes with it.
+			var owner_device: Node3D = (held as ControllerPlug).get_controller()
+			if is_instance_valid(owner_device) and owner_device is XRToolsPickable:
+				print("[StorageBox] deleting plugged-in '%s'" % owner_device.name)
+				_delete_with_dependents(owner_device as XRToolsPickable, seen)
+			continue
+		if held is CablePlug or held.is_in_group("controller_plug"):
 			continue   # another device's captive cable end — released, not deleted
 		if held is RcaPlug:
 			_free_lead(held as RcaPlug)
