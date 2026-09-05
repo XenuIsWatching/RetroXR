@@ -219,7 +219,7 @@ debug build, 2026-08-27 — all passing):
 | `scene_tests` | 120 | 10 s | SceneManager and the save gates around it |
 | `poster_tests` | 112 | 11 s | the posters feature, stick/peel/conform |
 | `rope_tests` | 82 | 69 s | what a cable does when it meets furniture |
-| `av_suite` | 41 | 35 s | what reaches a television's inputs (§2c) |
+| `av_tests` | 41 | 35 s | what reaches a television's inputs (§2c) |
 | `system_tests` | — | — | the machine controller's port, pad, save and disc rules |
 | `link_tests` | — | — | which socket each end of a link lead belongs in |
 | `state_tests` | — | — | savestate capture/restore rules |
@@ -544,13 +544,13 @@ nothing at all. Run `--editor --quit` between the overwrite and the render.
 
 ### 2c. The A/V suite — the one thing here that is an actual test suite
 
-`RetroXR/Tests/av_suite.tscn` — 41 cases over what reaches a television's inputs and
+`RetroXR/Tests/av_tests.tscn` — 41 cases over what reaches a television's inputs and
 what it shows. Headless, ~35 s, **exits non-zero on failure**, so it is the one probe
 that can be run as a gate rather than read.
 
 ```bash
-"$godot" --headless --path RetroXR res://Tests/av_suite.tscn
-"$godot" --headless --path RetroXR res://Tests/av_suite.tscn -- --only=display
+"$godot" --headless --path RetroXR res://Tests/av_tests.tscn
+"$godot" --headless --path RetroXR res://Tests/av_tests.tscn -- --only=display
 ```
 
 Groups: `routing/` (real TV + VCR + composite leads — cords into the wrong sockets, a

@@ -44,7 +44,7 @@ var _av_ports: Array = []
 ## which host to tell.
 var _snapped_plugs: Array = []
 
-## The host feeding each input, or null. av_suite and the Tools/av probes read this
+## The host feeding each input, or null. av_tests and the Tools/av probes read this
 ## directly to assert what the set thinks is cabled to it.
 var _connected_systems: Array = []
 

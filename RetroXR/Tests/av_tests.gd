@@ -5,8 +5,8 @@
 ## DISPLAY (which input the set is showing, and what it paints when there is
 ## nothing). Every bug this suite pins down shipped at least once.
 ##
-##   godot --headless --path RetroXR res://Tests/av_suite.tscn
-##   godot --headless --path RetroXR res://Tests/av_suite.tscn -- --only=display
+##   godot --headless --path RetroXR res://Tests/av_tests.tscn
+##   godot --headless --path RetroXR res://Tests/av_tests.tscn -- --only=display
 ##
 ## Exits non-zero if anything fails. Headless on purpose: these are decisions, not
 ## appearances — what a picture LOOKS like needs a windowed run and a photograph.

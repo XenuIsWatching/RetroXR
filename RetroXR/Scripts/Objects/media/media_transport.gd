@@ -15,7 +15,7 @@
 ##
 ## The reason this exists at all is coverage as much as duplication:
 ## on_av_topology_changed and _apply_av_feed are the routing rules that
-## av_suite tests through the VCR, and the DVD player had its own copy that no
+## av_tests tests through the VCR, and the DVD player had its own copy that no
 ## case ever reached. Sharing them puts both decks behind the same 23 cases.
 ##
 ## Sibling of RetroAudioPlayer rather than a parent or child of it: that class is

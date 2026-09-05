@@ -18,7 +18,7 @@
 ## look for children that a bare instance does not have. That is also the limit
 ## of what can be tested here — anything that touches `_libretro`, `_model`, the
 ## snap zones or the A/V graph needs a real scene and lives in `Tools/` probes or
-## in `Tests/av_suite.tscn`. `_sync_core_tray()` is on the far side of that line;
+## in `Tests/av_tests.tscn`. `_sync_core_tray()` is on the far side of that line;
 ## what is testable is the two questions it asks first, and those are below.
 ##
 ## Known gaps, asserted nowhere on purpose — add the case with the fix, not
@@ -1838,7 +1838,7 @@ func _test_sram_paths() -> void:
 ## The cabling gate SystemAudio applies: whether a machine can be heard at all
 ## as it is currently wired.
 ##
-## Pinned here because NOTHING else covers it. av_suite's audio/ cases drive a
+## Pinned here because NOTHING else covers it. av_tests' audio/ cases drive a
 ## mock that answers set_audio_volume itself, so they measure tv.gd's routing
 ## decision and never reach a RetroSystem's own audio path — deleting this gate
 ## outright leaves all 22 suites green, which is how the gap was found. It was

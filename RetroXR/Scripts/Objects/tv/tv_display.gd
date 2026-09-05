@@ -17,7 +17,7 @@
 ## The two phosphor SubViewports stay there too, being @onready paths into the
 ## set's own scene, as does the screen mesh everything here draws onto.
 ##
-## av_suite and Tools/av/rca_channel_probe read _crt_material, _crt_source_tex,
+## av_tests and Tools/av/rca_channel_probe read _crt_material, _crt_source_tex,
 ## _blue_texture, _dark_material and _phosphor_fresh off this helper.
 class_name TvDisplay
 extends Node
