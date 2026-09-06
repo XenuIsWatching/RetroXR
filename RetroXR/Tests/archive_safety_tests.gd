@@ -15,6 +15,16 @@
 ##   "$godot" --headless --path RetroXR res://Tests/archive_safety_tests.tscn
 extends Node
 
+## Cases in this file, NOT counting the guard below -- it is checked before
+## it has recorded itself.
+##
+## A case that never RAN is not a case that passed. GDScript has no
+## try/catch, so one bad index aborts the function it is in and every case
+## after it simply never prints, leaving a green run that checked less than
+## it claims. card_tests records finding this the hard way; mutation-testing
+## cores_data_tests found it again.
+const EXPECTED_CASES := 27
+
 var _passed := 0
 var _failed := 0
 
@@ -32,6 +42,8 @@ func _ready() -> void:
 	_group_refused()
 	_group_allowed()
 	_group_links()
+
+	_eq(_passed + _failed, EXPECTED_CASES, "suite/every case ran")
 
 	print("[archsafe] %d checks, %d failed" % [_passed + _failed, _failed])
 	print("[archsafe] RESULT=%s" % ("PASS" if _failed == 0 else "FAIL"))
