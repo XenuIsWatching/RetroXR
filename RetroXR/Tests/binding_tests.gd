@@ -90,7 +90,7 @@ func _ok(cond: bool, name: String, detail: String = "") -> void:
 		print("[test] FAIL  %s%s" % [name, "  — " + detail if not detail.is_empty() else ""])
 
 
-func _eq(name: String, got: Variant, want: Variant) -> void:
+func _eq(got: Variant, want: Variant, name: String) -> void:
 	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
@@ -163,20 +163,20 @@ func _test_no_profile_is_global() -> void:
 	var pad_global := _pad_profile("a", "btn:5")
 	GamepadBindings.save_global(pad_global[0], pad_global[1])
 
-	_eq("xr/no profile resolves to global",
-		ControllerBindings.get_for_system(SYS_A)["buttons"],
-		ControllerBindings.get_global()["buttons"])
-	_eq("pad/no profile resolves to global",
-		GamepadBindings.get_for_system(SYS_A)["buttons"],
-		GamepadBindings.get_global()["buttons"])
+	_eq(ControllerBindings.get_for_system(SYS_A)["buttons"],
+		ControllerBindings.get_global()["buttons"],
+		"xr/no profile resolves to global")
+	_eq(GamepadBindings.get_for_system(SYS_A)["buttons"],
+		GamepadBindings.get_global()["buttons"],
+		"pad/no profile resolves to global")
 	# And the global edit itself took, rather than both sides agreeing on stale
 	# defaults — a comparison of two identical wrong answers proves nothing.
-	_eq("xr/global edit took",
-		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_L)
-	_eq("pad/global edit took",
-		str((GamepadBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("a")),
-		"btn:5")
+	_eq(int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_L,
+		"xr/global edit took")
+	_eq(str((GamepadBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("a")),
+		"btn:5",
+		"pad/global edit took")
 
 
 # ---------------------------------------------------------------------------
@@ -190,27 +190,27 @@ func _test_profile_shadows_global() -> void:
 	var a := _xr_profile("right_grip", ControllerBindings.JOYPAD_R2)
 	ControllerBindings.save_for_system(SYS_A, a[0], a[1], a[2])
 
-	_eq("xr/profile wins for its own platform",
-		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_R2)
-	_eq("xr/another platform still reads global",
-		int((ControllerBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_L)
-	_eq("xr/the global map itself is untouched",
-		int((ControllerBindings.get_global()["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_L)
+	_eq(int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_R2,
+		"xr/profile wins for its own platform")
+	_eq(int((ControllerBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_L,
+		"xr/another platform still reads global")
+	_eq(int((ControllerBindings.get_global()["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_L,
+		"xr/the global map itself is untouched")
 
 	var pg := _pad_profile("a", "btn:5")
 	GamepadBindings.save_global(pg[0], pg[1])
 	var pa := _pad_profile("a", "btn:9")
 	GamepadBindings.save_for_system(SYS_A, pa[0], pa[1])
 
-	_eq("pad/profile wins for its own platform",
-		str((GamepadBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("a")), "btn:9")
-	_eq("pad/another platform still reads global",
-		str((GamepadBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("a")), "btn:5")
-	_eq("pad/the global map itself is untouched",
-		str((GamepadBindings.get_global()["buttons"] as Dictionary).get("a")), "btn:5")
+	_eq(str((GamepadBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("a")),
+		"btn:9", "pad/profile wins for its own platform")
+	_eq(str((GamepadBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("a")),
+		"btn:5", "pad/another platform still reads global")
+	_eq(str((GamepadBindings.get_global()["buttons"] as Dictionary).get("a")),
+		"btn:5", "pad/the global map itself is untouched")
 
 
 # ---------------------------------------------------------------------------
@@ -229,12 +229,12 @@ func _test_later_global_edit_does_not_leak() -> void:
 	var g2 := _xr_profile("left_grip", ControllerBindings.JOYPAD_R3)
 	ControllerBindings.save_global(g2[0], g2[1], g2[2])
 
-	_eq("xr/a later global edit does not reach an overridden platform",
-		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("left_grip")),
-		ControllerBindings.DEFAULT_BUTTON_MAP["left_grip"])
-	_eq("xr/but it does reach an un-overridden one",
-		int((ControllerBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("left_grip")),
-		ControllerBindings.JOYPAD_R3)
+	_eq(int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("left_grip")),
+		ControllerBindings.DEFAULT_BUTTON_MAP["left_grip"],
+		"xr/a later global edit does not reach an overridden platform")
+	_eq(int((ControllerBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("left_grip")),
+		ControllerBindings.JOYPAD_R3,
+		"xr/but it does reach an un-overridden one")
 
 
 # ---------------------------------------------------------------------------
@@ -277,16 +277,16 @@ func _test_clear_restores_global() -> void:
 	ControllerBindings.clear_system_override(SYS_A)
 
 	_ok(not ControllerBindings.has_system_override(SYS_A), "xr/clear drops the override")
-	_eq("xr/cleared platform is back on global",
-		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_L)
+	_eq(int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_L,
+		"xr/cleared platform is back on global")
 	_ok(ControllerBindings.has_system_override(SYS_B), "xr/the other platform's profile stands")
-	_eq("xr/and still resolves to its own value",
-		int((ControllerBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_L2)
-	_eq("xr/global survives the clear",
-		int((ControllerBindings.get_global()["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_L)
+	_eq(int((ControllerBindings.get_for_system(SYS_B)["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_L2,
+		"xr/and still resolves to its own value")
+	_eq(int((ControllerBindings.get_global()["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_L,
+		"xr/global survives the clear")
 
 	var pg := _pad_profile("a", "btn:5")
 	GamepadBindings.save_global(pg[0], pg[1])
@@ -294,8 +294,8 @@ func _test_clear_restores_global() -> void:
 	GamepadBindings.save_for_system(SYS_A, pa[0], pa[1])
 	GamepadBindings.clear_system_override(SYS_A)
 	_ok(not GamepadBindings.has_system_override(SYS_A), "pad/clear drops the override")
-	_eq("pad/cleared platform is back on global",
-		str((GamepadBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("a")), "btn:5")
+	_eq(str((GamepadBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("a")),
+		"btn:5", "pad/cleared platform is back on global")
 
 	# Clearing a platform that never had one is a no-op, not a crash — the switch
 	# can be flicked off on a page that was never overridden.
@@ -313,21 +313,21 @@ func _test_empty_systemid_is_global() -> void:
 	_clear()
 	var a := _xr_profile("right_grip", ControllerBindings.JOYPAD_R2)
 	ControllerBindings.save_for_system("", a[0], a[1], a[2])
-	_eq("xr/save_for_system(\"\") writes global",
-		int((ControllerBindings.get_global()["buttons"] as Dictionary).get("right_grip")),
-		ControllerBindings.JOYPAD_R2)
+	_eq(int((ControllerBindings.get_global()["buttons"] as Dictionary).get("right_grip")),
+		ControllerBindings.JOYPAD_R2,
+		"xr/save_for_system(\"\") writes global")
 
 	var pa := _pad_profile("a", "btn:9")
 	GamepadBindings.save_for_system("", pa[0], pa[1])
-	_eq("pad/save_for_system(\"\") writes global",
-		str((GamepadBindings.get_global()["buttons"] as Dictionary).get("a")), "btn:9")
+	_eq(str((GamepadBindings.get_global()["buttons"] as Dictionary).get("a")),
+		"btn:9", "pad/save_for_system(\"\") writes global")
 
-	_eq("xr/get_for_system(\"\") is get_global",
-		ControllerBindings.get_for_system("")["buttons"],
-		ControllerBindings.get_global()["buttons"])
-	_eq("pad/get_for_system(\"\") is get_global",
-		GamepadBindings.get_for_system("")["buttons"],
-		GamepadBindings.get_global()["buttons"])
+	_eq(ControllerBindings.get_for_system("")["buttons"],
+		ControllerBindings.get_global()["buttons"],
+		"xr/get_for_system(\"\") is get_global")
+	_eq(GamepadBindings.get_for_system("")["buttons"],
+		GamepadBindings.get_global()["buttons"],
+		"pad/get_for_system(\"\") is get_global")
 
 	# A global write must not invent a per_system entry, or every platform tile
 	# would come up badged the first time the global page is touched.
@@ -353,16 +353,16 @@ func _test_overridden_systems() -> void:
 
 	var listed := ControllerBindings.overridden_systems()
 	listed.sort()
-	_eq("xr/lists exactly the overridden platforms", listed, [SYS_A, SYS_B])
+	_eq(listed, [SYS_A, SYS_B], "xr/lists exactly the overridden platforms")
 
 	ControllerBindings.clear_system_override(SYS_A)
-	_eq("xr/a cleared platform leaves the list",
-		ControllerBindings.overridden_systems(), [SYS_B])
+	_eq(ControllerBindings.overridden_systems(),
+		[SYS_B], "xr/a cleared platform leaves the list")
 
 	var pa := _pad_profile("a", "btn:9")
 	GamepadBindings.save_for_system(SYS_A, pa[0], pa[1])
-	_eq("pad/lists its own overridden platforms",
-		GamepadBindings.overridden_systems(), [SYS_A])
+	_eq(GamepadBindings.overridden_systems(),
+		[SYS_A], "pad/lists its own overridden platforms")
 	# The two stores are independent: a pad override alone must still badge the
 	# tile, which is why the view asks both.
 	_ok(GamepadBindings.has_system_override(SYS_A) and not ControllerBindings.has_system_override(SYS_A),
@@ -396,18 +396,18 @@ func _test_the_editor_writes_the_nunchuk_layer() -> void:
 	ed._systemid = "wii"
 	ed._build_xr_controls(ed)
 
-	_eq("editor/starts from the stored map",
-		str(ed._edit_nunchuk_map.get("c")), "ax_button")
+	_eq(str(ed._edit_nunchuk_map.get("c")),
+		"ax_button", "editor/starts from the stored map")
 
 	ed._edit_nunchuk_map["c"] = "grip"
 	ed._apply_xr_bindings()
-	_eq("editor/a change to C reaches the store",
-		str((ControllerBindings.get_for_system("wii")["nunchuk"] as Dictionary).get("c")),
-		"grip")
+	_eq(str((ControllerBindings.get_for_system("wii")["nunchuk"] as Dictionary).get("c")),
+		"grip",
+		"editor/a change to C reaches the store")
 	# And did not take the other key with it.
-	_eq("editor/while Z keeps its default",
-		str((ControllerBindings.get_for_system("wii")["nunchuk"] as Dictionary).get("z")),
-		"trigger")
+	_eq(str((ControllerBindings.get_for_system("wii")["nunchuk"] as Dictionary).get("z")),
+		"trigger",
+		"editor/while Z keeps its default")
 
 	# The rows exist and are the two that can be bound. The stick is not among
 	# them on purpose — it is whichever hand is holding the Nunchuk.
@@ -449,24 +449,24 @@ func _test_the_wii_diagram_writes_the_wiimote_layer() -> void:
 
 	# The picture is anchored on RetroPad targets; the remote is bound by control
 	# name. "x" is the 1 button, and grip carries it by default.
-	_eq("wii-xr/the picture reads the remote's own map",
-		ed._wiimote_source_for("x"), "grip")
-	_eq("wii-xr/and B is the trigger", ed._wiimote_source_for("b"), "trigger")
+	_eq(ed._wiimote_source_for("x"),
+		"grip", "wii-xr/the picture reads the remote's own map")
+	_eq(ed._wiimote_source_for("b"), "trigger", "wii-xr/and B is the trigger")
 
 	# Moving a control takes the source off whatever it was on, and lands in the
 	# layer the remote reads.
 	ed._on_console_xr_changed("x", "by_button")
 	var stored: Dictionary = ControllerBindings.get_for_system("wii")["wiimote"]
-	_eq("wii-xr/a change lands in the wiimote layer", str(stored.get("by_button")), "one")
-	_eq("wii-xr/and the source it displaced is freed", str(stored.get("grip")), "none")
-	_eq("wii-xr/the picture agrees afterwards", ed._wiimote_source_for("x"), "by_button")
+	_eq(str(stored.get("by_button")), "one", "wii-xr/a change lands in the wiimote layer")
+	_eq(str(stored.get("grip")), "none", "wii-xr/and the source it displaced is freed")
+	_eq(ed._wiimote_source_for("x"), "by_button", "wii-xr/the picture agrees afterwards")
 
 	# It must NOT have gone into the joypad map, which is the map that was being
 	# written before and the one the remote never reads.
 	var joypad: Dictionary = ControllerBindings.get_for_system("wii")["buttons"]
-	_eq("wii-xr/and not into the joypad map",
-		int(joypad.get("right_grip", -99)),
-		int((ControllerBindings.DEFAULT_BUTTON_MAP as Dictionary).get("right_grip", -99)))
+	_eq(int(joypad.get("right_grip", -99)),
+		int((ControllerBindings.DEFAULT_BUTTON_MAP as Dictionary).get("right_grip", -99)),
+		"wii-xr/and not into the joypad map")
 
 	# Every control the picture draws can be bound, including the cross. The page
 	# has always said the D-pad is bindable; for this remote it was not.
@@ -474,7 +474,7 @@ func _test_the_wii_diagram_writes_the_wiimote_layer() -> void:
 	for control: String in ConsolePadArt.controls("wii"):
 		if String(ControllerBindings.WIIMOTE_CONTROL_OF_TARGET.get(control, "")).is_empty():
 			unbindable.append(control)
-	_eq("wii-xr/every drawn control maps to a remote control", unbindable, [])
+	_eq(unbindable, [], "wii-xr/every drawn control maps to a remote control")
 	ed.queue_free()
 
 
@@ -485,35 +485,35 @@ func _test_the_sideways_diagram_has_its_own_layer() -> void:
 	ed._systemid = "wii"
 	ed._build_xr_controls(ed)
 
-	_eq("wii-sideways/left trigger works physical B",
-		ed._wiimote_source_for("y", ConsolePadArt.WII_SIDEWAYS), "left_trigger")
-	_eq("wii-sideways/right B works physical 1",
-		ed._wiimote_source_for("b", ConsolePadArt.WII_SIDEWAYS), "right_by_button")
-	_eq("wii-sideways/right A works physical 2",
-		ed._wiimote_source_for("a", ConsolePadArt.WII_SIDEWAYS), "right_ax_button")
-	_eq("wii-sideways/left click works minus",
-		ed._wiimote_source_for("select", ConsolePadArt.WII_SIDEWAYS),
-		"left_primary_click")
-	_eq("wii-sideways/right click works plus",
-		ed._wiimote_source_for("start", ConsolePadArt.WII_SIDEWAYS),
-		"right_primary_click")
-	_eq("wii-sideways/logical Left is the physical Up arm",
-		str(ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET.get("left")), "up")
-	_eq("wii-sideways/logical Up is the physical Right arm",
-		str(ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET.get("up")), "right")
+	_eq(ed._wiimote_source_for("y", ConsolePadArt.WII_SIDEWAYS),
+		"left_trigger", "wii-sideways/left trigger works physical B")
+	_eq(ed._wiimote_source_for("b", ConsolePadArt.WII_SIDEWAYS),
+		"right_by_button", "wii-sideways/right B works physical 1")
+	_eq(ed._wiimote_source_for("a", ConsolePadArt.WII_SIDEWAYS),
+		"right_ax_button", "wii-sideways/right A works physical 2")
+	_eq(ed._wiimote_source_for("select", ConsolePadArt.WII_SIDEWAYS),
+		"left_primary_click",
+		"wii-sideways/left click works minus")
+	_eq(ed._wiimote_source_for("start", ConsolePadArt.WII_SIDEWAYS),
+		"right_primary_click",
+		"wii-sideways/right click works plus")
+	_eq(str(ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET.get("left")),
+		"up", "wii-sideways/logical Left is the physical Up arm")
+	_eq(str(ControllerBindings.WIIMOTE_SIDEWAYS_CONTROL_OF_TARGET.get("up")),
+		"right", "wii-sideways/logical Up is the physical Right arm")
 
 	# Rebinding the sideways picture changes only its hand-specific layer.
 	ed._on_console_xr_changed("b", "right_trigger", ConsolePadArt.WII_SIDEWAYS)
 	var resolved := ControllerBindings.get_for_system("wii")
 	var sideways: Dictionary = resolved["wiimote_sideways"]
-	_eq("wii-sideways/a change lands in the sideways layer",
-		str(sideways.get("right_trigger")), "one")
-	_eq("wii-sideways/and frees the old source",
-		str(sideways.get("right_by_button")), "none")
-	_eq("wii-sideways/upright trigger remains B",
-		str((resolved["wiimote"] as Dictionary).get("trigger")), "b")
-	_eq("wii-sideways/the sideways picture agrees",
-		ed._wiimote_source_for("b", ConsolePadArt.WII_SIDEWAYS), "right_trigger")
+	_eq(str(sideways.get("right_trigger")),
+		"one", "wii-sideways/a change lands in the sideways layer")
+	_eq(str(sideways.get("right_by_button")),
+		"none", "wii-sideways/and frees the old source")
+	_eq(str((resolved["wiimote"] as Dictionary).get("trigger")),
+		"b", "wii-sideways/upright trigger remains B")
+	_eq(ed._wiimote_source_for("b", ConsolePadArt.WII_SIDEWAYS),
+		"right_trigger", "wii-sideways/the sideways picture agrees")
 	ed.queue_free()
 
 
@@ -522,9 +522,9 @@ func _test_the_sideways_diagram_has_its_own_layer() -> void:
 func _test_wii_target_table_matches_the_remote() -> void:
 	for retro_name: String in Wiimote.DESKTOP_BUTTON_MAP:
 		var target := retro_name.trim_prefix("RETRO_JOYPAD_").to_lower()
-		_eq("wii-xr/%s agrees with DESKTOP_BUTTON_MAP" % target,
-			str(ControllerBindings.WIIMOTE_CONTROL_OF_TARGET.get(target, "")),
-			str(Wiimote.DESKTOP_BUTTON_MAP[retro_name]))
+		_eq(str(ControllerBindings.WIIMOTE_CONTROL_OF_TARGET.get(target, "")),
+			str(Wiimote.DESKTOP_BUTTON_MAP[retro_name]),
+			"wii-xr/%s agrees with DESKTOP_BUTTON_MAP" % target)
 
 
 func _test_pad_art_variants() -> void:
@@ -536,11 +536,11 @@ func _test_pad_art_variants() -> void:
 
 	# The Wii draws two pictures; everyone else draws one; the global page draws
 	# none. Order matters — the upright remote is the one a player meets first.
-	_eq("variant/the wii lists both ways it is held",
-		ConsolePadArt.variants_for("wii"), ["wii", ConsolePadArt.WII_SIDEWAYS])
-	_eq("variant/a one-way console lists just itself",
-		ConsolePadArt.variants_for("nes"), ["nes"])
-	_eq("variant/the global scope lists none", ConsolePadArt.variants_for(""), [])
+	_eq(ConsolePadArt.variants_for("wii"),
+		["wii", ConsolePadArt.WII_SIDEWAYS], "variant/the wii lists both ways it is held")
+	_eq(ConsolePadArt.variants_for("nes"),
+		["nes"], "variant/a one-way console lists just itself")
+	_eq(ConsolePadArt.variants_for(""), [], "variant/the global scope lists none")
 
 	# Same bits, different names. Sideways is a picture and a set of labels, not a
 	# second binding map, so it must carry exactly the controls the upright remote
@@ -550,7 +550,7 @@ func _test_pad_art_variants() -> void:
 	var sideways := ConsolePadArt.controls(ConsolePadArt.WII_SIDEWAYS).duplicate()
 	upright.sort()
 	sideways.sort()
-	_eq("variant/sideways carries the same controls as upright", sideways, upright)
+	_eq(sideways, upright, "variant/sideways carries the same controls as upright")
 
 	# Every control is drawn and every drawn control is listed. A missing anchor
 	# is a lead to nowhere; a missing row entry is a control the page will not
@@ -564,9 +564,9 @@ func _test_pad_art_variants() -> void:
 			missing_anchor.append(control)
 		if not glyphs.has(control):
 			missing_glyph.append(control)
-	_eq("variant/every sideways control has an anchor", missing_anchor, [])
-	_eq("variant/and a glyph", missing_glyph, [])
-	_eq("variant/and no anchor is left unlisted", anchors.size(), sideways.size())
+	_eq(missing_anchor, [], "variant/every sideways control has an anchor")
+	_eq(missing_glyph, [], "variant/and a glyph")
+	_eq(anchors.size(), sideways.size(), "variant/and no anchor is left unlisted")
 
 	# The re-keying, which is the whole reason this variant exists and the one
 	# thing no picture can check. Dolphin's descWiimoteSideways puts 1 on B and 2
@@ -595,7 +595,7 @@ func _test_pad_art_variants() -> void:
 					var b_near: float = b.y if side == "bottom" else -b.y
 					if a_near < b_near:
 						crossings += 1
-		_eq("variant/no leads cross on the %s row" % side, crossings, 0)
+		_eq(crossings, 0, "variant/no leads cross on the %s row" % side)
 
 
 func _test_wii_pad_art() -> void:
@@ -620,7 +620,7 @@ func _test_wii_pad_art() -> void:
 	want.sort()
 	var got := controls.duplicate()
 	got.sort()
-	_eq("wii/carries exactly the controls the remote drives", got, want)
+	_eq(got, want, "wii/carries exactly the controls the remote drives")
 	_ok(not controls.has("r2"), "wii/the shake gesture is not drawn")
 
 	# Same structural rule the NES gets: a row entry with no anchor draws a lead
@@ -629,10 +629,10 @@ func _test_wii_pad_art() -> void:
 	var listed: Array = (row["left"] as Array) + (row["right"] as Array)
 	var listed_sorted := listed.duplicate()
 	listed_sorted.sort()
-	_eq("wii/every control appears in exactly one column", listed_sorted, want)
+	_eq(listed_sorted, want, "wii/every control appears in exactly one column")
 	var anchor_keys: Array = anchors.keys()
 	anchor_keys.sort()
-	_eq("wii/every anchor is a control", anchor_keys, want)
+	_eq(anchor_keys, want, "wii/every anchor is a control")
 
 	var in_range := true
 	for key: String in anchors:
@@ -665,7 +665,7 @@ func _test_wii_pad_art() -> void:
 	var glyphs: Dictionary = row.get("glyphs", {})
 	var glyph_keys: Array = glyphs.keys()
 	glyph_keys.sort()
-	_eq("wii/every control has a glyph of its own", glyph_keys, want)
+	_eq(glyph_keys, want, "wii/every control has a glyph of its own")
 	var all_wii := true
 	var all_present := true
 	for key: String in glyphs:
@@ -679,10 +679,10 @@ func _test_wii_pad_art() -> void:
 	_ok(all_wii, "wii/every glyph is a Wii one, not a borrowed RetroPad picture")
 	_ok(all_present, "wii/every glyph file is present")
 	# The two that were actually wrong on screen.
-	_eq("wii/plus is a plus, not Start", String(glyphs.get("start", "")),
-		"wii_button_plus_outline")
-	_eq("wii/home is a house, not R3", String(glyphs.get("r3", "")),
-		"wii_button_home_outline")
+	_eq(String(glyphs.get("start", "")), "wii_button_plus_outline",
+		"wii/plus is a plus, not Start")
+	_eq(String(glyphs.get("r3", "")), "wii_button_home_outline",
+		"wii/home is a house, not R3")
 
 	# And the external-pad page is replaced rather than drawn: a Wii Remote is
 	# pointed and swung, and none of that maps onto a gamepad.
@@ -701,12 +701,12 @@ func _test_wii_pad_art() -> void:
 	var diagram := ConsolePadDiagram.new()
 	add_child(diagram)
 	diagram.setup("wii", [], {})
-	_eq("wii/the diagram resolves plus to the Wii glyph",
-		_glyph_stem(diagram, "start"), "wii_button_plus_outline")
-	_eq("wii/the diagram resolves home to the Wii glyph",
-		_glyph_stem(diagram, "r3"), "wii_button_home_outline")
-	_eq("wii/the diagram resolves the d-pad to Wii glyphs",
-		_glyph_stem(diagram, "up"), "wii_dpad_up_outline")
+	_eq(_glyph_stem(diagram, "start"),
+		"wii_button_plus_outline", "wii/the diagram resolves plus to the Wii glyph")
+	_eq(_glyph_stem(diagram, "r3"),
+		"wii_button_home_outline", "wii/the diagram resolves home to the Wii glyph")
+	_eq(_glyph_stem(diagram, "up"),
+		"wii_dpad_up_outline", "wii/the diagram resolves the d-pad to Wii glyphs")
 	diagram.queue_free()
 
 	# EVERY glyph any panel can ask for must resolve. These are Kenney vectors now,
@@ -741,8 +741,8 @@ func _test_wii_pad_art() -> void:
 	var nes_diagram := ConsolePadDiagram.new()
 	add_child(nes_diagram)
 	nes_diagram.setup("nes", [], {})
-	_eq("art/a pad with no glyphs of its own falls back to the shared map",
-		_glyph_stem(nes_diagram, "start"), "playstation3_button_start_outline")
+	_eq(_glyph_stem(nes_diagram, "start"),
+		"playstation3_button_start_outline", "art/a pad with no glyphs of its own falls back to the shared map")
 	nes_diagram.queue_free()
 
 
@@ -763,15 +763,15 @@ func _test_wii_layers_survive_a_save() -> void:
 	ControllerBindings.save_for_system(SYS_A, a[0], a[1], a[2], wiimote, nunchuk,
 		sideways)
 
-	_eq("wii/the nunchuk layer round-trips",
-		str((ControllerBindings.get_for_system(SYS_A)["nunchuk"] as Dictionary).get("c")),
-		"grip")
-	_eq("wii/and the wiimote layer with it",
-		str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
-		"grip")
-	_eq("wii/and the sideways layer with it",
-		str((ControllerBindings.get_for_system(SYS_A)["wiimote_sideways"] as Dictionary)
-			.get("right_trigger")), "one")
+	_eq(str((ControllerBindings.get_for_system(SYS_A)["nunchuk"] as Dictionary).get("c")),
+		"grip",
+		"wii/the nunchuk layer round-trips")
+	_eq(str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
+		"grip",
+		"wii/and the wiimote layer with it")
+	_eq(str((ControllerBindings.get_for_system(SYS_A)["wiimote_sideways"] as Dictionary)
+			.get("right_trigger")),
+		"one", "wii/and the sideways layer with it")
 
 	# THE GUARD. Saving any OTHER binding for the same platform used to replace
 	# the whole per-system entry with buttons/sticks/lightgun, taking these two
@@ -780,35 +780,35 @@ func _test_wii_layers_survive_a_save() -> void:
 	var b := _xr_profile("left_grip", ControllerBindings.JOYPAD_L2)
 	ControllerBindings.save_for_system(SYS_A, b[0], b[1], b[2])
 
-	_eq("wii/an unrelated save leaves the nunchuk layer standing",
-		str((ControllerBindings.get_for_system(SYS_A)["nunchuk"] as Dictionary).get("c")),
-		"grip")
-	_eq("wii/and the wiimote layer standing",
-		str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
-		"grip")
-	_eq("wii/and the sideways layer standing",
-		str((ControllerBindings.get_for_system(SYS_A)["wiimote_sideways"] as Dictionary)
-			.get("right_trigger")), "one")
-	_eq("wii/while the new binding did take",
-		int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("left_grip")),
-		ControllerBindings.JOYPAD_L2)
+	_eq(str((ControllerBindings.get_for_system(SYS_A)["nunchuk"] as Dictionary).get("c")),
+		"grip",
+		"wii/an unrelated save leaves the nunchuk layer standing")
+	_eq(str((ControllerBindings.get_for_system(SYS_A)["wiimote"] as Dictionary).get("shake")),
+		"grip",
+		"wii/and the wiimote layer standing")
+	_eq(str((ControllerBindings.get_for_system(SYS_A)["wiimote_sideways"] as Dictionary)
+			.get("right_trigger")),
+		"one", "wii/and the sideways layer standing")
+	_eq(int((ControllerBindings.get_for_system(SYS_A)["buttons"] as Dictionary).get("left_grip")),
+		ControllerBindings.JOYPAD_L2,
+		"wii/while the new binding did take")
 
 	# The global layer has the same shape and the same hazard.
 	ControllerBindings.save_global(a[0], a[1], a[2], wiimote, nunchuk, sideways)
 	var g := _xr_profile("right_trigger", ControllerBindings.JOYPAD_A)
 	ControllerBindings.save_global(g[0], g[1], g[2])
-	_eq("wii/a global save leaves the global nunchuk layer standing",
-		str((ControllerBindings.get_global()["nunchuk"] as Dictionary).get("z")),
-		"by_button")
-	_eq("wii/and leaves the global sideways layer standing",
-		str((ControllerBindings.get_global()["wiimote_sideways"] as Dictionary)
-			.get("right_trigger")), "one")
+	_eq(str((ControllerBindings.get_global()["nunchuk"] as Dictionary).get("z")),
+		"by_button",
+		"wii/a global save leaves the global nunchuk layer standing")
+	_eq(str((ControllerBindings.get_global()["wiimote_sideways"] as Dictionary)
+			.get("right_trigger")),
+		"one", "wii/and leaves the global sideways layer standing")
 
 	# And a platform with no Nunchuk map of its own still reads the global one,
 	# which is what makes the layer worth storing per platform at all.
-	_eq("wii/another platform falls back to the global nunchuk map",
-		str((ControllerBindings.get_for_system(SYS_B)["nunchuk"] as Dictionary).get("c")),
-		"grip")
+	_eq(str((ControllerBindings.get_for_system(SYS_B)["nunchuk"] as Dictionary).get("c")),
+		"grip",
+		"wii/another platform falls back to the global nunchuk map")
 
 
 func _test_console_pad_art() -> void:
@@ -822,24 +822,24 @@ func _test_console_pad_art() -> void:
 	var got := controls.duplicate()
 	got.sort()
 	want.sort()
-	_eq("art/nes carries exactly its eight controls", got, want)
+	_eq(got, want, "art/nes carries exactly its eight controls")
 
 	# The whole two-sections-one-table trick rests on this: a control key is a
 	# GamepadBindings target, and that array's index IS the RetroPad bit. If the
 	# two ever disagree, the XR half silently binds the wrong button.
-	_eq("art/a maps to JOYPAD_A", ConsolePadArt.bit_of("a"), ControllerBindings.JOYPAD_A)
-	_eq("art/b maps to JOYPAD_B", ConsolePadArt.bit_of("b"), ControllerBindings.JOYPAD_B)
-	_eq("art/select maps to JOYPAD_SELECT",
-		ConsolePadArt.bit_of("select"), ControllerBindings.JOYPAD_SELECT)
-	_eq("art/start maps to JOYPAD_START",
-		ConsolePadArt.bit_of("start"), ControllerBindings.JOYPAD_START)
-	_eq("art/up maps to JOYPAD_UP", ConsolePadArt.bit_of("up"), ControllerBindings.JOYPAD_UP)
-	_eq("art/down maps to JOYPAD_DOWN",
-		ConsolePadArt.bit_of("down"), ControllerBindings.JOYPAD_DOWN)
-	_eq("art/left maps to JOYPAD_LEFT",
-		ConsolePadArt.bit_of("left"), ControllerBindings.JOYPAD_LEFT)
-	_eq("art/right maps to JOYPAD_RIGHT",
-		ConsolePadArt.bit_of("right"), ControllerBindings.JOYPAD_RIGHT)
+	_eq(ConsolePadArt.bit_of("a"), ControllerBindings.JOYPAD_A, "art/a maps to JOYPAD_A")
+	_eq(ConsolePadArt.bit_of("b"), ControllerBindings.JOYPAD_B, "art/b maps to JOYPAD_B")
+	_eq(ConsolePadArt.bit_of("select"),
+		ControllerBindings.JOYPAD_SELECT, "art/select maps to JOYPAD_SELECT")
+	_eq(ConsolePadArt.bit_of("start"),
+		ControllerBindings.JOYPAD_START, "art/start maps to JOYPAD_START")
+	_eq(ConsolePadArt.bit_of("up"), ControllerBindings.JOYPAD_UP, "art/up maps to JOYPAD_UP")
+	_eq(ConsolePadArt.bit_of("down"),
+		ControllerBindings.JOYPAD_DOWN, "art/down maps to JOYPAD_DOWN")
+	_eq(ConsolePadArt.bit_of("left"),
+		ControllerBindings.JOYPAD_LEFT, "art/left maps to JOYPAD_LEFT")
+	_eq(ConsolePadArt.bit_of("right"),
+		ControllerBindings.JOYPAD_RIGHT, "art/right maps to JOYPAD_RIGHT")
 
 	# Structural check for whoever adds the next console: every control needs an
 	# anchor and a row, and every anchor needs to be a control. A row entry with
@@ -850,10 +850,10 @@ func _test_console_pad_art() -> void:
 	var listed: Array = (row["top"] as Array) + (row["bottom"] as Array)
 	var listed_sorted := listed.duplicate()
 	listed_sorted.sort()
-	_eq("art/every control appears in exactly one row", listed_sorted, want)
+	_eq(listed_sorted, want, "art/every control appears in exactly one row")
 	var anchor_keys: Array = anchors.keys()
 	anchor_keys.sort()
-	_eq("art/anchors and controls are the same set", anchor_keys, want)
+	_eq(anchor_keys, want, "art/anchors and controls are the same set")
 
 	var in_range := true
 	for control: String in anchors:
@@ -913,36 +913,36 @@ func _test_desktop_layers() -> void:
 		"desktop/writing a platform profile turns its override on")
 
 	DesktopBindings.apply_for_system(SYS_A)
-	_eq("desktop/the platform's key applies", _bound_key(_DESK_ACTION), KEY_K)
+	_eq(_bound_key(_DESK_ACTION), KEY_K, "desktop/the platform's key applies")
 	DesktopBindings.apply_for_system(SYS_B)
-	_eq("desktop/another platform gets the global key", _bound_key(_DESK_ACTION), KEY_J)
+	_eq(_bound_key(_DESK_ACTION), KEY_J, "desktop/another platform gets the global key")
 	DesktopBindings.apply_for_system("")
-	_eq("desktop/the global scope is untouched", _bound_key(_DESK_ACTION), KEY_J)
+	_eq(_bound_key(_DESK_ACTION), KEY_J, "desktop/the global scope is untouched")
 
 	# A later global edit must not reach the overridden platform — the same rule
 	# the other two stores keep, and the reason a whole layer is written.
 	_bind_key(_DESK_ACTION, KEY_L)
 	DesktopBindings.save()
 	DesktopBindings.apply_for_system(SYS_A)
-	_eq("desktop/a later global edit does not reach an overridden platform",
-		_bound_key(_DESK_ACTION), KEY_K)
+	_eq(_bound_key(_DESK_ACTION),
+		KEY_K, "desktop/a later global edit does not reach an overridden platform")
 	DesktopBindings.apply_for_system(SYS_B)
-	_eq("desktop/but it does reach an un-overridden one", _bound_key(_DESK_ACTION), KEY_L)
+	_eq(_bound_key(_DESK_ACTION), KEY_L, "desktop/but it does reach an un-overridden one")
 
 	# Clearing puts the platform back on global.
 	DesktopBindings.clear_system_override(SYS_A)
 	_ok(not DesktopBindings.has_system_override(SYS_A), "desktop/clear drops the override")
 	DesktopBindings.apply_for_system(SYS_A)
-	_eq("desktop/cleared platform is back on global", _bound_key(_DESK_ACTION), KEY_L)
+	_eq(_bound_key(_DESK_ACTION), KEY_L, "desktop/cleared platform is back on global")
 
-	_eq("desktop/overridden_systems lists nothing now",
-		DesktopBindings.overridden_systems(), [])
+	_eq(DesktopBindings.overridden_systems(),
+		[], "desktop/overridden_systems lists nothing now")
 
 	# save_for_system("") is save(), the fall-through the shared editor needs.
 	_bind_key(_DESK_ACTION, KEY_M)
 	DesktopBindings.save_for_system("")
 	DesktopBindings.apply_for_system("")
-	_eq("desktop/save_for_system(\"\") writes global", _bound_key(_DESK_ACTION), KEY_M)
+	_eq(_bound_key(_DESK_ACTION), KEY_M, "desktop/save_for_system(\"\") writes global")
 	_ok(DesktopBindings.overridden_systems().is_empty(), "desktop/and creates no per-system entry")
 
 	# An action NOT named by any layer must come back as its project default
@@ -955,8 +955,8 @@ func _test_desktop_layers() -> void:
 	DesktopBindings.save_for_system(SYS_A)
 	DesktopBindings.clear_system_override(SYS_A)
 	DesktopBindings.apply_for_system(SYS_A)
-	_eq("desktop/an unnamed action returns to its project default",
-		_bound_key("RETRO_JOYPAD_START"), start_default)
+	_eq(_bound_key("RETRO_JOYPAD_START"),
+		start_default, "desktop/an unnamed action returns to its project default")
 
 	InputMap.load_from_project_settings()
 
@@ -974,7 +974,7 @@ func _test_desktop_legacy_file() -> void:
 	f.close()
 
 	DesktopBindings.apply_for_system("")
-	_eq("desktop/a legacy flat file still applies", _bound_key(_DESK_ACTION), KEY_N)
+	_eq(_bound_key(_DESK_ACTION), KEY_N, "desktop/a legacy flat file still applies")
 	_ok(DesktopBindings.overridden_systems().is_empty(),
 		"desktop/and reads as global, not as a platform")
 
@@ -1004,8 +1004,8 @@ func _test_xr_identity() -> void:
 		"pads/a Meta vendor id is enough on its own")
 	_ok(GamepadBindings.is_xr_identity("Wireless Controller", "0300000033280000502400000100000000", {}),
 		"pads/and so is the vendor an SDL GUID carries")
-	_eq("pads/the GUID vendor field is read low byte first",
-		GamepadBindings.vendor_from_guid("0300000033280000502400000100000000"), 0x2833)
+	_eq(GamepadBindings.vendor_from_guid("0300000033280000502400000100000000"),
+		0x2833, "pads/the GUID vendor field is read low byte first")
 
 
 # ── JsonStore ─────────────────────────────────────────────────────────────────
@@ -1025,7 +1025,7 @@ func _test_json_store() -> void:
 	_ok(JsonStore.read_dict(path).is_empty(), "json/a missing file reads as empty")
 
 	_ok(JsonStore.write_dict(path, {"a": 1}), "json/a write reports success")
-	_eq("json/and round-trips", int(JsonStore.read_dict(path).get("a", 0)), 1)
+	_eq(int(JsonStore.read_dict(path).get("a", 0)), 1, "json/and round-trips")
 	# The staging file is an implementation detail the caller must never find.
 	_ok(not FileAccess.file_exists(path + ".part"), "json/no staging file is left behind")
 
@@ -1039,7 +1039,7 @@ func _test_json_store() -> void:
 		"json/a stale staging file does not become the store")
 	_ok(JsonStore.write_dict(path, {"a": 2}), "json/and the next write clears it")
 	_ok(not FileAccess.file_exists(path + ".part"), "json/leaving none behind")
-	_eq("json/with the new value", int(JsonStore.read_dict(path).get("a", 0)), 2)
+	_eq(int(JsonStore.read_dict(path).get("a", 0)), 2, "json/with the new value")
 
 	# A corrupt store reads as empty rather than throwing, because every caller
 	# treats {} as "nothing saved yet" and would otherwise take the parse error

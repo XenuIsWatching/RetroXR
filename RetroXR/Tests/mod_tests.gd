@@ -77,12 +77,12 @@ func _group_pack() -> void:
 		_ok(r.error.is_empty(), "pack/%s opens" % label, r.error)
 		var files := r.files()
 		files.sort()
-		_eq("pack/%s lists res:// paths" % label, files,
-			PackedStringArray(["res://mods/t.one/m.gd", "res://mods/t.one/mod.json"]))
-		_eq("pack/%s reads a member" % label,
-			r.read("res://mods/t.one/m.gd").get_string_from_utf8(), "extends RetroMod")
-		_eq("pack/%s parses json" % label,
-			str(r.read_json("res://mods/t.one/mod.json").get("id", "")), "t.one")
+		_eq(files, PackedStringArray(["res://mods/t.one/m.gd", "res://mods/t.one/mod.json"]),
+			"pack/%s lists res:// paths" % label)
+		_eq(r.read("res://mods/t.one/m.gd").get_string_from_utf8(),
+			"extends RetroMod", "pack/%s reads a member" % label)
+		_eq(str(r.read_json("res://mods/t.one/mod.json").get("id", "")),
+			"t.one", "pack/%s parses json" % label)
 		_ok(r.read("res://nope").is_empty(), "pack/%s misses cleanly" % label)
 		r.close()
 
@@ -100,8 +100,8 @@ func _group_manifest() -> void:
 		"name": "Nice", "version": "1.2.3", "priority": 5,
 	})
 	_ok(good.error.is_empty(), "manifest/valid parses", good.error)
-	_eq("manifest/own root", good.own_root(), "res://mods/a.b/")
-	_eq("manifest/priority kept", good.priority, 5)
+	_eq(good.own_root(), "res://mods/a.b/", "manifest/own root")
+	_eq(good.priority, 5, "manifest/priority kept")
 
 	_ok(not ModManifest.parse({"api_version": 1, "entry": "x"}).error.is_empty(),
 		"manifest/no id refused")
@@ -166,12 +166,12 @@ func _group_inventory() -> void:
 	var adder := ModManifest.parse({"id": "a.b", "api_version": 1,
 		"entry": "res://mods/a.b/m.gd",
 		"claims": ["res://Textures/SystemIcons/does_not_exist.svg"]})
-	_eq("inventory/adding claim is not shadowing", adder.shadowing_claims().size(), 0)
-	_eq("inventory/adding claim counted", adder.adding_claims().size(), 1)
+	_eq(adder.shadowing_claims().size(), 0, "inventory/adding claim is not shadowing")
+	_eq(adder.adding_claims().size(), 1, "inventory/adding claim counted")
 	var shadower := ModManifest.parse({"id": "a.b", "api_version": 1,
 		"entry": "res://mods/a.b/m.gd",
 		"claims": ["res://Scripts/Objects/widgets/vr_hinge.gd"]})
-	_eq("inventory/shadowing claim detected", shadower.shadowing_claims().size(), 1)
+	_eq(shadower.shadowing_claims().size(), 1, "inventory/shadowing claim detected")
 
 
 # ── registry/ ─────────────────────────────────────────────────────────────────
@@ -180,17 +180,17 @@ const _SCRIPT := "res://Scripts/Objects/system_models/default_model.gd"
 
 func _group_registry() -> void:
 	var owner := "t.reg"
-	_eq("registry/row registers", SystemModelRegistry.register_mod_row(
-		"t.reg:box", {"platform": "nes", "label": "Box", "script": _SCRIPT}, owner), "")
-	_eq("registry/resolves", str(SystemModelRegistry.resolve("t.reg:box", "nes").get("id", "")),
-		"t.reg:box")
+	_eq(SystemModelRegistry.register_mod_row(
+		"t.reg:box", {"platform": "nes", "label": "Box", "script": _SCRIPT}, owner), "", "registry/row registers")
+	_eq(str(SystemModelRegistry.resolve("t.reg:box", "nes").get("id", "")), "t.reg:box",
+		"registry/resolves")
 	_ok(SystemModelRegistry.is_available("t.reg:box"), "registry/is available")
 	_ok(SystemModelRegistry.is_mod_row("t.reg:box"), "registry/marked as a mod row")
-	_eq("registry/owner recorded", SystemModelRegistry.owner_of("t.reg:box"), owner)
+	_eq(SystemModelRegistry.owner_of("t.reg:box"), owner, "registry/owner recorded")
 
 	# A shipped platform's DEFAULT must not change because a mod added a row.
-	_eq("registry/shipped default unchanged",
-		str(SystemModelRegistry.resolve("", "nes").get("id", "")), "nes")
+	_eq(str(SystemModelRegistry.resolve("", "nes").get("id", "")),
+		"nes", "registry/shipped default unchanged")
 
 	_ok(not SystemModelRegistry.register_mod_row( "t.reg:box", {"platform": "nes", "label": "X", "script": _SCRIPT}, owner).is_empty(),
 		"registry/duplicate refused")
@@ -208,12 +208,12 @@ func _group_registry() -> void:
 	_ok(not SystemModelRegistry.register_mod_row( "t.reg:d", {"platform": "nes", "label": "D", "script": "res://nope.gd"}, owner).is_empty(),
 		"registry/missing file refused")
 
-	_eq("registry/override registers", SystemModelRegistry.override_mod_row(
-		"wii", {"platform": "wii", "label": "Modded Wii", "script": _SCRIPT}, owner), "")
-	_eq("registry/override keeps the id",
-		str(SystemModelRegistry.resolve("wii", "wii").get("id", "")), "wii")
-	_eq("registry/override replaces the label",
-		str(SystemModelRegistry.resolve("wii", "wii").get("label", "")), "Modded Wii")
+	_eq(SystemModelRegistry.override_mod_row(
+		"wii", {"platform": "wii", "label": "Modded Wii", "script": _SCRIPT}, owner), "", "registry/override registers")
+	_eq(str(SystemModelRegistry.resolve("wii", "wii").get("id", "")),
+		"wii", "registry/override keeps the id")
+	_eq(str(SystemModelRegistry.resolve("wii", "wii").get("label", "")),
+		"Modded Wii", "registry/override replaces the label")
 	_ok(not SystemModelRegistry.override_mod_row("nope", {"platform": "x", "label": "L", "script": _SCRIPT}, owner).is_empty(),
 		"registry/override of an unknown id refused")
 
@@ -224,33 +224,33 @@ func _group_registry() -> void:
 
 	SystemModelRegistry.drop_mod(owner)
 	_ok(SystemModelRegistry.row_for("t.reg:box").is_empty(), "registry/drop removes the row")
-	_eq("registry/drop restores the shipped row",
-		str(SystemModelRegistry.resolve("wii", "wii").get("label", "")), "Wii")
+	_eq(str(SystemModelRegistry.resolve("wii", "wii").get("label", "")),
+		"Wii", "registry/drop restores the shipped row")
 	# The whole point of the fallback: a save naming a model that has gone still
 	# lands on something spawnable rather than on nothing.
-	_eq("registry/removed model falls back",
-		str(SystemModelRegistry.resolve("t.reg:box", "nes").get("id", "")), "nes")
+	_eq(str(SystemModelRegistry.resolve("t.reg:box", "nes").get("id", "")),
+		"nes", "registry/removed model falls back")
 
 
 # ── rooms/ ────────────────────────────────────────────────────────────────────
 
 func _group_rooms() -> void:
 	# The collapsed descriptor must still describe the shipped rooms exactly.
-	_eq("rooms/arcade path", RoomCatalog.path_of("arcade"), "res://Scenes/MainScene.tscn")
-	_eq("rooms/bedroom loading title", RoomCatalog.title_of("bedroom"), "90s BEDROOM")
-	_eq("rooms/bedroom menu title", RoomCatalog.menu_title_of("bedroom"), "90s Bedroom")
+	_eq(RoomCatalog.path_of("arcade"), "res://Scenes/MainScene.tscn", "rooms/arcade path")
+	_eq(RoomCatalog.title_of("bedroom"), "90s BEDROOM", "rooms/bedroom loading title")
+	_eq(RoomCatalog.menu_title_of("bedroom"), "90s Bedroom", "rooms/bedroom menu title")
 	_ok(RoomCatalog.has_slots("arcade"), "rooms/arcade keeps slots")
 	_ok(not RoomCatalog.has_slots("den"), "rooms/den keeps none")
-	_eq("rooms/slot rooms", RoomCatalog.slot_rooms(), ["arcade", "bedroom", "passthrough"])
+	_eq(RoomCatalog.slot_rooms(), ["arcade", "bedroom", "passthrough"], "rooms/slot rooms")
 	_ok(not RoomCatalog.has("nope"), "rooms/unknown room is absent")
 
 	var owner := "t.room"
-	_eq("rooms/registers", RoomCatalog.register_mod_room("t.room:attic", {
-		"path": "res://Scenes/DenScene.tscn", "menu_title": "The Attic"}, owner), "")
+	_eq(RoomCatalog.register_mod_room("t.room:attic", {
+		"path": "res://Scenes/DenScene.tscn", "menu_title": "The Attic"}, owner), "", "rooms/registers")
 	_ok(RoomCatalog.has("t.room:attic"), "rooms/mod room exists")
 	_ok(RoomCatalog.is_mod_room("t.room:attic"), "rooms/marked as a mod room")
-	_eq("rooms/menu title kept", RoomCatalog.menu_title_of("t.room:attic"), "The Attic")
-	_eq("rooms/loading title derived", RoomCatalog.title_of("t.room:attic"), "THE ATTIC")
+	_eq(RoomCatalog.menu_title_of("t.room:attic"), "The Attic", "rooms/menu title kept")
+	_eq(RoomCatalog.title_of("t.room:attic"), "THE ATTIC", "rooms/loading title derived")
 	_ok(RoomCatalog.has_slots("t.room:attic"), "rooms/defaults to keeping slots")
 	_ok(not RoomCatalog.register_mod_room( "arcade", {"path": "res://Scenes/DenScene.tscn"}, owner).is_empty(),
 		"rooms/shipped id refused")
@@ -260,7 +260,7 @@ func _group_rooms() -> void:
 		"rooms/no path refused")
 	RoomCatalog.drop_mod(owner)
 	_ok(not RoomCatalog.has("t.room:attic"), "rooms/drop removes it")
-	_eq("rooms/shipped rooms survive a drop", RoomCatalog.ids().size(), 5)
+	_eq(RoomCatalog.ids().size(), 5, "rooms/shipped rooms survive a drop")
 
 	# Pad art tracked no owner until the overlay tables were shared, so a mod's
 	# drawing could be registered and never taken back.
@@ -268,7 +268,7 @@ func _group_rooms() -> void:
 	var art_row := {"anchors": {"a": Vector2(0.5, 0.5)}, "rows": [["a"]]}
 	ConsolePadArt.register_mod_row("t.art:pad", art_row, art_owner)
 	_ok(ConsolePadArt.has("t.art:pad"), "pad art/mod row registers")
-	_eq("pad art/owner recorded", ConsolePadArt.owner_of("t.art:pad"), art_owner)
+	_eq(ConsolePadArt.owner_of("t.art:pad"), art_owner, "pad art/owner recorded")
 	_ok(not ConsolePadArt.row("t.art:pad").is_empty(), "pad art/row is served")
 	ConsolePadArt.drop_mod(art_owner)
 	_ok(not ConsolePadArt.has("t.art:pad"), "pad art/drop removes it")
@@ -282,10 +282,10 @@ func _group_objects() -> void:
 	var scene := "res://Scenes/Objects/table.tscn"
 	if not ResourceLoader.exists(scene):
 		scene = "res://Scenes/Objects/system.tscn"
-	_eq("objects/registers", ScenePersistence.register_mod_object(
-		"t.obj:crate", scene, owner), "")
+	_eq(ScenePersistence.register_mod_object(
+		"t.obj:crate", scene, owner), "", "objects/registers")
 	_ok(ScenePersistence.is_mod_object("t.obj:crate"), "objects/known")
-	_eq("objects/scene recorded", ScenePersistence.mod_object_scene("t.obj:crate"), scene)
+	_eq(ScenePersistence.mod_object_scene("t.obj:crate"), scene, "objects/scene recorded")
 	_ok(not ScenePersistence.register_mod_object( "table", scene, owner).is_empty(),
 		"objects/shipped type refused")
 	_ok(not ScenePersistence.register_mod_object( "t.obj:crate", scene, owner).is_empty(),
@@ -298,8 +298,8 @@ func _group_objects() -> void:
 	var inst := ScenePersistence._instantiate_mod_object("t.obj:crate")
 	_ok(inst != null, "objects/instantiates")
 	if inst != null:
-		_eq("objects/carries its type stamp",
-			str(inst.get_meta(ScenePersistence.MOD_TYPE_META)), "t.obj:crate")
+		_eq(str(inst.get_meta(ScenePersistence.MOD_TYPE_META)),
+			"t.obj:crate", "objects/carries its type stamp")
 		inst.free()
 
 	ScenePersistence.drop_mod_objects(owner)
@@ -310,35 +310,35 @@ func _group_objects() -> void:
 
 func _group_media() -> void:
 	var sid := "t_media_platform"
-	_eq("media/registers", MediaDimensions.register_mod_media(sid, {
-		"cart_size": Vector3(0.1, 0.2, 0.01)}), "")
-	_eq("media/cart size", MediaDimensions.cart_size(sid), Vector3(0.1, 0.2, 0.01))
+	_eq(MediaDimensions.register_mod_media(sid, {
+		"cart_size": Vector3(0.1, 0.2, 0.01)}), "", "media/registers")
+	_eq(MediaDimensions.cart_size(sid), Vector3(0.1, 0.2, 0.01), "media/cart size")
 	_ok(MediaDimensions.has_cart_size(sid), "media/has a cart size")
 	_ok(not MediaDimensions.is_disc_system(sid), "media/cartridge system is not a disc one")
-	_eq("media/no disc means no loader", MediaDimensions.disc_loader(sid),
-		MediaDimensions.LOADER_NONE)
+	_eq(MediaDimensions.disc_loader(sid), MediaDimensions.LOADER_NONE,
+		"media/no disc means no loader")
 
 	var disc := "t_disc_platform"
 	MediaDimensions.register_mod_media(disc, {"disc_diameter": 0.12})
 	_ok(MediaDimensions.is_disc_system(disc), "media/disc system")
-	_eq("media/tray by default", MediaDimensions.disc_loader(disc), MediaDimensions.LOADER_TRAY)
+	_eq(MediaDimensions.disc_loader(disc), MediaDimensions.LOADER_TRAY, "media/tray by default")
 	var slot := "t_slot_platform"
 	MediaDimensions.register_mod_media(slot, {"disc_diameter": 0.12, "slot_load": true})
-	_eq("media/slot load", MediaDimensions.disc_loader(slot), MediaDimensions.LOADER_SLOT)
+	_eq(MediaDimensions.disc_loader(slot), MediaDimensions.LOADER_SLOT, "media/slot load")
 	_ok(not MediaDimensions.register_mod_media("t_bad", {"slot_load": true}).is_empty(),
 		"media/slot without a disc refused")
 	_ok(not MediaDimensions.register_mod_media("t_bad2", {"cart_size": "big"}).is_empty(),
 		"media/bad cart size refused")
 	# A shipped platform must be untouched by any of this.
-	_eq("media/shipped nes unchanged", MediaDimensions.disc_loader("nes"),
-		MediaDimensions.LOADER_NONE)
+	_eq(MediaDimensions.disc_loader("nes"), MediaDimensions.LOADER_NONE,
+		"media/shipped nes unchanged")
 
 	# Without a scraper mapping a platform's carts stay blank for ever, and
 	# nothing anywhere says why — so the mapping is a first-class registration.
-	_eq("media/unmapped platform", ScreenscraperSystems.get_systemeid("t_media_platform"), -1)
+	_eq(ScreenscraperSystems.get_systemeid("t_media_platform"), -1, "media/unmapped platform")
 	ScreenscraperSystems.register_mod_system("t_media_platform", 4242)
-	_eq("media/mapped platform", ScreenscraperSystems.get_systemeid("t_media_platform"), 4242)
-	_eq("media/shipped mapping unchanged", ScreenscraperSystems.get_systemeid("nes"), 3)
+	_eq(ScreenscraperSystems.get_systemeid("t_media_platform"), 4242, "media/mapped platform")
+	_eq(ScreenscraperSystems.get_systemeid("nes"), 3, "media/shipped mapping unchanged")
 
 
 # ── shaders/ ──────────────────────────────────────────────────────────────────
@@ -378,14 +378,14 @@ func _group_removal() -> void:
 		{"id": 3, "type": "gone.mod:rug", "position": [3, 0, 0], "rotation": [0, 0, 0]},
 	]
 	var kept := ScenePersistence._prune_unknown_types(objects, "test")
-	_eq("removal/keeps everything else", kept.size(), 2)
-	_eq("removal/dropped the mod props", _types_of(kept), ["table", "tv_remote"])
+	_eq(kept.size(), 2, "removal/keeps everything else")
+	_eq(_types_of(kept), ["table", "tv_remote"], "removal/dropped the mod props")
 	# Dropping an entry creates dangling references. Not scrubbing them turns
 	# "one missing prop" straight back into "the whole slot is invalid".
 	var remote := _entry_of(kept, "tv_remote")
 	_ok(remote.get("system") == null, "removal/dangling reference scrubbed")
-	_eq("removal/slot still validates",
-		ScenePersistence._objects_validation_error(kept), "")
+	_eq(ScenePersistence._objects_validation_error(kept),
+		"", "removal/slot still validates")
 
 	# A slot with nothing missing must come back byte-identical, not merely
 	# equivalent — this path runs on every load.
@@ -422,8 +422,8 @@ func _group_removal() -> void:
 		_ok(read != null,
 			"removal/a real slot with a missing mod still loads", "the whole slot was refused")
 		if read is Array:
-			_eq("removal/and comes back without the missing props",
-				_types_of(read as Array), ["table", "tv_remote"])
+			_eq(_types_of(read as Array),
+				["table", "tv_remote"], "removal/and comes back without the missing props")
 		DirAccess.remove_absolute(slot_path)
 	DirAccess.remove_absolute(slot_dir)
 
@@ -433,11 +433,11 @@ func _group_removal() -> void:
 	ScenePersistence.register_mod_object("t.keep:thing", scene, owner)
 	var live: Array = [{"id": 0, "type": "t.keep:thing", "position": [0, 0, 0],
 		"rotation": [0, 0, 0]}]
-	_eq("removal/loaded mod prop survives",
-		ScenePersistence._prune_unknown_types(live, "test").size(), 1)
+	_eq(ScenePersistence._prune_unknown_types(live, "test").size(),
+		1, "removal/loaded mod prop survives")
 	ScenePersistence.drop_mod_objects(owner)
-	_eq("removal/same prop drops once the mod is gone",
-		ScenePersistence._prune_unknown_types(live, "test").size(), 0)
+	_eq(ScenePersistence._prune_unknown_types(live, "test").size(),
+		0, "removal/same prop drops once the mod is gone")
 
 
 func _types_of(entries: Array) -> Array:
@@ -459,7 +459,7 @@ func _entry_of(entries: Array, type: String) -> Dictionary:
 func _group_netplay() -> void:
 	# With nothing loaded the fingerprint is empty, so two stock builds match and
 	# the check costs an untouched room nothing.
-	_eq("netplay/no mods means an empty fingerprint", Mods.fingerprint().size(), 0)
+	_eq(Mods.fingerprint().size(), 0, "netplay/no mods means an empty fingerprint")
 
 	var ours := PackedStringArray(["a@1.0.0", "b@2.0.0"])
 	var same := PackedStringArray(["a@1.0.0", "b@2.0.0"])
@@ -493,17 +493,17 @@ func _group_consistency() -> void:
 		var info := SystemInfo.for_system(sid)
 		if info == null or not info.computer:
 			mismatched.append(sid)
-	_eq("consistency/computer platforms match SystemInfo.computer",
-		", ".join(mismatched), "")
+	_eq(", ".join(mismatched),
+		"", "consistency/computer platforms match SystemInfo.computer")
 
 	# system_info.gd says MediaType intentionally matches MediaDimensions.LOADER_*
 	# so the two "never disagree". They are separate tables, so check it.
-	_eq("consistency/CARTRIDGE == LOADER_NONE",
-		int(SystemInfo.MediaType.CARTRIDGE), MediaDimensions.LOADER_NONE)
-	_eq("consistency/DISC_TRAY == LOADER_TRAY",
-		int(SystemInfo.MediaType.DISC_TRAY), MediaDimensions.LOADER_TRAY)
-	_eq("consistency/DISC_INSERT == LOADER_SLOT",
-		int(SystemInfo.MediaType.DISC_INSERT), MediaDimensions.LOADER_SLOT)
+	_eq(int(SystemInfo.MediaType.CARTRIDGE),
+		MediaDimensions.LOADER_NONE, "consistency/CARTRIDGE == LOADER_NONE")
+	_eq(int(SystemInfo.MediaType.DISC_TRAY),
+		MediaDimensions.LOADER_TRAY, "consistency/DISC_TRAY == LOADER_TRAY")
+	_eq(int(SystemInfo.MediaType.DISC_INSERT),
+		MediaDimensions.LOADER_SLOT, "consistency/DISC_INSERT == LOADER_SLOT")
 
 	# EVERY descriptor, not just the platforms that happen to have a model row.
 	# Checking only those hid the PS2, which has no row and disagreed just as
@@ -530,7 +530,7 @@ func _group_consistency() -> void:
 		dir.list_dir_end()
 	_ok(checked > 50,
 		"consistency/descriptors were actually read", "only %d read — the check would pass vacuously" % checked)
-	_eq("consistency/media_type agrees with disc_loader", ", ".join(disagree), "")
+	_eq(", ".join(disagree), "", "consistency/media_type agrees with disc_loader")
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -589,5 +589,5 @@ func _ok(cond: bool, name: String, detail: String = "") -> void:
 			"  — " + detail if not detail.is_empty() else ""])
 
 
-func _eq(name: String, got: Variant, want: Variant) -> void:
+func _eq(got: Variant, want: Variant, name: String) -> void:
 	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])

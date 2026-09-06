@@ -86,20 +86,20 @@ func _test_netplay_cable_guard() -> void:
 	cable.netplay_manager_override = manager
 	var bus: Array = [{"machine": a, "port": 0}, {"machine": b, "port": 0}]
 	_ok(cable.netplay_took_bus(bus, []), "netplay/a covered join is claimed")
-	_eq("netplay/and scheduled once", manager.scheduled.size(), 1)
+	_eq(manager.scheduled.size(), 1, "netplay/and scheduled once")
 	_ok(cable.netplay_took_bus(bus, []),
 		"netplay/re-resolving the same seated lead does not schedule twice")
-	_eq("netplay/the duplicate join was coalesced", manager.scheduled.size(), 1)
+	_eq(manager.scheduled.size(), 1, "netplay/the duplicate join was coalesced")
 	_ok(cable.netplay_took_bus([], []), "netplay/a pull before the join lands is still claimed")
-	_eq("netplay/and schedules the inverse operation", manager.scheduled.size(), 2)
+	_eq(manager.scheduled.size(), 2, "netplay/and schedules the inverse operation")
 	if manager.scheduled.size() >= 2:
-		_eq("netplay/the inverse is a pull", manager.scheduled[1]["op"], 0)
+		_eq(manager.scheduled[1]["op"], 0, "netplay/the inverse is a pull")
 
 	manager.scheduled.clear()
 	var partial: Array = [{"machine": a, "port": 0}, {"machine": outside, "port": 0}]
 	_ok(cable.netplay_took_bus(partial, []),
 		"netplay/a cable crossing the session boundary is claimed and refused")
-	_eq("netplay/so no local or scheduled partial bus is made", manager.scheduled.size(), 0)
+	_eq(manager.scheduled.size(), 0, "netplay/so no local or scheduled partial bus is made")
 	a.free()
 	b.free()
 	outside.free()
@@ -141,11 +141,11 @@ func _test_gc_gba_cable() -> void:
 
 	# Which console's ports will take it. A GameCube lead is not a Wii lead, and
 	# the socket says so before anything electrical is decided.
-	_eq("the console end fits a GameCube", gc_end.systemid, "gamecube")
+	_eq(gc_end.systemid, "gamecube", "the console end fits a GameCube")
 
 	# Seating it announces a handheld to the core, the same way any pad announces
 	# itself: there is no separate step and nothing else to configure.
-	_eq("and announces a Game Boy Advance", gc_end.device_type, (7 << 8) | 0)
+	_eq(gc_end.device_type, (7 << 8) | 0, "and announces a Game Boy Advance")
 
 	# It carries neither picture nor sound, so AvGraph must walk straight past it.
 	_ok(lead.links().is_empty(), "the lead is not an A/V cable")
@@ -224,12 +224,12 @@ func _joined_lead_names_its_pair() -> void:
 	psx._join({"libretro": m1.libretro, "machine": m1, "port": 0},
 		{"libretro": m2.libretro, "machine": m2, "port": 0})
 	var psx_held: Array = psx.held_machines()
-	_eq("a joined PlayStation lead names two machines", psx_held.size(), 2)
+	_eq(psx_held.size(), 2, "a joined PlayStation lead names two machines")
 	if psx_held.size() == 2:
 		_ok(psx_held[0]["machine"] == m1 and psx_held[1]["machine"] == m2,
 			"and they are the two it joined")
 	psx._disconnect()
-	_eq("a parted PlayStation lead names none", (psx.held_machines() as Array).size(), 0)
+	_eq((psx.held_machines() as Array).size(), 0, "a parted PlayStation lead names none")
 
 	var gc := GcGbaCable.new()
 	add_child(gc)
@@ -237,27 +237,27 @@ func _joined_lead_names_its_pair() -> void:
 	# lead follows for its purple end.
 	gc._join({"libretro": m1.libretro, "machine": m1, "port": 2}, m2.libretro)
 	var gc_held: Array = gc.held_machines()
-	_eq("a joined GameCube lead names two machines", gc_held.size(), 2)
+	_eq(gc_held.size(), 2, "a joined GameCube lead names two machines")
 	if gc_held.size() == 2:
 		_ok(gc_held[0]["machine"] == m1, "console first")
 		_ok(gc_held[1]["machine"] == m2, "then the handheld")
-		_eq("the console keeps its own port number", int(gc_held[0]["port"]), 2)
-		_eq("and the handheld its GameCube conversation",
-			int(gc_held[1]["port"]), GcGbaCable.GBA_JOY_PORT)
+		_eq(int(gc_held[0]["port"]), 2, "the console keeps its own port number")
+		_eq(int(gc_held[1]["port"]),
+			GcGbaCable.GBA_JOY_PORT, "and the handheld its GameCube conversation")
 	gc._disconnect()
-	_eq("a parted GameCube lead names none", (gc.held_machines() as Array).size(), 0)
+	_eq((gc.held_machines() as Array).size(), 0, "a parted GameCube lead names none")
 
 	var handheld := LinkCable.new()
 	add_child(handheld)
 	handheld._join([{"libretro": m1.libretro, "machine": m1, "port": 0},
 		{"libretro": m2.libretro, "machine": m2, "port": 0}])
 	var hh_held: Array = handheld.held_machines()
-	_eq("a joined handheld lead names two machines", hh_held.size(), 2)
+	_eq(hh_held.size(), 2, "a joined handheld lead names two machines")
 	if hh_held.size() == 2:
 		_ok(hh_held[0]["machine"] == m1 and hh_held[1]["machine"] == m2,
 			"and they are the two it joined")
 	handheld._disconnect()
-	_eq("a parted handheld lead names none", (handheld.held_machines() as Array).size(), 0)
+	_eq((handheld.held_machines() as Array).size(), 0, "a parted handheld lead names none")
 
 	psx.queue_free()
 	gc.queue_free()
@@ -276,7 +276,7 @@ func _ok(cond: bool, name: String, detail := "") -> void:
 		print("[link] FAIL  %s%s" % [name, "  — " + detail if not detail.is_empty() else ""])
 
 
-func _eq(name: String, got: Variant, want: Variant) -> void:
+func _eq(got: Variant, want: Variant, name: String) -> void:
 	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
@@ -296,8 +296,8 @@ func _test_plug_gating() -> void:
 	var plug := LinkPlug.new()
 	add_child(plug)
 
-	_eq("port and plug name the same group", port.plug_group(), plug.plug_group())
-	_eq("the group is link_plug", port.plug_group(), "link_plug")
+	_eq(port.plug_group(), plug.plug_group(), "port and plug name the same group")
+	_eq(port.plug_group(), "link_plug", "the group is link_plug")
 
 	# A link lead must not fit an A/V socket, and a phono cord must not fit this
 	# one. Asserted against the real classes rather than string literals, so
@@ -312,7 +312,7 @@ func _test_plug_gating() -> void:
 
 	# The gate is enforced through the snap zone, so the requirement has to have
 	# actually been applied and not just be available to read.
-	_eq("the socket requires that group to snap", port.snap_require, port.plug_group())
+	_eq(port.snap_require, port.plug_group(), "the socket requires that group to snap")
 
 	port.queue_free()
 	plug.queue_free()
@@ -325,7 +325,7 @@ func _test_port_pins_its_channel() -> void:
 	# Inherited from RcaPort but meaningless on a cable that carries neither
 	# picture nor sound, so it is pinned rather than left for a scene to set
 	# wrong.
-	_eq("channel is pinned", port.channel, RcaPort.Channel.VIDEO)
+	_eq(port.channel, RcaPort.Channel.VIDEO, "channel is pinned")
 	_ok(not port.show_jack, "the jack visual is off")
 	port.queue_free()
 
@@ -334,7 +334,7 @@ func _test_port_pins_its_channel() -> void:
 
 func _test_machine_lookup() -> void:
 	var loose := _port()
-	_eq("a socket owned by nobody has no machine", loose.get_machine(), null)
+	_eq(loose.get_machine(), null, "a socket owned by nobody has no machine")
 	loose.queue_free()
 
 	var machine := _StubMachine.new()
@@ -344,7 +344,7 @@ func _test_machine_lookup() -> void:
 	var port := LinkPort.new()
 	shell.add_child(port)
 
-	_eq("a socket finds the machine that owns it", port.get_machine(), machine)
+	_eq(port.get_machine(), machine, "a socket finds the machine that owns it")
 	machine.queue_free()
 
 
@@ -356,7 +356,7 @@ func _test_libretro_lookup() -> void:
 
 	# A cable seated into a console that has not been switched on is ordinary,
 	# not an error: the link should simply come up when it is powered.
-	_eq("an unpowered machine yields no core", port.get_libretro(), null)
+	_eq(port.get_libretro(), null, "an unpowered machine yields no core")
 	machine.queue_free()
 
 
@@ -368,7 +368,7 @@ func _test_cable_is_not_av() -> void:
 	# AvGraph duck-types on links(), so an empty list is how a lead says "not
 	# mine". A link cable reporting itself here would drag televisions into
 	# routing serial traffic.
-	_eq("a link cable reports no A/V links", cable.links().size(), 0)
+	_eq(cable.links().size(), 0, "a link cable reports no A/V links")
 	cable.queue_free()
 
 
@@ -383,7 +383,7 @@ func _test_disconnect_is_idempotent() -> void:
 	# time and any number of times.
 	cable._disconnect()
 	cable._disconnect()
-	_eq("a cable that was never joined records no link", cable._linked.size(), 0)
+	_eq(cable._linked.size(), 0, "a cable that was never joined records no link")
 
 	# Neither machine is running, and the cable joins them anyway. That is the
 	# behaviour a cable has: seating one into a console that is switched off is
@@ -408,12 +408,12 @@ func _test_disconnect_is_idempotent() -> void:
 		{"libretro": m2.libretro, "port": 0},
 	]
 	cable._join(g2)
-	_eq("two idle machines are still cabled together", cable._linked.size(), 2)
+	_eq(cable._linked.size(), 2, "two idle machines are still cabled together")
 
 	# Re-stating the same set changes nothing, which matters because every cable
 	# in a chain resolves whenever any plug in it moves.
 	cable._join(g2)
-	_eq("re-stating the same group is a no-op", cable._linked.size(), 2)
+	_eq(cable._linked.size(), 2, "re-stating the same group is a no-op")
 	cable._disconnect()
 
 	# The guard against a machine cabled to itself, which the room can present as
@@ -422,7 +422,7 @@ func _test_disconnect_is_idempotent() -> void:
 		{"libretro": m1.libretro, "port": 0},
 		{"libretro": m1.libretro, "port": 0},
 	] as Array[Dictionary])
-	_eq("a machine cabled to itself is not recorded", cable._linked.size(), 0)
+	_eq(cable._linked.size(), 0, "a machine cabled to itself is not recorded")
 
 	# Disconnect has to survive the ends being gone. A machine can be carried out
 	# of the room, or the room torn down, between joining and pulling.
@@ -432,7 +432,7 @@ func _test_disconnect_is_idempotent() -> void:
 	]
 	m2.libretro.free()
 	cable._disconnect()
-	_eq("disconnect clears even when an end is gone", cable._linked.size(), 0)
+	_eq(cable._linked.size(), 0, "disconnect clears even when an end is gone")
 
 	m1.queue_free()
 	m2.queue_free()
@@ -470,7 +470,7 @@ func _test_cable_scene() -> void:
 	# One cord, so CompositeCable takes its single-rope path. A miscount here
 	# would send it down the ribbon path looking for a breakout that does not
 	# exist.
-	_eq("it is a one-cord lead", cable.cord_count(), 1)
+	_eq(cable.cord_count(), 1, "it is a one-cord lead")
 	_ok(cable.get_node_or_null("VerletRope") != null, "it has a rope")
 
 	# Both ends answer to the group their sockets require, which is the whole of
@@ -511,11 +511,11 @@ func _test_cable_scene() -> void:
 	var j := cable.junction_port()
 	_ok(j != null, "the lead carries a junction")
 	if j != null:
-		_eq("it takes the same plugs the machines do", j.snap_require, "link_plug")
+		_eq(j.snap_require, "link_plug", "it takes the same plugs the machines do")
 		# The two kinds of socket have to be told apart during the chain walk:
 		# a machine port answers get_machine, a junction answers get_cable.
-		_eq("it belongs to no machine", j.get_machine(), null)
-		_eq("it belongs to this cable", j.get_cable(), cable)
+		_eq(j.get_machine(), null, "it belongs to no machine")
+		_eq(j.get_cable(), cable, "it belongs to this cable")
 
 	cable.queue_free()
 	await get_tree().process_frame
@@ -534,7 +534,7 @@ func _test_port_scene() -> void:
 
 	# The gate, as the socket actually enforces it rather than as the class
 	# merely reports it.
-	_eq("it requires a link plug", port.snap_require, "link_plug")
+	_eq(port.snap_require, "link_plug", "it requires a link plug")
 
 	# Named LinkJack rather than RcaJack on purpose, so the inherited channel
 	# tinting cannot repaint a socket that carries no signal.
@@ -877,7 +877,7 @@ func _test_the_lead_will_seat() -> void:
 	# controller_plug membership can make the room-wide scan find it now.
 	gba_end.remove_from_group("link_plug")
 	var console_bus: Array = console.net_link_bus()
-	_eq("netplay finds a bus through the controller socket", console_bus.size(), 2)
+	_eq(console_bus.size(), 2, "netplay finds a bus through the controller socket")
 	_ok(console_bus.any(func(entry: Dictionary) -> bool: return entry.get("machine") == console),
 		"and that bus contains the GameCube")
 	_ok(console_bus.any(func(entry: Dictionary) -> bool: return entry.get("machine") == handheld),
@@ -1291,10 +1291,10 @@ func _test_psx_plug_gating() -> void:
 	var plug := PsxLinkPlug.new()
 	add_child(plug)
 
-	_eq("the PlayStation port and plug name the same group",
-		port.plug_group(), plug.plug_group())
-	_eq("the group is psx_link_plug", port.plug_group(), "psx_link_plug")
-	_eq("the socket requires that group to snap", port.snap_require, port.plug_group())
+	_eq(port.plug_group(),
+		plug.plug_group(), "the PlayStation port and plug name the same group")
+	_eq(port.plug_group(), "psx_link_plug", "the group is psx_link_plug")
+	_eq(port.snap_require, port.plug_group(), "the socket requires that group to snap")
 
 	# The case this class exists for. Reusing the handheld group would have let a
 	# Game Boy Advance lead seat in a console's serial socket and look right doing
@@ -1318,7 +1318,7 @@ func _test_psx_plug_gating() -> void:
 
 	# link_port is inherited and a PlayStation has exactly one serial socket, so
 	# it stays where it started. The export exists for hardware that has more.
-	_eq("the console's one serial socket is port 0", port.link_port, 0)
+	_eq(port.link_port, 0, "the console's one serial socket is port 0")
 
 	port.queue_free()
 	plug.queue_free()
@@ -1332,7 +1332,7 @@ func _test_psx_cable_is_not_av() -> void:
 	# would put a television in the business of routing serial traffic.
 	var cable := PsxLinkCable.new()
 	add_child(cable)
-	_eq("a PlayStation link cable carries no A/V links", cable.links().size(), 0)
+	_eq(cable.links().size(), 0, "a PlayStation link cable carries no A/V links")
 	cable.queue_free()
 
 
@@ -1401,7 +1401,7 @@ func _test_psx_socket_follows_the_hardware() -> void:
 			"and clear of the A/V sockets", "nearest A/V socket is %.1f mm away" % (av_gap * 1000.0))
 		# The machine behind the socket is the one it is bolted to, which is what
 		# the cable resolves through.
-		_eq("and it belongs to that machine", on_psx.get_machine(), psx)
+		_eq(on_psx.get_machine(), psx, "and it belongs to that machine")
 
 	psx.queue_free()
 	plain.queue_free()
@@ -1467,7 +1467,7 @@ func _test_psx_cable_joins_a_pair() -> void:
 	# resolve and on the way out of the tree.
 	cable._disconnect()
 	cable._disconnect()
-	_eq("a lead that was never joined records no link", cable._linked.size(), 0)
+	_eq(cable._linked.size(), 0, "a lead that was never joined records no link")
 
 	var m1 := _StubMachine.new()
 	var m2 := _StubMachine.new()
@@ -1485,7 +1485,7 @@ func _test_psx_cable_joins_a_pair() -> void:
 	# into a machine that is switched off is an ordinary thing to do, and the link
 	# comes alive when both cores attach their serial hardware.
 	cable._join(a, b)
-	_eq("two idle consoles are still cabled together", cable._linked.size(), 6)
+	_eq(cable._linked.size(), 6, "two idle consoles are still cabled together")
 
 	# Re-stating the same pair changes nothing, which matters because a lead
 	# resolves whenever either of its plugs moves.
@@ -1494,12 +1494,12 @@ func _test_psx_cable_joins_a_pair() -> void:
 	_ok(cable._linked == was, "re-stating the same pair is a no-op")
 
 	cable._disconnect()
-	_eq("pulling a plug parts them", cable._linked.size(), 0)
+	_eq(cable._linked.size(), 0, "pulling a plug parts them")
 
 	# A machine cabled to itself, which the room cannot present -- one console has
 	# one serial socket -- but which the guard exists for anyway.
 	cable._join(a, {"libretro": m1.libretro, "machine": m1, "port": 0})
-	_eq("a console is not cabled to itself", cable._linked.size(), 0)
+	_eq(cable._linked.size(), 0, "a console is not cabled to itself")
 
 	cable.queue_free()
 	m1.queue_free()

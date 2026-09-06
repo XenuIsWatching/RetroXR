@@ -114,7 +114,7 @@ func _ok(cond: bool, name: String, detail: String = "") -> void:
 		print("[test] FAIL  %s%s" % [name, "  — " + detail if not detail.is_empty() else ""])
 
 
-func _eq(name: String, got: Variant, want: Variant) -> void:
+func _eq(got: Variant, want: Variant, name: String) -> void:
 	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
@@ -131,42 +131,42 @@ func _at(arr: Array, i: int) -> Dictionary:
 
 func _test_pair_url() -> void:
 	var scheme := RommPairUrl.parse("http://192.168.0.106:8080/pair?code=MXWT-SDZE")
-	_eq("pair/scheme url", scheme["url"], "http://192.168.0.106:8080")
-	_eq("pair/scheme code", scheme["code"], "MXWT-SDZE")
+	_eq(scheme["url"], "http://192.168.0.106:8080", "pair/scheme url")
+	_eq(scheme["code"], "MXWT-SDZE", "pair/scheme code")
 
 	# The QR frequently omits the scheme, and keeps the http default that a typed
 	# hostname no longer gets — the payload came from the server being looked at,
 	# and pairing trades a code for a token rather than sending a password.
 	var bare := RommPairUrl.parse("192.168.0.106:8080/pair?code=MXWT-SDZE")
-	_eq("pair/schemeless url", bare["url"], "http://192.168.0.106:8080")
-	_eq("pair/schemeless code", bare["code"], "MXWT-SDZE")
+	_eq(bare["url"], "http://192.168.0.106:8080", "pair/schemeless url")
+	_eq(bare["code"], "MXWT-SDZE", "pair/schemeless code")
 
 	# A bare code pairs against the configured server.
 	var only := RommPairUrl.parse("MXWT-SDZE")
-	_eq("pair/bare code url", only["url"], "")
-	_eq("pair/bare code code", only["code"], "MXWT-SDZE")
+	_eq(only["url"], "", "pair/bare code url")
+	_eq(only["code"], "MXWT-SDZE", "pair/bare code code")
 
 	# Shaped like a URL but carrying no host: treating this as a bare code would
 	# pair against whatever server happened to be configured and hide the
 	# malformed QR behind an unrelated failure.
 	var hostless := RommPairUrl.parse("/pair?code=MXWT-SDZE")
-	_eq("pair/hostless rejected", hostless["code"], "")
+	_eq(hostless["code"], "", "pair/hostless rejected")
 
-	_eq("pair/not a romm qr", RommPairUrl.parse("https://example.com/hello")["code"], "")
-	_eq("pair/empty", RommPairUrl.parse("")["code"], "")
-	_eq("pair/whitespace only", RommPairUrl.parse("   ")["code"], "")
+	_eq(RommPairUrl.parse("https://example.com/hello")["code"], "", "pair/not a romm qr")
+	_eq(RommPairUrl.parse("")["code"], "", "pair/empty")
+	_eq(RommPairUrl.parse("   ")["code"], "", "pair/whitespace only")
 
 	# Percent-encoding must decode, and decoding must not smuggle in a code the
 	# pattern would have rejected.
-	_eq("pair/uri decoded", RommPairUrl.parse("http://h:8080/pair?code=AB%2DCD")["code"], "AB-CD")
-	_eq("pair/decode cannot widen",
-		RommPairUrl.parse("http://h:8080/pair?code=AB%2FCD")["code"], "")
+	_eq(RommPairUrl.parse("http://h:8080/pair?code=AB%2DCD")["code"], "AB-CD", "pair/uri decoded")
+	_eq(RommPairUrl.parse("http://h:8080/pair?code=AB%2FCD")["code"],
+		"", "pair/decode cannot widen")
 
 	# Fragments and extra query params.
-	_eq("pair/extra query", RommPairUrl.parse("http://h:8080/pair?x=1&code=ABCD")["code"], "ABCD")
+	_eq(RommPairUrl.parse("http://h:8080/pair?x=1&code=ABCD")["code"], "ABCD", "pair/extra query")
 
 	var over := "A".repeat(RommPairUrl.MAX_CODE_LEN + 1)
-	_eq("pair/over-long code", RommPairUrl.parse("http://h:8080/pair?code=" + over)["code"], "")
+	_eq(RommPairUrl.parse("http://h:8080/pair?code=" + over)["code"], "", "pair/over-long code")
 
 
 # ---------------------------------------------------------------------------
@@ -174,36 +174,36 @@ func _test_pair_url() -> void:
 # ---------------------------------------------------------------------------
 
 func _test_systemid_for() -> void:
-	_eq("slug/plain n64",
-		RommPlatforms.systemid_for({"slug": "n64", "fs_slug": "n64"}), "nintendo_64")
+	_eq(RommPlatforms.systemid_for({"slug": "n64", "fs_slug": "n64"}),
+		"nintendo_64", "slug/plain n64")
 
 	# The one that shipped wrong: 64DD is its own system, not N64.
-	_eq("slug/64dd is not n64",
-		RommPlatforms.systemid_for({"slug": "64dd", "fs_slug": "n64dd"}), "nintendo_64dd")
+	_eq(RommPlatforms.systemid_for({"slug": "64dd", "fs_slug": "n64dd"}),
+		"nintendo_64dd", "slug/64dd is not n64")
 
 	# The same shape as 64DD: Neo Geo CD used to map to "neogeo", a CARTRIDGE
 	# system, so 105 discs spawned as cartridges and neocd — which declares
 	# neo_geo_cd as its own systemid — could never be selected for the folder.
-	_eq("slug/neogeocd is not neogeo",
-		RommPlatforms.systemid_for({"slug": "neogeocd", "fs_slug": "neogeocd"}), "neo_geo_cd")
-	_eq("slug/the hyphenated RomM form too",
-		RommPlatforms.systemid_for({"slug": "neo-geo-cd", "fs_slug": "neo-geo-cd"}), "neo_geo_cd")
-	_eq("slug/the cartridge Neo Geo is untouched",
-		RommPlatforms.systemid_for({"slug": "neogeo", "fs_slug": "neogeo"}), "neogeo")
+	_eq(RommPlatforms.systemid_for({"slug": "neogeocd", "fs_slug": "neogeocd"}),
+		"neo_geo_cd", "slug/neogeocd is not neogeo")
+	_eq(RommPlatforms.systemid_for({"slug": "neo-geo-cd", "fs_slug": "neo-geo-cd"}),
+		"neo_geo_cd", "slug/the hyphenated RomM form too")
+	_eq(RommPlatforms.systemid_for({"slug": "neogeo", "fs_slug": "neogeo"}),
+		"neogeo", "slug/the cartridge Neo Geo is untouched")
 
 	# fs_slug beats slug — it is the folder the user named themselves.
-	_eq("slug/fs_slug wins",
-		RommPlatforms.systemid_for({"slug": "unknown-thing", "fs_slug": "snes"}), "super_nes")
+	_eq(RommPlatforms.systemid_for({"slug": "unknown-thing", "fs_slug": "snes"}),
+		"super_nes", "slug/fs_slug wins")
 
 	# An explicit override beats both, by either key.
-	_eq("slug/override by slug",
-		RommPlatforms.systemid_for({"slug": "weird", "fs_slug": "alsoweird"}, {"weird": "nes"}),
-		"nes")
+	_eq(RommPlatforms.systemid_for({"slug": "weird", "fs_slug": "alsoweird"}, {"weird": "nes"}),
+		"nes",
+		"slug/override by slug")
 
-	_eq("slug/unmappable", RommPlatforms.systemid_for({"slug": "nonesuch", "fs_slug": "nope"}), "")
+	_eq(RommPlatforms.systemid_for({"slug": "nonesuch", "fs_slug": "nope"}), "", "slug/unmappable")
 
 	# JSON nulls arrive from RomM for absent fields; str(null) must not map.
-	_eq("slug/null fields", RommPlatforms.systemid_for({"slug": null, "fs_slug": null}), "")
+	_eq(RommPlatforms.systemid_for({"slug": null, "fs_slug": null}), "", "slug/null fields")
 
 
 func _test_partition() -> void:
@@ -213,9 +213,9 @@ func _test_partition() -> void:
 		{"slug": "snes", "fs_slug": "snes", "rom_count": 0},      # empty, dropped
 		{"slug": "gb", "fs_slug": "gb", "rom_count": null},        # null, dropped
 	])
-	_eq("partition/mapped", part["mapped"].size(), 1)
-	_eq("partition/unmapped", part["unmapped"].size(), 1)
-	_eq("partition/systemid stamped", str((part["mapped"][0] as Dictionary)["systemid"]), "nes")
+	_eq(part["mapped"].size(), 1, "partition/mapped")
+	_eq(part["unmapped"].size(), 1, "partition/unmapped")
+	_eq(str((part["mapped"][0] as Dictionary)["systemid"]), "nes", "partition/systemid stamped")
 
 
 func _test_collapse_by_systemid() -> void:
@@ -227,25 +227,25 @@ func _test_collapse_by_systemid() -> void:
 	var forward := RommPlatforms.collapse_by_systemid([a, b])
 	var reverse := RommPlatforms.collapse_by_systemid([b, a])
 
-	_eq("collapse/one tile per systemid", (forward["platforms"] as Dictionary).size(), 1)
-	_eq("collapse/biggest wins",
-		str(((forward["platforms"] as Dictionary)["super_nes"] as Dictionary)["slug"]), "snes")
-	_eq("collapse/order independent",
-		str(((reverse["platforms"] as Dictionary)["super_nes"] as Dictionary)["slug"]), "snes")
+	_eq((forward["platforms"] as Dictionary).size(), 1, "collapse/one tile per systemid")
+	_eq(str(((forward["platforms"] as Dictionary)["super_nes"] as Dictionary)["slug"]),
+		"snes", "collapse/biggest wins")
+	_eq(str(((reverse["platforms"] as Dictionary)["super_nes"] as Dictionary)["slug"]),
+		"snes", "collapse/order independent")
 
 	# The loser is reported, not dropped on the floor.
-	_eq("collapse/loser reported", (forward["shadowed"] as Array).size(), 1)
-	_eq("collapse/loser identity",
-		str(((forward["shadowed"] as Array)[0] as Dictionary)["slug"]), "sgb")
-	_eq("collapse/loser reported either order", (reverse["shadowed"] as Array).size(), 1)
+	_eq((forward["shadowed"] as Array).size(), 1, "collapse/loser reported")
+	_eq(str(((forward["shadowed"] as Array)[0] as Dictionary)["slug"]),
+		"sgb", "collapse/loser identity")
+	_eq((reverse["shadowed"] as Array).size(), 1, "collapse/loser reported either order")
 
 	# Distinct systemids never contend.
 	var many := RommPlatforms.collapse_by_systemid([
 		{"slug": "nes", "systemid": "nes", "rom_count": 1},
 		{"slug": "gb", "systemid": "game_boy", "rom_count": 1},
 	])
-	_eq("collapse/distinct kept", (many["platforms"] as Dictionary).size(), 2)
-	_eq("collapse/no false shadow", (many["shadowed"] as Array).size(), 0)
+	_eq((many["platforms"] as Dictionary).size(), 2, "collapse/distinct kept")
+	_eq((many["shadowed"] as Array).size(), 0, "collapse/no false shadow")
 
 
 # ---------------------------------------------------------------------------
@@ -258,14 +258,14 @@ func _test_collapse_by_systemid() -> void:
 # ---------------------------------------------------------------------------
 
 func _test_firmware_index() -> void:
-	_eq("fw/slug from path", RommFirmware.platform_slug_from_path("bios/ps2"), "ps2")
-	_eq("fw/slug trailing slash", RommFirmware.platform_slug_from_path("bios/ps2/"), "ps2")
-	_eq("fw/slug backslashes", RommFirmware.platform_slug_from_path("bios\\ps2"), "ps2")
-	_eq("fw/slug cased", RommFirmware.platform_slug_from_path("bios/PS2"), "ps2")
+	_eq(RommFirmware.platform_slug_from_path("bios/ps2"), "ps2", "fw/slug from path")
+	_eq(RommFirmware.platform_slug_from_path("bios/ps2/"), "ps2", "fw/slug trailing slash")
+	_eq(RommFirmware.platform_slug_from_path("bios\\ps2"), "ps2", "fw/slug backslashes")
+	_eq(RommFirmware.platform_slug_from_path("bios/PS2"), "ps2", "fw/slug cased")
 	# A bare name is not a folder. Reading one as a slug would file every loose
 	# firmware under whatever platform its filename happened to resemble.
-	_eq("fw/slug needs a folder", RommFirmware.platform_slug_from_path("ps2"), "")
-	_eq("fw/slug empty", RommFirmware.platform_slug_from_path(""), "")
+	_eq(RommFirmware.platform_slug_from_path("ps2"), "", "fw/slug needs a folder")
+	_eq(RommFirmware.platform_slug_from_path(""), "", "fw/slug empty")
 
 	var fw := RommFirmware.new()
 	fw.config = RommConfig.new()
@@ -288,28 +288,28 @@ func _test_firmware_index() -> void:
 	fw._loaded = true
 
 	var ps2: Array = fw.find_for_system("playstation2")
-	_eq("fw/platform index size", ps2.size(), 2)
-	_eq("fw/name sorted", str(_at(ps2, 0).get("file_name", "")), "ps2-0100j-20000117.bin")
-	_eq("fw/other platform", fw.find_for_system("playstation").size(), 1)
-	_eq("fw/unmapped is not a bucket", fw.find_for_system("").size(), 0)
-	_eq("fw/no such system", fw.find_for_system("gamecube").size(), 0)
+	_eq(ps2.size(), 2, "fw/platform index size")
+	_eq(str(_at(ps2, 0).get("file_name", "")), "ps2-0100j-20000117.bin", "fw/name sorted")
+	_eq(fw.find_for_system("playstation").size(), 1, "fw/other platform")
+	_eq(fw.find_for_system("").size(), 0, "fw/unmapped is not a bucket")
+	_eq(fw.find_for_system("gamecube").size(), 0, "fw/no such system")
 
 	# The by-name index still works, and now carries the system with it.
 	var hit := fw.find("scph5500.bin")
-	_eq("fw/by name id", int(hit.get("id", 0)), 9)
-	_eq("fw/by name stamps systemid", str(hit.get("systemid", "")), "playstation")
+	_eq(int(hit.get("id", 0)), 9, "fw/by name id")
+	_eq(str(hit.get("systemid", "")), "playstation", "fw/by name stamps systemid")
 	# Declared nested and stored flat, cased differently — the shipped case.
-	_eq("fw/by name is basename+caseless",
-		int(fw.find("Machines/PS2-0120A-20000902.BIN").get("id", 0)), 7)
+	_eq(int(fw.find("Machines/PS2-0120A-20000902.BIN").get("id", 0)),
+		7, "fw/by name is basename+caseless")
 
 	# md5 is compared against FileAccess.get_md5, which is lowercase.
-	_eq("fw/md5 lowercased", str(_at(ps2, 1).get("md5", "")),
-		"8db2fbbac7413bf3e7154c1e0715e565")
+	_eq(str(_at(ps2, 1).get("md5", "")), "8db2fbbac7413bf3e7154c1e0715e565",
+		"fw/md5 lowercased")
 
 	# A missing file is absent from BOTH indexes, not just the one it was
 	# filtered out of.
-	_eq("fw/missing from fs excluded by name",
-		fw.find("ps2-0101j-20000217.bin").is_empty(), true)
+	_eq(fw.find("ps2-0101j-20000217.bin").is_empty(),
+		true, "fw/missing from fs excluded by name")
 
 	# Re-listing replaces; a server that lost a file must not keep serving it out
 	# of a stale platform bucket.
@@ -317,8 +317,8 @@ func _test_firmware_index() -> void:
 		{"id": 3, "file_name": "ps2-0100j-20000117.bin", "file_path": "bios/ps2",
 			"file_size_bytes": 4194304},
 	])
-	_eq("fw/reindex replaces", fw.find_for_system("playstation2").size(), 1)
-	_eq("fw/reindex clears other platforms", fw.find_for_system("playstation").size(), 0)
+	_eq(fw.find_for_system("playstation2").size(), 1, "fw/reindex replaces")
+	_eq(fw.find_for_system("playstation").size(), 0, "fw/reindex clears other platforms")
 
 	fw.free()
 
@@ -386,12 +386,12 @@ func _test_password_not_persisted() -> void:
 	# A bare hostname must not become http: basic sign-in puts the password in
 	# every request header, so the default scheme decides whether it crosses the
 	# network in the clear.
-	_eq("auth/a bare host defaults to https",
-		RommConfig.normalize_url("romm.local:8080"), "https://romm.local:8080")
-	_eq("auth/an explicit http scheme is kept",
-		RommConfig.normalize_url("http://192.168.1.9"), "http://192.168.1.9")
-	_eq("auth/trailing slashes still go",
-		RommConfig.normalize_url("https://romm.example/"), "https://romm.example")
+	_eq(RommConfig.normalize_url("romm.local:8080"),
+		"https://romm.local:8080", "auth/a bare host defaults to https")
+	_eq(RommConfig.normalize_url("http://192.168.1.9"),
+		"http://192.168.1.9", "auth/an explicit http scheme is kept")
+	_eq(RommConfig.normalize_url("https://romm.example/"),
+		"https://romm.example", "auth/trailing slashes still go")
 
 	var plain := RommConfig.new()
 	plain.base_url = RommConfig.normalize_url("http://192.168.1.9")
@@ -455,41 +455,41 @@ func _test_verify_transfer() -> void:
 	var V: Callable = RommDownloader.verify_transfer
 
 	# A plain, complete file: the response's own length is what it is judged on.
-	_eq("verify/exact length ok", V.call(0, 200, 1000, 1000, 1000, false), "")
+	_eq(V.call(0, 200, 1000, 1000, 1000, false), "", "verify/exact length ok")
 	# Truncated. HTTPClient cannot distinguish this from a clean finish, so this
 	# check is the only thing that catches it.
 	_ok(not V.call(0, 200, 1000, 940, 1000, false).is_empty(), "verify/short body caught")
 
 	# THE BUG: a generated zip is bigger than the ROM the catalog describes, and
 	# the server sent no length to check it against. It must still pass.
-	_eq("verify/streamed zip larger than fs_size_bytes",
-		V.call(0, 200, 0, 214223188, 214222438, true), "")
+	_eq(V.call(0, 200, 0, 214223188, 214222438, true),
+		"", "verify/streamed zip larger than fs_size_bytes")
 	# And a raw streamed file with no length still falls back to fs_size_bytes.
 	_ok(not V.call(0, 200, 0, 940, 1000, false).is_empty(),
 		"verify/streamed raw file still checked")
-	_eq("verify/streamed raw file complete", V.call(0, 200, 0, 1000, 1000, false), "")
+	_eq(V.call(0, 200, 0, 1000, 1000, false), "", "verify/streamed raw file complete")
 
 	# A served length always wins over fs_size_bytes — a zip whose body length IS
 	# known must be judged on it, not on the members' sum.
-	_eq("verify/served length beats fs_size_bytes",
-		V.call(0, 200, 214223188, 214223188, 214222438, true), "")
+	_eq(V.call(0, 200, 214223188, 214223188, 214222438, true),
+		"", "verify/served length beats fs_size_bytes")
 
 	# Resume honoured: 206, and have + served is the whole file.
-	_eq("verify/206 resume ok", V.call(400, 206, 600, 1000, 1000, false), "")
+	_eq(V.call(400, 206, 600, 1000, 1000, false), "", "verify/206 resume ok")
 	_ok(not V.call(400, 206, 600, 900, 1000, false).is_empty(), "verify/206 resume short caught")
 
 	# Resume IGNORED: 200 with a partial already on disk means the whole body was
 	# appended onto it. have + served then equals the corrupt length, so nothing
 	# downstream can catch it — this rule is the only guard.
 	_ok(not V.call(400, 200, 1000, 1400, 1000, false).is_empty(), "verify/range ignored caught")
-	_eq("verify/range ignored names itself",
-		V.call(400, 200, 1000, 1400, 1000, false), "The server did not resume the download")
+	_eq(V.call(400, 200, 1000, 1400, 1000, false),
+		"The server did not resume the download", "verify/range ignored names itself")
 	# Not a resume, so a 200 is simply the normal case.
-	_eq("verify/200 with no partial is fine", V.call(0, 200, 1000, 1000, 1000, false), "")
+	_eq(V.call(0, 200, 1000, 1000, 1000, false), "", "verify/200 with no partial is fine")
 
 	# Nothing to check against at all: no served length, no catalog size. Passing
 	# is the only option — failing here would block every unsized transfer.
-	_eq("verify/no oracle passes", V.call(0, 200, 0, 1234, 0, false), "")
+	_eq(V.call(0, 200, 0, 1234, 0, false), "", "verify/no oracle passes")
 
 	# A mismatch that rounds to the same words must print exact bytes, or it
 	# reports "204 MB of 204 MB" and reads as a broken message rather than a real
@@ -509,9 +509,9 @@ func _test_verify_transfer() -> void:
 
 func _test_cache_paths() -> void:
 	var root := RomLibrary.default_roms_root()
-	_eq("cache/relative strips the system dir",
-		RommCacheManifest.relative_path("nes", root.path_join("nes").path_join("Game.nes")),
-		"Game.nes")
+	_eq(RommCacheManifest.relative_path("nes", root.path_join("nes").path_join("Game.nes")),
+		"Game.nes",
+		"cache/relative strips the system dir")
 
 	var key := RommCacheManifest.make_key("nes", "Game.nes")
 	_ok(key.contains("nes"), "cache/key carries the system", key)
@@ -628,8 +628,8 @@ func _test_index_by_basename() -> void:
 		{"path": "/roms/satellaview/BS-X.srm", "label": "BS-X"},
 	]
 	var idx := RomLibrary.index_by_basename(rows, exts)
-	_eq("stem/a save does not shadow its game",
-		str((idx.get("bs-x", {}) as Dictionary).get("path", "")), "/roms/satellaview/BS-X.sfc")
+	_eq(str((idx.get("bs-x", {}) as Dictionary).get("path", "")),
+		"/roms/satellaview/BS-X.sfc", "stem/a save does not shadow its game")
 
 	# ...and the same when the game is scanned second.
 	rows = [
@@ -637,8 +637,8 @@ func _test_index_by_basename() -> void:
 		{"path": "/roms/satellaview/BS-X.sfc", "label": "BS-X"},
 	]
 	idx = RomLibrary.index_by_basename(rows, exts)
-	_eq("stem/order does not decide it",
-		str((idx.get("bs-x", {}) as Dictionary).get("path", "")), "/roms/satellaview/BS-X.sfc")
+	_eq(str((idx.get("bs-x", {}) as Dictionary).get("path", "")),
+		"/roms/satellaview/BS-X.sfc", "stem/order does not decide it")
 
 	# A savestate is the other sidecar that lands beside a game.
 	rows = [
@@ -646,8 +646,8 @@ func _test_index_by_basename() -> void:
 		{"path": "/roms/n64/Game.z64", "label": "Game"},
 	]
 	idx = RomLibrary.index_by_basename(rows, exts)
-	_eq("stem/a savestate does not shadow its game",
-		str((idx.get("game", {}) as Dictionary).get("path", "")), "/roms/n64/Game.z64")
+	_eq(str((idx.get("game", {}) as Dictionary).get("path", "")),
+		"/roms/n64/Game.z64", "stem/a savestate does not shadow its game")
 
 	# The rule that was already there and must survive: the descriptor wins over
 	# the raw track, whichever order they arrive in.
@@ -656,15 +656,15 @@ func _test_index_by_basename() -> void:
 		{"path": "/roms/psx/Disc.bin", "label": "Disc"},
 	]
 	idx = RomLibrary.index_by_basename(rows, exts)
-	_eq("stem/manifest still beats its track",
-		str((idx.get("disc", {}) as Dictionary).get("path", "")), "/roms/psx/Disc.cue")
+	_eq(str((idx.get("disc", {}) as Dictionary).get("path", "")),
+		"/roms/psx/Disc.cue", "stem/manifest still beats its track")
 
 	# A downloaded .zip is not in any core's list, and until it is unpacked it is
 	# still the only thing standing for that game — it must keep the key.
 	rows = [{"path": "/roms/n64/Zipped.zip", "label": "Zipped"}]
 	idx = RomLibrary.index_by_basename(rows, exts)
-	_eq("stem/an unpacked-yet .zip still holds its key",
-		str((idx.get("zipped", {}) as Dictionary).get("path", "")), "/roms/n64/Zipped.zip")
+	_eq(str((idx.get("zipped", {}) as Dictionary).get("path", "")),
+		"/roms/n64/Zipped.zip", "stem/an unpacked-yet .zip still holds its key")
 
 	# Two files that are both real games: either may win, but one must, and the
 	# key must not be lost.
@@ -676,7 +676,7 @@ func _test_index_by_basename() -> void:
 	_ok(not str((idx.get("twin", {}) as Dictionary).get("path", "")).is_empty(),
 		"stem/two real games still yield a row")
 
-	_eq("stem/a shared stem collapses to one row", idx.size(), 1)
+	_eq(idx.size(), 1, "stem/a shared stem collapses to one row")
 
 
 # ---------------------------------------------------------------------------
@@ -716,7 +716,7 @@ func _test_gamelist_removal() -> void:
 	for g: Dictionary in gl.load_gamelist(TEST_SYSTEM).get("games", []):
 		by_id[str(g.get("game_id", ""))] = g
 	_ok(by_id.has("drop"), "del/game survives while a rom remains")
-	_eq("del/last rom standing", (by_id["drop"] as Dictionary).get("roms", []).size(), 1)
+	_eq((by_id["drop"] as Dictionary).get("roms", []).size(), 1, "del/last rom standing")
 
 	# Removing the last one takes the game with it: an entry the library claims
 	# and cannot produce is exactly the stale row this exists to stop.
@@ -765,21 +765,21 @@ func _test_media_and_cleanup() -> void:
 	# Art is keyed on the ROM's basename and the extension is whatever the
 	# scraper was handed, so a composed path would miss the .jpg every time.
 	var live := RomMedia.scraped_for_rom(TEST_SYSTEM, "Live.z64")
-	_eq("media/finds every extension for one rom", live.size(), 3)
+	_eq(live.size(), 3, "media/finds every extension for one rom")
 	_ok(RomMedia.scraped_for_rom(TEST_SYSTEM, "./sub/Live.cue").size() == 3,
 		"media/matches a rom-relative path")
-	_eq("media/unknown rom has none",
-		RomMedia.scraped_for_rom(TEST_SYSTEM, "Nothing.z64").size(), 0)
+	_eq(RomMedia.scraped_for_rom(TEST_SYSTEM, "Nothing.z64").size(),
+		0, "media/unknown rom has none")
 
 	# The RomM cover is keyed on the server id instead, and the index has to say
 	# so or the sweep cannot tell the two schemes apart.
 	var index := RomMedia.index(TEST_SYSTEM)
-	_eq("media/index keys scraped art by basename",
-		str(index.get(media.path_join("box/Live.png"), "")), "Live")
-	_eq("media/index keys romm art by id",
-		str(index.get(media.path_join("romm/4242_s.webp"), "")), "romm:4242")
-	_eq("media/romm art found by id", RomMedia.romm_art_for_id(TEST_SYSTEM, 4242).size(), 1)
-	_eq("media/wrong id finds nothing", RomMedia.romm_art_for_id(TEST_SYSTEM, 1).size(), 0)
+	_eq(str(index.get(media.path_join("box/Live.png"), "")),
+		"Live", "media/index keys scraped art by basename")
+	_eq(str(index.get(media.path_join("romm/4242_s.webp"), "")),
+		"romm:4242", "media/index keys romm art by id")
+	_eq(RomMedia.romm_art_for_id(TEST_SYSTEM, 4242).size(), 1, "media/romm art found by id")
+	_eq(RomMedia.romm_art_for_id(TEST_SYSTEM, 1).size(), 0, "media/wrong id finds nothing")
 
 	# A sweep must spare art whose ROM is still here and take the rest.
 	var found := StorageCleanup.scan()
@@ -856,7 +856,7 @@ func _test_cleanup_gate() -> void:
 	_ok(not FileAccess.file_exists(art), "gate/sweeps the safe category")
 	_ok(FileAccess.file_exists(save_dir.path_join("game.srm")),
 		"gate/SAVES SURVIVES A DEFAULT SWEEP")
-	_eq("gate/counts only what it removed", int(res["removed"]), 1)
+	_eq(int(res["removed"]), 1, "gate/counts only what it removed")
 
 	# Named explicitly, it goes — and a directory goes with its contents.
 	StorageCleanup.remove(found, [StorageCleanup.SAVES])
@@ -905,7 +905,7 @@ func _test_bios_folder_rule() -> void:
 	for d: String in dirs:
 		if V.call(d):
 			offered.append(d)
-	_eq("biosdir/exactly one folder shape takes server files", offered, ["pcsx2/bios"])
+	_eq(offered, ["pcsx2/bios"], "biosdir/exactly one folder shape takes server files")
 
 
 ## Which directories under system/ may be offered for deletion.
@@ -937,7 +937,7 @@ func _test_cleanup_core_dirs() -> void:
 		var leaf := str(p).trim_suffix("/").get_file()
 		if db.get_by_core_name(leaf).is_empty():
 			bad[p] = true
-	_eq("coredir/offers no unidentifiable directory", bad.size(), 0)
+	_eq(bad.size(), 0, "coredir/offers no unidentifiable directory")
 	# Belt and braces: name the two that actually shipped wrong.
 	for leaf: String in ["cheats", "melonDS DS"]:
 		_ok(not (system_root.path_join(leaf) in offered.get("paths", [])),
@@ -1033,16 +1033,16 @@ func _test_core_uninstall() -> void:
 	# passed with the loop cut down to a single name.
 	var android := PackedStringArray(["_libretro_android", "_libretro"])
 	var both := CoreDownloadManager.core_lib_filenames(FAKE, android, ".so")
-	_eq("uninstall/android has two naming variants", both.size(), 2)
-	_eq("uninstall/canonical variant first", both[0], FAKE + "_libretro_android.so")
-	_eq("uninstall/round-trips the android name",
-		CoreDownloadManager.core_name_from_lib_filename(
-			FAKE + "_libretro_android.so", android, ".so"), FAKE)
-	_eq("uninstall/round-trips the bare name",
-		CoreDownloadManager.core_name_from_lib_filename(
-			FAKE + "_libretro.so", android, ".so"), FAKE)
-	_eq("uninstall/a non-core filename yields nothing",
-		CoreDownloadManager.core_name_from_lib_filename("readme.txt", android, ".so"), "")
+	_eq(both.size(), 2, "uninstall/android has two naming variants")
+	_eq(both[0], FAKE + "_libretro_android.so", "uninstall/canonical variant first")
+	_eq(CoreDownloadManager.core_name_from_lib_filename(
+			FAKE + "_libretro_android.so", android, ".so"),
+		FAKE, "uninstall/round-trips the android name")
+	_eq(CoreDownloadManager.core_name_from_lib_filename(
+			FAKE + "_libretro.so", android, ".so"),
+		FAKE, "uninstall/round-trips the bare name")
+	_eq(CoreDownloadManager.core_name_from_lib_filename("readme.txt", android, ".so"),
+		"", "uninstall/a non-core filename yields nothing")
 
 	var names := CoreDownloadManager.core_lib_filenames(FAKE)
 	_ok(names.size() > 0, "uninstall/has a filename for this platform")
@@ -1059,7 +1059,7 @@ func _test_core_uninstall() -> void:
 	for n: String in names:
 		if FileAccess.file_exists(cores_dir.path_join(n)):
 			left += 1
-	_eq("uninstall/removes this platform's library", left, 0)
+	_eq(left, 0, "uninstall/removes this platform's library")
 	_ok(FileAccess.file_exists(bystander), "uninstall/leaves a similarly named core alone")
 	DirAccess.remove_absolute(bystander)
 
@@ -1071,10 +1071,10 @@ func _test_core_uninstall() -> void:
 	_ok(not bool(CoreDownloadManager.uninstall("")["ok"]), "uninstall/empty name refuses")
 
 	# Nothing in the scene, so nothing can be using it.
-	_eq("uninstall/nothing is using a fake core",
-		CoreDownloadManager.systems_using(FAKE).size(), 0)
-	_eq("uninstall/an unnamed core is used by nothing",
-		CoreDownloadManager.systems_using("").size(), 0)
+	_eq(CoreDownloadManager.systems_using(FAKE).size(),
+		0, "uninstall/nothing is using a fake core")
+	_eq(CoreDownloadManager.systems_using("").size(),
+		0, "uninstall/an unnamed core is used by nothing")
 
 	if had_manifest:
 		var f := FileAccess.open(manifest_path, FileAccess.WRITE)
@@ -1280,15 +1280,15 @@ func _test_http_stalls() -> void:
 	# says the fake server and the harness work; if it ever goes red, suspect them
 	# before suspecting RommHttp.
 	var silent: Dictionary = await _probe([], Callable(), 1.0)
-	_eq("http/a server that never answers times out",
-		int(silent["result"]), RommHttp.Result.TIMED_OUT)
+	_eq(int(silent["result"]),
+		RommHttp.Result.TIMED_OUT, "http/a server that never answers times out")
 
 	# The freeze itself: headers arrive, three bytes of an eleven-byte body
 	# arrive, and then nothing ever does.
 	var half: Array = [[0, (_HEAD + "abc").to_utf8_buffer()]]
 	var stalled: Dictionary = await _probe(half, Callable(), 1.0)
-	_eq("http/a body that stops mid-stream times out",
-		int(stalled["result"]), RommHttp.Result.TIMED_OUT)
+	_eq(int(stalled["result"]),
+		RommHttp.Result.TIMED_OUT, "http/a body that stops mid-stream times out")
 
 	# Same stall, but the caller changes its mind first. A generous timeout so
 	# that reaching ABORTED proves the abort ended it and not the clock — this is
@@ -1296,8 +1296,8 @@ func _test_http_stalls() -> void:
 	var give_up := Time.get_ticks_msec() + 300
 	var aborted: Dictionary = await _probe(half,
 		func() -> bool: return Time.get_ticks_msec() > give_up, 30.0)
-	_eq("http/a stalled body answers the abort",
-		int(aborted["result"]), RommHttp.Result.ABORTED)
+	_eq(int(aborted["result"]),
+		RommHttp.Result.ABORTED, "http/a stalled body answers the abort")
 
 	# The deadline bounds SILENCE, not total transfer. Six chunks 200 ms apart run
 	# 1.2 s against a 0.5 s budget and must all get through: a 4 GB ROM outruns
@@ -1306,8 +1306,8 @@ func _test_http_stalls() -> void:
 	for i in range(6):
 		drip.append([200, _BODY.substr(i * 2, 2).to_utf8_buffer()])
 	var slow: Dictionary = await _probe(drip, Callable(), 0.5)
-	_eq("http/a slow but moving body is not cut off",
-		int(slow["result"]), RommHttp.Result.OK)
+	_eq(int(slow["result"]),
+		RommHttp.Result.OK, "http/a slow but moving body is not cut off")
 
 
 func _rm_rf(path: String) -> void:
@@ -1409,22 +1409,22 @@ func _test_state_schema() -> void:
 		"screenshot": {"download_path": "/assets/states/12.png",
 			"file_name": "12.png", "file_size_bytes": 9000},
 	})
-	_eq("states/the id comes through", int(with_shot["id"]), 12)
-	_eq("states/and the picture's path", str(with_shot["screenshot_path"]),
-		"/assets/states/12.png")
+	_eq(int(with_shot["id"]), 12, "states/the id comes through")
+	_eq(str(with_shot["screenshot_path"]), "/assets/states/12.png",
+		"states/and the picture's path")
 
 	var without := RommStates.from_schema({
 		"id": 13, "rom_id": 7, "file_name": "someone-elses.state", "screenshot": null})
-	_eq("states/a null screenshot flattens to nothing", str(without["screenshot_path"]), "")
+	_eq(str(without["screenshot_path"]), "", "states/a null screenshot flattens to nothing")
 
 	# Identity is the filename, because RomM gives a state no slot to key on. A
 	# name this app did not mint must NOT be adopted: claiming it would take an
 	# id we might mint ourselves later, and the two would then collide.
-	_eq("states/our own filename yields its id",
-		RommStates.id_from_filename(_STATE_ID + ".state"), _STATE_ID)
-	_eq("states/a foreign name yields nothing",
-		RommStates.id_from_filename("someone-elses.state"), "")
-	_eq("states/and so does an empty one", RommStates.id_from_filename(""), "")
+	_eq(RommStates.id_from_filename(_STATE_ID + ".state"),
+		_STATE_ID, "states/our own filename yields its id")
+	_eq(RommStates.id_from_filename("someone-elses.state"),
+		"", "states/a foreign name yields nothing")
+	_eq(RommStates.id_from_filename(""), "", "states/and so does an empty one")
 
 
 func _test_state_upload_body() -> void:
@@ -1474,7 +1474,7 @@ func _test_state_upload_body() -> void:
 		"upload/and so is the second part's")
 	# A stale Content-Length is a different fault: too short and the server reads
 	# the rest as the next request, too long and it waits for bytes never sent.
-	_eq("upload/Content-Length matches the body", _body_len(req), _declared_len(req))
+	_eq(_body_len(req), _declared_len(req), "upload/Content-Length matches the body")
 
 	# No picture: one part, and the upload still goes. A thumbnail that failed to
 	# encode must never hold a state back.
@@ -1487,7 +1487,7 @@ func _test_state_upload_body() -> void:
 		"upload/a state with no picture still uploads")
 	_ok(req2.contains('name="stateFile"') and not req2.contains('name="screenshotFile"'),
 		"upload/and sends only the one part")
-	_eq("upload/its Content-Length matches too", _body_len(req2), _declared_len(req2))
+	_eq(_body_len(req2), _declared_len(req2), "upload/its Content-Length matches too")
 	_ok(req2.contains(_CRLF + "--%s--" % _boundary_of(req2)),
 		"upload/and its one part is terminated")
 
@@ -1508,7 +1508,7 @@ func _test_save_upload_still_works() -> void:
 		"saves/still names the part saveFile")
 	_ok(req.contains("battery"), "saves/still sends the bytes")
 	_ok(req.contains(_CRLF + "--%s--" % _boundary_of(req)), "saves/and still terminates the body")
-	_eq("saves/with a Content-Length that matches", _body_len(req), _declared_len(req))
+	_eq(_body_len(req), _declared_len(req), "saves/with a Content-Length that matches")
 
 
 func _test_state_overwrite_and_delete() -> void:
@@ -1558,13 +1558,13 @@ func _test_state_server_only() -> void:
 		 "screenshot_path": ""},
 	]
 	var only := sync.server_only(core, rom, server)
-	_eq("server-only/one row offered", only.size(), 1)
+	_eq(only.size(), 1, "server-only/one row offered")
 	if only.size() == 1:
 		# Not the one we already have, and not the one another client wrote.
-		_eq("server-only/and it is the one we lack", str(only[0]["state_id"]),
-			"1787000000001-0a1b2d")
-		_eq("server-only/carrying its server id", int(only[0]["server_id"]), 2)
-		_eq("server-only/and its picture", str(only[0]["screenshot_path"]), "/assets/2.png")
+		_eq(str(only[0]["state_id"]), "1787000000001-0a1b2d",
+			"server-only/and it is the one we lack")
+		_eq(int(only[0]["server_id"]), 2, "server-only/carrying its server id")
+		_eq(str(only[0]["screenshot_path"]), "/assets/2.png", "server-only/and its picture")
 
 	# The ledger key is relative to the states root, so it survives the app being
 	# moved — the same rule saves follow.
@@ -1598,37 +1598,37 @@ func _test_state_restore() -> void:
 
 	# Fresh off the wire, before anything is recorded: the row must not claim to
 	# be backed up.
-	_eq("restore/an unrecorded state is not backed up", sync.status_for(path), "off")
+	_eq(sync.status_for(path), "off", "restore/an unrecorded state is not backed up")
 
 	# What _download_worker reports when a pull lands. Recording the server id is
 	# what stops the tab offering to upload a state it has just downloaded — and
 	# what lets a later overwrite PUT over the right copy instead of creating a
 	# second one.
 	sync._download_done(path, true, 99, "")
-	_eq("restore/a pulled state reads as backed up", sync.status_for(path), "on")
-	_eq("restore/against the server's own id",
-		int(sync.record_for(path).get("server_id", 0)), 99)
+	_eq(sync.status_for(path), "on", "restore/a pulled state reads as backed up")
+	_eq(int(sync.record_for(path).get("server_id", 0)),
+		99, "restore/against the server's own id")
 	# And it is no longer offered as server-only, because the file now exists.
-	_eq("restore/and drops out of the server list",
-		sync.server_only(core, rom, [{"id": 99, "file_name": _STATE_ID + ".state",
-			"size": 6, "updated_at": "a", "screenshot_path": ""}]).size(), 0)
+	_eq(sync.server_only(core, rom, [{"id": 99, "file_name": _STATE_ID + ".state",
+			"size": 6, "updated_at": "a", "screenshot_path": ""}]).size(),
+		0, "restore/and drops out of the server list")
 
 	# A failed pull records nothing: a row that says "on" with no file behind it
 	# is worse than one that says nothing.
 	var missing := StatePaths.state_path(core, rom, "1787000000009-0b2c3d")
 	sync._download_done(missing, false, 0, "Connection lost")
-	_eq("restore/a failed pull claims nothing", sync.status_for(missing), "off")
+	_eq(sync.status_for(missing), "off", "restore/a failed pull claims nothing")
 
 	# Deleting locally must drop the ledger entry, or a state minted later at the
 	# same path would inherit this server id and PUT over a stranger's copy.
 	sync.forget(path)
-	_eq("restore/deleting forgets the server id", sync.status_for(path), "off")
+	_eq(sync.status_for(path), "off", "restore/deleting forgets the server id")
 
 	# With backup switched off the column goes away entirely rather than showing
 	# a stale "on" for every row.
 	sync._download_done(path, true, 99, "")
 	cfg.backup_enabled = false
-	_eq("restore/the switch hides the column", sync.status_for(path), "off")
+	_eq(sync.status_for(path), "off", "restore/the switch hides the column")
 
 	sync._state.clear()
 	sync.save_state()
@@ -1661,16 +1661,16 @@ func _test_gamelist_one_entry_per_rom() -> void:
 		{"path": rom, "romname": rom.get_file()})
 
 	var games: Array = gl._gamelists[sysid]["games"]
-	_eq("gamelist/scraping a RomM rom does not add a second entry", games.size(), 1)
+	_eq(games.size(), 1, "gamelist/scraping a RomM rom does not add a second entry")
 	if games.size() == 1:
 		# The RomM link is load-bearing and the scraper id is not, so the scrape
 		# must not take it away.
-		_eq("gamelist/and keeps the RomM id", str(games[0].get("game_id", "")), "romm:93288")
+		_eq(str(games[0].get("game_id", "")), "romm:93288", "gamelist/and keeps the RomM id")
 		# ...while the description it brought is kept, rather than the entry
 		# holding a RomM id and no metadata.
-		_eq("gamelist/while adopting the scraped description",
-			str(games[0].get("desc", "")), "Mario in a dream world.")
-		_eq("gamelist/and lists the rom once", (games[0].get("roms", []) as Array).size(), 1)
+		_eq(str(games[0].get("desc", "")),
+			"Mario in a dream world.", "gamelist/while adopting the scraped description")
+		_eq((games[0].get("roms", []) as Array).size(), 1, "gamelist/and lists the rom once")
 
 	# The other order: scraped first, downloaded second. This is the one that
 	# used to leave rom_id_for answering 0 for a ROM that IS on the server.
@@ -1683,22 +1683,22 @@ func _test_gamelist_one_entry_per_rom() -> void:
 		"desc": "", "developer": "", "publisher": "", "genre": ""},
 		{"path": rom, "romname": rom.get_file()})
 	var games2: Array = gl2._gamelists[sysid]["games"]
-	_eq("gamelist/downloading a scraped rom does not add one either", games2.size(), 1)
+	_eq(games2.size(), 1, "gamelist/downloading a scraped rom does not add one either")
 	if games2.size() == 1:
-		_eq("gamelist/and upgrades it to the RomM id",
-			str(games2[0].get("game_id", "")), "romm:93288")
+		_eq(str(games2[0].get("game_id", "")),
+			"romm:93288", "gamelist/and upgrades it to the RomM id")
 		# The download must not wipe what the scrape wrote — the downloader
 		# sends desc "" and would otherwise blank it.
-		_eq("gamelist/without erasing the description",
-			str(games2[0].get("desc", "")), "Mario in a dream world.")
+		_eq(str(games2[0].get("desc", "")),
+			"Mario in a dream world.", "gamelist/without erasing the description")
 
 	# Two different games still get two entries. The merge keys on the ROM, so a
 	# rule that folded these together would be far worse than the bug.
 	gl2.add_or_merge_rom(sysid, {"game_id": "1246", "name": "Super Mario Bros. 3",
 		"desc": "", "developer": "", "publisher": "", "genre": ""},
 		{"path": "./Super Mario Bros. 3 (USA).nes", "romname": "Super Mario Bros. 3 (USA).nes"})
-	_eq("gamelist/a different rom is still its own entry",
-		(gl2._gamelists[sysid]["games"] as Array).size(), 2)
+	_eq((gl2._gamelists[sysid]["games"] as Array).size(),
+		2, "gamelist/a different rom is still its own entry")
 
 	# A second regional copy of the SAME game joins its entry rather than
 	# starting a new one — that is what the game_id match is still there for.
@@ -1706,8 +1706,8 @@ func _test_gamelist_one_entry_per_rom() -> void:
 		"desc": "", "developer": "", "publisher": "", "genre": ""},
 		{"path": "./Super Mario Bros. 2 (Europe).nes", "romname": "smb2eu.nes"})
 	var smb2: Dictionary = gl2._gamelists[sysid]["games"][0]
-	_eq("gamelist/another region joins the same game",
-		(smb2.get("roms", []) as Array).size(), 2)
+	_eq((smb2.get("roms", []) as Array).size(),
+		2, "gamelist/another region joins the same game")
 	gl._gamelists.clear()
 	gl2._gamelists.clear()
 
@@ -1729,25 +1729,25 @@ func _test_gamelist_dedupe() -> void:
 	]}
 	var folded := gl.dedupe(sysid)
 	var games: Array = gl._gamelists[sysid]["games"]
-	_eq("dedupe/the split pair became one", folded, 1)
-	_eq("dedupe/leaving two games", games.size(), 2)
-	_eq("dedupe/under the RomM id", str(games[0].get("game_id", "")), "romm:90988")
-	_eq("dedupe/keeping the scraped description",
-		str(games[0].get("desc", "")), "Shoot em up")
-	_eq("dedupe/and one rom", (games[0].get("roms", []) as Array).size(), 1)
+	_eq(folded, 1, "dedupe/the split pair became one")
+	_eq(games.size(), 2, "dedupe/leaving two games")
+	_eq(str(games[0].get("game_id", "")), "romm:90988", "dedupe/under the RomM id")
+	_eq(str(games[0].get("desc", "")),
+		"Shoot em up", "dedupe/keeping the scraped description")
+	_eq((games[0].get("roms", []) as Array).size(), 1, "dedupe/and one rom")
 	if OS.get_name() in ["Windows", "macOS"]:
 		# Same file, two spellings — one row.
-		_eq("dedupe/a case-variant duplicate rom is dropped",
-			(games[1].get("roms", []) as Array).size(), 1)
+		_eq((games[1].get("roms", []) as Array).size(),
+			1, "dedupe/a case-variant duplicate rom is dropped")
 		_ok(bool((games[1].get("roms", [])[0] as Dictionary).get("preferred", false)),
 			"dedupe/and the kept one is still preferred")
 	else:
 		# Two genuinely different files on a case-sensitive filesystem.
-		_eq("dedupe/case-distinct roms are left alone",
-			(games[1].get("roms", []) as Array).size(), 2)
+		_eq((games[1].get("roms", []) as Array).size(),
+			2, "dedupe/case-distinct roms are left alone")
 
 	# Idempotent: running it again changes nothing.
-	_eq("dedupe/a clean list folds nothing", gl.dedupe(sysid), 0)
+	_eq(gl.dedupe(sysid), 0, "dedupe/a clean list folds nothing")
 	gl._gamelists.clear()
 
 
@@ -1768,7 +1768,7 @@ func _test_rom_id_resolve() -> void:
 	f.store_string("cartridge bytes")
 	f.close()
 
-	_eq("resolve/never asked reads as unknown", sync.resolved_rom_id("nes", rom), -1)
+	_eq(sync.resolved_rom_id("nes", rom), -1, "resolve/never asked reads as unknown")
 
 	# Which HTTP outcomes count as the server having ANSWERED. A 404 does — it
 	# is how by-hash says "not in the library" — and everything that went wrong
@@ -1788,8 +1788,8 @@ func _test_rom_id_resolve() -> void:
 	# A real answer is recorded, and rom_id_for starts answering for it — that is
 	# what lets the flush path use it without ever hashing anything itself.
 	sync._id_done("nes", rom, 93288, true)
-	_eq("resolve/a hit is remembered", sync.resolved_rom_id("nes", rom), 93288)
-	_eq("resolve/and rom_id_for adopts it", sync.rom_id_for("nes", rom), 93288)
+	_eq(sync.resolved_rom_id("nes", rom), 93288, "resolve/a hit is remembered")
+	_eq(sync.rom_id_for("nes", rom), 93288, "resolve/and rom_id_for adopts it")
 
 	# A 404 IS an answer — it is how by-hash says "not in the library" — and it
 	# costs the server the same full search a hit does. Not caching it meant
@@ -1800,7 +1800,7 @@ func _test_rom_id_resolve() -> void:
 	f2.store_string("homebrew")
 	f2.close()
 	sync._id_done("nes", other, 0, true)
-	_eq("resolve/a miss is remembered too", sync.resolved_rom_id("nes", other), 0)
+	_eq(sync.resolved_rom_id("nes", other), 0, "resolve/a miss is remembered too")
 
 	# A lookup that died on the network must NOT be remembered: caching that as
 	# "RomM does not have this game" would be permanent, and wrong the moment
@@ -1810,8 +1810,8 @@ func _test_rom_id_resolve() -> void:
 	f3.store_string("unreachable")
 	f3.close()
 	sync._id_done("nes", third, 0, false)
-	_eq("resolve/an unanswered lookup is not remembered",
-		sync.resolved_rom_id("nes", third), -1)
+	_eq(sync.resolved_rom_id("nes", third),
+		-1, "resolve/an unanswered lookup is not remembered")
 
 	# A file replaced under the same name is a different ROM. Answering for the
 	# old one would attach this game's saves to another game on the server.
@@ -1819,8 +1819,8 @@ func _test_rom_id_resolve() -> void:
 	var f4 := FileAccess.open(rom, FileAccess.WRITE)
 	f4.store_string("a completely different dump, different length")
 	f4.close()
-	_eq("resolve/a replaced file invalidates its answer",
-		sync.resolved_rom_id("nes", rom), -1)
+	_eq(sync.resolved_rom_id("nes", rom),
+		-1, "resolve/a replaced file invalidates its answer")
 
 	# The answer must never arrive synchronously. Half of them come off a worker
 	# and half straight out of the cache, and a caller that connects the signal
@@ -1879,41 +1879,41 @@ func _test_error_vocabulary() -> void:
 	var D: Callable = RommHttp.describe_error
 	var HTTP: int = RommHttp.Result.HTTP_ERROR
 
-	_eq("errors/a dead connection", D.call(RommHttp.Result.CONNECT_FAILED, 0),
-		"Connection lost")
-	_eq("errors/a refused request reads the same as a dead one",
-		D.call(RommHttp.Result.REQUEST_FAILED, 0), "Connection lost")
-	_eq("errors/a silent server", D.call(RommHttp.Result.TIMED_OUT, 0),
-		"The server took too long to answer")
-	_eq("errors/a full disk", D.call(RommHttp.Result.WRITE_FAILED, 0),
-		"Not enough space, or the disk is unwritable")
-	_eq("errors/the player cancelled", D.call(RommHttp.Result.ABORTED, 0), "Cancelled")
+	_eq(D.call(RommHttp.Result.CONNECT_FAILED, 0), "Connection lost",
+		"errors/a dead connection")
+	_eq(D.call(RommHttp.Result.REQUEST_FAILED, 0),
+		"Connection lost", "errors/a refused request reads the same as a dead one")
+	_eq(D.call(RommHttp.Result.TIMED_OUT, 0), "The server took too long to answer",
+		"errors/a silent server")
+	_eq(D.call(RommHttp.Result.WRITE_FAILED, 0), "Not enough space, or the disk is unwritable",
+		"errors/a full disk")
+	_eq(D.call(RommHttp.Result.ABORTED, 0), "Cancelled", "errors/the player cancelled")
 
 	# The transport result wins over the code: a cancelled transfer often carries
 	# whatever status had already come back, and reporting that would be a lie.
-	_eq("errors/a transport failure outranks any status code",
-		D.call(RommHttp.Result.ABORTED, 500), "Cancelled")
+	_eq(D.call(RommHttp.Result.ABORTED, 500),
+		"Cancelled", "errors/a transport failure outranks any status code")
 
-	_eq("errors/an expired token", D.call(HTTP, 401), "Sign in to RomM again")
-	_eq("errors/and a forbidden one says the same by default",
-		D.call(HTTP, 403), "Sign in to RomM again")
-	_eq("errors/a deleted item", D.call(HTTP, 404), "No longer on the server")
-	_eq("errors/a server fault names the code", D.call(HTTP, 503),
-		"Server error (503)")
-	_eq("errors/anything else falls through with its code",
-		D.call(HTTP, 418), "RomM refused the request (418)")
+	_eq(D.call(HTTP, 401), "Sign in to RomM again", "errors/an expired token")
+	_eq(D.call(HTTP, 403),
+		"Sign in to RomM again", "errors/and a forbidden one says the same by default")
+	_eq(D.call(HTTP, 404), "No longer on the server", "errors/a deleted item")
+	_eq(D.call(HTTP, 503), "Server error (503)",
+		"errors/a server fault names the code")
+	_eq(D.call(HTTP, 418),
+		"RomM refused the request (418)", "errors/anything else falls through with its code")
 
 	# Both overrides. The upload wording is the reason this is a parameter and
 	# not a fifth copy: a QR-paired token with no write access will never be able
 	# to upload, so "sign in again" would send that player round a loop.
 	var upload := "RomM will not accept uploads from this device — its sign-in has no write access"
-	_eq("errors/an upload endpoint can say why a 403 is permanent",
-		D.call(HTTP, 403, upload), upload)
-	_eq("errors/and a download endpoint can name itself",
-		D.call(HTTP, 400, "Sign in to RomM again", "Server refused the download (%d)"),
-		"Server refused the download (400)")
-	_eq("errors/an override does not leak into the other branches",
-		D.call(HTTP, 404, upload), "No longer on the server")
+	_eq(D.call(HTTP, 403, upload),
+		upload, "errors/an upload endpoint can say why a 403 is permanent")
+	_eq(D.call(HTTP, 400, "Sign in to RomM again", "Server refused the download (%d)"),
+		"Server refused the download (400)",
+		"errors/and a download endpoint can name itself")
+	_eq(D.call(HTTP, 404, upload),
+		"No longer on the server", "errors/an override does not leak into the other branches")
 
 
 # ---------------------------------------------------------------------------
@@ -1953,7 +1953,7 @@ func _test_ghost_rows() -> void:
 		{"id": 0, "missing_from_fs": true},     # no id to act on
 	])
 	_ok(bool(good["trusted"]), "ghost/a page of lost rows is trusted")
-	_eq("ghost/and yields their ids", Array(good["ids"] as PackedInt32Array), [80159, 80161])
+	_eq(Array(good["ids"] as PackedInt32Array), [80159, 80161], "ghost/and yields their ids")
 
 	# The load-bearing one. A server too old for the `missing` filter ignores it
 	# and answers with the whole platform; acting on that would delete every row
@@ -1963,7 +1963,7 @@ func _test_ghost_rows() -> void:
 		{"id": 80160, "missing_from_fs": false},
 	])
 	_ok(not bool(stale["trusted"]), "ghost/a page holding a present row is not trusted")
-	_eq("ghost/and yields nothing at all", (stale["ids"] as PackedInt32Array).size(), 0)
+	_eq((stale["ids"] as PackedInt32Array).size(), 0, "ghost/and yields nothing at all")
 
 	# --- who survives the sweep ----------------------------------------------
 	var lines := {80159: "a", 80160: "b", 80171: "c"}
@@ -1972,15 +1972,15 @@ func _test_ghost_rows() -> void:
 	# row — so removing it would take the player's own copy out of the list.
 	var went := RommCatalog.drop_ghosts(lines, PackedInt32Array([80159, 80171]),
 		PackedInt64Array([80171]))
-	_eq("ghost/only the undownloaded ghost goes", went, 1)
+	_eq(went, 1, "ghost/only the undownloaded ghost goes")
 	_ok(not lines.has(80159), "ghost/the ghost is gone", str(lines.keys()))
 	_ok(lines.has(80171), "ghost/a downloaded ghost is kept", str(lines.keys()))
 	_ok(lines.has(80160), "ghost/an untouched row is untouched", str(lines.keys()))
 
 	var none := {80159: "a"}
-	_eq("ghost/an empty sweep removes nothing",
-		RommCatalog.drop_ghosts(none, PackedInt32Array(), PackedInt64Array()), 0)
-	_eq("ghost/and leaves the index alone", none.size(), 1)
+	_eq(RommCatalog.drop_ghosts(none, PackedInt32Array(), PackedInt64Array()),
+		0, "ghost/an empty sweep removes nothing")
+	_eq(none.size(), 1, "ghost/and leaves the index alone")
 
 	cat.free()
 
@@ -2006,40 +2006,40 @@ func _test_index_rewrite() -> void:
 			"fs_name": "Gamma.ndd", "regions": []}),
 	}
 	var written := RommCatalog._write_index(dir, RommCatalog._rows_from_lines(lines))
-	_eq("rewrite/three rows written", str(written["error"]), "")
-	_eq("rewrite/total counted", int(written["total"]), 3)
+	_eq(str(written["error"]), "", "rewrite/three rows written")
+	_eq(int(written["total"]), 3, "rewrite/total counted")
 	RommCatalog._write_text(RommCatalog.meta_path(TEST_SYSTEM), JSON.stringify({
 		"total": 3, "shown": 3, "updated_after": "2026-08-26T22:43:21+00:00",
 		"group_by_meta_id": false, "platform_id": 143,
 	}, "\t"))
 
-	_eq("rewrite/removing an absent id changes nothing",
-		cat.remove_rows(TEST_SYSTEM, [999]), 0)
+	_eq(cat.remove_rows(TEST_SYSTEM, [999]),
+		0, "rewrite/removing an absent id changes nothing")
 
 	# The row dropped is the MIDDLE one, so a sidecar left unrewritten still has
 	# the right length and the wrong contents.
-	_eq("rewrite/one row removed", cat.remove_rows(TEST_SYSTEM, [22]), 1)
+	_eq(cat.remove_rows(TEST_SYSTEM, [22]), 1, "rewrite/one row removed")
 
 	_ok(cat.load_index(TEST_SYSTEM), "rewrite/index still loads")
-	_eq("rewrite/two rows left", cat.count(), 2)
-	_eq("rewrite/ids in order", [cat.rom_id_at(0), cat.rom_id_at(1)], [11, 33])
-	_eq("rewrite/names follow the ids", [cat.name_at(0), cat.name_at(1)], ["Alpha", "Gamma"])
-	_eq("rewrite/fs sidecar follows too",
-		[cat.fs_basename_at(0), cat.fs_basename_at(1)], ["alpha", "gamma"])
-	_eq("rewrite/extensions follow", [cat.fs_ext_at(0), cat.fs_ext_at(1)], ["z64", "ndd"])
-	_eq("rewrite/regions follow", Array(cat.regions_at(0)), ["USA"])
+	_eq(cat.count(), 2, "rewrite/two rows left")
+	_eq([cat.rom_id_at(0), cat.rom_id_at(1)], [11, 33], "rewrite/ids in order")
+	_eq([cat.name_at(0), cat.name_at(1)], ["Alpha", "Gamma"], "rewrite/names follow the ids")
+	_eq([cat.fs_basename_at(0), cat.fs_basename_at(1)],
+		["alpha", "gamma"], "rewrite/fs sidecar follows too")
+	_eq([cat.fs_ext_at(0), cat.fs_ext_at(1)], ["z64", "ndd"], "rewrite/extensions follow")
+	_eq(Array(cat.regions_at(0)), ["USA"], "rewrite/regions follow")
 	# The offsets sidecar is the one that silently shows the wrong game.
-	_eq("rewrite/row 1 seeks to its own line", str(cat.row(1).get("name", "")), "Gamma")
-	_eq("rewrite/the removed row is unsearchable", Array(cat.search("Beta")), [])
-	_eq("rewrite/a survivor is still searchable", Array(cat.search("Gamma")), [1])
+	_eq(str(cat.row(1).get("name", "")), "Gamma", "rewrite/row 1 seeks to its own line")
+	_eq(Array(cat.search("Beta")), [], "rewrite/the removed row is unsearchable")
+	_eq(Array(cat.search("Gamma")), [1], "rewrite/a survivor is still searchable")
 
 	var meta := RommCatalog.read_meta(TEST_SYSTEM)
-	_eq("rewrite/meta total follows", int(meta.get("total", -1)), 2)
+	_eq(int(meta.get("total", -1)), 2, "rewrite/meta total follows")
 	# The watermark belongs to the sync. A rewrite that reset it would make the
 	# next delta re-fetch the whole platform.
-	_eq("rewrite/meta watermark preserved",
-		str(meta.get("updated_after", "")), "2026-08-26T22:43:21+00:00")
-	_eq("rewrite/meta platform preserved", int(meta.get("platform_id", 0)), 143)
+	_eq(str(meta.get("updated_after", "")),
+		"2026-08-26T22:43:21+00:00", "rewrite/meta watermark preserved")
+	_eq(int(meta.get("platform_id", 0)), 143, "rewrite/meta platform preserved")
 
 	cat.unload_index()
 	cat.free()
@@ -2069,29 +2069,29 @@ func _test_launch_path() -> void:
 	# The archive it arrived in is gone, so naming it must not win.
 	var stale := one_member.duplicate(true)
 	stale["fs_name"] = "Game.zip"
-	_eq("launch/ a deleted archive falls through to the member",
-		RommCacheManifest.launch_path(systemid, stale), dir.path_join(real))
+	_eq(RommCacheManifest.launch_path(systemid, stale),
+		dir.path_join(real), "launch/ a deleted archive falls through to the member")
 
 	# A launch that IS on disk is still preferred -- that is the whole point of
 	# recording one for a multi-file set.
 	var good := one_member.duplicate(true)
 	good["launch"] = real
-	_eq("launch/ a launch that exists is used as-is",
-		RommCacheManifest.launch_path(systemid, good), dir.path_join(real))
+	_eq(RommCacheManifest.launch_path(systemid, good),
+		dir.path_join(real), "launch/ a launch that exists is used as-is")
 
 	# Ambiguous: several members and no usable launch. Answering with a guess
 	# would pick a track out of a multi-disc set, so it answers with nothing and
 	# lets the caller resolve by basename instead.
 	var many := {"systemid": systemid, "fs_name": "Game.zip",
 		"members": [{"path": real}, {"path": "Other.bs"}]}
-	_eq("launch/ an ambiguous group names nothing rather than guessing",
-		RommCacheManifest.launch_path(systemid, many), "")
+	_eq(RommCacheManifest.launch_path(systemid, many),
+		"", "launch/ an ambiguous group names nothing rather than guessing")
 
 	# Nothing on disk at all.
 	var missing := {"systemid": systemid, "fs_name": "Gone.zip",
 		"members": [{"path": "Gone.bs"}]}
-	_eq("launch/ a group whose file is gone names nothing",
-		RommCacheManifest.launch_path(systemid, missing), "")
+	_eq(RommCacheManifest.launch_path(systemid, missing),
+		"", "launch/ a group whose file is gone names nothing")
 
 	DirAccess.remove_absolute(dir.path_join(real))
 	DirAccess.remove_absolute(dir)

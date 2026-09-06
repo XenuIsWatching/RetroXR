@@ -72,7 +72,7 @@ func _ok(cond: bool, name: String, detail := "") -> void:
 		print("[state-ui] FAIL  %s%s" % [name, "  — " + detail if not detail.is_empty() else ""])
 
 
-func _eq(name: String, got: Variant, want: Variant) -> void:
+func _eq(got: Variant, want: Variant, name: String) -> void:
 	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
@@ -143,7 +143,7 @@ func _test_tab_order() -> void:
 	_ok(tabs != null, "tabs/there is a tab strip")
 	if tabs != null:
 		# The asked-for position: between Saves and Achievements.
-		_eq("tabs/order", _titles(tabs), ["Saves", "States", "Achievements"])
+		_eq(_titles(tabs), ["Saves", "States", "Achievements"], "tabs/order")
 	ui.free()
 
 
@@ -168,7 +168,7 @@ func _test_active_scroll_follows_the_tab() -> void:
 func _test_rows() -> void:
 	var ui := _ui()
 	ui.populate_states(_rows(3), 3 * 4096)
-	_eq("rows/one plate per state", _live_children(ui._states_box), 3)
+	_eq(_live_children(ui._states_box), 3, "rows/one plate per state")
 	_ok(ui._state_total_lbl.text.begins_with("3 states"),
 		"rows/the header counts them", ui._state_total_lbl.text)
 	_ok(ui._state_total_lbl.text.ends_with("KB"), "rows/and sizes them", ui._state_total_lbl.text)
@@ -180,7 +180,7 @@ func _test_rows() -> void:
 		"rows/one state, not one states", ui._state_total_lbl.text)
 
 	ui.populate_states([], 0)
-	_eq("rows/empty says so", _live_children(ui._states_box), 1)
+	_eq(_live_children(ui._states_box), 1, "rows/empty says so")
 
 	# A server row is offered even with nothing local, or a state pulled to a new
 	# device would be invisible.
@@ -195,8 +195,8 @@ func _test_blocked() -> void:
 	ui.capture_blocked = "no machine is running this game"
 	ui.populate_states(_rows(2), 8192)
 	_ok(ui._state_capture_btn.disabled, "blocked/capture is disabled")
-	_eq("blocked/and says why", ui._state_capture_btn.tooltip_text,
-		"no machine is running this game")
+	_eq(ui._state_capture_btn.tooltip_text, "no machine is running this game",
+		"blocked/and says why")
 	# Overwrite writes too, so the same blocker has to reach it. Missing this is
 	# how a greyed-out header sits above three live overwrite buttons.
 	var disabled := 0
@@ -206,7 +206,7 @@ func _test_blocked() -> void:
 			disabled += 1
 		elif (b as Button).tooltip_text.begins_with("Save over"):
 			enabled += 1
-	_eq("blocked/every overwrite button too", [disabled, enabled], [2, 0])
+	_eq([disabled, enabled], [2, 0], "blocked/every overwrite button too")
 
 	ui.capture_blocked = ""
 	ui.populate_states(_rows(2), 8192)
@@ -224,7 +224,7 @@ func _test_armed_row() -> void:
 	for lbl: Variant in _labels(ui._states_box):
 		if str((lbl as Label).text).begins_with("Press again to save over"):
 			warned += 1
-	_eq("armed/exactly one row asks again", warned, 1)
+	_eq(warned, 1, "armed/exactly one row asks again")
 
 	ui.states_armed_action = "delete"
 	ui.populate_states(rows, 3 * 4096)
@@ -232,7 +232,7 @@ func _test_armed_row() -> void:
 	for lbl: Variant in _labels(ui._states_box):
 		if str((lbl as Label).text).begins_with("Press the bin again"):
 			bins += 1
-	_eq("armed/the bin asks its own question", bins, 1)
+	_eq(bins, 1, "armed/the bin asks its own question")
 	ui.free()
 
 
@@ -251,21 +251,21 @@ func _test_arm_ladder() -> void:
 	add_child(panel)
 
 	_ok(not panel._arm_state("A", "overwrite"), "arm/the first press only arms")
-	_eq("arm/and the row remembers which", [panel._states_armed_id, panel._states_armed_action],
-		["A", "overwrite"])
+	_eq([panel._states_armed_id, panel._states_armed_action], ["A", "overwrite"],
+		"arm/and the row remembers which")
 	_ok(panel._arm_state("A", "overwrite"), "arm/the second press confirms")
-	_eq("arm/and disarms", panel._states_armed_id, "")
+	_eq(panel._states_armed_id, "", "arm/and disarms")
 
 	# The other action on the SAME row: arming it must not inherit the first
 	# one's confirmation.
 	_ok(not panel._arm_state("A", "overwrite"), "arm/overwrite arms")
 	_ok(not panel._arm_state("A", "delete"), "arm/then the bin only arms")
-	_eq("arm/the bin took the slot", panel._states_armed_action, "delete")
+	_eq(panel._states_armed_action, "delete", "arm/the bin took the slot")
 	_ok(not panel._arm_state("A", "overwrite"), "arm/and overwrite is no longer confirmable")
 
 	# A different row takes the slot rather than sharing it.
 	_ok(not panel._arm_state("B", "overwrite"), "arm/another row only arms")
-	_eq("arm/and owns the slot now", panel._states_armed_id, "B")
+	_eq(panel._states_armed_id, "B", "arm/and owns the slot now")
 	panel.free()
 
 
@@ -289,7 +289,7 @@ func _test_backup_notice() -> void:
 	var saved_state_cfg: RommConfig = StateSync.config
 	SaveSync.config = RommConfig.new()
 	StateSync.config = cfg
-	_eq("notice/an unconfigured server says nothing", panel._backup_notice("fceumm", []), "")
+	_eq(panel._backup_notice("fceumm", []), "", "notice/an unconfigured server says nothing")
 
 	# Configured, but the switch is off: name the switch, not the symptom.
 	SaveSync.config = cfg
@@ -307,8 +307,8 @@ func _test_backup_notice() -> void:
 	panel._cart = FakeCart.new()
 	var rom_path: String = panel._rom()
 
-	_eq("notice/before the lookup runs there is nothing to say",
-		panel._backup_notice("fceumm", []), "")
+	_eq(panel._backup_notice("fceumm", []),
+		"", "notice/before the lookup runs there is nothing to say")
 
 	SaveSync._id_done("nes", rom_path, 0, false)
 	_ok(panel._backup_notice("fceumm", []).contains("Could not reach RomM"),
@@ -320,7 +320,7 @@ func _test_backup_notice() -> void:
 
 	# And a hit says nothing at all — the column is there, so the rows speak.
 	SaveSync._id_done("nes", rom_path, 4242, true)
-	_eq("notice/a hit says nothing", panel._backup_notice("fceumm", []), "")
+	_eq(panel._backup_notice("fceumm", []), "", "notice/a hit says nothing")
 
 	SaveSync._hash_ids.erase("nes/" + rom_path.get_file())
 	SaveSync._id_failed.erase("nes/" + rom_path.get_file())
@@ -344,7 +344,7 @@ func _test_thumb_cache() -> void:
 	# A path that decodes to nothing still caches, or every repopulate retries a
 	# file that is not there.
 	var missing := "user://__no_such_state_shot.png"
-	_eq("thumb/a missing picture is null", ui._thumb(missing), null)
+	_eq(ui._thumb(missing), null, "thumb/a missing picture is null")
 	_ok(ui._thumb_cache.has(missing), "thumb/and is remembered as null")
 
 	var path := "user://__state_tests_shot.png"
@@ -384,10 +384,10 @@ func _test_panel_chrome() -> void:
 		# All four, not just one: the loop this replaced set them by name, and a
 		# hand-written replacement that misses a corner is invisible in review and
 		# obvious on screen.
-		_eq("chrome/top-left is rounded", sb.corner_radius_top_left, 10)
-		_eq("chrome/top-right is rounded", sb.corner_radius_top_right, 10)
-		_eq("chrome/bottom-left is rounded", sb.corner_radius_bottom_left, 10)
-		_eq("chrome/bottom-right is rounded", sb.corner_radius_bottom_right, 10)
+		_eq(sb.corner_radius_top_left, 10, "chrome/top-left is rounded")
+		_eq(sb.corner_radius_top_right, 10, "chrome/top-right is rounded")
+		_eq(sb.corner_radius_bottom_left, 10, "chrome/bottom-left is rounded")
+		_eq(sb.corner_radius_bottom_right, 10, "chrome/bottom-right is rounded")
 		_ok(sb.bg_color.a > 0.5, "chrome/the background is opaque", str(sb.bg_color))
 
 	# The margin is the builder's other half: ten panels used to add their own
@@ -407,15 +407,15 @@ func _test_panel_chrome() -> void:
 	add_child(host)
 	var built := MenuStyle.panel_root(host, Color(0.2, 0.3, 0.4, 1.0), 6, 9)
 	_ok(built != null, "chrome/the builder returns a margin")
-	_eq("chrome/the builder sets the padding it was given",
-		built.get_theme_constant("margin_left"), 9)
+	_eq(built.get_theme_constant("margin_left"),
+		9, "chrome/the builder sets the padding it was given")
 	var built_panel := built.get_parent() as PanelContainer
 	_ok(built_panel != null, "chrome/wrapped in a panel")
 	if built_panel != null:
 		var built_sb := built_panel.get_theme_stylebox("panel") as StyleBoxFlat
-		_eq("chrome/with the radius it was given",
-			built_sb.corner_radius_top_left, 6)
-		_eq("chrome/and the colour", built_sb.bg_color, Color(0.2, 0.3, 0.4, 1.0))
+		_eq(built_sb.corner_radius_top_left,
+			6, "chrome/with the radius it was given")
+		_eq(built_sb.bg_color, Color(0.2, 0.3, 0.4, 1.0), "chrome/and the colour")
 		_ok(built_panel.anchor_right == 1.0 and built_panel.anchor_bottom == 1.0,
 			"chrome/anchored to fill its host")
 	host.free()
@@ -424,11 +424,11 @@ func _test_panel_chrome() -> void:
 	# same thing the panels used to build by hand, so the swap is not just
 	# consistent with itself.
 	var made := MenuStyle.rounded(Color(0.1, 0.2, 0.3, 0.9), 7)
-	_eq("chrome/the shared builder keeps the colour", made.bg_color,
-		Color(0.1, 0.2, 0.3, 0.9))
+	_eq(made.bg_color, Color(0.1, 0.2, 0.3, 0.9),
+		"chrome/the shared builder keeps the colour")
 	for corner in ["corner_radius_top_left", "corner_radius_top_right",
 			"corner_radius_bottom_left", "corner_radius_bottom_right"]:
-		_eq("chrome/the shared builder sets %s" % corner, made.get(corner), 7)
+		_eq(made.get(corner), 7, "chrome/the shared builder sets %s" % corner)
 	ui.free()
 
 
@@ -524,7 +524,7 @@ func _test_floating_panels() -> void:
 		_ok(base != null and base.resource_path.ends_with("floating_object_panel_3d.gd"),
 			"panel/%s uses the shared base" % file)
 		var inst: Node3D = scr.new()
-		_eq("panel/%s keeps its float height" % file, inst._float_height(), float(entry[2]))
+		_eq(inst._float_height(), float(entry[2]), "panel/%s keeps its float height" % file)
 		_ok(inst._target_node() == null, "panel/%s reports no subject before it is shown" % file)
 		inst.free()
 

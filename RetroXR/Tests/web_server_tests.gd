@@ -95,7 +95,7 @@ func _ok(cond: bool, name: String, detail: String = "") -> void:
 		print("[test] FAIL  %s%s" % [name, "  — " + detail if not detail.is_empty() else ""])
 
 
-func _eq(name: String, got: Variant, want: Variant) -> void:
+func _eq(got: Variant, want: Variant, name: String) -> void:
 	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
 
 
@@ -110,26 +110,26 @@ func _denied(name: String, rel: String) -> void:
 # ── The resolver, inside its roots ────────────────────────────────────────────
 
 func _test_resolve_inside_root() -> void:
-	_eq("resolve/the virtual top level has no single path", _srv._resolve(""), "")
-	_eq("resolve/a named root resolves to its base", _srv._resolve("media"), _media)
-	_eq("resolve/a file under it keeps the root prefix",
-		_srv._resolve("media/roms/nes/game.nes"), _media + "/roms/nes/game.nes")
-	_eq("resolve/a percent-encoded space decodes",
-		_srv._resolve("media/roms/my%20game.nes"), _media + "/roms/my game.nes")
+	_eq(_srv._resolve(""), "", "resolve/the virtual top level has no single path")
+	_eq(_srv._resolve("media"), _media, "resolve/a named root resolves to its base")
+	_eq(_srv._resolve("media/roms/nes/game.nes"),
+		_media + "/roms/nes/game.nes", "resolve/a file under it keeps the root prefix")
+	_eq(_srv._resolve("media/roms/my%20game.nes"),
+		_media + "/roms/my game.nes", "resolve/a percent-encoded space decodes")
 	# Interior traversal that stays inside is legitimate and must still work --
 	# a confinement check that rejects every ".." is too blunt and breaks the UI's
 	# own "up one directory" link.
-	_eq("resolve/traversal that lands back inside is allowed",
-		_srv._resolve("media/roms/../roms/game.nes"), _media + "/roms/game.nes")
+	_eq(_srv._resolve("media/roms/../roms/game.nes"),
+		_media + "/roms/game.nes", "resolve/traversal that lands back inside is allowed")
 	_ok(not _srv._resolve("libretro").is_empty(), "resolve/the second named root resolves too")
 
 
 func _test_resolve_rejects_unknown_root() -> void:
-	_eq("resolve/an unknown root is refused", _srv._resolve("etc/passwd"), "")
-	_eq("resolve/and so is a bare filename", _srv._resolve("secret.txt"), "")
+	_eq(_srv._resolve("etc/passwd"), "", "resolve/an unknown root is refused")
+	_eq(_srv._resolve("secret.txt"), "", "resolve/and so is a bare filename")
 	# The root name is matched whole, so a name that merely starts with a real
 	# one is not a root.
-	_eq("resolve/a root name is not a prefix match", _srv._resolve("mediaevil/x"), "")
+	_eq(_srv._resolve("mediaevil/x"), "", "resolve/a root name is not a prefix match")
 
 
 # ── The resolver, under attack ────────────────────────────────────────────────
@@ -167,44 +167,44 @@ func _test_escape_encoded() -> void:
 ## A folder upload carries a relative path in each part's filename, so this is
 ## the other place a client picks where bytes land.
 func _test_safe_subpath() -> void:
-	_eq("subpath/a plain name is kept", _srv._safe_subpath("game.nes"), "game.nes")
-	_eq("subpath/a folder path is kept",
-		_srv._safe_subpath("MyGame/save/data.001"), "MyGame/save/data.001")
-	_eq("subpath/backslashes become separators",
-		_srv._safe_subpath("MyGame\\save\\data.001"), "MyGame/save/data.001")
-	_eq("subpath/traversal segments are dropped",
-		_srv._safe_subpath("../../etc/passwd"), "etc/passwd")
-	_eq("subpath/a traversal in the middle is dropped too",
-		_srv._safe_subpath("MyGame/../../../x.nes"), "MyGame/x.nes")
-	_eq("subpath/an absolute posix path loses its root",
-		_srv._safe_subpath("/etc/passwd"), "etc/passwd")
-	_eq("subpath/single dots are dropped", _srv._safe_subpath("./a/./b"), "a/b")
-	_eq("subpath/empty segments collapse", _srv._safe_subpath("a//b"), "a/b")
-	_eq("subpath/nothing usable gives nothing", _srv._safe_subpath("../.."), "")
-	_eq("subpath/an empty name gives nothing", _srv._safe_subpath(""), "")
+	_eq(_srv._safe_subpath("game.nes"), "game.nes", "subpath/a plain name is kept")
+	_eq(_srv._safe_subpath("MyGame/save/data.001"),
+		"MyGame/save/data.001", "subpath/a folder path is kept")
+	_eq(_srv._safe_subpath("MyGame\\save\\data.001"),
+		"MyGame/save/data.001", "subpath/backslashes become separators")
+	_eq(_srv._safe_subpath("../../etc/passwd"),
+		"etc/passwd", "subpath/traversal segments are dropped")
+	_eq(_srv._safe_subpath("MyGame/../../../x.nes"),
+		"MyGame/x.nes", "subpath/a traversal in the middle is dropped too")
+	_eq(_srv._safe_subpath("/etc/passwd"),
+		"etc/passwd", "subpath/an absolute posix path loses its root")
+	_eq(_srv._safe_subpath("./a/./b"), "a/b", "subpath/single dots are dropped")
+	_eq(_srv._safe_subpath("a//b"), "a/b", "subpath/empty segments collapse")
+	_eq(_srv._safe_subpath("../.."), "", "subpath/nothing usable gives nothing")
+	_eq(_srv._safe_subpath(""), "", "subpath/an empty name gives nothing")
 
 
 # ── Request parsing ───────────────────────────────────────────────────────────
 
 func _test_parse_query() -> void:
 	var q: Dictionary = _srv._parse_query("a=1&b=2")
-	_eq("parse/a query splits into pairs", q.get("a", ""), "1")
-	_eq("parse/and keeps the second", q.get("b", ""), "2")
+	_eq(q.get("a", ""), "1", "parse/a query splits into pairs")
+	_eq(q.get("b", ""), "2", "parse/and keeps the second")
 	var enc: Dictionary = _srv._parse_query("path=roms%2Fmy%20game.nes")
-	_eq("parse/values are percent-decoded", enc.get("path", ""), "roms/my game.nes")
-	_eq("parse/an empty query is empty", _srv._parse_query("").size(), 0)
+	_eq(enc.get("path", ""), "roms/my game.nes", "parse/values are percent-decoded")
+	_eq(_srv._parse_query("").size(), 0, "parse/an empty query is empty")
 	# A bare flag has no "=", and the parser skips it rather than storing a null.
-	_eq("parse/a valueless key is skipped", _srv._parse_query("flag").size(), 0)
+	_eq(_srv._parse_query("flag").size(), 0, "parse/a valueless key is skipped")
 
 
 func _test_cookie() -> void:
-	_eq("parse/a cookie value is found",
-		_srv._cookie("sid=abc123; other=1", "sid"), "abc123")
-	_eq("parse/one later in the header is found too",
-		_srv._cookie("other=1; sid=abc123", "sid"), "abc123")
-	_eq("parse/a missing cookie is empty",
-		_srv._cookie("other=1", "sid"), "")
-	_eq("parse/an empty header is empty", _srv._cookie("", "sid"), "")
+	_eq(_srv._cookie("sid=abc123; other=1", "sid"),
+		"abc123", "parse/a cookie value is found")
+	_eq(_srv._cookie("other=1; sid=abc123", "sid"),
+		"abc123", "parse/one later in the header is found too")
+	_eq(_srv._cookie("other=1", "sid"),
+		"", "parse/a missing cookie is empty")
+	_eq(_srv._cookie("", "sid"), "", "parse/an empty header is empty")
 
 
 ## The session token must not be guessable, and the 4-digit PIN must not be
@@ -214,9 +214,9 @@ func _test_auth_hardening() -> void:
 	for i in 200:
 		var tok: String = _srv._gen_token()
 		if i == 0:
-			_eq("auth/a token is 32 bytes of hex", tok.length(), 64)
+			_eq(tok.length(), 64, "auth/a token is 32 bytes of hex")
 		seen[tok] = true
-	_eq("auth/every token is distinct", seen.size(), 200)
+	_eq(seen.size(), 200, "auth/every token is distinct")
 
 	# randi() is seeded, so a fresh run reproduces its stream. Two independently
 	# seeded sequences agreeing would mean the token is derived from one.
@@ -237,34 +237,34 @@ func _test_auth_hardening() -> void:
 
 
 func _test_extract_pin() -> void:
-	_eq("parse/a form pin is read", _srv._extract_pin("pin=1234"), "1234")
-	_eq("parse/a pin among other fields is read",
-		_srv._extract_pin("x=1&pin=4321&y=2"), "4321")
-	_eq("parse/no pin field gives nothing", _srv._extract_pin("x=1"), "")
+	_eq(_srv._extract_pin("pin=1234"), "1234", "parse/a form pin is read")
+	_eq(_srv._extract_pin("x=1&pin=4321&y=2"),
+		"4321", "parse/a pin among other fields is read")
+	_eq(_srv._extract_pin("x=1"), "", "parse/no pin field gives nothing")
 
 
 func _test_extract_filename() -> void:
-	_eq("parse/a multipart filename is read",
-		_srv._extract_filename('Content-Disposition: form-data; name="f"; filename="game.nes"'),
-		"game.nes")
-	_eq("parse/a filename with spaces survives",
-		_srv._extract_filename('filename="my game.nes"'), "my game.nes")
-	_eq("parse/no filename gives nothing",
-		_srv._extract_filename('Content-Disposition: form-data; name="f"'), "")
+	_eq(_srv._extract_filename('Content-Disposition: form-data; name="f"; filename="game.nes"'),
+		"game.nes",
+		"parse/a multipart filename is read")
+	_eq(_srv._extract_filename('filename="my game.nes"'),
+		"my game.nes", "parse/a filename with spaces survives")
+	_eq(_srv._extract_filename('Content-Disposition: form-data; name="f"'),
+		"", "parse/no filename gives nothing")
 
 
 func _test_find_bytes() -> void:
 	var hay := "abcdefabc".to_utf8_buffer()
-	_eq("parse/a needle is found at its offset",
-		_srv._find_bytes(hay, "def".to_utf8_buffer()), 3)
-	_eq("parse/searching from past it finds the later copy",
-		_srv._find_bytes(hay, "abc".to_utf8_buffer(), 1), 6)
-	_eq("parse/an absent needle is -1",
-		_srv._find_bytes(hay, "zzz".to_utf8_buffer()), -1)
+	_eq(_srv._find_bytes(hay, "def".to_utf8_buffer()),
+		3, "parse/a needle is found at its offset")
+	_eq(_srv._find_bytes(hay, "abc".to_utf8_buffer(), 1),
+		6, "parse/searching from past it finds the later copy")
+	_eq(_srv._find_bytes(hay, "zzz".to_utf8_buffer()),
+		-1, "parse/an absent needle is -1")
 	# The multipart reader calls this on every incoming chunk, so a needle longer
 	# than what has arrived so far is the normal case, not an edge one.
-	_eq("parse/a needle longer than the haystack is -1",
-		_srv._find_bytes("ab".to_utf8_buffer(), "abc".to_utf8_buffer()), -1)
+	_eq(_srv._find_bytes("ab".to_utf8_buffer(), "abc".to_utf8_buffer()),
+		-1, "parse/a needle longer than the haystack is -1")
 
 
 # ── Upload staging ────────────────────────────────────────────────────────────
@@ -326,8 +326,8 @@ func _test_upload_completes() -> void:
 
 	_ok(done, "upload/a whole body finishes the stream")
 	_ok(FileAccess.file_exists(dest), "upload/the file lands at its destination")
-	_eq("upload/with the bytes that were sent",
-		FileAccess.get_file_as_string(dest), "PAYLOAD-BYTES")
+	_eq(FileAccess.get_file_as_string(dest),
+		"PAYLOAD-BYTES", "upload/with the bytes that were sent")
 	_ok(not FileAccess.file_exists(dest + ".part"), "upload/and no staging file is left behind")
 	_cleanup_up_dir()
 
@@ -354,7 +354,7 @@ func _test_upload_interrupted_keeps_the_original() -> void:
 
 	_ok(FileAccess.file_exists(dest),
 		"upload/the original file survives an interrupted upload", "dest is gone")
-	_eq("upload/and still holds its own bytes",
-		FileAccess.get_file_as_string(dest), keep)
+	_eq(FileAccess.get_file_as_string(dest),
+		keep, "upload/and still holds its own bytes")
 	_ok(not FileAccess.file_exists(dest + ".part"), "upload/the staging file is cleaned up")
 	_cleanup_up_dir()
