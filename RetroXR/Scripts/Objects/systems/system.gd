@@ -412,7 +412,7 @@ func _ready() -> void:
 	super._ready()
 	add_to_group("retro_system")
 	# Unconditional, unlike HandheldInput and WiiLink: every machine can be asked
-	# for a state, and can_capture_state answers for the ones that cannot give
+	# for a state, and capture_gate answers for the ones that cannot give
 	# one. Built here so the forwarders below never see a null.
 	_cartridge_slot.has_picked_up.connect(_on_cartridge_inserted)
 	_cartridge_slot.has_dropped.connect(_on_cartridge_removed)
@@ -4682,8 +4682,8 @@ var _save_state: SaveStateController = null
 
 ## Can this machine take a state right now? {ok, reason} — reason is empty when
 ## ok, and a sentence to put on a disabled button when not.
-func can_capture_state() -> Dictionary:
-	return _save_state.can_capture_state()
+func capture_gate() -> Dictionary:
+	return _save_state.capture_gate()
 
 
 ## Take a state. `into_id` empty mints a new one; a real id overwrites that state

@@ -573,9 +573,9 @@ func _capture_blocked() -> String:
 	var sys := _live_machine()
 	if sys == null:
 		return "no machine is running this game"
-	if not sys.has_method("can_capture_state"):
+	if not sys.has_method("capture_gate"):
 		return "this machine cannot take save states"
-	var gate: Dictionary = sys.can_capture_state()
+	var gate: Dictionary = sys.capture_gate()
 	return "" if bool(gate.get("ok", false)) else str(gate.get("reason", ""))
 
 

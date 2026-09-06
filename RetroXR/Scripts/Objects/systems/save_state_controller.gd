@@ -59,9 +59,14 @@ var _load_id := ""
 var _load_gen := 0
 
 
-## Can this machine take a state right now? {ok, reason} — reason is empty when
-## ok, and a sentence to put on a disabled button when not.
-func can_capture_state() -> Dictionary:
+## Whether this machine can take a state right now, and why not if it cannot:
+## {ok, reason}, where reason is empty when ok and otherwise a sentence to put
+## on a disabled button.
+##
+## Named for the gate rather than the question because it does not answer with a
+## bool — `if can_capture_state():` was true whatever the gate said, since a
+## non-empty Dictionary is truthy. Every caller wants the reason as well.
+func capture_gate() -> Dictionary:
 	if _host.rom_path.is_empty():
 		return {"ok": false, "reason": "no game is inserted"}
 	if not _host.is_powered_on:
@@ -79,7 +84,7 @@ func can_capture_state() -> Dictionary:
 ##
 ## Answers exactly once through state_captured, always.
 func capture_state(into_id := "") -> void:
-	var gate := can_capture_state()
+	var gate := capture_gate()
 	if not bool(gate["ok"]):
 		_host.state_captured.emit(into_id, false, str(gate["reason"]))
 		return

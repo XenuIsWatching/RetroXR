@@ -1644,19 +1644,19 @@ func _test_save_state_gates() -> void:
 	sys.rom_path = ""
 	sys.is_powered_on = false
 	_eq("state/no cartridge is the first refusal",
-		str(sys.can_capture_state()["reason"]), "no game is inserted")
+		str(sys.capture_gate()["reason"]), "no game is inserted")
 
 	sys.rom_path = "/nonexistent/__state_selftest.nes"
 	_eq("state/then a machine that is off",
-		str(sys.can_capture_state()["reason"]), "the machine is off")
+		str(sys.capture_gate()["reason"]), "the machine is off")
 
 	sys.is_powered_on = true
-	_ok(bool(sys.can_capture_state()["ok"]),
-		"state/a running machine with a game can capture", str(sys.can_capture_state()))
+	_ok(bool(sys.capture_gate()["ok"]),
+		"state/a running machine with a game can capture", str(sys.capture_gate()))
 
 	sys._save_state._capture_id = "__in_flight"
 	_eq("state/one capture at a time",
-		str(sys.can_capture_state()["reason"]), "a save state is already being written")
+		str(sys.capture_gate()["reason"]), "a save state is already being written")
 	sys._save_state._capture_id = ""
 
 	# A core that answered "I cannot serialize" is remembered STATICALLY, because
@@ -1664,7 +1664,7 @@ func _test_save_state_gates() -> void:
 	var core: String = sys._resolve_core()
 	SaveStateController._cores_without_states[core] = true
 	_eq("state/a core that cannot serialize is remembered",
-		str(sys.can_capture_state()["reason"]), "this core cannot save states")
+		str(sys.capture_gate()["reason"]), "this core cannot save states")
 	SaveStateController._cores_without_states.erase(core)
 
 	# ── Answers exactly once ──
