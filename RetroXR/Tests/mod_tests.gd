@@ -24,6 +24,9 @@
 ## Exits 0 when everything passes, 1 otherwise, so it can gate a commit.
 extends Node
 
+## Cases in this file, NOT counting the guard below.
+const EXPECTED_CASES := 189
+
 var _pass := 0
 var _fail := 0
 var _only := ""
@@ -50,8 +53,15 @@ func _ready() -> void:
 	if _want("removal"):     _group_removal()
 	if _want("netplay"):     _group_netplay()
 	if _want("consistency"): _group_consistency()
+	if _want("overlay"):     _group_overlay()
 
 	_cleanup()
+	# A case that never RAN is not a case that passed: GDScript has no try/catch,
+	# so one bad index aborts the function it is in and every case after it simply
+	# never prints, leaving a green run that checked less than it claims. Skipped
+	# for a filtered run, where a lower count is the point.
+	if _only.is_empty():
+		_eq(_pass + _fail, EXPECTED_CASES, "suite/every case ran")
 	print("[test] ---- %d passed, %d failed ----" % [_pass, _fail])
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -674,3 +684,63 @@ func _ok(cond: bool, name: String, detail: String = "") -> void:
 
 func _eq(got: Variant, want: Variant, name: String) -> void:
 	_ok(got == want, name, "got %s, want %s" % [str(got), str(want)])
+
+
+# ── overlay/ ──────────────────────────────────────────────────────────────────
+#
+# ModOverlayTable is the bookkeeping several tables had each grown their own
+# copy of, and those copies had drifted: two owner-key conventions, some with a
+# merged cache and some rebuilding per read, and ConsolePadArt tracking no owner
+# at all — so its rows could be registered and never withdrawn. The mechanism is
+# now shared, which means one set of cases decides how every overlaid table
+# behaves.
+func _group_overlay() -> void:
+	var base := {"nes": {"name": "shipped nes"}, "snes": {"name": "shipped snes"}}
+	var t := ModOverlayTable.new(base)
+
+	_eq(t.table(), base, "overlay/an untouched table is the shipped one")
+	_ok(t.is_shipped("nes"), "overlay/a shipped key is shipped")
+	_ok(not t.is_mod("nes"), "overlay/and is not a mod row")
+	_eq(t.owner_of("nes"), "", "overlay/an untouched row has no owner")
+
+	t.add("dreamcast", {"name": "modded dc"}, "xenu.dc")
+	_eq(t.table()["dreamcast"]["name"], "modded dc", "overlay/an added row appears")
+	_ok(t.is_mod("dreamcast"), "overlay/and is a mod row")
+	_ok(not t.is_shipped("dreamcast"), "overlay/but is not shipped")
+	_eq(t.owner_of("dreamcast"), "xenu.dc", "overlay/it remembers who added it")
+	_eq(t.mod_keys(), ["dreamcast"], "overlay/and is listed as a mod key")
+
+	# The distinction that matters for saves: overriding a shipped row does NOT
+	# make it a mod row. Its id has to survive the mod being removed, because
+	# rooms and saves name it.
+	t.override("nes", {"name": "modded nes"}, "xenu.nes")
+	_eq(t.table()["nes"]["name"], "modded nes", "overlay/an override replaces the shipped row")
+	_ok(t.is_shipped("nes"), "overlay/an overridden row is STILL shipped")
+	_ok(not t.is_mod("nes"), "overlay/and still not a mod row")
+	_ok(t.has_override("nes"), "overlay/but it is marked overridden")
+	_eq(t.owner_of("nes"), "xenu.nes", "overlay/and blames the mod that replaced it")
+	_ok(not t.mod_keys().has("nes"), "overlay/an override is not a mod key")
+
+	# The base is the base: a merged view must never write back into the shipped
+	# table, or one mod's row would outlive every uninstall in the process.
+	_eq(base["nes"]["name"], "shipped nes", "overlay/the shipped table is never mutated")
+
+	# table() caches and rebuilds only when a registration changed it. A stale
+	# read here is invisible: the caller loops over a table that looks right.
+	var before: Dictionary = t.table()
+	t.add("saturn", {"name": "modded saturn"}, "xenu.dc")
+	_ok(t.table().has("saturn"), "overlay/the cache rebuilds after a registration")
+	_eq(before.has("saturn"), false, "overlay/and the earlier copy is unaffected")
+
+	# Withdrawal takes additions and overrides alike, and only this owner's.
+	t.drop_owner("xenu.dc")
+	_ok(not t.table().has("dreamcast"), "overlay/dropping an owner withdraws its addition")
+	_ok(not t.table().has("saturn"), "overlay/including its later ones")
+	_eq(t.table()["nes"]["name"], "modded nes",
+		"overlay/but leaves another mod's override alone")
+	_eq(t.owner_of("dreamcast"), "", "overlay/and forgets the owner it dropped")
+
+	t.drop_owner("xenu.nes")
+	_eq(t.table()["nes"]["name"], "shipped nes",
+		"overlay/withdrawing an override restores the shipped row")
+	_eq(t.table(), base, "overlay/and the table is the shipped one again")
