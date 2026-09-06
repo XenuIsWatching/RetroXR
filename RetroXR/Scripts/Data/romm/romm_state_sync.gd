@@ -73,12 +73,8 @@ func backup_enabled() -> bool:
 func _exit_tree() -> void:
 	_queue.clear()
 	_abort = true
-	if _thread != null and _thread.is_started():
-		_thread.wait_to_finish()
-		_thread = null
-	if _list_thread != null and _list_thread.is_started():
-		_list_thread.wait_to_finish()
-		_list_thread = null
+	_thread = _join(_thread)
+	_list_thread = _join(_list_thread)
 	_abort = false
 
 
@@ -381,13 +377,12 @@ static func state_path() -> String:
 
 func load_state() -> void:
 	_state.clear()
-	var f := FileAccess.open(state_path(), FileAccess.READ)
-	if f == null:
-		return
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	f.close()
-	if parsed is Dictionary and (parsed as Dictionary).get("states") is Dictionary:
-		_state = (parsed as Dictionary)["states"]
+	# Through JsonStore, like save_state() below already was. Silent on a
+	# missing or damaged ledger: it costs a re-upload check, not data, and
+	# an absent one is the ordinary first-run case.
+	var parsed := JsonStore.read_dict(state_path())
+	if parsed.get("states") is Dictionary:
+		_state = parsed["states"]
 
 
 ## Returns false when the ledger did not reach disk.
@@ -401,3 +396,15 @@ func save_state() -> bool:
 func forget(state_path_abs: String) -> void:
 	if _state.erase(key_for(state_path_abs)):
 		save_state()
+
+
+## Join one worker and hand back null, so a teardown that owns several says
+## so once per thread instead of spelling the same three lines out each time.
+##
+## Returns rather than clears because GDScript has no by-reference argument:
+## the caller writes `_thread = _join(_thread)`, which keeps the assignment
+## where a reader can see which field was released.
+static func _join(t: Thread) -> Thread:
+	if t != null and t.is_started():
+		t.wait_to_finish()
+	return null
