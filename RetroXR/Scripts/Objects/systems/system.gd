@@ -2601,12 +2601,9 @@ func net_refresh_link_cables() -> void:
 			if entry.get("machine") == self:
 				touches = true
 				break
-		if touches and cable.has_method("_disconnect") and cable.has_method("_resolve"):
-			# Its cached endpoints still name the same Libretro nodes, but
-			# StopContent removed those nodes from LinkCoordinator. Force a real
-			# disconnect/rejoin instead of letting the cache call it a no-op.
-			cable.call("_disconnect")
-			cable.call("_resolve")
+		if touches and cable.has_method("rejoin"):
+			# Why a rejoin and not a resolve is LinkCable.rejoin()'s to explain.
+			cable.call("rejoin")
 
 
 ## Flatten every cable bus reachable from `anchor`.  Kept pure so the rule can
