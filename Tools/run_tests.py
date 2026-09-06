@@ -27,6 +27,7 @@ script's `--only`, which picks whole suites.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -183,6 +184,51 @@ def scrape(text: str) -> tuple[int, int]:
     return 0, 0
 
 
+BASELINE = Path(__file__).resolve().parent / "test_baseline.json"
+
+
+def load_baseline() -> dict[str, int]:
+    """Each suite's known case count, or an empty map when the file is absent."""
+    if not BASELINE.exists():
+        return {}
+    try:
+        raw = json.loads(BASELINE.read_text(encoding="utf-8")).get("suites", {})
+        return {str(k): int(v) for k, v in raw.items()}
+    except (ValueError, OSError) as exc:
+        # A damaged baseline must not stop the suites from running: it is a
+        # guard over them, not a precondition for them.
+        print(f"[tests] ignoring unreadable {BASELINE.name}: {exc}")
+        return {}
+
+
+def write_baseline(counts: dict[str, int]) -> None:
+    BASELINE.write_text(json.dumps({
+        "_comment": "Case counts per suite. A DROP fails the run: a suite whose "
+                    "group quietly stops running still passes every case it did "
+                    "run and still exits 0, which is the one failure a green CI "
+                    "cannot show you. Counts rise as cases are added -- rerun "
+                    "with --update-baseline and commit this alongside them.",
+        "suites": dict(sorted(counts.items())),
+    }, indent=2) + "\n", encoding="utf-8")
+
+
+def check_baseline(results: list[tuple[str, str, int, int, float]]) -> list[str]:
+    """Suites whose count fell below the recorded baseline.
+
+    Only a DROP is reported. A rise is how the suites are supposed to grow, and
+    a suite absent from the file is new rather than broken — both pass, so
+    adding cases never needs a second commit to keep the run green.
+    """
+    known = load_baseline()
+    dropped = []
+    for name, status, checks, _failures, _secs in results:
+        if status != "OK" or name not in known:
+            continue
+        if checks < known[name]:
+            dropped.append(f"{name}: {checks} checks, baseline {known[name]}")
+    return dropped
+
+
 def verdict(code: int, timed_out: bool) -> str:
     """OK / FAIL / CRASH / TIMEOUT.
 
@@ -273,6 +319,8 @@ def main() -> int:
                     help=f"per-suite seconds (default {DEFAULT_TIMEOUT})")
     ap.add_argument("--verbose", action="store_true",
                     help="print each suite's filtered output, not only failures'")
+    ap.add_argument("--update-baseline", action="store_true",
+                    help="rewrite Tools/test_baseline.json from this run's counts")
     ap.add_argument("forward", nargs="*", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
@@ -328,6 +376,27 @@ def main() -> int:
         # assertion, so name the kind rather than lumping them together.
         print(f"\n{len(bad)} of {len(results)} suites not OK: "
               + ", ".join(f"{n} ({s})" for n, s in bad))
+        return 1
+
+    # A suite whose group stopped running still passes every case it did run,
+    # so the exit status alone cannot see it. The recorded count can.
+    #
+    # Skipped for a filtered run -- --only, or a forwarded --only= group --
+    # where a lower count is the whole point rather than a regression.
+    partial = bool(args.only) or any(a.startswith("--only=") for a in extra)
+    if args.update_baseline:
+        if partial:
+            print("\nrefusing to write a baseline from a filtered run")
+            return 1
+        write_baseline({n: c for n, _, c, _, _ in results})
+        print(f"\nwrote {BASELINE.name} from this run")
+    elif not partial and (dropped := check_baseline(results)):
+        print("\ncase count fell below the recorded baseline:")
+        for line in dropped:
+            print(f"  {line}")
+        print("\nA suite that quietly stops running a group still passes every\n"
+              "case it did run. If the drop is deliberate, rerun with\n"
+              "--update-baseline and commit Tools/test_baseline.json with it.")
         return 1
 
     print(f"\nall {len(results)} suites OK -- {total} checks in {elapsed:.0f}s")

@@ -193,7 +193,18 @@ All of it works without a VR headset (desktop fallback) and without a display.
 ```bash
 python Tools/run_tests.py            # every suite
 python Tools/run_tests.py --list     # name them and exit
+python Tools/run_tests.py --update-baseline   # after deliberately adding cases
 ```
+
+**A case count that DROPS fails the run.** `Tools/test_baseline.json` records each
+suite's count, and the runner compares against it — because a suite whose group
+quietly stops running still passes every case it did run and still exits 0,
+which is the same blind spot as a suite nested in a subfolder. Only a drop
+fails: a rise is how the suites grow, and a suite missing from the file is new
+rather than broken, so adding cases never needs a second commit. A filtered run
+(`--only`, or a forwarded `--only=<group>`) skips the check, since a lower count
+there is the point. When a drop is deliberate, re-run with `--update-baseline`
+and commit the JSON with the change that caused it.
 
 Because the runner globs `Tests/*.tscn` **non-recursively**, `Tests/` stays flat. Do not
 nest it into subfolders — a suite in a subdirectory is silently never run, which is the
