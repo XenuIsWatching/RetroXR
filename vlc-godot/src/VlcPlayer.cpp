@@ -66,12 +66,12 @@ VlcPlayer::VlcPlayer()
 {
     // Four seconds of stereo headroom. Not for stall tolerance -- it has to
     // outrun libVLC's decoder, which hands over PCM up to two seconds before its
-    // play date. A two-second ring is exactly lapped by that, and the wrap
+    // Play date. A two-second ring is exactly lapped by that, and the wrap
     // overwrites the very samples that are next to be served.
     m_audio_ring.assign((size_t)m_audio_rate * m_audio_channels * 4, 0);
 
-    // Here rather than in ensure_instance: this runs on Godot's thread, and
-    // ensure_instance may not.
+    // Here rather than in EnsureInstance: this runs on Godot's thread, and
+    // EnsureInstance may not.
     const String plugins = ProjectSettings::get_singleton()->globalize_path("res://vlc-godot/plugins");
     m_plugin_path = plugins.utf8().get_data();
 }
@@ -81,9 +81,9 @@ VlcPlayer::~VlcPlayer()
     // A libvlc_new in flight owns members of this object.
     if (m_warm_thread.joinable())
         m_warm_thread.join();
-    // Normally a no-op: shutdown() has already stopped and released the player,
+    // Normally a no-op: Shutdown() has already stopped and released the player,
     // so this only runs unbounded for an owner that never called it.
-    release_player();
+    ReleasePlayer();
     if (m_vlc)
     {
         libvlc_release(static_cast<libvlc_instance_t *>(m_vlc));
@@ -93,20 +93,20 @@ VlcPlayer::~VlcPlayer()
 
 namespace
 {
-// Players whose stop outran its budget. Holding a Ref keeps the object -- and so
+// Players whose Stop outran its budget. Holding a Ref keeps the object -- and so
 // the opaque pointer libVLC's callbacks still carry -- alive for the process
-// lifetime. Only ever touched on the thread that calls shutdown().
+// lifetime. Only ever touched on the thread that calls Shutdown().
 std::vector<godot::Ref<Xenu::VlcPlayer>> s_abandoned;
 } // namespace
 
-void VlcPlayer::shutdown(int budget_ms)
+void VlcPlayer::Shutdown(int budget_ms)
 {
     if (m_shutdown_started)
         return;
     m_shutdown_started = true;
 
     // Building the instance is a local plugin-tree walk with no network in it, so
-    // this join is bounded in practice -- and it has to happen before the stop:
+    // this join is bounded in practice -- and it has to happen before the Stop:
     // the worker below writes m_vlc.
     if (m_warm_thread.joinable())
         m_warm_thread.join();
@@ -119,7 +119,7 @@ void VlcPlayer::shutdown(int budget_ms)
     // delete a Godot Object off the main thread.
     auto done = std::make_shared<std::atomic<bool>>(false);
     std::thread([this, done]() {
-        release_player();
+        ReleasePlayer();
         done->store(true, std::memory_order_release);
     }).detach();
 
@@ -138,9 +138,9 @@ void VlcPlayer::shutdown(int budget_ms)
     }
 }
 
-void VlcPlayer::ensure_instance()
+void VlcPlayer::EnsureInstance()
 {
-    // Held for the whole of libvlc_new: warm_up() and open() both come through
+    // Held for the whole of libvlc_new: WarmUp() and Open() both come through
     // here, from different threads, and the loser must wait rather than build a
     // second instance.
     std::lock_guard<std::mutex> lock(m_instance_mutex);
@@ -164,7 +164,7 @@ void VlcPlayer::ensure_instance()
         // time-stretch audio so a faster rate keeps the same note, which is
         // right for watching a film at 1.5x and exactly backwards for a record
         // played at the wrong speed -- the whole point of a 33 on a 45 is that
-        // it comes out high. Turning the stretcher off is what makes set_rate
+        // it comes out high. Turning the stretcher off is what makes SetRate
         // sound like a turntable rather than a fast-forward button.
         "--no-audio-time-stretch",
 #ifdef __ANDROID__
@@ -181,7 +181,7 @@ void VlcPlayer::ensure_instance()
     m_instance_ready.store(true, std::memory_order_release);
 }
 
-void VlcPlayer::warm_up()
+void VlcPlayer::WarmUp()
 {
     if (m_instance_ready.load(std::memory_order_acquire) || m_warm_thread.joinable())
         return;
@@ -198,19 +198,19 @@ void VlcPlayer::warm_up()
     }
 #endif
     m_warm_thread = std::thread([this]() {
-        ensure_instance();
-        // Also on the failure paths above: a caller parked on is_ready() must not
+        EnsureInstance();
+        // Also on the failure paths above: a caller parked on IsReady() must not
         // be left parked by a libvlc_new that never worked.
         m_instance_ready.store(true, std::memory_order_release);
     });
 }
 
-bool VlcPlayer::is_ready() const
+bool VlcPlayer::IsReady() const
 {
     return m_instance_ready.load(std::memory_order_acquire);
 }
 
-void VlcPlayer::release_player()
+void VlcPlayer::ReleasePlayer()
 {
     if (m_mp)
     {
@@ -219,8 +219,8 @@ void VlcPlayer::release_player()
         m_mp = nullptr;
     }
     // Forget the old picture. Without this the previous media's dimensions
-    // survive into the next open(), so a stream that never decodes still
-    // reports a plausible get_video_size() and reads as live -- which is
+    // survive into the next Open(), so a stream that never decodes still
+    // reports a plausible GetVideoSize() and reads as live -- which is
     // exactly how a caller distinguishes a working source from a dead one.
     // The player is released above, so no VLC thread can be writing here.
     {
@@ -266,17 +266,17 @@ static bool has_uri_scheme(const String &p)
     return true;
 }
 
-bool VlcPlayer::open(const String &path, bool is_dvd)
+bool VlcPlayer::Open(const String &path, bool is_dvd)
 {
-    ensure_instance();
+    EnsureInstance();
     if (!m_vlc)
         return false;
-    release_player();
+    ReleasePlayer();
 
     libvlc_instance_t *inst = static_cast<libvlc_instance_t *>(m_vlc);
     String p = path.replace("\\", "/");
     // A URL is already an MRL -- pass it through untouched. Rewriting it the way
-    // a path is rewritten below would yield "file:///http://host/..." and open
+    // a path is rewritten below would yield "file:///http://host/..." and Open
     // nothing. is_dvd is ignored here: a scheme names its own access module.
     const bool is_url = has_uri_scheme(p);
     String mrl;
@@ -318,34 +318,34 @@ bool VlcPlayer::open(const String &path, bool is_dvd)
         return false;
     m_mp = mp;
 
-    libvlc_video_set_callbacks(mp, cb_lock, cb_unlock, cb_display, this);
-    libvlc_video_set_format_callbacks(mp, cb_format, cb_cleanup);
+    libvlc_video_set_callbacks(mp, CbLock, CbUnlock, CbDisplay, this);
+    libvlc_video_set_format_callbacks(mp, CbFormat, CbCleanup);
 
     // Route audio to Godot: decode to interleaved S16 stereo @48k into our ring
     // buffer; the owner drains it into an AudioStreamGenerator on a 3D player.
     libvlc_audio_set_format(mp, "S16N", m_audio_rate, m_audio_channels);
-    libvlc_audio_set_callbacks(mp, cb_audio_play, nullptr, nullptr, cb_audio_flush, nullptr, this);
+    libvlc_audio_set_callbacks(mp, CbAudioPlay, nullptr, nullptr, CbAudioFlush, nullptr, this);
 
-    // open() builds a NEW media player, which starts at 1.0 whatever the last one
+    // Open() builds a NEW media player, which starts at 1.0 whatever the last one
     // was doing. A deck that set its speed before loading would otherwise have the
     // setting silently forgotten by the load.
     if (m_rate != 1.0f)
         libvlc_media_player_set_rate(mp, m_rate);
 
-    attach_events();
+    AttachEvents();
     return true;
 }
 
-void VlcPlayer::attach_events()
+void VlcPlayer::AttachEvents()
 {
     if (!m_mp)
         return;
     libvlc_event_manager_t *em = libvlc_media_player_event_manager(static_cast<libvlc_media_player_t *>(m_mp));
-    // cb_event uses a VLC-free signature in the header; the pointer types are
+    // CbEvent uses a VLC-free signature in the header; the pointer types are
     // ABI-compatible, so cast to libvlc_callback_t at the attach site.
-    const libvlc_callback_t cb = reinterpret_cast<libvlc_callback_t>(&VlcPlayer::cb_event);
+    const libvlc_callback_t cb = reinterpret_cast<libvlc_callback_t>(&VlcPlayer::CbEvent);
     // EndReached alone is enough for a file, which either opens or does not.
-    // A network stream fails long after open() returned true -- an unreachable
+    // A network stream fails long after Open() returned true -- an unreachable
     // host, a channel with no free tuner -- so the caller needs to hear about
     // the states too, or a dead stream is indistinguishable from a slow one.
     static const libvlc_event_e k_events[] = {
@@ -361,38 +361,38 @@ void VlcPlayer::attach_events()
 
 // ── transport ────────────────────────────────────────────────────────────────
 
-void VlcPlayer::play()
+void VlcPlayer::Play()
 {
     if (m_mp)
         libvlc_media_player_play(static_cast<libvlc_media_player_t *>(m_mp));
 }
 
-void VlcPlayer::pause()
+void VlcPlayer::Pause()
 {
     if (m_mp)
         libvlc_media_player_set_pause(static_cast<libvlc_media_player_t *>(m_mp), 1);
 }
 
-void VlcPlayer::stop()
+void VlcPlayer::Stop()
 {
     if (m_mp)
         libvlc_media_player_stop(static_cast<libvlc_media_player_t *>(m_mp));
 }
 
-void VlcPlayer::set_paused(bool paused)
+void VlcPlayer::SetPaused(bool paused)
 {
     if (m_mp)
         libvlc_media_player_set_pause(static_cast<libvlc_media_player_t *>(m_mp), paused ? 1 : 0);
 }
 
-bool VlcPlayer::is_playing() const
+bool VlcPlayer::IsPlaying() const
 {
     return m_mp && libvlc_media_player_is_playing(static_cast<libvlc_media_player_t *>(m_mp));
 }
 
 // ── video frame handoff ──────────────────────────────────────────────────────
 
-void VlcPlayer::update_frame()
+void VlcPlayer::UpdateFrame()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_size_dirty && m_width > 0 && m_height > 0)
@@ -410,23 +410,23 @@ void VlcPlayer::update_frame()
     m_frame_dirty = false;
 }
 
-Ref<Texture2D> VlcPlayer::get_texture() const
+Ref<Texture2D> VlcPlayer::GetTexture() const
 {
     return m_texture;
 }
 
-Vector2i VlcPlayer::get_video_size() const
+Vector2i VlcPlayer::GetVideoSize() const
 {
     return Vector2i((int)m_width, (int)m_height);
 }
 
-int64_t VlcPlayer::get_frame_count() const
+int64_t VlcPlayer::GetFrameCount() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_frame_count;
 }
 
-unsigned VlcPlayer::cb_format(void **opaque, char *chroma, unsigned *width,
+unsigned VlcPlayer::CbFormat(void **opaque, char *chroma, unsigned *width,
                               unsigned *height, unsigned *pitches, unsigned *lines)
 {
     VlcPlayer *self = static_cast<VlcPlayer *>(*opaque);
@@ -447,28 +447,28 @@ unsigned VlcPlayer::cb_format(void **opaque, char *chroma, unsigned *width,
     return 1;
 }
 
-void VlcPlayer::cb_cleanup(void *opaque)
+void VlcPlayer::CbCleanup(void *opaque)
 {
     VlcPlayer *self = static_cast<VlcPlayer *>(opaque);
     std::lock_guard<std::mutex> lock(self->m_mutex);
     self->m_decode.clear();
 }
 
-void *VlcPlayer::cb_lock(void *opaque, void **planes)
+void *VlcPlayer::CbLock(void *opaque, void **planes)
 {
     VlcPlayer *self = static_cast<VlcPlayer *>(opaque);
     planes[0] = self->m_decode.empty() ? nullptr : self->m_decode.data();
     return nullptr;
 }
 
-void VlcPlayer::cb_unlock(void *opaque, void *picture, void *const *planes)
+void VlcPlayer::CbUnlock(void *opaque, void *picture, void *const *planes)
 {
     (void)opaque;
     (void)picture;
     (void)planes;
 }
 
-void VlcPlayer::cb_display(void *opaque, void *picture)
+void VlcPlayer::CbDisplay(void *opaque, void *picture)
 {
     (void)picture;
     VlcPlayer *self = static_cast<VlcPlayer *>(opaque);
@@ -481,7 +481,7 @@ void VlcPlayer::cb_display(void *opaque, void *picture)
     }
 }
 
-void VlcPlayer::cb_event(const void *event, void *data)
+void VlcPlayer::CbEvent(const void *event, void *data)
 {
     const libvlc_event_t *ev = static_cast<const libvlc_event_t *>(event);
     VlcPlayer *self = static_cast<VlcPlayer *>(data);
@@ -511,26 +511,26 @@ void VlcPlayer::cb_event(const void *event, void *data)
 
 // ── DVD navigation / chapters / titles ───────────────────────────────────────
 
-void VlcPlayer::navigate(int mode)
+void VlcPlayer::Navigate(int mode)
 {
     if (m_mp)
         libvlc_media_player_navigate(static_cast<libvlc_media_player_t *>(m_mp), (unsigned)mode);
 }
 
-void VlcPlayer::menu_up() { navigate(libvlc_navigate_up); }
-void VlcPlayer::menu_down() { navigate(libvlc_navigate_down); }
-void VlcPlayer::menu_left() { navigate(libvlc_navigate_left); }
-void VlcPlayer::menu_right() { navigate(libvlc_navigate_right); }
-void VlcPlayer::menu_activate() { navigate(libvlc_navigate_activate); }
-void VlcPlayer::menu_popup() { navigate(libvlc_navigate_popup); }
+void VlcPlayer::MenuUp() { Navigate(libvlc_navigate_up); }
+void VlcPlayer::MenuDown() { Navigate(libvlc_navigate_down); }
+void VlcPlayer::MenuLeft() { Navigate(libvlc_navigate_left); }
+void VlcPlayer::MenuRight() { Navigate(libvlc_navigate_right); }
+void VlcPlayer::MenuActivate() { Navigate(libvlc_navigate_activate); }
+void VlcPlayer::MenuPopup() { Navigate(libvlc_navigate_popup); }
 
-void VlcPlayer::go_to_menu()
+void VlcPlayer::GoToMenu()
 {
     if (!m_mp)
         return;
     libvlc_media_player_t *mp = static_cast<libvlc_media_player_t *>(m_mp);
     // Find the first title flagged as a menu and jump to it — that returns the
-    // dvdnav VM to the disc menu from anywhere in playback. (navigate(popup)
+    // dvdnav VM to the disc menu from anywhere in playback. (Navigate(popup)
     // only requests a popup overlay, which most discs ignore mid-title.)
     libvlc_title_description_t **titles = nullptr;
     int n = libvlc_media_player_get_full_title_descriptions(mp, &titles);
@@ -553,51 +553,51 @@ void VlcPlayer::go_to_menu()
         libvlc_media_player_navigate(mp, libvlc_navigate_popup);   // fallback
 }
 
-void VlcPlayer::next_chapter()
+void VlcPlayer::NextChapter()
 {
     if (m_mp)
         libvlc_media_player_next_chapter(static_cast<libvlc_media_player_t *>(m_mp));
 }
 
-void VlcPlayer::prev_chapter()
+void VlcPlayer::PrevChapter()
 {
     if (m_mp)
         libvlc_media_player_previous_chapter(static_cast<libvlc_media_player_t *>(m_mp));
 }
 
-void VlcPlayer::set_chapter(int chapter)
+void VlcPlayer::SetChapter(int chapter)
 {
     if (m_mp)
         libvlc_media_player_set_chapter(static_cast<libvlc_media_player_t *>(m_mp), chapter);
 }
 
-int VlcPlayer::get_chapter() const
+int VlcPlayer::GetChapter() const
 {
     return m_mp ? libvlc_media_player_get_chapter(static_cast<libvlc_media_player_t *>(m_mp)) : -1;
 }
 
-int VlcPlayer::get_chapter_count() const
+int VlcPlayer::GetChapterCount() const
 {
     return m_mp ? libvlc_media_player_get_chapter_count(static_cast<libvlc_media_player_t *>(m_mp)) : 0;
 }
 
-void VlcPlayer::set_title(int title)
+void VlcPlayer::SetTitle(int title)
 {
     if (m_mp)
         libvlc_media_player_set_title(static_cast<libvlc_media_player_t *>(m_mp), title);
 }
 
-int VlcPlayer::get_title() const
+int VlcPlayer::GetTitle() const
 {
     return m_mp ? libvlc_media_player_get_title(static_cast<libvlc_media_player_t *>(m_mp)) : -1;
 }
 
-int VlcPlayer::get_title_count() const
+int VlcPlayer::GetTitleCount() const
 {
     return m_mp ? libvlc_media_player_get_title_count(static_cast<libvlc_media_player_t *>(m_mp)) : 0;
 }
 
-bool VlcPlayer::is_in_menu() const
+bool VlcPlayer::IsInMenu() const
 {
     if (!m_mp)
         return false;
@@ -619,40 +619,40 @@ bool VlcPlayer::is_in_menu() const
 
 // ── position / audio ─────────────────────────────────────────────────────────
 
-double VlcPlayer::get_position() const
+double VlcPlayer::GetPosition() const
 {
     return m_mp ? libvlc_media_player_get_position(static_cast<libvlc_media_player_t *>(m_mp)) : 0.0;
 }
 
-void VlcPlayer::set_position(double pos)
+void VlcPlayer::SetPosition(double pos)
 {
     if (m_mp)
         libvlc_media_player_set_position(static_cast<libvlc_media_player_t *>(m_mp), (float)pos);
 }
 
-int64_t VlcPlayer::get_length() const
+int64_t VlcPlayer::GetLength() const
 {
     return m_mp ? libvlc_media_player_get_length(static_cast<libvlc_media_player_t *>(m_mp)) : 0;
 }
 
-int64_t VlcPlayer::get_time() const
+int64_t VlcPlayer::GetTime() const
 {
     return m_mp ? libvlc_media_player_get_time(static_cast<libvlc_media_player_t *>(m_mp)) : 0;
 }
 
-void VlcPlayer::set_volume(int volume)
+void VlcPlayer::SetVolume(int volume)
 {
     if (m_mp)
         libvlc_audio_set_volume(static_cast<libvlc_media_player_t *>(m_mp), volume);
 }
 
 /// Playback rate, 1.0 being the media's own speed. Remembered rather than only
-/// pushed, because open() replaces the media player (see there).
+/// pushed, because Open() replaces the media player (see there).
 ///
 /// libVLC refuses a rate a demux cannot serve and reports it; the stored value is
-/// still what a later open() re-applies, so a refusal does not leave the object
+/// still what a later Open() re-applies, so a refusal does not leave the object
 /// disagreeing with the player about what it asked for.
-void VlcPlayer::set_rate(float rate)
+void VlcPlayer::SetRate(float rate)
 {
     if (rate <= 0.0f)
         return;
@@ -664,7 +664,7 @@ void VlcPlayer::set_rate(float rate)
 
 /// What the PLAYER reports, not what was asked for -- the two differ when a demux
 /// will not do the rate.
-float VlcPlayer::get_rate() const
+float VlcPlayer::GetRate() const
 {
     if (!m_mp)
         return m_rate;
@@ -673,14 +673,14 @@ float VlcPlayer::get_rate() const
 
 // ── Godot-routed audio ───────────────────────────────────────────────────────
 
-int VlcPlayer::get_audio_rate() const { return m_audio_rate; }
-int VlcPlayer::get_audio_channels() const { return m_audio_channels; }
+int VlcPlayer::GetAudioRate() const { return m_audio_rate; }
+int VlcPlayer::GetAudioChannels() const { return m_audio_channels; }
 
-// Depth the ring is capped at when a source stamps no usable play dates. Purely
-// a ratchet stop: with no timestamps there is nothing to align against.
+// Depth the ring is capped at when a source stamps no usable Play dates. Purely
+// a ratchet Stop: with no timestamps there is nothing to align against.
 static constexpr int kFallbackLeadMs = 80;
 
-void VlcPlayer::cb_audio_play(void *data, const void *samples, unsigned count, int64_t pts)
+void VlcPlayer::CbAudioPlay(void *data, const void *samples, unsigned count, int64_t pts)
 {
     VlcPlayer *self = static_cast<VlcPlayer *>(data);
     const int16_t *pcm = static_cast<const int16_t *>(samples);
@@ -693,7 +693,7 @@ void VlcPlayer::cb_audio_play(void *data, const void *samples, unsigned count, i
 
     // pts is when these samples should be heard, on the clock the video output
     // schedules pictures against. Anchor it to the frame index the block starts
-    // at -- everything already queued -- so read_audio can recover the play date
+    // at -- everything already queued -- so ReadAudio can recover the Play date
     // of whichever sample reaches the head later. Re-anchoring on every block
     // means a seek or a discontinuity is corrected by the next one and no
     // rounding accumulates.
@@ -720,7 +720,7 @@ void VlcPlayer::cb_audio_play(void *data, const void *samples, unsigned count, i
     self->m_frames_out += (int64_t)(overwritten / (size_t)ch);
 }
 
-void VlcPlayer::cb_audio_flush(void *data, int64_t pts)
+void VlcPlayer::CbAudioFlush(void *data, int64_t pts)
 {
     (void)pts;
     VlcPlayer *self = static_cast<VlcPlayer *>(data);
@@ -733,7 +733,7 @@ void VlcPlayer::cb_audio_flush(void *data, int64_t pts)
     self->m_pts_anchored = false;
 }
 
-int VlcPlayer::get_audio_backlog_ms() const
+int VlcPlayer::GetAudioBacklogMs() const
 {
     std::lock_guard<std::mutex> lock(m_audio_mutex);
     if (m_audio_channels < 1 || m_audio_rate < 1)
@@ -741,7 +741,7 @@ int VlcPlayer::get_audio_backlog_ms() const
     return (int)((m_audio_count / (size_t)m_audio_channels) * 1000 / (size_t)m_audio_rate);
 }
 
-int VlcPlayer::get_audio_lead_ms() const
+int VlcPlayer::GetAudioLeadMs() const
 {
     std::lock_guard<std::mutex> lock(m_audio_mutex);
     if (!m_pts_anchored || m_audio_rate < 1)
@@ -751,19 +751,19 @@ int VlcPlayer::get_audio_lead_ms() const
     return (int)((head_pts - libvlc_clock()) / 1000);
 }
 
-int VlcPlayer::get_audio_lead_target_ms() const
+int VlcPlayer::GetAudioLeadTargetMs() const
 {
     std::lock_guard<std::mutex> lock(m_audio_mutex);
     return m_audio_lead_ms;
 }
 
-void VlcPlayer::set_audio_lead_ms(int ms)
+void VlcPlayer::SetAudioLeadMs(int ms)
 {
     std::lock_guard<std::mutex> lock(m_audio_mutex);
     m_audio_lead_ms = std::clamp(ms, -500, 1000);
 }
 
-PackedVector2Array VlcPlayer::read_audio(int max_frames)
+PackedVector2Array VlcPlayer::ReadAudio(int max_frames)
 {
     PackedVector2Array out;
     int ch = m_audio_channels;
@@ -775,10 +775,10 @@ PackedVector2Array VlcPlayer::read_audio(int max_frames)
         return out;
     int frames_avail = (int)(m_audio_count / (size_t)ch);
 
-    // Serve each sample at its play date, not at some chosen queue depth.
+    // Serve each sample at its Play date, not at some chosen queue depth.
     //
     // libVLC stamps every block with the time it should be heard and schedules
-    // pictures against that same clock, so a picture arriving at cb_display and
+    // pictures against that same clock, so a picture arriving at CbDisplay and
     // the sample belonging with it carry the same instant and can be compared
     // directly. What libVLC does not do is pace the audio. Routed through
     // callbacks there is no output module to push back, so the decoder runs as
@@ -791,15 +791,15 @@ PackedVector2Array VlcPlayer::read_audio(int max_frames)
     // milliseconds and the sound comes out (run-ahead - depth) early: a setting
     // that suits a disc is over a second wrong on a plain file, and both are
     // wrong again after any hitch that moves the run-ahead. Steer the lead
-    // instead -- keep the next sample's play date a constant interval ahead of
+    // instead -- keep the next sample's Play date a constant interval ahead of
     // now, discarding when we have slipped behind it and waiting when we are in
     // front of it. The media's own buffering then cancels out of the answer.
     //
     // That interval is the one quantity that genuinely belongs to us: how much
-    // sooner a sample must leave here than its picture leaves cb_display, to pay
+    // sooner a sample must leave here than its picture leaves CbDisplay, to pay
     // for the queue and device latency after us against the upload and
     // compositor latency after the picture. Tens of milliseconds, a property of
-    // this application rather than of the media, and what set_audio_lead_ms is
+    // this application rather than of the media, and what SetAudioLeadMs is
     // for.
     const int64_t lead_target = (int64_t)m_audio_lead_ms * 1000;
     const int64_t slack = 20000;   // 20 ms, far inside anything perceptible
@@ -870,7 +870,7 @@ static Array vlc_desc_to_array(libvlc_track_description_t *t)
     return a;
 }
 
-Array VlcPlayer::get_audio_tracks() const
+Array VlcPlayer::GetAudioTracks() const
 {
     if (!m_mp)
         return Array();
@@ -882,18 +882,18 @@ Array VlcPlayer::get_audio_tracks() const
     return a;
 }
 
-int VlcPlayer::get_audio_track() const
+int VlcPlayer::GetAudioTrack() const
 {
     return m_mp ? libvlc_audio_get_track(static_cast<libvlc_media_player_t *>(m_mp)) : -1;
 }
 
-void VlcPlayer::set_audio_track(int id)
+void VlcPlayer::SetAudioTrack(int id)
 {
     if (m_mp)
         libvlc_audio_set_track(static_cast<libvlc_media_player_t *>(m_mp), id);
 }
 
-Array VlcPlayer::get_subtitle_tracks() const
+Array VlcPlayer::GetSubtitleTracks() const
 {
     if (!m_mp)
         return Array();
@@ -905,12 +905,12 @@ Array VlcPlayer::get_subtitle_tracks() const
     return a;
 }
 
-int VlcPlayer::get_subtitle() const
+int VlcPlayer::GetSubtitle() const
 {
     return m_mp ? libvlc_video_get_spu(static_cast<libvlc_media_player_t *>(m_mp)) : -1;
 }
 
-void VlcPlayer::set_subtitle(int id)
+void VlcPlayer::SetSubtitle(int id)
 {
     if (m_mp)
         libvlc_video_set_spu(static_cast<libvlc_media_player_t *>(m_mp), id);
@@ -920,63 +920,63 @@ void VlcPlayer::set_subtitle(int id)
 
 void VlcPlayer::_bind_methods()
 {
-    ClassDB::bind_method(D_METHOD("open", "path", "is_dvd"), &VlcPlayer::open, DEFVAL(true));
-    ClassDB::bind_method(D_METHOD("warm_up"), &VlcPlayer::warm_up);
-    ClassDB::bind_method(D_METHOD("is_ready"), &VlcPlayer::is_ready);
-    ClassDB::bind_method(D_METHOD("play"), &VlcPlayer::play);
-    ClassDB::bind_method(D_METHOD("pause"), &VlcPlayer::pause);
-    ClassDB::bind_method(D_METHOD("stop"), &VlcPlayer::stop);
-    ClassDB::bind_method(D_METHOD("shutdown", "budget_ms"), &VlcPlayer::shutdown, DEFVAL(2000));
-    ClassDB::bind_method(D_METHOD("set_paused", "paused"), &VlcPlayer::set_paused);
-    ClassDB::bind_method(D_METHOD("set_rate", "rate"), &VlcPlayer::set_rate);
-    ClassDB::bind_method(D_METHOD("get_rate"), &VlcPlayer::get_rate);
-    ClassDB::bind_method(D_METHOD("is_playing"), &VlcPlayer::is_playing);
-    ClassDB::bind_method(D_METHOD("get_frame_count"), &VlcPlayer::get_frame_count);
+    ClassDB::bind_method(D_METHOD("open", "path", "is_dvd"), &VlcPlayer::Open, DEFVAL(true));
+    ClassDB::bind_method(D_METHOD("warm_up"), &VlcPlayer::WarmUp);
+    ClassDB::bind_method(D_METHOD("is_ready"), &VlcPlayer::IsReady);
+    ClassDB::bind_method(D_METHOD("play"), &VlcPlayer::Play);
+    ClassDB::bind_method(D_METHOD("pause"), &VlcPlayer::Pause);
+    ClassDB::bind_method(D_METHOD("stop"), &VlcPlayer::Stop);
+    ClassDB::bind_method(D_METHOD("shutdown", "budget_ms"), &VlcPlayer::Shutdown, DEFVAL(2000));
+    ClassDB::bind_method(D_METHOD("set_paused", "paused"), &VlcPlayer::SetPaused);
+    ClassDB::bind_method(D_METHOD("set_rate", "rate"), &VlcPlayer::SetRate);
+    ClassDB::bind_method(D_METHOD("get_rate"), &VlcPlayer::GetRate);
+    ClassDB::bind_method(D_METHOD("is_playing"), &VlcPlayer::IsPlaying);
+    ClassDB::bind_method(D_METHOD("get_frame_count"), &VlcPlayer::GetFrameCount);
 
-    ClassDB::bind_method(D_METHOD("update_frame"), &VlcPlayer::update_frame);
-    ClassDB::bind_method(D_METHOD("get_texture"), &VlcPlayer::get_texture);
-    ClassDB::bind_method(D_METHOD("get_video_size"), &VlcPlayer::get_video_size);
+    ClassDB::bind_method(D_METHOD("update_frame"), &VlcPlayer::UpdateFrame);
+    ClassDB::bind_method(D_METHOD("get_texture"), &VlcPlayer::GetTexture);
+    ClassDB::bind_method(D_METHOD("get_video_size"), &VlcPlayer::GetVideoSize);
 
-    ClassDB::bind_method(D_METHOD("navigate", "mode"), &VlcPlayer::navigate);
-    ClassDB::bind_method(D_METHOD("menu_up"), &VlcPlayer::menu_up);
-    ClassDB::bind_method(D_METHOD("menu_down"), &VlcPlayer::menu_down);
-    ClassDB::bind_method(D_METHOD("menu_left"), &VlcPlayer::menu_left);
-    ClassDB::bind_method(D_METHOD("menu_right"), &VlcPlayer::menu_right);
-    ClassDB::bind_method(D_METHOD("menu_activate"), &VlcPlayer::menu_activate);
-    ClassDB::bind_method(D_METHOD("menu_popup"), &VlcPlayer::menu_popup);
-    ClassDB::bind_method(D_METHOD("go_to_menu"), &VlcPlayer::go_to_menu);
+    ClassDB::bind_method(D_METHOD("navigate", "mode"), &VlcPlayer::Navigate);
+    ClassDB::bind_method(D_METHOD("menu_up"), &VlcPlayer::MenuUp);
+    ClassDB::bind_method(D_METHOD("menu_down"), &VlcPlayer::MenuDown);
+    ClassDB::bind_method(D_METHOD("menu_left"), &VlcPlayer::MenuLeft);
+    ClassDB::bind_method(D_METHOD("menu_right"), &VlcPlayer::MenuRight);
+    ClassDB::bind_method(D_METHOD("menu_activate"), &VlcPlayer::MenuActivate);
+    ClassDB::bind_method(D_METHOD("menu_popup"), &VlcPlayer::MenuPopup);
+    ClassDB::bind_method(D_METHOD("go_to_menu"), &VlcPlayer::GoToMenu);
 
-    ClassDB::bind_method(D_METHOD("next_chapter"), &VlcPlayer::next_chapter);
-    ClassDB::bind_method(D_METHOD("prev_chapter"), &VlcPlayer::prev_chapter);
-    ClassDB::bind_method(D_METHOD("set_chapter", "chapter"), &VlcPlayer::set_chapter);
-    ClassDB::bind_method(D_METHOD("get_chapter"), &VlcPlayer::get_chapter);
-    ClassDB::bind_method(D_METHOD("get_chapter_count"), &VlcPlayer::get_chapter_count);
+    ClassDB::bind_method(D_METHOD("next_chapter"), &VlcPlayer::NextChapter);
+    ClassDB::bind_method(D_METHOD("prev_chapter"), &VlcPlayer::PrevChapter);
+    ClassDB::bind_method(D_METHOD("set_chapter", "chapter"), &VlcPlayer::SetChapter);
+    ClassDB::bind_method(D_METHOD("get_chapter"), &VlcPlayer::GetChapter);
+    ClassDB::bind_method(D_METHOD("get_chapter_count"), &VlcPlayer::GetChapterCount);
 
-    ClassDB::bind_method(D_METHOD("set_title", "title"), &VlcPlayer::set_title);
-    ClassDB::bind_method(D_METHOD("get_title"), &VlcPlayer::get_title);
-    ClassDB::bind_method(D_METHOD("get_title_count"), &VlcPlayer::get_title_count);
-    ClassDB::bind_method(D_METHOD("is_in_menu"), &VlcPlayer::is_in_menu);
+    ClassDB::bind_method(D_METHOD("set_title", "title"), &VlcPlayer::SetTitle);
+    ClassDB::bind_method(D_METHOD("get_title"), &VlcPlayer::GetTitle);
+    ClassDB::bind_method(D_METHOD("get_title_count"), &VlcPlayer::GetTitleCount);
+    ClassDB::bind_method(D_METHOD("is_in_menu"), &VlcPlayer::IsInMenu);
 
-    ClassDB::bind_method(D_METHOD("get_position"), &VlcPlayer::get_position);
-    ClassDB::bind_method(D_METHOD("set_position", "pos"), &VlcPlayer::set_position);
-    ClassDB::bind_method(D_METHOD("get_length"), &VlcPlayer::get_length);
-    ClassDB::bind_method(D_METHOD("get_time"), &VlcPlayer::get_time);
-    ClassDB::bind_method(D_METHOD("set_volume", "volume"), &VlcPlayer::set_volume);
+    ClassDB::bind_method(D_METHOD("get_position"), &VlcPlayer::GetPosition);
+    ClassDB::bind_method(D_METHOD("set_position", "pos"), &VlcPlayer::SetPosition);
+    ClassDB::bind_method(D_METHOD("get_length"), &VlcPlayer::GetLength);
+    ClassDB::bind_method(D_METHOD("get_time"), &VlcPlayer::GetTime);
+    ClassDB::bind_method(D_METHOD("set_volume", "volume"), &VlcPlayer::SetVolume);
 
-    ClassDB::bind_method(D_METHOD("get_audio_rate"), &VlcPlayer::get_audio_rate);
-    ClassDB::bind_method(D_METHOD("get_audio_channels"), &VlcPlayer::get_audio_channels);
-    ClassDB::bind_method(D_METHOD("read_audio", "max_frames"), &VlcPlayer::read_audio);
-    ClassDB::bind_method(D_METHOD("get_audio_backlog_ms"), &VlcPlayer::get_audio_backlog_ms);
-    ClassDB::bind_method(D_METHOD("get_audio_lead_ms"), &VlcPlayer::get_audio_lead_ms);
-    ClassDB::bind_method(D_METHOD("get_audio_lead_target_ms"), &VlcPlayer::get_audio_lead_target_ms);
-    ClassDB::bind_method(D_METHOD("set_audio_lead_ms", "ms"), &VlcPlayer::set_audio_lead_ms);
+    ClassDB::bind_method(D_METHOD("get_audio_rate"), &VlcPlayer::GetAudioRate);
+    ClassDB::bind_method(D_METHOD("get_audio_channels"), &VlcPlayer::GetAudioChannels);
+    ClassDB::bind_method(D_METHOD("read_audio", "max_frames"), &VlcPlayer::ReadAudio);
+    ClassDB::bind_method(D_METHOD("get_audio_backlog_ms"), &VlcPlayer::GetAudioBacklogMs);
+    ClassDB::bind_method(D_METHOD("get_audio_lead_ms"), &VlcPlayer::GetAudioLeadMs);
+    ClassDB::bind_method(D_METHOD("get_audio_lead_target_ms"), &VlcPlayer::GetAudioLeadTargetMs);
+    ClassDB::bind_method(D_METHOD("set_audio_lead_ms", "ms"), &VlcPlayer::SetAudioLeadMs);
 
-    ClassDB::bind_method(D_METHOD("get_audio_tracks"), &VlcPlayer::get_audio_tracks);
-    ClassDB::bind_method(D_METHOD("get_audio_track"), &VlcPlayer::get_audio_track);
-    ClassDB::bind_method(D_METHOD("set_audio_track", "id"), &VlcPlayer::set_audio_track);
-    ClassDB::bind_method(D_METHOD("get_subtitle_tracks"), &VlcPlayer::get_subtitle_tracks);
-    ClassDB::bind_method(D_METHOD("get_subtitle"), &VlcPlayer::get_subtitle);
-    ClassDB::bind_method(D_METHOD("set_subtitle", "id"), &VlcPlayer::set_subtitle);
+    ClassDB::bind_method(D_METHOD("get_audio_tracks"), &VlcPlayer::GetAudioTracks);
+    ClassDB::bind_method(D_METHOD("get_audio_track"), &VlcPlayer::GetAudioTrack);
+    ClassDB::bind_method(D_METHOD("set_audio_track", "id"), &VlcPlayer::SetAudioTrack);
+    ClassDB::bind_method(D_METHOD("get_subtitle_tracks"), &VlcPlayer::GetSubtitleTracks);
+    ClassDB::bind_method(D_METHOD("get_subtitle"), &VlcPlayer::GetSubtitle);
+    ClassDB::bind_method(D_METHOD("set_subtitle", "id"), &VlcPlayer::SetSubtitle);
 
     ADD_SIGNAL(MethodInfo("finished"));
     ADD_SIGNAL(MethodInfo("error"));
