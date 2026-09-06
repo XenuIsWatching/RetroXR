@@ -83,7 +83,6 @@ func save_config() -> bool:
 		"web_server_pin": web_server_pin,
 	}
 	return JsonStore.write_dict(path, data, "ScraperConfig")
-	print("[ScraperConfig] Saved config")
 
 
 static func _config_path() -> String:
