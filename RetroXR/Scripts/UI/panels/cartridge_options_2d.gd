@@ -43,34 +43,15 @@ const COLOR_MUTED   := Color(0.45, 0.45, 0.58)
 const COLOR_SYNC    := Color(0.45, 0.70, 1.00)
 const COLOR_WARN    := Color(1.00, 0.72, 0.20)
 
-# Same Nerd Font glyphs the spawn menu uses, so a cloud means the same thing in
-# both places. Names are the font's own, read from its post table — a codepoint
-# being present in the cmap does not make it the glyph you meant.
-const _ICON_CLOUD    := 0xF0ED    # fa-cloud_download    — on the server, not here
-const _ICON_SYNC_ON  := 0xF063F   # md-cloud_sync        — kept in step
-const _ICON_SYNC_OFF := 0xF0164   # md-cloud_off_outline — local only
-const _ICON_BUSY     := 0xF019    # fa-download
-## A state in flight is going UP. The saves list reuses fa-download for "syncing"
-## because its sync can go either way; a state's only ever does one, and an
-## arrow pointing into a tray while bytes leave the device reads as the opposite
-## of what is happening.
-const _ICON_UPLOAD   := 0xF093    # fa-upload
-## Saving OVER a state, so the floppy rather than a refresh arrow: this writes a
-## file, it does not re-run something.
-const _ICON_OVERWRITE := 0xF0C7   # fa-save
-const _ICON_WARN     := 0xF071    # fa-warning
-## The theme font carries none of the panel's pictograms, so a bare Unicode
-## symbol renders only where the OS fallback happens to cover it — tofu on
-## Quest. These three replace the fullwidth plus, the black circle and the
-## multiplication X with glyphs from the font this panel already ships.
-const _ICON_NEW      := 0xF0415   # md-plus
-const _ICON_CURRENT  := 0xF09DE   # md-circle_medium — the save in the slot
-const _ICON_CLOSE    := 0xF0156   # md-close
-const _SYMBOL_FONT_PATH := "res://fonts/SymbolsNerdFont-Regular.ttf"
-
-## One shared FontVariation — the list is rebuilt on every populate(), and a
-## resource per row would churn on each rebuild.
-var _symbol_font: FontVariation = null
+# Glyph names and the font itself come from MenuIcons, so a cloud means the
+# same thing here as in the spawn menu. This panel kept a private copy of the
+# table AND of the FontVariation that loads it, while already reaching for
+# MenuIcons.ERROR in one place -- two tables of the same codepoints, one of
+# which was free to drift.
+#
+# Two glyphs it needed were only in the copy and are now shared: PLUS, and
+# SAVE_OVER -- a floppy rather than a refresh arrow, because writing over a
+# state saves a file, it does not re-run anything.
 
 var _title_lbl: Label = null
 ## The ROM's path on disk, under the game's name. Small and muted: it is there to
@@ -205,24 +186,11 @@ func _build_ui() -> void:
 
 
 func _build_title(root_vbox: VBoxContainer) -> void:
-	var title_row := HBoxContainer.new()
-	root_vbox.add_child(title_row)
-
-	_title_lbl = Label.new()
 	# Not "Battery Save" any more — the saves list is one ribbon of several, and
 	# the panel as a whole is about the cartridge.
-	_title_lbl.text = "Cartridge"
-	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_title_lbl.add_theme_font_size_override("font_size", 24)
-	_title_lbl.add_theme_color_override("font_color", COLOR_TITLE)
-	title_row.add_child(_title_lbl)
-
-	var close_btn := Button.new()
-	close_btn.add_theme_font_override("font", _symbols())
-	close_btn.text = "  %s  " % String.chr(_ICON_CLOSE)
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.pressed.connect(func(): close_requested.emit())
-	title_row.add_child(close_btn)
+	var title_row := MenuStyle.title_row(root_vbox, "Cartridge", 24)
+	_title_lbl = title_row.get_child(0) as Label
+	MenuStyle.close_button(title_row, func() -> void: close_requested.emit())
 
 
 ## Name and path for the embedded copy, which has no title row of its own. Sits
@@ -284,17 +252,6 @@ static func _find_scroll(node: Node) -> ScrollContainer:
 		if found != null:
 			return found
 	return null
-
-
-func _symbols() -> FontVariation:
-	if _symbol_font != null:
-		return _symbol_font
-	_symbol_font = FontVariation.new()
-	_symbol_font.base_font = ThemeDB.fallback_font
-	var symbols: Font = load(_SYMBOL_FONT_PATH)
-	if symbols != null:
-		_symbol_font.fallbacks = [symbols]
-	return _symbol_font
 
 
 ## Rebuild the list.
@@ -376,9 +333,9 @@ func _add_new_row(is_current: bool, romm_available: bool) -> void:
 	blank.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	blank.add_theme_font_size_override("font_size", 18)
 	blank.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	blank.add_theme_font_override("font", _symbols())
-	var mark := "%s  " % String.chr(_ICON_CURRENT) if is_current else "    "
-	blank.text = mark + "%s  New blank save" % String.chr(_ICON_NEW)
+	blank.add_theme_font_override("font", MenuIcons.symbols())
+	var mark := "%s  " % String.chr(MenuIcons.DOT) if is_current else "    "
+	blank.text = mark + "%s  New blank save" % String.chr(MenuIcons.PLUS)
 	if is_current:
 		blank.add_theme_color_override("font_color", COLOR_CURRENT)
 	blank.pressed.connect(func(): save_selected.emit(""))
@@ -392,8 +349,8 @@ func _add_new_row(is_current: bool, romm_available: bool) -> void:
 	synced.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	synced.add_theme_font_size_override("font_size", 18)
 	synced.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	synced.add_theme_font_override("font", _symbols())
-	synced.text = "  %s  New synced save" % String.chr(_ICON_SYNC_ON)
+	synced.add_theme_font_override("font", MenuIcons.symbols())
+	synced.text = "  %s  New synced save" % String.chr(MenuIcons.SYNC_ON)
 	synced.add_theme_color_override("font_color", COLOR_SYNC)
 	synced.tooltip_text = "Start a save that is kept on RomM from the first write"
 	synced.pressed.connect(func(): new_synced_save_requested.emit())
@@ -425,8 +382,8 @@ func _add_row(title: String, detail: String, save_id: String, is_current: bool,
 	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	var t := Label.new()
-	t.add_theme_font_override("font", _symbols())
-	t.text = ("%s  " % String.chr(_ICON_CURRENT) if is_current else "") + title
+	t.add_theme_font_override("font", MenuIcons.symbols())
+	t.text = ("%s  " % String.chr(MenuIcons.DOT) if is_current else "") + title
 	t.add_theme_font_size_override("font_size", 19)
 	t.add_theme_color_override("font_color", COLOR_CURRENT if is_current else COLOR_TITLE)
 	col.add_child(t)
@@ -472,7 +429,7 @@ func _delete_button(save_id: String) -> Button:
 	var forever := not backed_up.has(save_id)
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(64, 52)
-	b.add_theme_font_override("font", _symbols())
+	b.add_theme_font_override("font", MenuIcons.symbols())
 	b.add_theme_font_size_override("font_size", 22)
 	if not delete_blocked.is_empty():
 		b.disabled = true
@@ -497,23 +454,23 @@ func _delete_button(save_id: String) -> Button:
 func _sync_toggle(save_id: String, sync_state: String) -> Button:
 	var toggle := Button.new()
 	toggle.custom_minimum_size = Vector2(64, 52)
-	toggle.add_theme_font_override("font", _symbols())
+	toggle.add_theme_font_override("font", MenuIcons.symbols())
 	toggle.add_theme_font_size_override("font_size", 22)
 	match sync_state:
 		"on":
-			toggle.text = String.chr(_ICON_SYNC_ON)
+			toggle.text = String.chr(MenuIcons.SYNC_ON)
 			toggle.add_theme_color_override("font_color", COLOR_SYNC)
 			toggle.tooltip_text = "Synced with RomM — press to stop"
 		"busy":
-			toggle.text = String.chr(_ICON_BUSY)
+			toggle.text = String.chr(MenuIcons.BUSY)
 			toggle.add_theme_color_override("font_color", COLOR_WARN)
 			toggle.tooltip_text = "Syncing…"
 		"conflict":
-			toggle.text = String.chr(_ICON_WARN)
+			toggle.text = String.chr(MenuIcons.ERROR)
 			toggle.add_theme_color_override("font_color", COLOR_WARN)
 			toggle.tooltip_text = "Both copies changed — the server's was kept as a separate save"
 		_:
-			toggle.text = String.chr(_ICON_SYNC_OFF)
+			toggle.text = String.chr(MenuIcons.SYNC_OFF)
 			toggle.add_theme_color_override("font_color", COLOR_MUTED)
 			toggle.tooltip_text = "Not synced — press to keep this save on RomM"
 	var want_on := sync_state != "on"
@@ -542,9 +499,9 @@ func _add_server_row(e: Dictionary) -> void:
 
 	var get_btn := Button.new()
 	get_btn.custom_minimum_size = Vector2(64, 52)
-	get_btn.add_theme_font_override("font", _symbols())
+	get_btn.add_theme_font_override("font", MenuIcons.symbols())
 	get_btn.add_theme_font_size_override("font_size", 22)
-	get_btn.text = String.chr(_ICON_CLOUD)
+	get_btn.text = String.chr(MenuIcons.DOWNLOAD)
 	get_btn.add_theme_color_override("font_color", COLOR_SYNC)
 	get_btn.tooltip_text = "Download this save and bind the cartridge to it"
 	get_btn.pressed.connect(func(): server_save_requested.emit(slot))
@@ -681,8 +638,8 @@ func _build_states_page() -> void:
 	_state_capture_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_state_capture_btn.add_theme_font_size_override("font_size", 18)
 	_state_capture_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_state_capture_btn.add_theme_font_override("font", _symbols())
-	_state_capture_btn.text = "    %s  Save state now" % String.chr(_ICON_NEW)
+	_state_capture_btn.add_theme_font_override("font", MenuIcons.symbols())
+	_state_capture_btn.text = "    %s  Save state now" % String.chr(MenuIcons.PLUS)
 	# Inside a Viewport2Din3D every click arrives twice. The Saves tab's bin gets
 	# away with it because _populate() frees the button between the two presses;
 	# a capture has no such protection and one click would write two states.
@@ -912,10 +869,10 @@ func _overwrite_button(state_id: String, armed: bool) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(64, 52)
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	b.add_theme_font_override("font", _symbols())
+	b.add_theme_font_override("font", MenuIcons.symbols())
 	b.add_theme_font_size_override("font_size", 22)
 	b.action_mode = BaseButton.ACTION_MODE_BUTTON_RELEASE
-	b.text = String.chr(MenuIcons.ERROR if armed else _ICON_OVERWRITE)
+	b.text = String.chr(MenuIcons.ERROR if armed else MenuIcons.SAVE_OVER)
 	if not capture_blocked.is_empty():
 		b.disabled = true
 		b.add_theme_color_override("font_color", COLOR_MUTED)
@@ -932,7 +889,7 @@ func _state_delete_button(state_id: String, armed: bool) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(64, 52)
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	b.add_theme_font_override("font", _symbols())
+	b.add_theme_font_override("font", MenuIcons.symbols())
 	b.add_theme_font_size_override("font_size", 22)
 	b.action_mode = BaseButton.ACTION_MODE_BUTTON_RELEASE
 	b.text = String.chr(MenuIcons.ERROR if armed else MenuIcons.DELETE_FOREVER)
@@ -948,25 +905,25 @@ func _state_delete_button(state_id: String, armed: bool) -> Button:
 func _backup_glyph(backup_state: String) -> Control:
 	var lbl := Label.new()
 	lbl.custom_minimum_size = Vector2(40, 52)
-	lbl.add_theme_font_override("font", _symbols())
+	lbl.add_theme_font_override("font", MenuIcons.symbols())
 	lbl.add_theme_font_size_override("font_size", 20)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	match backup_state:
 		"on":
-			lbl.text = String.chr(_ICON_SYNC_ON)
+			lbl.text = String.chr(MenuIcons.SYNC_ON)
 			lbl.add_theme_color_override("font_color", COLOR_SYNC)
 			lbl.tooltip_text = "Backed up to RomM"
 		"busy":
-			lbl.text = String.chr(_ICON_UPLOAD)
+			lbl.text = String.chr(MenuIcons.UPLOAD)
 			lbl.add_theme_color_override("font_color", COLOR_WARN)
 			lbl.tooltip_text = "Uploading to RomM…"
 		"failed":
-			lbl.text = String.chr(_ICON_WARN)
+			lbl.text = String.chr(MenuIcons.ERROR)
 			lbl.add_theme_color_override("font_color", COLOR_WARN)
 			lbl.tooltip_text = "This state could not be backed up"
 		_:
-			lbl.text = String.chr(_ICON_SYNC_OFF)
+			lbl.text = String.chr(MenuIcons.SYNC_OFF)
 			lbl.add_theme_color_override("font_color", COLOR_MUTED)
 			lbl.tooltip_text = "Not backed up yet"
 	return lbl
@@ -997,10 +954,10 @@ func _add_server_state_row(e: Dictionary) -> void:
 
 	var get_btn := Button.new()
 	get_btn.custom_minimum_size = Vector2(64, 52)
-	get_btn.add_theme_font_override("font", _symbols())
+	get_btn.add_theme_font_override("font", MenuIcons.symbols())
 	get_btn.add_theme_font_size_override("font_size", 22)
 	get_btn.action_mode = BaseButton.ACTION_MODE_BUTTON_RELEASE
-	get_btn.text = String.chr(_ICON_CLOUD)
+	get_btn.text = String.chr(MenuIcons.DOWNLOAD)
 	get_btn.add_theme_color_override("font_color", COLOR_SYNC)
 	get_btn.tooltip_text = "Download this save state"
 	get_btn.pressed.connect(func(): server_state_requested.emit(state_id))

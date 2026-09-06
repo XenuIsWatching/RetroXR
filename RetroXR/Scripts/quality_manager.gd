@@ -1234,33 +1234,33 @@ func _load_prefs() -> void:
 	var data := JsonStore.read_dict(PREFS_PATH, "QualityManager")
 	if data.is_empty():
 		return
-	msaa_3d = clampi(_prefs_int(data, "msaa_3d", msaa_3d),
+	msaa_3d = clampi(JsonStore.get_int(data, "msaa_3d", msaa_3d),
 		Viewport.MSAA_DISABLED, Viewport.MSAA_8X)
-	post_aa = clampi(_prefs_int(data, "post_aa", post_aa), PostAA.OFF, PostAA.SMAA) as PostAA
-	preset = clampi(_prefs_int(data, "preset", preset), Preset.LOW, Preset.CUSTOM) as Preset
-	shadow_quality = clampi(_prefs_int(data, "shadow_quality", shadow_quality),
+	post_aa = clampi(JsonStore.get_int(data, "post_aa", post_aa), PostAA.OFF, PostAA.SMAA) as PostAA
+	preset = clampi(JsonStore.get_int(data, "preset", preset), Preset.LOW, Preset.CUSTOM) as Preset
+	shadow_quality = clampi(JsonStore.get_int(data, "shadow_quality", shadow_quality),
 		ShadowQuality.OFF, ShadowQuality.HIGH) as ShadowQuality
-	ao_quality = clampi(_prefs_int(data, "ao_quality", ao_quality),
+	ao_quality = clampi(JsonStore.get_int(data, "ao_quality", ao_quality),
 		AOQuality.OFF, AOQuality.HIGH) as AOQuality
 	# Forced to 1.0 where scaling is unsupported, so a value saved on desktop and
 	# synced to a headset cannot bring the broken path back with it.
 	window_mode = str(data.get("window_mode", window_mode))
 	resolution = str(data.get("resolution", resolution))
-	render_scale = clampf(_prefs_float(data, "render_scale", render_scale),
+	render_scale = clampf(JsonStore.get_float(data, "render_scale", render_scale),
 		RENDER_SCALE_MIN, RENDER_SCALE_MAX) if supports_render_scale() else 1.0
 	# Kept whatever the platform, unlike render_scale above: where it is not
 	# supported it is inert rather than harmful, and one desktop session writing
 	# the file back must not strip the headset's setting out of it.
-	eye_buffer_scale = clampf(_prefs_float(data, "eye_buffer_scale", eye_buffer_scale),
+	eye_buffer_scale = clampf(JsonStore.get_float(data, "eye_buffer_scale", eye_buffer_scale),
 		EYE_BUFFER_SCALE_MIN, EYE_BUFFER_SCALE_MAX)
 	# Kept as saved rather than validated here: which rates exist is the runtime's
 	# to say, and effective_display_rate() snaps to the nearest it offers.
-	display_rate = maxf(_prefs_float(data, "display_rate", display_rate), 0.0)
-	cpu_level = clampi(_prefs_int(data, "cpu_level", cpu_level),
+	display_rate = maxf(JsonStore.get_float(data, "display_rate", display_rate), 0.0)
+	cpu_level = clampi(JsonStore.get_int(data, "cpu_level", cpu_level),
 		PerfLevel.POWER_SAVINGS, PerfLevel.BOOST) as PerfLevel
-	gpu_level = clampi(_prefs_int(data, "gpu_level", gpu_level),
+	gpu_level = clampi(JsonStore.get_int(data, "gpu_level", gpu_level),
 		PerfLevel.POWER_SAVINGS, PerfLevel.BOOST) as PerfLevel
-	foveation_level = clampi(_prefs_int(data, "foveation_level", foveation_level),
+	foveation_level = clampi(JsonStore.get_int(data, "foveation_level", foveation_level),
 		Foveation.OFF, Foveation.HIGH) as Foveation
 	var glow: Variant = data.get("glow_enabled")
 	if typeof(glow) == TYPE_BOOL:
@@ -1288,18 +1288,3 @@ func save_prefs() -> void:
 		"glow_enabled": glow_enabled,
 		"screen_lights_enabled": screen_lights_enabled,
 	}, "QualityManager")
-
-
-## JSON numbers arrive as floats and a null would make int() fail outright.
-func _prefs_int(data: Dictionary, key: String, fallback: int) -> int:
-	var value: Variant = data.get(key)
-	if typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT:
-		return int(value)
-	return fallback
-
-
-func _prefs_float(data: Dictionary, key: String, fallback: float) -> float:
-	var value: Variant = data.get(key)
-	if typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT:
-		return float(value)
-	return fallback

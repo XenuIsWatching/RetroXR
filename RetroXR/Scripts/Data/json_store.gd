@@ -55,6 +55,62 @@ static func read_dict(path: String, owner: String = "") -> Dictionary:
 ## Returns false and reports through `owner` on any failure, leaving whatever
 ## was already at `path` untouched — a store that cannot be replaced is better
 ## than one replaced by half of itself.
+# ── Typed reads out of a parsed store ─────────────────────────────────────────
+#
+# A store on disk is a file the player can edit and a file JSON has already
+# round-tripped, so a caller cannot cast what it finds — it has to check. A bool
+# read with int() is 0 or 1 whatever was written, and a MISSING key casts to
+# zero rather than to the default the caller supplied, which is the difference
+# between "never set" and "set to off".
+#
+# AppPrefs and QualityManager had each written these out, and their float
+# readers were byte-identical. They live beside read_dict because that is what
+# produced the dictionary being read.
+
+## `fallback` unless `key` holds a real bool.
+static func get_bool(data: Dictionary, key: String, fallback: bool) -> bool:
+	var value: Variant = data.get(key)
+	return value if typeof(value) == TYPE_BOOL else fallback
+
+
+## `fallback` unless `key` holds a number. Both int and float are accepted: JSON
+## numbers come back as floats, but a value written as a whole number can read
+## back as an int.
+static func get_float(data: Dictionary, key: String, fallback: float) -> float:
+	var value: Variant = data.get(key)
+	if typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT:
+		return float(value)
+	return fallback
+
+
+## Same contract as get_float, truncated to a whole number.
+static func get_int(data: Dictionary, key: String, fallback: int) -> int:
+	var value: Variant = data.get(key)
+	if typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT:
+		return int(value)
+	return fallback
+
+
+## `fallback` unless `key` holds an object.
+static func get_dict(data: Dictionary, key: String, fallback: Dictionary) -> Dictionary:
+	var value: Variant = data.get(key)
+	return value if typeof(value) == TYPE_DICTIONARY else fallback
+
+
+## JSON has no packed-array type, so a saved PackedStringArray reads back as a
+## plain Array of whatever was in it. Rebuilt element by element, dropping
+## anything that is not a non-empty string rather than trusting the file.
+static func get_strings(data: Dictionary, key: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var value: Variant = data.get(key)
+	if typeof(value) != TYPE_ARRAY:
+		return out
+	for v: Variant in value as Array:
+		if typeof(v) == TYPE_STRING and not (v as String).is_empty():
+			out.append(v)
+	return out
+
+
 static func write_dict(path: String, data: Dictionary, owner: String = "") -> bool:
 	return write_text(path, JSON.stringify(data, "\t"), owner)
 

@@ -212,31 +212,31 @@ func _load_prefs() -> void:
 	var data := JsonStore.read_dict(PREFS_PATH, "AppPrefs")
 	if data.is_empty():
 		return
-	auto_save_scene  = _prefs_bool(data, "auto_save_scene",  auto_save_scene)
-	autosave_periodic = _prefs_bool(data, "autosave_periodic", autosave_periodic)
-	autosave_interval = clampf(_prefs_float(data, "autosave_interval", autosave_interval),
+	auto_save_scene  = JsonStore.get_bool(data, "auto_save_scene",  auto_save_scene)
+	autosave_periodic = JsonStore.get_bool(data, "autosave_periodic", autosave_periodic)
+	autosave_interval = clampf(JsonStore.get_float(data, "autosave_interval", autosave_interval),
 		AUTOSAVE_INTERVAL_MIN, AUTOSAVE_INTERVAL_MAX)
 	# The performance HUD is deliberately absent: like the collision-shape
 	# overlay it is a look at how the app is running, not a setting, so it lives
 	# on PerfHud's statics and is off again every launch. A "show_fps" left in an
 	# old file is simply ignored.
-	aim_crosshair    = _prefs_bool(data, "aim_crosshair",    aim_crosshair)
+	aim_crosshair    = JsonStore.get_bool(data, "aim_crosshair",    aim_crosshair)
 	xr_display_mode = _prefs_xr_display_mode(data, "xr_display_mode", xr_display_mode)
-	controller_hands = _prefs_bool(data, "controller_hands", controller_hands)
-	system_filter    = _prefs_bool(data, "system_filter",    system_filter)
-	bios_boot_override = _prefs_bool(data, "bios_boot_override", bios_boot_override)
-	menu_curved      = _prefs_bool(data, "menu_curved",      menu_curved)
-	show_hints       = _prefs_bool(data, "show_hints",       show_hints)
-	hint_uses        = _prefs_dict(data, "hint_uses",        hint_uses)
-	spatial_audio_sdk = _prefs_bool(data, "spatial_audio_sdk", spatial_audio_sdk)
-	locomotion_teleport = _prefs_bool(data, "locomotion_teleport", locomotion_teleport)
-	passthrough_locomotion = _prefs_bool(data, "passthrough_locomotion", passthrough_locomotion)
-	hidden_systems      = _prefs_strings(data, "hidden_systems")
-	show_hidden_systems = _prefs_bool(data, "show_hidden_systems", show_hidden_systems)
-	compact_tiles       = _prefs_bool(data, "compact_tiles",       compact_tiles)
-	bedroom_time_of_day = clampf(_prefs_float(data, "bedroom_time_of_day",
+	controller_hands = JsonStore.get_bool(data, "controller_hands", controller_hands)
+	system_filter    = JsonStore.get_bool(data, "system_filter",    system_filter)
+	bios_boot_override = JsonStore.get_bool(data, "bios_boot_override", bios_boot_override)
+	menu_curved      = JsonStore.get_bool(data, "menu_curved",      menu_curved)
+	show_hints       = JsonStore.get_bool(data, "show_hints",       show_hints)
+	hint_uses        = JsonStore.get_dict(data, "hint_uses",        hint_uses)
+	spatial_audio_sdk = JsonStore.get_bool(data, "spatial_audio_sdk", spatial_audio_sdk)
+	locomotion_teleport = JsonStore.get_bool(data, "locomotion_teleport", locomotion_teleport)
+	passthrough_locomotion = JsonStore.get_bool(data, "passthrough_locomotion", passthrough_locomotion)
+	hidden_systems      = JsonStore.get_strings(data, "hidden_systems")
+	show_hidden_systems = JsonStore.get_bool(data, "show_hidden_systems", show_hidden_systems)
+	compact_tiles       = JsonStore.get_bool(data, "compact_tiles",       compact_tiles)
+	bedroom_time_of_day = clampf(JsonStore.get_float(data, "bedroom_time_of_day",
 		bedroom_time_of_day), 0.0, 1.0)
-	hw_render_overrides = _prefs_dict(data, "hw_render_overrides", hw_render_overrides)
+	hw_render_overrides = JsonStore.get_dict(data, "hw_render_overrides", hw_render_overrides)
 
 
 ## Returns false when the write did not land. Callers that report a setting
@@ -265,23 +265,6 @@ func save_prefs() -> bool:
 	}, "AppPrefs")
 
 
-## A missing key or a JSON null must keep the default, not collapse to false.
-func _prefs_bool(data: Dictionary, key: String, fallback: bool) -> bool:
-	var value: Variant = data.get(key)
-	if typeof(value) == TYPE_BOOL:
-		return value
-	return fallback
-
-
-## Same contract as _prefs_bool. JSON numbers come back as floats, but a value
-## written as a whole number can read as an int, so both are accepted.
-func _prefs_float(data: Dictionary, key: String, fallback: float) -> float:
-	var value: Variant = data.get(key)
-	if typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT:
-		return float(value)
-	return fallback
-
-
 ## Accept only the three named display modes. JSON numbers may be int or float;
 ## a stale or hand-edited value keeps the safe BOTH default.
 func _prefs_xr_display_mode(data: Dictionary, key: String,
@@ -293,26 +276,3 @@ func _prefs_xr_display_mode(data: Dictionary, key: String,
 	if mode < XRDisplayMode.CONTROLLERS or mode > XRDisplayMode.BOTH:
 		return fallback
 	return mode as XRDisplayMode
-
-
-## JSON has no packed-array type, so a saved PackedStringArray reads back as a
-## plain Array of whatever was in it. Rebuild it element by element and drop
-## anything that is not a string rather than trusting the file.
-func _prefs_strings(data: Dictionary, key: String) -> PackedStringArray:
-	var out := PackedStringArray()
-	var value: Variant = data.get(key)
-	if typeof(value) != TYPE_ARRAY:
-		return out
-	for v: Variant in value as Array:
-		if typeof(v) == TYPE_STRING and not (v as String).is_empty():
-			out.append(v)
-	return out
-
-
-## Same contract as _prefs_bool. JSON gives back numbers as floats, so callers
-## reading a count out of this must int() it.
-func _prefs_dict(data: Dictionary, key: String, fallback: Dictionary) -> Dictionary:
-	var value: Variant = data.get(key)
-	if typeof(value) == TYPE_DICTIONARY:
-		return value
-	return fallback
