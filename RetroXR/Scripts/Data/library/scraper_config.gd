@@ -59,20 +59,16 @@ func _random_pin() -> int:
 
 
 func load_config() -> void:
-	var path := _config_path()
-	if not FileAccess.file_exists(path):
+	# parse_dict, not read_dict: the two failures mean opposite things to a
+	# config. A file that cannot be read at all -- missing, or damaged --
+	# comes back null and leaves every field standing, while a file that
+	# parses but is not an object comes back {} and falls through to the
+	# defaults below. read_dict flattens both to {}, which would quietly
+	# reset stored credentials on a corrupt file; ra_tests pins both.
+	var raw: Variant = JsonStore.parse_dict(_config_path(), "ScraperConfig")
+	if raw == null:
 		return
-
-	var file := FileAccess.open(path, FileAccess.READ)
-	if not file:
-		return
-
-	var json := JSON.new()
-	if json.parse(file.get_as_text()) != OK:
-		push_warning("[ScraperConfig] JSON parse error: %s" % json.get_error_message())
-		return
-
-	var data: Dictionary = json.data if json.data is Dictionary else {}
+	var data: Dictionary = raw
 	ssid = data.get("ssid", "")
 	sspassword = data.get("sspassword", "")
 

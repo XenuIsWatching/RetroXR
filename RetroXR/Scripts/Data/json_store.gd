@@ -31,6 +31,42 @@ extends RefCounted
 ## `owner` is the label used in the warning; pass the calling class's name so a
 ## complaint in the log says which store could not be read. An empty owner reads
 ## a missing or bad file silently, which is what a disposable cache wants.
+## The same read, keeping the difference between "could not be read at all" and
+## "read fine, but is not an object".
+##
+## Returns null for the first and a Dictionary for the second — {} when the file
+## holds a JSON array or a bare number, which IS a successful read of something
+## that is not a store.
+##
+## read_dict below flattens both to {}, which is what almost every caller wants.
+## The three config classes are the exception and the reason this exists: a
+## damaged file leaves the player's settings standing, while a well-formed file
+## that is not an object resets them to defaults. Collapsing those two would
+## quietly change what happens to stored credentials on a corrupt file, and
+## ra_tests pins both.
+static func parse_dict(path: String, owner: String = "") -> Variant:
+	if not FileAccess.file_exists(path):
+		return null
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		if not owner.is_empty():
+			push_warning("%s: cannot read %s (error %d)"
+				% [owner, path, FileAccess.get_open_error()])
+		return null
+	var text := f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(text)
+	if parsed == null:
+		if not owner.is_empty() and not text.strip_edges().is_empty():
+			push_warning("%s: %s is not valid JSON, leaving it alone" % [owner, path])
+		return null
+	if parsed is Dictionary:
+		return parsed as Dictionary
+	if not owner.is_empty():
+		push_warning("%s: %s is not a JSON object, ignoring it" % [owner, path])
+	return {}
+
+
 static func read_dict(path: String, owner: String = "") -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
