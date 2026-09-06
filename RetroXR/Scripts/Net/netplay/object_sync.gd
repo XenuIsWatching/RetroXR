@@ -1111,176 +1111,152 @@ func _apply_event(kind: NetEvents.Event, wire: Dictionary) -> void:
 ## through, because a missing method there is a bug that should be a loud crash
 ## rather than a room that silently stops responding to one control.
 func _dispatch_event(kind: NetEvents.Event, a: Dictionary) -> void:
+	# Every arm below used to repeat its own _valid(a, [...]) list, and those 44
+	# lists were a second copy of EV_NODE_KEYS -- the same contract written twice,
+	# agreeing only for as long as both were edited together. The table is the one
+	# the SEND side already checks in _has_required_nodes, so it is now the only
+	# place a new event declares which nodes it needs.
+	if not _valid(a, EV_NODE_KEYS.get(kind, [])):
+		return
 	match kind:
 		NetEvents.Event.EV_CART_INSERT:
-			if _valid(a, ["sys", "cart"]):
-				a["sys"].restore_cartridge(a["cart"])
+			a["sys"].restore_cartridge(a["cart"])
 		NetEvents.Event.EV_CART_REMOVE:
-			if _valid(a, ["sys"]):
-				a["sys"].net_release_cartridge()
+			a["sys"].net_release_cartridge()
 		NetEvents.Event.EV_TAPE_INSERT:
-			if _valid(a, ["vcr", "tape"]):
-				a["vcr"].restore_tape(a["tape"])
+			a["vcr"].restore_tape(a["tape"])
 		NetEvents.Event.EV_TAPE_REMOVE:
-			if _valid(a, ["vcr"]):
-				a["vcr"].net_release_tape()
+			a["vcr"].net_release_tape()
 		NetEvents.Event.EV_TV_PLUG:
-			if _valid(a, ["owner", "tv"]):
-				# A console carries the cable channel and the set's own input
-				# ("in" is Composite 1-4, absent on events from before there
-				# were four). Anything else is guarded rather than assumed the
-				# way tv_panel guards on_tv_connected: the VCR and DVD player
-				# used to satisfy this call with an empty override, which is a
-				# method existing only to be called into and do nothing.
-				if a["owner"] is RetroSystem:
-					a["owner"].restore_cable_connection(a["tv"], int(a.get("ch", 0)),
-						int(a.get("in", 0)))
-				elif a["owner"].has_method("restore_cable_connection"):
-					a["owner"].restore_cable_connection(a["tv"])
+			# A console carries the cable channel and the set's own input
+			# ("in" is Composite 1-4, absent on events from before there
+			# were four). Anything else is guarded rather than assumed the
+			# way tv_panel guards on_tv_connected: the VCR and DVD player
+			# used to satisfy this call with an empty override, which is a
+			# method existing only to be called into and do nothing.
+			if a["owner"] is RetroSystem:
+				a["owner"].restore_cable_connection(a["tv"], int(a.get("ch", 0)),
+					int(a.get("in", 0)))
+			elif a["owner"].has_method("restore_cable_connection"):
+				a["owner"].restore_cable_connection(a["tv"])
 		NetEvents.Event.EV_TV_UNPLUG:
-			if _valid(a, ["tv"]):
-				a["tv"].release_input(int(a.get("in", 0)))
+			a["tv"].release_input(int(a.get("in", 0)))
 		NetEvents.Event.EV_RCA_PLUG:
 			# The lead names the socket by device + node name, so a peer needs no
 			# shared numbering of ports to put the same end in the same place.
-			if _valid(a, ["cable", "dev"]):
-				a["cable"].net_seat_plug(int(a.get("end", 0)), int(a.get("cord", 0)),
-					a["dev"], str(a.get("port", "")))
+			a["cable"].net_seat_plug(int(a.get("end", 0)), int(a.get("cord", 0)),
+				a["dev"], str(a.get("port", "")))
 		NetEvents.Event.EV_RCA_UNPLUG:
-			if _valid(a, ["cable"]):
-				a["cable"].net_release_plug(int(a.get("end", 0)), int(a.get("cord", 0)))
+			a["cable"].net_release_plug(int(a.get("end", 0)), int(a.get("cord", 0)))
 		NetEvents.Event.EV_PORT_PLUG:
-			if _valid(a, ["sys", "ctrl"]):
-				a["ctrl"].restore_port_connection(a["sys"], int(a.get("port", 0)))
+			a["ctrl"].restore_port_connection(a["sys"], int(a.get("port", 0)))
 		NetEvents.Event.EV_PORT_UNPLUG:
-			if _valid(a, ["sys"]):
-				var port := int(a.get("port", 0))
-				a["sys"].net_release_controller_port(port)
+			var port := int(a.get("port", 0))
+			a["sys"].net_release_controller_port(port)
 		NetEvents.Event.EV_SYS_POWER:
 			# Client intent — the host toggles for real. Un-suppressed so the
 			# host's own hook broadcasts NetEvents.Event.EV_SYS_POWER_STATE afterwards.
-			if _nm.is_host() and _valid(a, ["sys"]):
+			if _nm.is_host():
 				_unsuppressed(a["sys"].toggle_power)
 		NetEvents.Event.EV_SYS_POWER_STATE:
-			if _valid(a, ["sys"]) and a["sys"].has_method("net_set_remote_power"):
+			if a["sys"].has_method("net_set_remote_power"):
 				a["sys"].net_set_remote_power(bool(a.get("on", false)))
 		NetEvents.Event.EV_SYS_RESET:
 			# Like power intent, reset is host-authoritative. RetroSystem.reset()
 			# frame-schedules the actual core reset when lockstep is active.
-			if _nm.is_host() and _valid(a, ["sys"]) and a["sys"].has_method("reset"):
+			if _nm.is_host() and a["sys"].has_method("reset"):
 				_unsuppressed(a["sys"].reset)
 		NetEvents.Event.EV_TV_POWER:
-			if _valid(a, ["tv"]):
-				a["tv"].remote_power_toggle()
+			a["tv"].remote_power_toggle()
 		NetEvents.Event.EV_TV_VOL_UP:
-			if _valid(a, ["tv"]):
-				a["tv"].remote_volume_up()
+			a["tv"].remote_volume_up()
 		NetEvents.Event.EV_TV_VOL_DOWN:
-			if _valid(a, ["tv"]):
-				a["tv"].remote_volume_down()
+			a["tv"].remote_volume_down()
 		NetEvents.Event.EV_TV_MUTE:
-			if _valid(a, ["tv"]):
-				a["tv"].remote_mute_toggle()
+			a["tv"].remote_mute_toggle()
 		NetEvents.Event.EV_TV_CRT:
-			if _valid(a, ["tv"]):
-				a["tv"].set_crt_enabled(bool(a.get("on", true)))
+			a["tv"].set_crt_enabled(bool(a.get("on", true)))
 		NetEvents.Event.EV_TV_STEREO:
-			if _valid(a, ["tv"]):
-				a["tv"].set_stereo_mode(int(a.get("mode", 0)))
+			a["tv"].set_stereo_mode(int(a.get("mode", 0)))
 		NetEvents.Event.EV_TV_AUDIO_MODE:
-			if _valid(a, ["tv"]):
-				a["tv"].set_audio_mode(int(a.get("mode", 0)))
+			a["tv"].set_audio_mode(int(a.get("mode", 0)))
 		NetEvents.Event.EV_TV_ASPECT:
-			if _valid(a, ["tv"]):
-				a["tv"].set_widescreen(bool(a.get("on", false)))
+			a["tv"].set_widescreen(bool(a.get("on", false)))
 		NetEvents.Event.EV_TV_SOURCE:
-			if _valid(a, ["tv"]):
-				a["tv"].set_source(int(a.get("source", 0)))
+			a["tv"].set_source(int(a.get("source", 0)))
 		NetEvents.Event.EV_TV_CHANNEL:
-			if _valid(a, ["tv"]):
-				a["tv"].net_set_channel_state(int(a.get("source", 0)),
-					int(a.get("rf", 3)), int(a.get("index", -1)))
+			a["tv"].net_set_channel_state(int(a.get("source", 0)),
+				int(a.get("rf", 3)), int(a.get("index", -1)))
 		NetEvents.Event.EV_ROOM_LIGHTS:
-			if _valid(a, ["switch"]) and a["switch"].has_method("set_lights_on"):
+			if a["switch"].has_method("set_lights_on"):
 				a["switch"].set_lights_on(bool(a.get("on", true)))
 		NetEvents.Event.EV_PULL_LIGHT:
-			if _valid(a, ["cord"]) and a["cord"].has_method("set_lit_remote"):
+			if a["cord"].has_method("set_lit_remote"):
 				a["cord"].set_lit_remote(bool(a.get("on", true)))
 		NetEvents.Event.EV_BLINDS:
-			if _valid(a, ["blinds"]) and a["blinds"].has_method("set_drop_remote"):
+			if a["blinds"].has_method("set_drop_remote"):
 				a["blinds"].set_drop_remote(float(a.get("drop", 1.0)))
 		NetEvents.Event.EV_TIME_OF_DAY:
-			if _valid(a, ["clock"]) and a["clock"].has_method("net_set_time"):
+			if a["clock"].has_method("net_set_time"):
 				a["clock"].net_set_time(float(a.get("time", 0.75)))
 		NetEvents.Event.EV_SYS_VIDEO_OUT:
-			if _valid(a, ["sys"]):
-				a["sys"].set_video_out_enabled(bool(a.get("on", true)))
+			a["sys"].set_video_out_enabled(bool(a.get("on", true)))
 		NetEvents.Event.EV_SYS_GRAVITY:
-			if _valid(a, ["sys"]):
-				a["sys"].set_ignore_gravity(bool(a.get("on", false)))
+			a["sys"].set_ignore_gravity(bool(a.get("on", false)))
 		NetEvents.Event.EV_TV_SIZE:
-			if _valid(a, ["tv"]):
-				a["tv"].set_tv_scale(float(a.get("scale", 1.0)))
+			a["tv"].set_tv_scale(float(a.get("scale", 1.0)))
 		NetEvents.Event.EV_VCR_CMD:
 			# Transport is host-authoritative; the host executes the command and
 			# its state broadcast (send_media_state) drives every peer's local
 			# playback (M5 drift sync). Run un-suppressed so the transport hook's
 			# _net_push_state() actually broadcasts.
-			if _nm.is_host() and _valid(a, ["vcr"]):
+			if _nm.is_host():
 				_unsuppressed(_host_vcr_cmd.bind(a["vcr"], str(a.get("cmd", ""))))
 		NetEvents.Event.EV_BOOK_PAGE:
-			if _valid(a, ["book"]) and a["book"].has_method("set_page"):
+			if a["book"].has_method("set_page"):
 				a["book"].set_page(int(a.get("state", 0)), int(a.get("leaf", 0)))
 		NetEvents.Event.EV_BOOK_SIZE:
-			if _valid(a, ["book"]):
-				a["book"].set("size_scale", float(a.get("scale", 1.0)))
+			a["book"].set("size_scale", float(a.get("scale", 1.0)))
 		NetEvents.Event.EV_BOOK_HALF:
-			if _valid(a, ["book"]):
-				a["book"].set("half_page_mode", bool(a.get("on", false)))
+			a["book"].set("half_page_mode", bool(a.get("on", false)))
 		NetEvents.Event.EV_MEMCARD_INSERT:
-			if _valid(a, ["sys", "card"]):
-				a["sys"].restore_memory_card(a["card"], _memcard_slot_of(a))
+			a["sys"].restore_memory_card(a["card"], _memcard_slot_of(a))
 		NetEvents.Event.EV_MEMCARD_REMOVE:
-			if _valid(a, ["sys"]):
-				a["sys"].net_release_memory_card(_memcard_slot_of(a))
+			a["sys"].net_release_memory_card(_memcard_slot_of(a))
 		NetEvents.Event.EV_TRAY:
-			if _valid(a, ["sys"]) and a["sys"].has_method("net_set_tray_open"):
+			if a["sys"].has_method("net_set_tray_open"):
 				a["sys"].net_set_tray_open(bool(a.get("open", false)))
 		NetEvents.Event.EV_DISK_OP:
 			# Client disc-swap intent — the host frame-schedules it for all
 			# peers through the netplay session (system.gd _request_disk_op).
-			if _nm.is_host() and _valid(a, ["sys"]):
+			if _nm.is_host():
 				_nm.netplay_schedule_disk(a["sys"], int(a.get("op", 0)),
 					str(a.get("md5", "")), int(a.get("index", 0)))
 		NetEvents.Event.EV_DVD_INSERT:
-			if _valid(a, ["dvd", "disc"]):
-				a["dvd"].restore_disc(a["disc"])
+			a["dvd"].restore_disc(a["disc"])
 		NetEvents.Event.EV_DVD_REMOVE:
-			if _valid(a, ["dvd"]):
-				a["dvd"].net_release_disc()
+			a["dvd"].net_release_disc()
 		NetEvents.Event.EV_DVD_CMD:
 			# DVD transport/menu is host-authoritative: the host executes the
 			# command and its state broadcast (send_media_state) drives every
 			# peer's local playback. Run un-suppressed so the command hook's
 			# _net_push_state() actually broadcasts.
-			if _nm.is_host() and _valid(a, ["dvd"]):
+			if _nm.is_host():
 				_unsuppressed(_host_dvd_cmd.bind(a["dvd"], str(a.get("cmd", ""))))
 		NetEvents.Event.EV_AUDIO_INSERT:
-			if _valid(a, ["player", "media"]):
-				a["player"].restore_media(a["media"])
+			a["player"].restore_media(a["media"])
 		NetEvents.Event.EV_AUDIO_REMOVE:
 			# Through the deck's own loader, not the snap zone. A seated item is
 			# NOT held by the zone — MediaSlot/MediaTray both drop it and reparent
 			# it as they take ownership — so the old get_node("MediaSlot").
 			# drop_object() here unseated nothing at all on a tray deck.
-			if _valid(a, ["player"]):
-				a["player"].remove_media()
+			a["player"].remove_media()
 		NetEvents.Event.EV_AUDIO_CMD:
 			# Audio transport is host-authoritative: the host executes and its
 			# state broadcast (send_media_state) drives every peer's local
 			# playback. Run un-suppressed so the command hook's _net_push_state()
 			# actually broadcasts.
-			if _nm.is_host() and _valid(a, ["player"]):
+			if _nm.is_host():
 				_unsuppressed(_host_audio_cmd.bind(a["player"],
 					str(a.get("cmd", "")), int(a.get("index", -1))))
 
