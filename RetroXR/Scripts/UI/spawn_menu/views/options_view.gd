@@ -1405,42 +1405,18 @@ func _save_romm_config() -> void:
 func _build_romm_options(vbox: VBoxContainer) -> void:
 	vbox.add_child(MenuStyle.spacer(10))
 
-	var enable_row := HBoxContainer.new()
-	enable_row.custom_minimum_size = Vector2(0, 68)
-	enable_row.add_theme_constant_override("separation", 10)
-	vbox.add_child(enable_row)
+	MenuStyle.switch_row(vbox, "Enable RomM library", romm_config.enabled, 20, 68) \
+		.toggled.connect(func(on: bool) -> void:
+			romm_config.enabled = on
+			_save_romm_config()
+			if on:
+				romm_platforms_requested.emit())
 
-	var enable_lbl := Label.new()
-	enable_lbl.text = "Enable RomM library"
-	enable_lbl.add_theme_font_size_override("font_size", 20)
-	enable_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
-	enable_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	enable_row.add_child(enable_lbl)
-
-	enable_row.add_child(VRToggle.create(romm_config.enabled, func(on: bool) -> void:
-		romm_config.enabled = on
-		_save_romm_config()
-		if on:
-			romm_platforms_requested.emit()
-	))
-
-	var backup_row := HBoxContainer.new()
-	backup_row.custom_minimum_size = Vector2(0, 68)
-	backup_row.add_theme_constant_override("separation", 10)
-	vbox.add_child(backup_row)
-
-	var backup_lbl := Label.new()
-	backup_lbl.text = "Back up saves and states"
-	backup_lbl.add_theme_font_size_override("font_size", 20)
-	backup_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
-	backup_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	backup_lbl.tooltip_text = "Upload battery saves and save states to RomM as they are written"
-	backup_row.add_child(backup_lbl)
-
-	backup_row.add_child(VRToggle.create(romm_config.backup_enabled, func(on: bool) -> void:
-		romm_config.backup_enabled = on
-		_save_romm_config()
-	))
+	MenuStyle.switch_row(vbox, "Back up saves and states", romm_config.backup_enabled,
+			20, 68, "Upload battery saves and save states to RomM as they are written") \
+		.toggled.connect(func(on: bool) -> void:
+			romm_config.backup_enabled = on
+			_save_romm_config())
 
 	_romm_url_edit = _add_options_text_field(vbox, "Server URL", romm_config.base_url,
 		func(text: String) -> void:

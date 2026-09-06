@@ -183,8 +183,12 @@ static func check(text: String, font_size := 18, height := 38) -> CheckBox:
 ## A caption on the left, a VRToggle switch on the right — the shape every
 ## boolean row in OPTIONS has. Adds the row to `parent` and returns the switch,
 ## since the row itself is never touched again.
+## `tooltip` is on the LABEL rather than the switch, because the name is the
+## wider target and the thing a player is reading when they want the
+## explanation. Optional: only the rows whose setting is not self-evident from
+## its name carry one.
 static func switch_row(parent: Container, text: String, initial_on := false,
-		font_size := 18, height := 56) -> VRToggle:
+		font_size := 18, height := 56, tooltip := "") -> VRToggle:
 	var row := HBoxContainer.new()
 	row.custom_minimum_size = Vector2(0, height)
 	row.add_theme_constant_override("separation", 8)
@@ -196,6 +200,7 @@ static func switch_row(parent: Container, text: String, initial_on := false,
 	lbl.add_theme_font_size_override("font_size", font_size)
 	lbl.add_theme_color_override("font_color", COLOR_LICENSE)
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.tooltip_text = tooltip
 	row.add_child(lbl)
 
 	var sw := VRToggle.create(initial_on)
