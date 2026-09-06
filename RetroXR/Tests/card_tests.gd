@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 146
+const EXPECTED_CASES := 148
 
 var _pass := 0
 var _fail := 0
@@ -556,6 +556,15 @@ func _test_format_registry() -> void:
 	for fmt: CardFormat in CardFormats.all():
 		ids.append(fmt.id())
 	_eq(ids.size(), _unique(ids).size(), "registry/every family id is distinct")
+
+	# The id must map to the right CONCRETE adapter, not merely to something that
+	# answers the id. Nothing else asserts the wiring between a family string and
+	# the class that implements it, so a _build() that registered one format under
+	# the other's key would satisfy every case above.
+	_ok(CardFormats.for_family("playstation") is PS1CardFormat,
+		"registry/the playstation family is a PS1CardFormat")
+	_ok(CardFormats.for_family("gamecube") is GCCardFormat,
+		"registry/the gamecube family is a GCCardFormat")
 
 	# for_path lowercases before matching, so a card named by a tool that shouts
 	# still resolves. Nothing else covers the fold.
