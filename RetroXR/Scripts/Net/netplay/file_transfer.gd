@@ -379,6 +379,10 @@ func _req_file(md5: String, kind: String) -> void:
 	if not _nm.is_host():
 		return
 	var sender := multiplayer.get_remote_sender_id()
+	# Accepted peer, not merely a connected one. This handler hands FILES
+	# out, so it is the one where the difference matters most.
+	if not _nm.is_accepted_peer(sender):
+		return
 	# Server-side kind allowlist — the authoritative refusal.
 	if not TRANSFER_KINDS.has(kind):
 		_refuse(sender, md5, "kind '%s' is not transferable" % kind)

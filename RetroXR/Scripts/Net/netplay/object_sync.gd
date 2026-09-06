@@ -341,6 +341,10 @@ func _broadcast_spawn(node: Node) -> void:
 func _request_snapshot() -> void:
 	if not _nm.is_host():
 		return
+	# The sender must be a peer we ACCEPTED, not merely one holding a
+	# socket: is_host() only says we are the one who decides.
+	if not _nm.is_accepted_peer(multiplayer.get_remote_sender_id()):
+		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	if not _world_ready or _applying or _nm.world_root_node() == null:
 		_pending_snapshot_peers[peer_id] = true
@@ -474,9 +478,14 @@ func _clear_world(root: Node) -> void:
 func _request_spawn(entry: Dictionary) -> void:
 	if not _nm.is_host():
 		return
+	# The sender must be a peer we ACCEPTED, not merely one holding a
+	# socket: is_host() only says we are the one who decides.
+	if not _nm.is_accepted_peer(multiplayer.get_remote_sender_id()):
+		return
 	var root: Node = _nm.world_root_node()
 	if root == null:
 		return
+	entry = _local_paths_only(entry)
 	var spawned: Dictionary = _suppressed(
 		_persistence.instantiate_objects.bind(root, [entry]))
 	for id: Variant in spawned:
@@ -485,6 +494,40 @@ func _request_spawn(entry: Dictionary) -> void:
 			_broadcast_spawn(node)
 		else:
 			node.queue_free()
+
+
+## Path fields a spawn entry can carry into a node.
+const PEER_PATH_FIELDS := ["pdf_path", "image_path", "rom_path", "video_path"]
+
+
+## Blank any path in a PEER-SUPPLIED entry that does not sit inside this
+## machine's own library.
+##
+## The host adopts these verbatim, and _serialize_registry_entry then hashes
+## whatever path the spawned node holds and calls serve_register on it for any
+## kind in TRANSFER_KINDS. Unchecked, that is an arbitrary-file-read: a peer
+## names a file anywhere on the host, asks the host to spawn a book pointing at
+## it, and then fetches it back down the file channel.
+##
+## Blanked rather than refused, because a peer naming a path this machine does
+## not have is the ORDINARY case and already worked: the client's own resolution
+## chain (_resolve_file_fields) finds the file by name or by hash instead. The
+## host simply must not adopt the string. Its own spawns are not filtered --
+## those come from its menus and its save files, where naming a path outside the
+## library is legitimate.
+func _local_paths_only(entry: Dictionary) -> Dictionary:
+	var root := DataPaths.media_root()
+	var out := entry.duplicate(true)
+	for key: String in PEER_PATH_FIELDS:
+		var raw := str(out.get(key, ""))
+		if raw.is_empty():
+			continue
+		var p := raw.simplify_path()
+		if p == root or p.begins_with(root + "/"):
+			continue
+		push_warning("[NetObjectSync] refused a peer path outside the library: %s" % raw)
+		out[key] = ""
+	return out
 
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -505,6 +548,10 @@ func _spawn_object_body(root: Node, entry: Dictionary) -> void:
 @rpc("any_peer", "call_remote", "reliable", 0)
 func _request_despawn(net_id: int) -> void:
 	if not _nm.is_host():
+		return
+	# The sender must be a peer we ACCEPTED, not merely one holding a
+	# socket: is_host() only says we are the one who decides.
+	if not _nm.is_accepted_peer(multiplayer.get_remote_sender_id()):
 		return
 	var node: Node = _registry.get(net_id)
 	if is_instance_valid(node):
@@ -644,6 +691,10 @@ func _hinge_request(updates: Array) -> void:
 	if not _nm.is_host():
 		return
 	var sender := multiplayer.get_remote_sender_id()
+	# Accepted peer, not merely a connected one -- see
+	# NetworkManager.is_accepted_peer.
+	if not _nm.is_accepted_peer(sender):
+		return
 	var accepted := _apply_hinge_updates(updates)
 	if accepted.is_empty():
 		return
@@ -826,6 +877,10 @@ func _request_grab(net_id: int) -> void:
 	if not _nm.is_host():
 		return
 	var sender := multiplayer.get_remote_sender_id()
+	# Accepted peer, not merely a connected one -- see
+	# NetworkManager.is_accepted_peer.
+	if not _nm.is_accepted_peer(sender):
+		return
 	var node: Node = _registry.get(net_id)
 	if not is_instance_valid(node):
 		return
@@ -1014,6 +1069,10 @@ func _event_req(kind: NetEvents.Event, wire: Dictionary) -> void:
 	if not _nm.is_host():
 		return
 	var sender := multiplayer.get_remote_sender_id()
+	# Accepted peer, not merely a connected one -- see
+	# NetworkManager.is_accepted_peer.
+	if not _nm.is_accepted_peer(sender):
+		return
 	_apply_event(kind, wire)
 	_update_port_owner(kind, _decode_args(wire), sender)
 	# Relay to everyone except the originator (who already has the state).

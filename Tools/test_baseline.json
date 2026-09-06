@@ -3,7 +3,7 @@
   "suites": {
     "archive_safety_tests": 28,
     "archive_tests": 34,
-    "autoload_order_tests": 8,
+    "autoload_order_tests": 9,
     "av_tests": 149,
     "bay_tests": 106,
     "binding_tests": 186,
@@ -21,7 +21,7 @@
     "mod_tests": 165,
     "motion_tests": 55,
     "netplay_tests": 685,
-    "object_sync_tests": 129,
+    "object_sync_tests": 139,
     "poster_tests": 112,
     "ra_tests": 29,
     "rom_compat_tests": 27,

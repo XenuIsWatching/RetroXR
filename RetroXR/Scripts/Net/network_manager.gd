@@ -261,6 +261,20 @@ func is_active() -> bool:
 	return _active
 
 
+## True when `id` is a peer this host actually accepted into the session.
+##
+## A different question from is_host(), and the one most request handlers were
+## not asking. is_host() only says whether WE are the peer that decides; it says
+## nothing about whether the SENDER is allowed to ask. A connected socket is not
+## an accepted player — _register refuses a peer whose protocol version, mod set
+## or arrival order does not fit, and until it passes there is no roster entry.
+##
+## Every @rpc("any_peer") handler that MUTATES shared state should pass this as
+## well as is_host(). _pose_report was the only one that did.
+func is_accepted_peer(id: int) -> bool:
+	return peers.has(id)
+
+
 func is_host() -> bool:
 	if not _active or multiplayer == null or multiplayer.multiplayer_peer == null:
 		return false
@@ -928,9 +942,11 @@ func _register(info: Dictionary, version: int) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if version != PROTOCOL_VERSION:
 		_reject.rpc_id(sender, "version mismatch (host %d, you %d)" % [PROTOCOL_VERSION, version])
+		_refuse_peer(sender)
 		return
 	if peers.size() >= MAX_PLAYERS:
 		_reject.rpc_id(sender, "server full")
+		_refuse_peer(sender)
 		return
 	# Mods change what objects exist and what a console looks like, so a room
 	# shared between mismatched peers is one where the two see different rooms —
@@ -941,6 +957,7 @@ func _register(info: Dictionary, version: int) -> void:
 	if their_mods != our_mods:
 		_reject.rpc_id(sender, "mods do not match: %s"
 			% Mods.fingerprint_mismatch(our_mods, their_mods))
+		_refuse_peer(sender)
 		return
 	var entry := {
 		"name": str(info.get("name", "Player")).left(24),
@@ -981,6 +998,30 @@ func _accept(roster: Dictionary, scene_id: String) -> void:
 		_setup_world()
 	status_changed.emit("Connected — %d player(s)" % peers.size())
 	session_started.emit(false)
+
+
+## Close a refused peer's connection, after its rejection has gone out.
+##
+## _reject runs on the CLIENT and calls leave_session there, so until this the
+## refusal was enforced entirely by the peer being refused: a client that simply
+## ignored the message kept an open socket to the host and could go on sending
+## any_peer RPCs. A version or mod mismatch is exactly the case where the peer
+## may not be running our code at all.
+##
+## Deferred so the reliable _reject sent immediately before is flushed rather
+## than dropped with the connection, and guarded because a peer can vanish on
+## its own between the two.
+func _refuse_peer(id: int) -> void:
+	call_deferred("_disconnect_refused", id)
+
+
+func _disconnect_refused(id: int) -> void:
+	var peer := multiplayer.multiplayer_peer if multiplayer != null else null
+	if peer == null or not peer.has_method("disconnect_peer"):
+		return
+	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
+		return
+	peer.call("disconnect_peer", id)
 
 
 @rpc("authority", "call_remote", "reliable", CH_CONTROL)

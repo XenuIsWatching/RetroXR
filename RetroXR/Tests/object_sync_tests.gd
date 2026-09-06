@@ -317,6 +317,8 @@ func _ready() -> void:
 
 	if _want("registry"):
 		await _test_registry_lifecycle()
+	if _want("paths"):
+		_test_peer_paths()
 	var pair: Pair = null
 	if _needs_network():
 		pair = await _make_pair()
@@ -353,6 +355,46 @@ func _ready() -> void:
 
 func _needs_network() -> bool:
 	return _only.is_empty() or _only != "registry"
+
+
+## paths/ — what a peer is allowed to name.
+##
+## The host adopts a spawn entry's path fields verbatim and then hashes whatever
+## the spawned node holds, registering it for serving. Unfiltered, that is an
+## arbitrary-file-read: name a file anywhere on the host, have the host spawn a
+## book pointing at it, fetch it back. Needs no network — the filter is pure.
+func _test_peer_paths() -> void:
+	var sync := NetObjectSync.new()
+	add_child(sync)
+	var root := DataPaths.media_root()
+
+	var inside := {"type": "book", "pdf_path": root + "/books/manual.pdf"}
+	_eq(sync._local_paths_only(inside).get("pdf_path"), root + "/books/manual.pdf",
+		"paths/a path inside the library is kept")
+
+	# Every shape the escape can take.
+	for bad: String in [
+			"/etc/passwd",
+			root + "/../secrets.pdf",
+			root + "books.pdf",          # sibling whose name merely starts with root
+			"C:/Users/someone/tax.pdf"]:
+		var entry := {"type": "book", "pdf_path": bad}
+		_eq(sync._local_paths_only(entry).get("pdf_path"), "",
+			"paths/refused: %s" % bad)
+
+	# Every field, not just the book's.
+	var many := {"type": "poster", "image_path": "/etc/shadow",
+		"rom_path": "/etc/hosts", "video_path": "/etc/fstab"}
+	var cleaned := sync._local_paths_only(many)
+	_eq(cleaned.get("image_path"), "", "paths/image_path is filtered too")
+	_eq(cleaned.get("rom_path"), "", "paths/and rom_path")
+	_eq(cleaned.get("video_path"), "", "paths/and video_path")
+	_eq(cleaned.get("type"), "poster", "paths/non-path fields are untouched")
+
+	# The caller's dictionary must not be mutated: the host re-broadcasts it.
+	_eq(many.get("image_path"), "/etc/shadow", "paths/the entry is copied, not edited")
+
+	sync.queue_free()
 
 
 func _test_registry_lifecycle() -> void:
