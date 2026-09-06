@@ -96,15 +96,20 @@ static var _mod_owners: Dictionary = {}
 
 ## Add or replace a descriptor. The systemid comes off the resource itself, so a
 ## mod cannot file one under a name it does not answer to.
-static func register_mod_info(info: SystemInfo, owner_id: String = "") -> void:
-	if info == null or info.systemid.is_empty():
-		return
+## "" on success, else why the descriptor was refused, like every other
+## registrar a mod reaches.
+static func register_mod_info(info: SystemInfo, owner_id: String = "") -> String:
+	if info == null:
+		return "no descriptor given"
+	if info.systemid.is_empty():
+		return "descriptor carries no systemid"
 	_mod_infos[info.systemid] = info
 	_mod_owners[info.systemid] = owner_id
 	# The negative cache is why this matters: for_system() caches a MISS as null,
 	# so a systemid asked about before the mod registered would stay null for the
 	# session. Dropping the entry is cheaper than reasoning about who asked first.
 	_cache.erase(info.systemid)
+	return ""
 
 
 ## Take back one mod's descriptors.

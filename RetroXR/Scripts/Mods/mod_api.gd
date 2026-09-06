@@ -69,7 +69,9 @@ func override_model(model_id: String, row: Dictionary) -> bool:
 func register_system_info(info: SystemInfo) -> bool:
 	if info == null or info.systemid.is_empty():
 		return _fail("register_system_info needs a SystemInfo carrying a systemid")
-	SystemInfo.register_mod_info(info, id)
+	var err := SystemInfo.register_mod_info(info, id)
+	if not err.is_empty():
+		return _fail("descriptor %s: %s" % [info.systemid, err])
 	_note("platform", "%s descriptor" % info.systemid)
 	return true
 
@@ -175,7 +177,9 @@ func register_object(type: String, scene_path: String, menu: Dictionary = {}) ->
 	if not err.is_empty():
 		return _fail("object %s: %s" % [type, err])
 	if not menu.is_empty():
-		SpawnCatalog.register_mod_spawnable(type, menu, id)
+		var menu_err := SpawnCatalog.register_mod_spawnable(type, menu, id)
+		if not menu_err.is_empty():
+			return _fail("object %s: %s" % [type, menu_err])
 	_note("object", str(menu.get("label", type)))
 	return true
 

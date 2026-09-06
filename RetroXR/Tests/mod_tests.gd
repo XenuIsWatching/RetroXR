@@ -360,7 +360,12 @@ func _group_media() -> void:
 		"withdraw/a mapping registers under an owner")
 	var info := SystemInfo.new()
 	info.systemid = "t_withdraw_platform"
-	SystemInfo.register_mod_info(info, withdrawn)
+	_eq(SystemInfo.register_mod_info(info, withdrawn), "",
+		"withdraw/a good descriptor reports no error")
+	_ok(not SystemInfo.register_mod_info(null, withdrawn).is_empty(),
+		"withdraw/a null descriptor is refused out loud")
+	_ok(not SpawnCatalog.register_mod_spawnable("", {"label": "X"}, withdrawn).is_empty(),
+		"withdraw/a spawnable with no type is refused out loud")
 	_ok(SystemInfo.for_system("t_withdraw_platform") != null, "withdraw/descriptor is served")
 
 	MediaDimensions.drop_mod(withdrawn)

@@ -398,11 +398,18 @@ static func register_mod_peripherals(systemid: String, items: Array,
 
 
 ## A prop the spawn menu can offer directly. `menu` carries at least a label.
-static func register_mod_spawnable(type: String, menu: Dictionary, owner_id: String) -> void:
+## "" on success, else why the entry was refused, like every other registrar a
+## mod reaches. A spawnable filed under an empty type could never be spawned and
+## could never be found again to be withdrawn.
+static func register_mod_spawnable(type: String, menu: Dictionary,
+		owner_id: String) -> String:
+	if type.is_empty():
+		return "spawnable type is empty"
 	var row := menu.duplicate(true)
 	row["owner"] = owner_id
 	row["label"] = str(menu.get("label", type))
 	_mod_spawnables[type] = row
+	return ""
 
 
 ## Every mod prop offered on the menu, as {type, label}.
