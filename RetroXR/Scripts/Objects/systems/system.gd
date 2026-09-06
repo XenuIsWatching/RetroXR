@@ -1916,17 +1916,24 @@ func power_on() -> void:
 	var resolved_core := _resolve_core()
 	var resolved_dir := _resolve_dir()
 
+	# Nothing in the slot, and this core will start anyway. Named because it is
+	# asked four times across this function and the answer CHANGES half way
+	# through: the verdict below may substitute blank media into rom_path, after
+	# which rom_path.is_empty() is false for a machine that is still, as far as
+	# the player is concerned, empty. See `still_empty` past that point.
+	var slot_empty := rom_path.is_empty() \
+		and BiosBoot.can_boot_empty(resolved_core, systemid)
+
 	# Only when the slot is empty: empty_media_path CREATES the blank image, and
 	# a machine with a game in it must not leave one behind.
 	var blank := ""
-	if rom_path.is_empty() and BiosBoot.can_boot_empty(resolved_core, systemid):
+	if slot_empty:
 		blank = BiosBoot.empty_media_path(
 			BiosBoot.empty_media_extension(resolved_core, systemid))
 
 	var verdict := _power_on_verdict(resolved_core, systemid, rom_path,
 		BiosBoot.missing_required(resolved_core), blank,
-		rom_path.is_empty() and BiosBoot.can_boot_empty(resolved_core, systemid)
-			and BiosBoot.boots_with_no_content(resolved_core, systemid),
+		slot_empty and BiosBoot.boots_with_no_content(resolved_core, systemid),
 		resolved_core.is_empty()
 			or not CoreDownloadManager.installed_core_lib(resolved_core).is_empty())
 	if not bool(verdict["start"]):
@@ -1944,6 +1951,13 @@ func power_on() -> void:
 	# handed a blank disc, which is what a console with a closed empty tray is.
 	rom_path = str(verdict["rom"])
 
+	# The same question as slot_empty, asked again on the OTHER side of that
+	# substitution, which is why it cannot reuse it: a machine handed blank media
+	# now has a non-empty rom_path while still being a console with nothing in
+	# its tray. Both readers below want this one, not the one above.
+	var still_empty := rom_path.is_empty() \
+		and BiosBoot.can_boot_empty(resolved_core, systemid)
+
 	print("[RetroSystem] Powering on: core=%s dir=%s rom=%s" % [resolved_core, resolved_dir, rom_path])
 
 	# The core is handed rom_path verbatim: nothing downstream unpacks an archive
@@ -1958,10 +1972,8 @@ func power_on() -> void:
 	# every launch. Never both: seed_values records the key as seeded for ever,
 	# and doing that behind a pin would silently disarm the override.
 	if AppPrefs.bios_boot_override:
-		var empty_slot := rom_path.is_empty() \
-			and BiosBoot.can_boot_empty(resolved_core, systemid)
 		CoreOptionsStore.seed_values(resolved_dir, resolved_core,
-			BiosBoot.pinned_options(resolved_core, systemid, empty_slot))
+			BiosBoot.pinned_options(resolved_core, systemid, still_empty))
 	_apply_forced_core_options(resolved_dir, resolved_core)
 	AppPrefs.apply_hw_render_for(resolved_core)
 	_libretro.SetSramPath(sram_path_for_run(resolved_core))
@@ -1976,9 +1988,8 @@ func power_on() -> void:
 	# sixteen surveyed took the process down. It is switched on only for the
 	# machines measured to want it, and off again straight after so the next
 	# machine to start is not handed a setting it never asked for.
-	var no_content := rom_path.is_empty() \
-		and BiosBoot.boots_with_no_content(resolved_core, systemid) \
-		and BiosBoot.can_boot_empty(resolved_core, systemid)
+	var no_content := still_empty \
+		and BiosBoot.boots_with_no_content(resolved_core, systemid)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", true)
 	# An assembled machine goes over as one piece if the core will take it that
