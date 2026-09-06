@@ -490,7 +490,7 @@ static func _archive_plan(reader: ZIPReader, dest_dir: String) -> Array[Dictiona
 	for raw_name: String in reader.get_files():
 		var directory := raw_name.replace("\\", "/").ends_with("/")
 		var member_name := raw_name.trim_suffix("/") if directory else raw_name
-		var relative := _safe_archive_member(member_name)
+		var relative := ArchiveSafety.safe_member(member_name)
 		if relative.is_empty():
 			push_warning("RommDownloader: refusing unsafe archive member '%s'" % raw_name)
 			return []
@@ -505,7 +505,7 @@ static func _archive_plan(reader: ZIPReader, dest_dir: String) -> Array[Dictiona
 		if not out_path.to_lower().begins_with(root.to_lower() + "/"):
 			push_warning("RommDownloader: archive member escaped destination '%s'" % raw_name)
 			return []
-		if _archive_parent_is_link(root, relative):
+		if ArchiveSafety.parent_is_link(root, relative):
 			push_warning("RommDownloader: archive member crosses a symbolic link '%s'" % raw_name)
 			return []
 		if directory:
@@ -520,41 +520,10 @@ static func _archive_plan(reader: ZIPReader, dest_dir: String) -> Array[Dictiona
 	return plan
 
 
-## A normalized relative member name, or empty when the spelling is unsafe on
-## any platform RetroXR ships. Colons are rejected as Windows drive/ADS syntax.
-static func _safe_archive_member(entry_name: String) -> String:
-	if entry_name.is_empty() or entry_name.contains("\u0000"):
-		return ""
-	var normalized := entry_name.replace("\\", "/")
-	if normalized.is_absolute_path() or normalized.begins_with("/") \
-			or normalized.begins_with("//") or normalized.contains(":"):
-		return ""
-	var parts := normalized.split("/", true)
-	for part: String in parts:
-		if part.is_empty() or part == "." or part == "..":
-			return ""
-	var relative := normalized.simplify_path()
-	if relative.is_empty() or relative == "." or relative == ".." \
-			or relative.begins_with("../"):
-		return ""
-	return relative
 
 
-## Existing directory symlinks defeat lexical prefix checks: root/link/file can
-## resolve outside root. Check each parent before extraction creates descendants.
-static func _archive_parent_is_link(root: String, relative: String) -> bool:
-	var dir := DirAccess.open(root)
-	if dir == null:
-		return false
-	var parts := relative.split("/", false)
-	var parent := ""
-	for i in range(parts.size() - 1):
-		parent = parts[i] if parent.is_empty() else parent.path_join(parts[i])
-		if dir.is_link(parent):
-			return true
-		if not DirAccess.dir_exists_absolute(root.path_join(parent)):
-			break
-	return false
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -782,7 +751,7 @@ func _reserve_cache_on_main(systemid: String, bytes: int, keep: PackedStringArra
 static func _remove_downloaded_members(systemid: String, members: Array) -> void:
 	for member: Dictionary in members:
 		var relative := str(member.get("path", ""))
-		if _safe_archive_member(relative).is_empty():
+		if ArchiveSafety.safe_member(relative).is_empty():
 			continue
 		var path := RommCacheManifest.local_path(systemid, relative)
 		if FileAccess.file_exists(path):

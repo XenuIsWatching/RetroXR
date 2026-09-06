@@ -339,7 +339,17 @@ func _extract_preserving_paths(zip_path: String, dest_dir: String) -> Dictionary
 	for entry: String in reader.get_files():
 		if entry.ends_with("/"):
 			continue
-		var out_path := dest_dir.path_join(entry)
+		# The member names come from the server that built the archive, not from
+		# the player. Joining a raw one to dest_dir is zip-slip: an entry named
+		# ../../../x walks straight out of the firmware folder.
+		var relative := ArchiveSafety.safe_member(entry)
+		if relative.is_empty():
+			reader.close()
+			return {"ok": false, "error": "Unsafe path in archive: %s" % entry}
+		if ArchiveSafety.parent_is_link(dest_dir, relative):
+			reader.close()
+			return {"ok": false, "error": "Archive path crosses a link: %s" % entry}
+		var out_path := dest_dir.path_join(relative)
 		DirAccess.make_dir_recursive_absolute(out_path.get_base_dir())
 		var f := FileAccess.open(out_path, FileAccess.WRITE)
 		if f == null:
