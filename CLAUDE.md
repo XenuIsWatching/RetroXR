@@ -510,8 +510,26 @@ second time. `.tscn` transforms, a model's facing and a port's seat all have not
 and all three were sitting in the index while that socket was written backwards.
 
 `libretro-godot/tests/run_tests.py` is the small Godot-free C++ harness for the
-link coordinator and sensor-id encoding. Other GDExtension changes are validated
-by rebuilding (above) and loading in the headless editor.
+link coordinator and sensor-id encoding.
+
+**`RetroXR/Tests/archive_tests.tscn` is the one GDExtension with a self-checking
+suite**, because `RommArchiveExtractor` is the one that needs no display, codec,
+core or server. 34 checks over a well-formed archive, the plan validation, a
+damaged/truncated/non-ZIP/missing one, and cancellation; every fixture is built
+under `user://` at run time, so it carries no binary.
+
+Two of its cases are hand-built STORED archives, and that is not fussiness.
+**For a DEFLATED member the declared CRC is handed to `StreamPeerGZIP` as a gzip
+trailer**, so a corrupt payload dies inside decompression and
+`RommArchiveExtractor`'s own `crc != entry.crc32` comparison is never reached — a
+"bad CRC" case built by flipping payload bytes passes with that check compiled
+out. Only a STORED member isolates it. `ZIPPacker` always deflates, hence the
+hand-rolled fixture.
+
+The other four extensions stay probes and rebuild-plus-load: `verlet-rope` has
+the bit-exact oracles in `Tools/rope/`, and `vlc-godot`, `godot-pdfium` and
+`metaxr-audio` all need a display, a codec or Meta's blob. Adding a suite for
+one of those would mean a red run that depends on the machine it ran on.
 
 ### 2b. The bedroom's saved visual probe
 
