@@ -537,6 +537,15 @@ func _on_media_download_completed(media_type: String, result: int,
 
 ## Start downloading all available media for a scraped result.
 ## rom_basename: e.g. "Banjo-Kazooie (USA)" (no extension)
+##
+## Each download is AWAITED, which is what makes _wait_for_rate_limit mean
+## anything: it compares against _last_request_time_ms, and that stamp is only
+## written once a request has actually been issued. Firing all four without
+## awaiting has every one of them read the same stamp, sleep the same interval
+## and then issue together, so the server sees a burst — the opposite of the
+## serialised client auto_scraper.gd documents itself as relying on. The await
+## returns as soon as the request is in flight, not when the file lands, so the
+## four transfers still overlap; only their STARTS are spaced.
 func download_all_media(scrape_result: Dictionary, systemid: String, rom_basename: String) -> void:
 	var media: Dictionary = scrape_result.get("media", {})
 	var media_root := RomLibrary.rom_dir_for_system(systemid).path_join("media")
@@ -559,7 +568,7 @@ func download_all_media(scrape_result: Dictionary, systemid: String, rom_basenam
 			ext = "." + url_ext
 		var dir_name: String = type_map[mtype]["dir"]
 		var dest := media_root.path_join(dir_name).path_join(rom_basename + ext)
-		download_media(mtype, url, dest)
+		await download_media(mtype, url, dest)
 
 
 func _wait_for_rate_limit() -> void:

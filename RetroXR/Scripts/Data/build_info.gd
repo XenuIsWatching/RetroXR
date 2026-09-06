@@ -124,7 +124,24 @@ static func _git(root: String, args: Array) -> String:
 	return str(out[0]).strip_edges() if out.size() > 0 else ""
 
 
-## Silent on a missing stamp: running from the editor there is no export, which
-## is the ordinary case and the reason collect_from_git() exists beside this.
+## The one JSON read in this project that must NOT go through JsonStore.
+##
+## read_dict opens with `FileAccess.file_exists(path)`, and STAMP_PATH is a
+## res:// path — which an export REMAPS into the pack, so file_exists answers
+## false for a file that is there and opens fine. The gate would make the whole
+## plate read "unknown" on device and nowhere else, which is the one place it
+## is supposed to work: in a checkout there is no stamp at all and
+## collect_from_git() answers instead.
+##
+## The constant's own comment says this fifteen lines up. It was migrated to the
+## shared reader anyway, and this is the note that should have stopped it.
+##
+## Silent on a missing stamp for that same reason: running from the editor,
+## absent is the ordinary case.
 static func _read_stamp() -> Dictionary:
-	return JsonStore.read_dict(STAMP_PATH)
+	var file := FileAccess.open(STAMP_PATH, FileAccess.READ)
+	if file == null:
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	return parsed if parsed is Dictionary else {}
