@@ -21,8 +21,8 @@ static func holder_of(tree: SceneTree, card_id: String) -> Node:
 		if not sys.has_method("get_snapped_memcard"):
 			continue
 		var slots := 1
-		if sys.has_method("get_memcard_slot_count"):
-			slots = int(sys.get_memcard_slot_count())
+		if sys.has_method("card_slot_count"):
+			slots = int(sys.card_slot_count())
 		for slot in maxi(slots, 1):
 			var seated: Node = sys.get_snapped_memcard(slot)
 			if seated != null and str(seated.get("card_id")) == card_id:

@@ -68,10 +68,6 @@ func get_snapped_memcard(slot := 0) -> Node3D:
 
 ## How many card slots this console shows. Public so menu code can walk them
 ## without knowing which console it is looking at.
-func get_memcard_slot_count() -> int:
-	return card_slot_count()
-
-
 func on_memcard_inserted(card: Node3D, slot: int) -> void:
 	_snapped_memcards[slot] = card
 	_host.add_collision_exception_with(card)

@@ -4450,10 +4450,6 @@ func get_snapped_memcard(slot := 0) -> Node3D:
 
 
 ## How many card slots this machine actually has.
-func get_memcard_slot_count() -> int:
-	return _memcards.get_memcard_slot_count()
-
-
 ## Re-resolve one slot (or all, with -1) and re-point a running core at it.
 func refresh_memcard_path(slot := -1) -> void:
 	_memcards.refresh_memcard_path(slot)
