@@ -65,6 +65,8 @@ func _ready() -> void:
 		await _test_a_dongle_has_its_own_sideways_id()
 		await _test_a_nunchuk_behind_a_dongle()
 		await _test_pulling_the_extension()
+	if _wants("touch"):
+		_test_touch_smoother()
 	if _wants("sideways"):
 		await _test_sideways_controls_follow_the_hands_and_shell()
 
@@ -746,3 +748,71 @@ func _test_pulling_the_extension() -> void:
 	_ok(not wm._has_nunchuk(), "and it stops claiming a second accelerometer")
 	wm.queue_free()
 	nc.queue_free()
+
+
+## ── touch/ ────────────────────────────────────────────────────────────
+##
+## TouchSmoother is the tremor filter under a fingertip on a handheld's touch pad
+## and on a TV showing that machine's bottom channel. Its three jobs each hide a
+## bug that shipped, and none of them announces itself when it regresses.
+func _test_touch_smoother() -> void:
+	var s := TouchSmoother.new()
+
+	# A fresh press starts exactly where it landed. Seeding only the target left
+	# the smoothed point at the PREVIOUS tap, so every new tap swept in from
+	# wherever the last one ended.
+	s.begin(Vector2(0.05, 0.02))
+	_ok(s.current().is_equal_approx(Vector2(0.05, 0.02)),
+		"touch/a new press starts where it landed")
+
+	# Movement under the deadzone does not move the stylus at all.
+	var before := s.current()
+	var tiny := s.point(Vector2(0.05 + TouchSmoother.DEADZONE * 0.5, 0.02), true, 1.0 / 90.0)
+	_ok(tiny.is_equal_approx(before), "touch/sub-deadzone wobble does not move it")
+
+	# SOFT deadzone: the excess is kept, not the whole movement, so crossing the
+	# threshold cannot jump by a full deadzone. A hard gate would step here.
+	var s2 := TouchSmoother.new()
+	s2.begin(Vector2.ZERO)
+	var step := TouchSmoother.DEADZONE * 1.01
+	for i in 200:
+		s2.point(Vector2(step, 0.0), true, 1.0 / 90.0)
+	var settled := s2.current().x
+	# The excess is what survives: a move of 1.01 deadzones settles at 0.01 of
+	# one, two orders below the raw point. A hard gate would settle AT the raw
+	# point instead, so this bound is what separates the two.
+	_ok(settled < step * 0.5,
+		"touch/a soft deadzone keeps only the excess, not the whole move",
+		"settled %f, raw %f" % [settled, step])
+	_ok(settled > 0.0, "touch/but it does move")
+
+	# The lift-off fix, and the reason this class exists. While `live` is false the
+	# last in-window point comes back UNCHANGED. Reporting the tip's real position
+	# on release put it outside the screen, where clamping pinned it to the border
+	# and turned every lift-off into a small swipe toward the edge.
+	var s3 := TouchSmoother.new()
+	s3.begin(Vector2(0.10, 0.10))
+	for i in 60:
+		s3.point(Vector2(0.10, 0.10), true, 1.0 / 90.0)
+	var held := s3.current()
+	var off_screen := s3.point(Vector2(9.0, 9.0), false, 1.0 / 90.0)
+	_ok(off_screen.is_equal_approx(held),
+		"touch/a lift-off reports the last in-window point, not the tip")
+	_ok(s3.point(Vector2(-9.0, -9.0), false, 1.0 / 90.0).is_equal_approx(held),
+		"touch/and sliding out sideways does not move it either")
+
+	# It follows exponentially rather than stepping: one frame gets part of the
+	# way, many frames arrive.
+	var s4 := TouchSmoother.new()
+	s4.begin(Vector2.ZERO)
+	var one := s4.point(Vector2(0.10, 0.0), true, 1.0 / 90.0).x
+	_ok(one > 0.0 and one < 0.10, "touch/one frame follows part of the way",
+		"got %f" % one)
+	for i in 300:
+		s4.point(Vector2(0.10, 0.0), true, 1.0 / 90.0)
+	_ok(absf(s4.current().x - 0.10) < 0.001, "touch/and it arrives if held")
+
+	# reset clears both halves, so a device put down and picked up again does not
+	# drag a stale point back in.
+	s4.reset()
+	_ok(s4.current().is_equal_approx(Vector2.ZERO), "touch/reset clears the point")
