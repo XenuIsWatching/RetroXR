@@ -976,3 +976,27 @@ func _group_pak() -> void:
 	_ok(offsets_ok, "pak/so port N starts at 0x800 + N * 0x8000")
 	_ok(N64Card.CARD_SIZE == RetroSystem.MEMPAK_SIZE,
 		"pak/and a pak image is exactly one port's worth")
+
+	# The round trip a saved room puts a pak through. A Controller Pak is a
+	# PLAIN_SCENES row — so the spawn menu can build one from its token — and
+	# that branch of _deserialize_object runs BEFORE the type match, which is
+	# why the card fields have to be carried across there. Restored without
+	# them, the pak reaches _ready with an empty card_id, mints itself a fresh
+	# one and reads exactly like a wiped set of notes.
+	var sp := ScenePersistence.new()
+	var saved := _pak(CONTROLLER_PAK_SCENE) as ControllerPak
+	await _wait(4)
+	saved.card_id = "PAK_ROUNDTRIP"
+	saved.card_label = "ROUNDTRIP"
+	var rec: Dictionary = sp._serialize_node(saved, 0, {})
+	_ok(str(rec.get("type", "")) == "controller_pak",
+		"pak/a saved pak is recorded as a controller_pak")
+	_ok(str(rec.get("card_id", "")) == "PAK_ROUNDTRIP",
+		"pak/carrying the card id its notes live under")
+	var back := sp._deserialize_object(rec) as ControllerPak
+	_ok(back != null, "pak/and is rebuilt from that record")
+	if back != null:
+		_ok(back.card_id == "PAK_ROUNDTRIP",
+			"pak/as the same pak, not a freshly minted blank")
+		_ok(back.card_label == "ROUNDTRIP", "pak/keeping the label on its face")
+		back.free()

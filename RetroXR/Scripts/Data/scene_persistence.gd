@@ -2082,6 +2082,16 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 		obj = _instantiate_mod_object(obj_type)
 	elif PLAIN_SCENES.has(obj_type):
 		obj = (PLAIN_SCENES[obj_type] as PackedScene).instantiate() as Node3D
+		# A Controller Pak is a PLAIN_SCENES row so the spawn menu can build one
+		# from its token, and this branch runs before the match below can — so
+		# its card fields are restored HERE or nowhere. Identity before the tree:
+		# card_id is the pak's file on disk, and a pak that reaches _ready
+		# without one mints a fresh blank, which reads exactly like the notes
+		# were wiped.
+		var cpak := obj as ControllerPak
+		if cpak != null:
+			cpak.card_id = str(data.get("card_id", ""))
+			cpak.card_label = str(data.get("card_label", "CONTROLLER PAK"))
 	else:
 		match obj_type:
 			"system":
@@ -2146,14 +2156,6 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				obj = card
 			"expansion_cover":
 				obj = EXPANSION_COVER_SCENE.instantiate() as ExpansionCover
-			"controller_pak":
-				# Identity before the tree: card_id is the pak's file on disk, and
-				# a pak that reached _ready without one mints a fresh blank, which
-				# reads exactly like the notes were wiped.
-				var cpak := CONTROLLER_PAK_SCENE.instantiate() as ControllerPak
-				cpak.card_id = str(data.get("card_id", ""))
-				cpak.card_label = str(data.get("card_label", "CONTROLLER PAK"))
-				obj = cpak
 			"poster":
 				var poster := POSTER_SCENE.instantiate() as Poster
 				# Size and mode BEFORE the path: the image setter derives the
