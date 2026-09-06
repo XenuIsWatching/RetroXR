@@ -32,6 +32,7 @@
     "spawn_menu_tests": 24,
     "state_tests": 100,
     "system_tests": 426,
+    "systems_data_tests": 42,
     "time_of_day_tests": 108,
     "tv_resize_tests": 53,
     "web_server_tests": 70
