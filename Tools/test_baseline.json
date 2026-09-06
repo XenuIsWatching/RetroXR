@@ -21,6 +21,7 @@
     "rope_tests": 82,
     "scene_tests": 153,
     "screen_cast_light_tests": 11,
+    "spawn_menu_tests": 24,
     "state_tests": 100,
     "system_tests": 426,
     "time_of_day_tests": 108,
