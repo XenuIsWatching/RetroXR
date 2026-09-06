@@ -83,11 +83,7 @@ static func _core_lib_ext() -> String:
 ## a different filesystem from the ROM tree on /sdcard — `adb push` cannot reach it.
 ## On Linux: $HOME/retroxr/libretro. On Windows: %USERPROFILE%/retroxr/libretro.
 static func default_core_root() -> String:
-	if OS.get_name() == "Android":
-		return OS.get_user_data_dir() + "/libretro"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/libretro"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/libretro"
+	return DataPaths.libretro_root()
 
 
 ## Absolute path to the cores subdirectory (where DLLs live).

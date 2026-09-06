@@ -9,11 +9,7 @@ extends RefCounted
 ## Root directory for ROMs.
 ## On Android: app external files dir (no permission needed). On Windows: %USERPROFILE%/retroxr/roms.
 static func default_roms_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/roms"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/roms"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/roms"
+	return DataPaths.media_root("roms")
 
 
 ## Absolute path for a single system's ROM folder.
@@ -236,11 +232,7 @@ static func scraped_manual_path(systemid: String, romname: String) -> String:
 ## Root directory for books (PDFs).
 ## Sits alongside the roms/ folder in the same files root.
 static func default_books_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/books"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/books"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/books"
+	return DataPaths.media_root("books")
 
 
 ## Create the books root if it doesn't already exist.
@@ -282,11 +274,7 @@ const VIDEO_EXTENSIONS := ["mp4", "mkv", "avi", "webm", "mov"]
 ## Root directory for videos.
 ## Sits alongside the roms/ and books/ folders in the same files root.
 static func default_videos_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/videos"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/videos"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/videos"
+	return DataPaths.media_root("videos")
 
 
 ## Create the videos root if it doesn't already exist.
@@ -328,11 +316,7 @@ const POSTER_EXTENSIONS := ["png", "jpg", "jpeg", "webp"]
 ## Root directory for posters.
 ## Sits alongside the roms/ and books/ folders in the same files root.
 static func default_posters_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/posters"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/posters"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/posters"
+	return DataPaths.media_root("posters")
 
 
 ## Create the posters root if it doesn't already exist.
@@ -370,11 +354,7 @@ static func scan_posters() -> Array[Dictionary]:
 ## Path to the TV root — the set's channel list (channels.json) lives here, and
 ## it is where a guide cache or channel logos would go later.
 static func default_tv_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/tv"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/tv"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/tv"
+	return DataPaths.media_root("tv")
 
 
 ## Create the tv root if it doesn't already exist.
@@ -390,11 +370,7 @@ static func ensure_tv_root() -> void:
 ## Path to the DVDs root — real DVD images (a VIDEO_TS/ folder, or an .iso/.img
 ## file) live here, played by the libVLC-backed DVDPlayer.
 static func default_dvd_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/dvd"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/dvd"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/dvd"
+	return DataPaths.media_root("dvd")
 
 
 ## Create the dvd root if it doesn't already exist.
@@ -439,11 +415,7 @@ const MUSIC_EXTENSIONS := ["mp3", "flac", "ogg", "wav", "m4a", "aac", "opus", "w
 ## Root directory for music. Each subfolder is an album (multi-track); loose
 ## audio files are single-track albums. Sits alongside roms/, videos/, dvd/.
 static func default_music_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/music"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/music"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/music"
+	return DataPaths.media_root("music")
 
 
 ## Create the music root if it doesn't already exist.
@@ -551,11 +523,7 @@ static func find_music_album(name: String) -> String:
 ## On Android this is the EXTERNAL tree on purpose, so a mod can be `adb push`ed
 ## like a ROM. The app only ever reads from here — see ensure_mods_root.
 static func default_mods_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files/mods"
-	if OS.get_name() in ["Linux", "macOS"]:
-		return OS.get_environment("HOME") + "/retroxr/mods"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr/mods"
+	return DataPaths.media_root("mods")
 
 
 ## Create the mods root if it doesn't already exist, and report whether it is

@@ -35,9 +35,7 @@ const SESSION_SECONDS := 86400
 
 ## Root of the served media filesystem (roms, books, videos, dvds).
 static func server_root() -> String:
-	if OS.get_name() == "Android":
-		return "/sdcard/Android/data/com.xenu.retroxr/files"
-	return OS.get_environment("USERPROFILE").replace("\\", "/") + "/retroxr"
+	return DataPaths.media_root()
 
 
 ## Named roots exposed at the top level of the web UI. "media" is the ROM/book/
