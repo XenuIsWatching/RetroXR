@@ -390,6 +390,10 @@ static func register_mod_peripherals(systemid: String, items: Array,
 	for item: Variant in items:
 		var row := (item as Dictionary).duplicate(true)
 		row["kind"] = "peripheral"
+		# Tagged per ROW, like _mod_spawnables. A systemid's list is shared by
+		# every mod that adds pads to that console, so the owner cannot live on
+		# the list -- see drop_mod.
+		row["owner"] = owner_id
 		(_mod_peripherals[systemid] as Array).append(row)
 	if not _peripheral_owners.has(owner_id):
 		_peripheral_owners[owner_id] = []
@@ -421,8 +425,20 @@ static func mod_spawnables() -> Array:
 
 
 static func drop_mod(owner_id: String) -> void:
+	# Row by row, not systemid by systemid. Two mods may both add pads to the
+	# same console -- a console mod and a controller pack, say -- and they land
+	# in one list, so erasing the systemid took the other mod's rows with it and
+	# left that console short of pads with nothing to say why.
 	for systemid: String in (_peripheral_owners.get(owner_id, []) as Array):
-		_mod_peripherals.erase(systemid)
+		var rows: Array = _mod_peripherals.get(systemid, [])
+		var kept: Array = []
+		for row: Variant in rows:
+			if (row as Dictionary).get("owner", "") != owner_id:
+				kept.append(row)
+		if kept.is_empty():
+			_mod_peripherals.erase(systemid)
+		else:
+			_mod_peripherals[systemid] = kept
 	_peripheral_owners.erase(owner_id)
 	for type: String in _mod_spawnables.keys():
 		if _mod_spawnables[type].get("owner", "") == owner_id:

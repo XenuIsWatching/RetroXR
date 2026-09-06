@@ -350,6 +350,31 @@ func _group_media() -> void:
 	_ok(not SpawnCatalog.register_mod_peripherals("t_bad", [], "t.bad").is_empty(),
 		"media/an empty peripheral list is refused rather than reported as added")
 
+	# Two mods adding pads to ONE console land in one list, so dropping either
+	# must take only its own rows. drop_mod erased the whole systemid, which
+	# left the console short of the surviving mod's pads with nothing to say why.
+	var pad_a := "t.pads_a"
+	var pad_b := "t.pads_b"
+	SpawnCatalog.register_mod_peripherals("nes",
+		[{"label": "A pad", "spawn": "retro_controller"}], pad_a)
+	SpawnCatalog.register_mod_peripherals("nes",
+		[{"label": "B pad", "spawn": "retro_controller"}], pad_b)
+	var labels := func() -> Array:
+		var out: Array = []
+		for it: Variant in SpawnCatalog.items_for("nes"):
+			out.append(str((it as Dictionary).get("label", "")))
+		return out
+	_ok(labels.call().has("A pad") and labels.call().has("B pad"),
+		"peripherals/both mods' rows are offered")
+	SpawnCatalog.drop_mod(pad_a)
+	_ok(not labels.call().has("A pad"), "peripherals/dropping one mod removes its row")
+	_ok(labels.call().has("B pad"),
+		"peripherals/and leaves the other mod's row on the same console")
+	SpawnCatalog.drop_mod(pad_b)
+	_ok(not labels.call().has("B pad"), "peripherals/dropping the second removes it too")
+	_ok(labels.call().has("Controller"),
+		"peripherals/the console's shipped rows survive both drops")
+
 	# These three tables tracked no owner, so what a mod contributed to them
 	# could be registered and never taken back — the exact defect the shared
 	# overlay tables were extracted to end, in the three that did not adopt one.
