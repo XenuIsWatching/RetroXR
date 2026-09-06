@@ -11,27 +11,12 @@ extends Control
 ## against the 1100×900 design resolution.
 @export var ui_scale: float = 2.0
 
-signal spawn_requested(type: String)
 signal close_requested
 ## Emitted when the user changes a default core in the Manager tab.
 signal default_core_changed(systemid: String, core_name: String)
 ## Emitted when the user clicks a ROM in the Cartridges tab.
 signal spawn_cartridge_requested(rom_path: String, game_label: String, systemid: String)
-## Emitted when the user clicks the manual (📖) button for a ROM.
-signal spawn_manual_requested(pdf_path: String)
-signal spawn_poster_requested(image_path: String)
-## Emitted when the user clicks a video (📼) in the Videos tab.
-signal spawn_video_requested(video_path: String)
 
-signal spawn_dvd_requested(dvd_path: String)
-## Emitted when the user clicks an album (💿) in the CDs tab.
-signal spawn_cd_requested(album_path: String)
-## Emitted when the user clicks an album (🎵) in the Tapes tab.
-signal spawn_cassette_requested(album_path: String)
-## Emitted when the user clicks an album in the Records tab.
-signal spawn_record_requested(album_path: String)
-## Emitted when the user changes the turn style. value is "SNAP" or "SMOOTH".
-signal turn_style_changed(value: String)
 ## Emitted when the user clicks a room card that maps directly to a scene (e.g. passthrough).
 signal scene_change_requested(scene_id: String)
 ## Every slot signal names its ROOM as well as its slot: each room keeps its own
@@ -46,30 +31,7 @@ signal scene_slot_delete_requested(slot_id: String, room_id: String)
 signal scene_slot_create_requested(room_id: String)
 ## Emitted when the user confirms a rename via the inline LineEdit.
 signal scene_slot_rename_requested(slot_id: String, new_name: String, room_id: String)
-## Emitted when the user toggles auto-save on scene switch.
-signal auto_save_changed(enabled: bool)
-## Emitted when any performance-HUD switch or its mount changed. The listener
-## re-reads AppPrefs rather than being told which one.
-signal hud_changed
-## Emitted when the user toggles the light gun aim crosshair.
-signal aim_crosshair_changed(enabled: bool)
-## True to aim a teleport with the left stick, false to slide with it.
-signal locomotion_mode_changed(teleport: bool)
-## Emitted when the user toggles whether the sticks work in passthrough.
-signal passthrough_locomotion_changed(enabled: bool)
-## Emitted when the physical controller/Capsense presentation changes.
-signal xr_display_mode_changed(mode: int)
-## Emitted when the user toggles the wrap-around hands drawn on held controllers.
-signal controller_hands_changed(enabled: bool)
-## Emitted when the user changes the snap turn angle.
-signal snap_angle_changed(degrees: float)
-## Emitted when the user adjusts the player height offset.
-signal height_offset_changed(offset: float)
-## Emitted when the user changes the desktop camera FOV.
-signal fov_changed(degrees: float)
-## Emitted when the user changes the world scale (below 1.0 = feel smaller /
-## everything bigger). Applies to VR (XRServer.world_scale) and desktop (eye height).
-signal world_scale_changed(scale: float)
+
 ## Emitted when the user saves controller bindings (global or per-system).
 signal controller_bindings_changed
 ## Emitted when the user clicks a desktop rebind button. spawn_menu_controller
@@ -137,6 +99,32 @@ var _graphics_view: SpawnMenuGraphicsView = null
 var _scene_view:    SpawnMenuSceneView = null
 var _net_view:      SpawnMenuNetView = null
 var _about_view:    SpawnMenuAboutView = null
+
+## The views, for a caller that wants to hear one of them directly.
+##
+## SpawnMenuController used to reach every view signal through a matching signal
+## re-declared on this class and re-emitted by a relay lambda: three
+## declarations and two hops for one event. It connects to the view now, and
+## this class declares only what it originates itself.
+##
+## Safe to hold: _build_ui runs once from _ready and no view is ever rebuilt, so
+## a connection made after the menu exists stays good for the session.
+func spawn_view() -> SpawnMenuSpawnView:
+	return _spawn_view
+
+
+func options_view() -> SpawnMenuOptionsView:
+	return _options_view
+
+
+func scene_view() -> SpawnMenuSceneView:
+	return _scene_view
+
+
+func controls_view() -> SpawnMenuControlsView:
+	return _controls_view
+
+
 var _nav_net_btn:      Button = null
 var _nav_spawn_btn:    Button = null
 var _nav_cores_btn:    Button = null
@@ -399,17 +387,6 @@ func _build_ui() -> void:
 
 	_spawn_view = SpawnMenuSpawnView.create(self)
 	_spawn_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for relay: Array in [
-			[_spawn_view.spawn_requested, spawn_requested],
-			[_spawn_view.spawn_manual_requested, spawn_manual_requested],
-			[_spawn_view.spawn_video_requested, spawn_video_requested],
-			[_spawn_view.spawn_dvd_requested, spawn_dvd_requested],
-			[_spawn_view.spawn_cd_requested, spawn_cd_requested],
-			[_spawn_view.spawn_cassette_requested, spawn_cassette_requested],
-			[_spawn_view.spawn_record_requested, spawn_record_requested],
-			[_spawn_view.spawn_poster_requested, spawn_poster_requested]]:
-		var out: Signal = relay[1]
-		(relay[0] as Signal).connect(func(v: Variant) -> void: out.emit(v))
 	_spawn_view.spawn_cartridge_requested.connect(
 		func(p: String, l: String, sid: String) -> void:
 			spawn_cartridge_requested.emit(p, l, sid))
@@ -462,22 +439,6 @@ func _build_ui() -> void:
 
 	_options_view = SpawnMenuOptionsView.create(self)
 	_options_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for relay: Array in [
-			[_options_view.turn_style_changed, turn_style_changed],
-			[_options_view.snap_angle_changed, snap_angle_changed],
-			[_options_view.height_offset_changed, height_offset_changed],
-			[_options_view.fov_changed, fov_changed],
-			[_options_view.world_scale_changed, world_scale_changed],
-			[_options_view.auto_save_changed, auto_save_changed],
-			[_options_view.aim_crosshair_changed, aim_crosshair_changed],
-			[_options_view.locomotion_mode_changed, locomotion_mode_changed],
-			[_options_view.passthrough_locomotion_changed, passthrough_locomotion_changed],
-			[_options_view.xr_display_mode_changed, xr_display_mode_changed],
-			[_options_view.controller_hands_changed, controller_hands_changed]]:
-		var out: Signal = relay[1]
-		(relay[0] as Signal).connect(func(v: Variant) -> void: out.emit(v))
-	# Argument-free, so it cannot ride the relay loop above.
-	_options_view.hud_changed.connect(func() -> void: hud_changed.emit())
 	_options_view.system_filter_changed.connect(_cores_view.refresh_download_systems)
 	_options_view.romm_platforms_requested.connect(_spawn_view.romm_fetch_platforms)
 	_options_view.scroll_changed.connect(func(s: ScrollContainer) -> void:

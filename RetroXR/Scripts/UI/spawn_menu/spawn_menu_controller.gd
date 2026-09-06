@@ -184,7 +184,14 @@ func _connect_menu_signals() -> void:
 	if _menu_connected:
 		return
 	var vp := _viewport_node.get_node_or_null("Viewport") as SubViewport
-	if not vp or vp.get_child_count() == 0:
+	# The views have to be built, not just the menu node present: the
+	# connections below reach through menu.spawn_view() and friends, so a menu
+	# that exists but has not run _build_ui yet would hand back null. Waiting on
+	# the node alone was enough when every signal was re-declared on the menu
+	# itself, and is not any more.
+	if not vp or vp.get_child_count() == 0 \
+			or (vp.get_child(0) as SpawnMenu2D) == null \
+			or (vp.get_child(0) as SpawnMenu2D).spawn_view() == null:
 		if _connect_retry_count >= 30:
 			push_error("SpawnMenuController: menu scene failed to load after 30 frames")
 			return
@@ -195,34 +202,34 @@ func _connect_menu_signals() -> void:
 	var menu := vp.get_child(0) as SpawnMenu2D
 	if not menu:
 		return
-	menu.spawn_requested.connect(_on_spawn_requested)
+	menu.spawn_view().spawn_requested.connect(_on_spawn_requested)
 	menu.close_requested.connect(_hide_menu)
 	menu.spawn_cartridge_requested.connect(_on_spawn_cartridge_requested)
-	menu.spawn_manual_requested.connect(_on_spawn_manual_requested)
-	menu.spawn_poster_requested.connect(_on_spawn_poster_requested)
-	menu.spawn_video_requested.connect(_on_spawn_video_requested)
-	menu.spawn_dvd_requested.connect(_on_spawn_dvd_requested)
-	menu.spawn_cd_requested.connect(_on_spawn_cd_requested)
-	menu.spawn_cassette_requested.connect(_on_spawn_cassette_requested)
-	menu.spawn_record_requested.connect(_on_spawn_record_requested)
-	menu.turn_style_changed.connect(_on_turn_style_changed)
+	menu.spawn_view().spawn_manual_requested.connect(_on_spawn_manual_requested)
+	menu.spawn_view().spawn_poster_requested.connect(_on_spawn_poster_requested)
+	menu.spawn_view().spawn_video_requested.connect(_on_spawn_video_requested)
+	menu.spawn_view().spawn_dvd_requested.connect(_on_spawn_dvd_requested)
+	menu.spawn_view().spawn_cd_requested.connect(_on_spawn_cd_requested)
+	menu.spawn_view().spawn_cassette_requested.connect(_on_spawn_cassette_requested)
+	menu.spawn_view().spawn_record_requested.connect(_on_spawn_record_requested)
+	menu.options_view().turn_style_changed.connect(_on_turn_style_changed)
 	menu.scene_change_requested.connect(_on_scene_change_requested)
 	menu.scene_slot_load_requested.connect(_on_slot_load)
 	menu.scene_slot_save_requested.connect(_on_slot_save)
 	menu.scene_slot_delete_requested.connect(_on_slot_delete)
 	menu.scene_slot_create_requested.connect(_on_slot_create)
 	menu.scene_slot_rename_requested.connect(_on_slot_rename)
-	menu.auto_save_changed.connect(_on_auto_save_changed)
-	menu.hud_changed.connect(_on_hud_changed)
-	menu.aim_crosshair_changed.connect(_on_aim_crosshair_changed)
-	menu.locomotion_mode_changed.connect(_on_locomotion_mode_changed)
-	menu.passthrough_locomotion_changed.connect(_on_passthrough_locomotion_changed)
-	menu.xr_display_mode_changed.connect(_on_xr_display_mode_changed)
-	menu.controller_hands_changed.connect(_on_controller_hands_changed)
-	menu.snap_angle_changed.connect(_on_snap_angle_changed)
-	menu.height_offset_changed.connect(_on_height_offset_changed)
-	menu.fov_changed.connect(_on_fov_changed)
-	menu.world_scale_changed.connect(_on_world_scale_changed)
+	menu.options_view().auto_save_changed.connect(_on_auto_save_changed)
+	menu.options_view().hud_changed.connect(_on_hud_changed)
+	menu.options_view().aim_crosshair_changed.connect(_on_aim_crosshair_changed)
+	menu.options_view().locomotion_mode_changed.connect(_on_locomotion_mode_changed)
+	menu.options_view().passthrough_locomotion_changed.connect(_on_passthrough_locomotion_changed)
+	menu.options_view().xr_display_mode_changed.connect(_on_xr_display_mode_changed)
+	menu.options_view().controller_hands_changed.connect(_on_controller_hands_changed)
+	menu.options_view().snap_angle_changed.connect(_on_snap_angle_changed)
+	menu.options_view().height_offset_changed.connect(_on_height_offset_changed)
+	menu.options_view().fov_changed.connect(_on_fov_changed)
+	menu.options_view().world_scale_changed.connect(_on_world_scale_changed)
 	menu.controller_bindings_changed.connect(_on_controller_bindings_changed)
 	menu.rebind_started.connect(_on_rebind_started)
 	menu.pad_rebind_started.connect(_on_pad_rebind_started)
