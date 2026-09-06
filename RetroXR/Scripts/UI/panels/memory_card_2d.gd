@@ -122,21 +122,11 @@ func _build_ui() -> void:
 
 	# Embedded in a page that already names the card in its own header, the title
 	# and its ✕ are a second heading for the same thing.
-	var title_row := HBoxContainer.new()
+	var title_row := MenuStyle.title_row(vbox, "Memory Card")
 	title_row.visible = show_name_field
-	vbox.add_child(title_row)
-	var title := Label.new()
-	title.text = "Memory Card"
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", COLOR_TITLE)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_row.add_child(title)
 	if show_name_field:
-		var close := Button.new()
-		close.add_theme_font_override("font", MenuIcons.symbols())
-		close.text = String.chr(MenuIcons.CLOSE)
-		close.pressed.connect(func() -> void: close_requested.emit())
-		title_row.add_child(close)
+		MenuStyle.close_button(title_row,
+			func() -> void: close_requested.emit(), false, 0.0, 0)
 
 	var name_row := HBoxContainer.new()
 	name_row.visible = show_name_field

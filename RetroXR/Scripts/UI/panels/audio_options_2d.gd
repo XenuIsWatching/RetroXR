@@ -36,22 +36,9 @@ func _build_ui() -> void:
 	root.add_theme_constant_override("separation", 10)
 	margin.add_child(root)
 
-	var title_row := HBoxContainer.new()
-	root.add_child(title_row)
-
-	_title_lbl = Label.new()
-	_title_lbl.text = "Player"
-	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_title_lbl.add_theme_font_size_override("font_size", 26)
-	_title_lbl.add_theme_color_override("font_color", COLOR_TITLE)
-	title_row.add_child(_title_lbl)
-
-	var close_btn := Button.new()
-	close_btn.add_theme_font_override("font", MenuIcons.symbols())
-	close_btn.text = "  %s  " % String.chr(MenuIcons.CLOSE)
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.pressed.connect(func(): close_requested.emit())
-	title_row.add_child(close_btn)
+	var title_row := MenuStyle.title_row(root, "Player")
+	_title_lbl = title_row.get_child(0) as Label
+	MenuStyle.close_button(title_row, func() -> void: close_requested.emit())
 
 	root.add_child(HSeparator.new())
 

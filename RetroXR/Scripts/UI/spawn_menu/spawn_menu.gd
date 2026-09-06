@@ -335,21 +335,8 @@ func _build_ui() -> void:
 	root_vbox.add_theme_constant_override("separation", 8)
 	margin.add_child(root_vbox)
 
-	# Title row
-	var title_row := HBoxContainer.new()
-	root_vbox.add_child(title_row)
-	var title := Label.new()
-	title.text = "RETROXR MENU"
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", MenuStyle.COLOR_TITLE)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_row.add_child(title)
-	var close_btn := Button.new()
-	close_btn.add_theme_font_override("font", MenuIcons.symbols())
-	close_btn.text = "  %s  " % String.chr(MenuIcons.CLOSE)
-	close_btn.add_theme_font_size_override("font_size", 24)
-	close_btn.pressed.connect(func(): close_requested.emit())
-	title_row.add_child(close_btn)
+	MenuStyle.close_button(MenuStyle.title_row(root_vbox, "RETROXR MENU", 28),
+		func() -> void: close_requested.emit(), true, 0.0, 24)
 
 	root_vbox.add_child(HSeparator.new())
 

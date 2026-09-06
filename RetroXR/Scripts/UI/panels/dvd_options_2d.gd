@@ -38,21 +38,8 @@ func _build_ui() -> void:
 	root.add_theme_constant_override("separation", 10)
 	margin.add_child(root)
 
-	# Title row
-	var title_row := HBoxContainer.new()
-	root.add_child(title_row)
-	var title := Label.new()
-	title.text = "DVD Settings"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", COLOR_TITLE)
-	title_row.add_child(title)
-	var close_btn := Button.new()
-	close_btn.add_theme_font_override("font", MenuIcons.symbols())
-	close_btn.text = "  %s  " % String.chr(MenuIcons.CLOSE)
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.pressed.connect(func(): close_requested.emit())
-	title_row.add_child(close_btn)
+	MenuStyle.close_button(MenuStyle.title_row(root, "DVD Settings"),
+		func() -> void: close_requested.emit())
 
 	root.add_child(HSeparator.new())
 

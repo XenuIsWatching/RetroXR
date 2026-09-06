@@ -94,15 +94,9 @@ func _build_ui() -> void:
 	root_vbox.add_theme_constant_override("separation", 6)
 	margin.add_child(root_vbox)
 
-	# ── Title row ──────────────────────────────────────────────────────────────
-	var title_row := HBoxContainer.new()
-	root_vbox.add_child(title_row)
-
-	var title_lbl := Label.new()
-	title_lbl.text = "System Settings"
-	title_lbl.add_theme_font_size_override("font_size", 26)
-	title_lbl.add_theme_color_override("font_color", COLOR_TITLE)
-	title_row.add_child(title_lbl)
+	# The title does not take the slack here — the core name below does, so the
+	# two sit together on the left rather than at opposite ends of the row.
+	var title_row := MenuStyle.title_row(root_vbox, "System Settings", 26, false)
 
 	# Ellipsised and set to take the slack, so a long corename cannot push the
 	# close button off the page.
@@ -115,12 +109,7 @@ func _build_ui() -> void:
 	title_row.add_child(_core_lbl)
 	_refresh_core_label()
 
-	var close_btn := Button.new()
-	close_btn.add_theme_font_override("font", MenuIcons.symbols())
-	close_btn.text = "  %s  " % String.chr(MenuIcons.CLOSE)
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.pressed.connect(func(): close_requested.emit())
-	title_row.add_child(close_btn)
+	MenuStyle.close_button(title_row, func() -> void: close_requested.emit())
 
 	root_vbox.add_child(HSeparator.new())
 

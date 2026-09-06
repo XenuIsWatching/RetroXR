@@ -93,6 +93,44 @@ static func header(text: String, font_size := 22) -> Label:
 	return label(text, font_size, COLOR_TITLE)
 
 
+## The row every panel opens with: its name on the left, a ✕ on the right.
+##
+## Returned rather than built whole because the middle of the row is not always
+## empty — CoreOptions2D puts the running core's name between the two, which is
+## why the title can be told not to take the slack. The title Label is the row's
+## first child, for the two panels that retitle themselves later.
+static func title_row(parent: Container, text: String, font_size := 26,
+		title_expands := true) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var lbl := label(text, font_size, COLOR_TITLE)
+	if title_expands:
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(lbl)
+	return row
+
+
+## The ✕ that dismisses a panel.
+##
+## The three knobs are the three ways the panels differ, and each is a real
+## difference rather than drift: `padded` surrounds the glyph with spaces to
+## give the wide panels a hit area that grows with their taller rows, `square`
+## sizes the compact ones as a fixed icon button instead, and a `font_size` of
+## 0 leaves the theme's own size alone for the buttons that never overrode it.
+static func close_button(row: Container, on_close: Callable, padded := true,
+		square := 0.0, font_size := 22) -> Button:
+	var btn := Button.new()
+	btn.add_theme_font_override("font", MenuIcons.symbols())
+	btn.text = ("  %s  " if padded else "%s") % String.chr(MenuIcons.CLOSE)
+	if square > 0.0:
+		btn.custom_minimum_size = Vector2(square, square)
+	if font_size > 0:
+		btn.add_theme_font_size_override("font_size", font_size)
+	btn.pressed.connect(func() -> void: on_close.call())
+	row.add_child(btn)
+	return btn
+
+
 ## Explanatory small print under a control. Wraps, because these are sentences.
 static func hint(text: String) -> Label:
 	var l := label(text, 16, COLOR_DESC)
