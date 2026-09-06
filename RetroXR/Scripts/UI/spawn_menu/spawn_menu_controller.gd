@@ -32,24 +32,9 @@ const PAD_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/pad_rec
 const KEYBOARD_RECEIVER_SCENE := preload("res://Scenes/Objects/controllers/keyboard_receiver.tscn")
 const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse_receiver.tscn")
 const LIGHT_GUN_SCENE       := preload("res://Scenes/Objects/peripherals/light_gun.tscn")
-const RF_SWITCH_SCENE       := preload("res://Scenes/Objects/appliances/rf_switch.tscn")
 const MEMCARD_SCENE         := preload("res://Scenes/Objects/media/memory_card.tscn")
 const GC_MEMCARD_SCENE      := preload("res://Scenes/Objects/media/gc_memory_card.tscn")
 const TAPE_SCENE            := preload("res://Scenes/Objects/media/vcr_tape.tscn")
-const COMPOSITE_CABLE_SCENE := preload("res://Scenes/Objects/cables/composite_cable.tscn")
-const MONO_CABLE_SCENE      := preload("res://Scenes/Objects/cables/mono_composite_cable.tscn")
-const POWER_CORD_SCENE      := preload("res://Scenes/Objects/cables/power_cord.tscn")
-const NEMA_1_15_C7_CORD_SCENE := preload(
-	"res://Scenes/Objects/cables/nema_1_15_to_c7_cord.tscn")
-const NEMA_1_15_C7_POLARIZED_CORD_SCENE := preload(
-	"res://Scenes/Objects/cables/nema_1_15_polarized_to_c7_polarized_cord.tscn")
-const WII_AV_CABLE_SCENE    := preload("res://Scenes/Objects/system_models/wii/wii_av_cable.tscn")
-const VGA_CABLE_SCENE       := preload("res://Scenes/Objects/cables/vga_cable.tscn")
-const TRS_CABLE_SCENE       := preload("res://Scenes/Objects/cables/trs_cable.tscn")
-const LINK_CABLE_SCENE      := preload("res://Scenes/Objects/cables/link_cable.tscn")
-const GB_LINK_CABLE_SCENE   := preload("res://Scenes/Objects/cables/gb_link_cable.tscn")
-const GC_GBA_CABLE_SCENE    := preload("res://Scenes/Objects/cables/gc_gba_cable.tscn")
-const PSX_LINK_CABLE_SCENE  := preload("res://Scenes/Objects/cables/psx_link_cable.tscn")
 const DVD_DISC_SCENE        := preload("res://Scenes/Objects/media/dvd_disc.tscn")
 const AUDIO_DISC_SCENE      := preload("res://Scenes/Objects/media/audio_disc.tscn")
 const AUDIO_CASSETTE_SCENE  := preload("res://Scenes/Objects/media/audio_cassette.tscn")
@@ -1140,30 +1125,6 @@ func _on_spawn_requested(type: String) -> void:
 			obj = TV_SCENE.instantiate() as Node3D
 		"cartridge":
 			obj = CART_SCENE.instantiate() as Node3D
-		"composite_cable":
-			obj = COMPOSITE_CABLE_SCENE.instantiate() as Node3D
-		"mono_composite_cable":
-			obj = MONO_CABLE_SCENE.instantiate() as Node3D
-		"power_cord":
-			obj = POWER_CORD_SCENE.instantiate() as Node3D
-		"nema_1_15_to_c7_cord":
-			obj = NEMA_1_15_C7_CORD_SCENE.instantiate() as Node3D
-		"nema_1_15_polarized_to_c7_polarized_cord":
-			obj = NEMA_1_15_C7_POLARIZED_CORD_SCENE.instantiate() as Node3D
-		"wii_av_cable":
-			obj = WII_AV_CABLE_SCENE.instantiate() as Node3D
-		"vga_cable":
-			obj = VGA_CABLE_SCENE.instantiate() as Node3D
-		"trs_cable":
-			obj = TRS_CABLE_SCENE.instantiate() as Node3D
-		"link_cable":
-			obj = LINK_CABLE_SCENE.instantiate() as Node3D
-		"gb_link_cable":
-			obj = GB_LINK_CABLE_SCENE.instantiate() as Node3D
-		"gc_gba_cable":
-			obj = GC_GBA_CABLE_SCENE.instantiate() as Node3D
-		"psx_link_cable":
-			obj = PSX_LINK_CABLE_SCENE.instantiate() as Node3D
 		"memory_card":
 			obj = MEMCARD_SCENE.instantiate() as Node3D
 		"retro_controller":
@@ -1192,8 +1153,6 @@ func _on_spawn_requested(type: String) -> void:
 		# socket in the room, the Wii's own sensor bar jack.
 		# A lead with a box in the middle, so it spawns like a lead — both its
 		# connectors are free and it picks its own sockets up off the floor.
-		"rf_switch":
-			obj = RF_SWITCH_SCENE.instantiate() as Node3D
 		"keyboard_receiver":
 			obj = KEYBOARD_RECEIVER_SCENE.instantiate() as Node3D
 		"mouse_receiver":

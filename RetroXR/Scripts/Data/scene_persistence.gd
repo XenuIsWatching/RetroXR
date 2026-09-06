@@ -97,9 +97,10 @@ static func drop_mod_objects(owner_id: String) -> void:
 ## so a new prop had to be registered twice and an object registered once either
 ## vanished on the next load or could not be spawned at all.
 static func instantiate(type: String) -> Node3D:
-	if not PLAIN_SCENES.has(type):
+	var packed: PackedScene = PLAIN_SCENES.get(type, LEAD_SCENES.get(type, null))
+	if packed == null:
 		return null
-	return (PLAIN_SCENES[type] as PackedScene).instantiate() as Node3D
+	return packed.instantiate() as Node3D
 
 
 static func _instantiate_mod_object(type: String) -> Node3D:
@@ -202,6 +203,31 @@ const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse
 ## The keys here and in (2) are deliberately the same strings; an object that
 ## spawns but is missing from (1) vanishes on the next load, and one missing
 ## from (2) can only ever arrive from a save file.
+## Every lead in the room is a CompositeCable; only the scene it was spawned
+## from differs. Keyed by the "kind" a cord serializes as, which is the SAME
+## token the spawn menu offers — so a new lead is one row here rather than a row
+## in this file and a match arm in spawn_menu_controller, which is how the two
+## sides used to drift.
+##
+## rf_switch is in here despite not being a cord: it is a lead with a box in the
+## middle, and it spawns and restores as one.
+const LEAD_SCENES := {
+	"wii_av_cable": WII_AV_CABLE_SCENE,
+	"vga_cable": VGA_CABLE_SCENE,
+	"trs_cable": TRS_CABLE_SCENE,
+	"link_cable": LINK_CABLE_SCENE,
+	"gb_link_cable": GB_LINK_CABLE_SCENE,
+	"gc_gba_cable": GC_GBA_CABLE_SCENE,
+	"psx_link_cable": PSX_LINK_CABLE_SCENE,
+	"rf_switch": RF_SWITCH_SCENE,
+	"power_cord": POWER_CORD_SCENE,
+	"nema_1_15_to_c7_cord": NEMA_1_15_C7_CORD_SCENE,
+	"nema_1_15_polarized_to_c7_polarized_cord": NEMA_1_15_C7P_CORD_SCENE,
+	"mono_composite_cable": MONO_CABLE_SCENE,
+	"composite_cable": COMPOSITE_CABLE_SCENE,
+}
+
+
 const PLAIN_SCENES := {
 	"tv_remote": TV_REMOTE_SCENE,
 	"trash_can": STORAGE_BOX_SCENE,
@@ -2092,36 +2118,14 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				# the fallback for saves written before that field existed, and it
 				# cannot tell a VGA lead from any other one-cord lead.
 				var kind: String = str(data.get("kind", ""))
-				var lead: PackedScene = COMPOSITE_CABLE_SCENE
-				# The Wii lead has to be named: it is three cords like the plain
-				# composite one, so the cord-count fallback cannot tell them apart and
-				# an old save has no reason to hold one anyway.
-				if kind == "wii_av_cable":
-					lead = WII_AV_CABLE_SCENE
-				elif kind == "vga_cable":
-					lead = VGA_CABLE_SCENE
-				elif kind == "trs_cable":
-					lead = TRS_CABLE_SCENE
-				elif kind == "link_cable":
-					lead = LINK_CABLE_SCENE
-				elif kind == "gb_link_cable":
-					lead = GB_LINK_CABLE_SCENE
-				elif kind == "gc_gba_cable":
-					lead = GC_GBA_CABLE_SCENE
-				elif kind == "psx_link_cable":
-					lead = PSX_LINK_CABLE_SCENE
-				elif kind == "rf_switch":
-					lead = RF_SWITCH_SCENE
-				elif kind == "power_cord":
-					lead = POWER_CORD_SCENE
-				# Named before the cord-count fallback: these are two-conductor
-				# ribbon, which that test reads as a mono composite lead.
-				elif kind == "nema_1_15_to_c7_cord":
-					lead = NEMA_1_15_C7_CORD_SCENE
-				elif kind == "nema_1_15_polarized_to_c7_polarized_cord":
-					lead = NEMA_1_15_C7P_CORD_SCENE
-				elif kind == "mono_composite_cable" or int(data.get("cords", 3)) == 2:
-					lead = MONO_CABLE_SCENE
+				# A named kind settles it. The cord-count fallback below is only
+				# for saves written before the field existed, and it cannot tell a
+				# VGA lead from any other one-cord lead.
+				var lead: PackedScene = LEAD_SCENES.get(kind, null)
+				if lead == null:
+					# Two-conductor ribbon reads as a mono composite lead, which is
+					# what an old save holding one would have been.
+					lead = MONO_CABLE_SCENE if int(data.get("cords", 3)) == 2 						else COMPOSITE_CABLE_SCENE
 				obj = lead.instantiate() as Node3D
 			"audio_disc":
 				var adisc := AUDIO_DISC_SCENE.instantiate() as AudioDisc
