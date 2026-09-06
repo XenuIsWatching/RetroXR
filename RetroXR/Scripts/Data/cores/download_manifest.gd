@@ -34,8 +34,11 @@ func load_manifest() -> void:
 		_data["cores"] = {}
 
 
-func save() -> void:
-	JsonStore.write_dict(_manifest_path(), _data, "DownloadManifest")
+## False when the write did not land. A lost manifest makes every installed
+## core look absent on the next launch, which the Cores tab then offers to
+## download again.
+func save() -> bool:
+	return JsonStore.write_dict(_manifest_path(), _data, "DownloadManifest")
 
 
 # ---------------------------------------------------------------------------

@@ -124,12 +124,7 @@ static func _git(root: String, args: Array) -> String:
 	return str(out[0]).strip_edges() if out.size() > 0 else ""
 
 
+## Silent on a missing stamp: running from the editor there is no export, which
+## is the ordinary case and the reason collect_from_git() exists beside this.
 static func _read_stamp() -> Dictionary:
-	var file := FileAccess.open(STAMP_PATH, FileAccess.READ)
-	if file == null:
-		return {}
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	file.close()
-	if parsed is Dictionary:
-		return parsed as Dictionary
-	return {}
+	return JsonStore.read_dict(STAMP_PATH)

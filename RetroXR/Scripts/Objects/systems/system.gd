@@ -4321,7 +4321,7 @@ static func _tray_op_for(open: bool, core_ejected: bool, has_disc: bool) -> int:
 func _on_lid_swung(_deg: float) -> void:
 	if _disc_bay == null or _disc_bay.lid_hinge == null:
 		return
-	_lid_reports(not _disc_bay.lid_hinge.is_latched_closed(),
+	lid_reports_open(not _disc_bay.lid_hinge.is_latched_closed(),
 		_disc_bay.lid_hinge)
 
 
@@ -4329,10 +4329,6 @@ func _on_lid_swung(_deg: float) -> void:
 ## its hinge and reports through here rather than growing a second copy of the
 ## rule (see playstation_model._on_lid_swung).
 func lid_reports_open(open: bool, mechanism: Node) -> void:
-	_lid_reports(open, mechanism)
-
-
-func _lid_reports(open: bool, mechanism: Node) -> void:
 	if _disc_loader != MediaDimensions.LOADER_TRAY or open == _tray_open:
 		return
 	var applying: bool = NetworkManager.is_event_applying() \

@@ -37,7 +37,7 @@ static func serial_of(rom_path: String) -> String:
 		return ""
 	if _cache.has(rom_path):
 		return str(_cache[rom_path])
-	var serial := _read_serial(_data_track(rom_path))
+	var serial := _read_serial(data_track(rom_path))
 	_cache[rom_path] = serial
 	return serial
 
@@ -48,10 +48,6 @@ static func serial_of(rom_path: String) -> String:
 ## Public so a caller sweeping a folder can tell which raw images its .cue files
 ## already speak for, and read each disc once instead of twice.
 static func data_track(rom_path: String) -> String:
-	return _data_track(rom_path)
-
-
-static func _data_track(rom_path: String) -> String:
 	if rom_path.get_extension().to_lower() != "cue":
 		return rom_path
 	if _track_cache.has(rom_path):

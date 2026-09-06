@@ -39,11 +39,14 @@ func all_defaults() -> Dictionary:
 	return _defaults.duplicate()
 
 
-func save() -> void:
+## False when the write did not land, like every other store here. A default
+## core that did not reach disk is a machine that boots the wrong emulator on
+## the next launch, so the caller is told rather than left to assume.
+func save() -> bool:
 	if _path.is_empty():
 		push_error("CoreDefaults: no path set, call setup() first")
-		return
-	JsonStore.write_dict(_path, {"defaults": _defaults}, "CoreDefaults")
+		return false
+	return JsonStore.write_dict(_path, {"defaults": _defaults}, "CoreDefaults")
 
 
 func load_defaults() -> void:
