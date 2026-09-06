@@ -121,7 +121,7 @@ func _thread_loop() -> void:
 				if up_st == StreamPeerTCP.STATUS_NONE or up_st == StreamPeerTCP.STATUS_ERROR:
 					# Dropped mid-part: bin the stage. Leaving it would strand a
 					# half-written .part beside the file it was replacing.
-					_discard_part(c["us"] as Dictionary)
+					(c["us"] as WebUploadStream).discard()
 					to_remove.append(c)
 					continue
 				var new_bytes := PackedByteArray()
@@ -162,7 +162,7 @@ func _thread_loop() -> void:
 ## Returns true when the request is fully received and handled.
 func _try_handle(c: Dictionary) -> bool:
 	var buf := c["buf"] as PackedByteArray
-	var sep := _find_bytes(buf, "\r\n\r\n".to_utf8_buffer())
+	var sep := WebUploadStream.find_bytes(buf, "\r\n\r\n".to_utf8_buffer())
 	if sep == -1:
 		return false  # headers incomplete
 
@@ -406,213 +406,35 @@ func _handle_list(peer: StreamPeerTCP, rel: String) -> void:
 	_send_text(peer, 200, "application/json", JSON.stringify({"dirs": dirs, "files": files}))
 
 
-## Starts a streaming multipart upload. Called as soon as HTTP headers arrive,
-## before the body has been fully received.
+## Begin a streaming upload, or answer the request outright when it cannot start.
+##
+## The reading itself is WebUploadStream's; this only resolves the destination
+## and turns a refusal into a reply.
 func _start_upload_stream(c: Dictionary, rel: String, headers: Dictionary,
-						   body_so_far: PackedByteArray) -> void:
+							body_so_far: PackedByteArray) -> void:
 	var peer := c["peer"] as StreamPeerTCP
 	var abs_path := _resolve(rel)
 	if abs_path.is_empty():
 		_send_text(peer, 403, "application/json", '{"error":"forbidden"}')
 		return
-	var ct: String = headers.get("content-type", "")
-	var b_idx := ct.find("boundary=")
-	if b_idx == -1:
+	var us := WebUploadStream.open(abs_path, str(headers.get("content-type", "")),
+		int(headers.get("content-length", "0")), body_so_far)
+	if us == null:
 		_send_text(peer, 400, "application/json", '{"error":"no boundary"}')
 		return
-	var boundary := ct.substr(b_idx + 9).strip_edges()
-	if boundary.begins_with('"'):
-		boundary = boundary.trim_prefix('"').trim_suffix('"')
-	c["us"] = {
-		"phase":     "part_preamble",
-		"dest_dir":  abs_path,
-		"delim":     ("--" + boundary).to_utf8_buffer(),
-		"data_term": ("\r\n--" + boundary).to_utf8_buffer(),
-		"buf":       body_so_far.duplicate(),
-		"f":         null,
-		"filename":  "",
-		"written":   0,
-		"total":     int(headers.get("content-length", "0")),
-		"saved":     0,
-	}
+	c["us"] = us
 
 
-## Append to the staged part, reporting a write that did not land.
-##
-## store_buffer returns nothing, so a full disk is only visible through
-## get_error() -- without this the server answered 200 OK over a file that was
-## silently short. A failure abandons the stage rather than promoting it.
-func _write_part(us: Dictionary, chunk: PackedByteArray) -> bool:
-	var f := us["f"] as FileAccess
-	f.store_buffer(chunk)
-	if f.get_error() != OK:
-		push_error("[WebFileServer] Write failed for %s (%d) -- discarding"
-			% [us.get("filename", ""), f.get_error()])
-		_discard_part(us)
-		return false
-	us["written"] = (us["written"] as int) + chunk.size()
-	_upload_progress["written"] = us["written"]
-	return true
-
-
-## Close and delete the staging file, leaving whatever was already at dest alone.
-func _discard_part(us: Dictionary) -> void:
-	if us.get("f") != null:
-		(us["f"] as FileAccess).close()
-		us["f"] = null
-	var part := str(us.get("part", ""))
-	if not part.is_empty() and FileAccess.file_exists(part):
-		DirAccess.remove_absolute(part)
-	us["part"] = ""
-
-
-## Move the finished stage over the real destination.
-func _promote_part(us: Dictionary) -> bool:
-	(us["f"] as FileAccess).close()
-	us["f"] = null
-	var part := str(us.get("part", ""))
-	var dest := str(us.get("dest", ""))
-	if FileAccess.file_exists(dest) and DirAccess.remove_absolute(dest) != OK:
-		push_error("[WebFileServer] Cannot replace %s" % dest)
-		DirAccess.remove_absolute(part)
-		return false
-	if DirAccess.rename_absolute(part, dest) != OK:
-		push_error("[WebFileServer] Cannot promote %s" % part)
-		DirAccess.remove_absolute(part)
-		return false
-	return true
-
-
-## State-machine step for streaming uploads. Appends new_data to the upload buffer
-## and writes file bytes to disk as they arrive, keeping only a tiny lookahead buffer.
-## Returns true when the upload is complete (HTTP response already sent).
+## Hand the next chunk to the reader. True once it has answered and the
+## connection can be closed.
 func _feed_upload_stream(c: Dictionary, new_data: PackedByteArray) -> bool:
-	var us: Dictionary = c["us"]
-	if new_data.size() > 0:
-		var b: PackedByteArray = us["buf"]
-		b.append_array(new_data)
-		us["buf"] = b
-
-	while true:
-		var phase: String = us["phase"]
-
-		if phase == "part_preamble":
-			var delim: PackedByteArray = us["delim"]
-			var buf: PackedByteArray   = us["buf"]
-			var pos := _find_bytes(buf, delim)
-			if pos == -1:
-				break
-			var after := pos + delim.size()
-			if after + 1 >= buf.size():
-				break  # need 2 more bytes to classify
-			if buf[after] == 45 and buf[after + 1] == 45:
-				# "--boundary--" with no parts.
-				_send_text(c["peer"] as StreamPeerTCP, 200, "application/json",
-						   '{"saved":%d}' % us["saved"])
-				return true
-			# Skip CRLF after delimiter.
-			if buf[after] == 13 and buf[after + 1] == 10:
-				after += 2
-			us["buf"]   = buf.slice(after)
-			us["phase"] = "part_headers"
-
-		elif phase == "part_headers":
-			var buf: PackedByteArray = us["buf"]
-			var hdr_end := _find_bytes(buf, "\r\n\r\n".to_utf8_buffer())
-			if hdr_end == -1:
-				break
-			var hdr_text := buf.slice(0, hdr_end).get_string_from_utf8()
-			us["buf"] = buf.slice(hdr_end + 4)
-			var filename := _extract_filename(hdr_text)
-			# Folder uploads transmit a relative path (e.g. "MyGame/save/data.001");
-			# preserve it instead of flattening so the directory tree is recreated.
-			var sub := _safe_subpath(filename)
-			if sub.is_empty():
-				us["phase"] = "part_preamble"
-				continue
-			var dest_dir: String = us["dest_dir"]
-			var dest: String = dest_dir.path_join(sub)
-			# Defence in depth — _safe_subpath already strips "..", but never write
-			# outside the destination root even if that ever changes.
-			if not dest.simplify_path().begins_with(dest_dir + "/"):
-				push_error("[WebFileServer] Rejected escaping upload path: %s" % filename)
-				us["phase"] = "part_preamble"
-				continue
-			var parent := dest.get_base_dir()
-			if parent != dest_dir:
-				DirAccess.make_dir_recursive_absolute(parent)
-			# Staged, never written straight to dest. An upload that stops early --
-			# a closed tab, a dropped link, a full disk -- would otherwise leave a
-			# truncated file standing where a good one was, and RomLibrary.scan_roms
-			# would spawn it as a real cartridge. Promoted on the closing boundary,
-			# deleted on any failure. Same rule the ROM downloader and the state
-			# writer already follow.
-			var part := dest + ".part"
-			var f := FileAccess.open(part, FileAccess.WRITE)
-			if not f:
-				push_error("[WebFileServer] Cannot open %s for writing (%d)"
-					% [part, FileAccess.get_open_error()])
-				us["phase"] = "part_preamble"
-				continue
-			us["f"]        = f
-			us["part"]     = part
-			us["dest"]     = dest
-			us["filename"] = sub
-			us["written"]  = 0
-			us["phase"]    = "data"
-			_upload_progress = {"filename": us["filename"], "written": 0, "total": us["total"]}
-			print("[WebFileServer] Streaming write: %s" % dest)
-
-		elif phase == "data":
-			var buf: PackedByteArray  = us["buf"]
-			var term: PackedByteArray = us["data_term"]
-			var term_pos := _find_bytes(buf, term)
-			if term_pos != -1:
-				var after_term := term_pos + term.size()
-				if after_term + 1 >= buf.size():
-					# Write up to the possible terminator and wait for 2 more bytes.
-					if term_pos > 0 and not _write_part(us, buf.slice(0, term_pos)):
-						_send_text(c["peer"] as StreamPeerTCP, 507, "application/json",
-							'{"error":"write failed"}')
-						return true
-					us["buf"] = buf.slice(term_pos)
-					break
-				# Write data before the terminator, then close file.
-				if term_pos > 0 and not _write_part(us, buf.slice(0, term_pos)):
-					_send_text(c["peer"] as StreamPeerTCP, 507, "application/json",
-						'{"error":"write failed"}')
-					return true
-				if not _promote_part(us):
-					_send_text(c["peer"] as StreamPeerTCP, 500, "application/json",
-						'{"error":"could not save"}')
-					return true
-				us["saved"] = (us["saved"] as int) + 1
-				print("[WebFileServer] Saved: %s" % us["filename"])
-				if buf[after_term] == 45 and buf[after_term + 1] == 45:
-					# Final boundary "--" → done.
-					_send_text(c["peer"] as StreamPeerTCP, 200, "application/json",
-							   '{"saved":%d}' % us["saved"])
-					return true
-				# More parts → skip CRLF, read next part headers.
-				if buf[after_term] == 13 and buf[after_term + 1] == 10:
-					after_term += 2
-				us["buf"]   = buf.slice(after_term)
-				us["phase"] = "part_headers"
-			else:
-				# Terminator not found yet. Flush all bytes that can't be part of it.
-				var safe := buf.size() - (term.size() - 1)
-				if safe > 0:
-					if not _write_part(us, buf.slice(0, safe)):
-						_send_text(c["peer"] as StreamPeerTCP, 507, "application/json",
-							'{"error":"write failed"}')
-						return true
-					us["buf"] = buf.slice(safe)
-				break
-
-		else:
-			break
-
-	return false
+	var us := c["us"] as WebUploadStream
+	var status := us.feed(new_data)
+	_upload_progress = us.progress()
+	if status != WebUploadStream.Status.DONE:
+		return false
+	_send_text(c["peer"] as StreamPeerTCP, us.code, "application/json", us.body)
+	return true
 
 
 func _handle_download(peer: StreamPeerTCP, rel: String) -> void:
@@ -692,51 +514,6 @@ func _parse_query(s: String) -> Dictionary:
 			d[pair.substr(0, eq).uri_decode()] = pair.substr(eq + 1).uri_decode()
 	return d
 
-
-
-## Sanitises a multipart filename — which for a folder upload carries a relative
-## path ("MyGame/save/data.001") — into a safe path relative to the destination
-## dir. Backslashes become "/", and empty / "." / ".." segments are dropped so the
-## result can never escape the destination or reference an absolute location.
-## Returns "" when nothing usable remains.
-func _safe_subpath(rel_name: String) -> String:
-	var out: Array[String] = []
-	for seg in rel_name.replace("\\", "/").split("/"):
-		var s := seg.strip_edges()
-		if s.is_empty() or s == "." or s == "..":
-			continue
-		out.append(s)
-	return "/".join(out)
-
-
-func _extract_filename(part_headers: String) -> String:
-	var idx := part_headers.find("filename=")
-	if idx == -1:
-		return ""
-	var rest := part_headers.substr(idx + 9)
-	if rest.begins_with('"'):
-		var quote_end := rest.find('"', 1)
-		return rest.substr(1, quote_end - 1) if quote_end != -1 else ""
-	var end := rest.find("\r")
-	if end == -1:
-		end = rest.find("\n")
-	return rest.substr(0, end if end != -1 else rest.length())
-
-
-func _find_bytes(haystack: PackedByteArray, needle: PackedByteArray, from: int = 0) -> int:
-	var hs := haystack.size()
-	var ns := needle.size()
-	if ns == 0 or hs < ns:
-		return -1
-	for i in range(from, hs - ns + 1):
-		var ok := true
-		for j in range(ns):
-			if haystack[i + j] != needle[j]:
-				ok = false
-				break
-		if ok:
-			return i
-	return -1
 
 
 func _send_text(peer: StreamPeerTCP, code: int, content_type: String, body: String) -> void:

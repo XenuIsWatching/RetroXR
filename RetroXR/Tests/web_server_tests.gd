@@ -167,21 +167,21 @@ func _test_escape_encoded() -> void:
 ## A folder upload carries a relative path in each part's filename, so this is
 ## the other place a client picks where bytes land.
 func _test_safe_subpath() -> void:
-	_eq(_srv._safe_subpath("game.nes"), "game.nes", "subpath/a plain name is kept")
-	_eq(_srv._safe_subpath("MyGame/save/data.001"),
+	_eq(WebUploadStream.safe_subpath("game.nes"), "game.nes", "subpath/a plain name is kept")
+	_eq(WebUploadStream.safe_subpath("MyGame/save/data.001"),
 		"MyGame/save/data.001", "subpath/a folder path is kept")
-	_eq(_srv._safe_subpath("MyGame\\save\\data.001"),
+	_eq(WebUploadStream.safe_subpath("MyGame\\save\\data.001"),
 		"MyGame/save/data.001", "subpath/backslashes become separators")
-	_eq(_srv._safe_subpath("../../etc/passwd"),
+	_eq(WebUploadStream.safe_subpath("../../etc/passwd"),
 		"etc/passwd", "subpath/traversal segments are dropped")
-	_eq(_srv._safe_subpath("MyGame/../../../x.nes"),
+	_eq(WebUploadStream.safe_subpath("MyGame/../../../x.nes"),
 		"MyGame/x.nes", "subpath/a traversal in the middle is dropped too")
-	_eq(_srv._safe_subpath("/etc/passwd"),
+	_eq(WebUploadStream.safe_subpath("/etc/passwd"),
 		"etc/passwd", "subpath/an absolute posix path loses its root")
-	_eq(_srv._safe_subpath("./a/./b"), "a/b", "subpath/single dots are dropped")
-	_eq(_srv._safe_subpath("a//b"), "a/b", "subpath/empty segments collapse")
-	_eq(_srv._safe_subpath("../.."), "", "subpath/nothing usable gives nothing")
-	_eq(_srv._safe_subpath(""), "", "subpath/an empty name gives nothing")
+	_eq(WebUploadStream.safe_subpath("./a/./b"), "a/b", "subpath/single dots are dropped")
+	_eq(WebUploadStream.safe_subpath("a//b"), "a/b", "subpath/empty segments collapse")
+	_eq(WebUploadStream.safe_subpath("../.."), "", "subpath/nothing usable gives nothing")
+	_eq(WebUploadStream.safe_subpath(""), "", "subpath/an empty name gives nothing")
 
 
 # ── Request parsing ───────────────────────────────────────────────────────────
@@ -292,26 +292,26 @@ func _test_extract_pin() -> void:
 
 
 func _test_extract_filename() -> void:
-	_eq(_srv._extract_filename('Content-Disposition: form-data; name="f"; filename="game.nes"'),
+	_eq(WebUploadStream.extract_filename('Content-Disposition: form-data; name="f"; filename="game.nes"'),
 		"game.nes",
 		"parse/a multipart filename is read")
-	_eq(_srv._extract_filename('filename="my game.nes"'),
+	_eq(WebUploadStream.extract_filename('filename="my game.nes"'),
 		"my game.nes", "parse/a filename with spaces survives")
-	_eq(_srv._extract_filename('Content-Disposition: form-data; name="f"'),
+	_eq(WebUploadStream.extract_filename('Content-Disposition: form-data; name="f"'),
 		"", "parse/no filename gives nothing")
 
 
 func _test_find_bytes() -> void:
 	var hay := "abcdefabc".to_utf8_buffer()
-	_eq(_srv._find_bytes(hay, "def".to_utf8_buffer()),
+	_eq(WebUploadStream.find_bytes(hay, "def".to_utf8_buffer()),
 		3, "parse/a needle is found at its offset")
-	_eq(_srv._find_bytes(hay, "abc".to_utf8_buffer(), 1),
+	_eq(WebUploadStream.find_bytes(hay, "abc".to_utf8_buffer(), 1),
 		6, "parse/searching from past it finds the later copy")
-	_eq(_srv._find_bytes(hay, "zzz".to_utf8_buffer()),
+	_eq(WebUploadStream.find_bytes(hay, "zzz".to_utf8_buffer()),
 		-1, "parse/an absent needle is -1")
 	# The multipart reader calls this on every incoming chunk, so a needle longer
 	# than what has arrived so far is the normal case, not an edge one.
-	_eq(_srv._find_bytes("ab".to_utf8_buffer(), "abc".to_utf8_buffer()),
+	_eq(WebUploadStream.find_bytes("ab".to_utf8_buffer(), "abc".to_utf8_buffer()),
 		-1, "parse/a needle longer than the haystack is -1")
 
 
@@ -395,10 +395,11 @@ func _test_upload_interrupted_keeps_the_original() -> void:
 	var partial := body.slice(0, body.size() - 24)
 	var done: bool = _srv._feed_upload_stream(c, partial)
 	_ok(not done, "upload/a partial body does not finish the stream")
-	_ok((c["us"] as Dictionary).get("f") != null, "upload/it is writing to a staging file")
+	_ok((c["us"] as WebUploadStream).filename != "",
+		"upload/it is writing to a staging file")
 
 	# The peer drops: _thread_loop's disconnect branch calls exactly this.
-	_srv._discard_part(c["us"] as Dictionary)
+	(c["us"] as WebUploadStream).discard()
 
 	_ok(FileAccess.file_exists(dest),
 		"upload/the original file survives an interrupted upload", "dest is gone")
