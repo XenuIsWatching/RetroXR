@@ -158,6 +158,8 @@ Tools/azahar-libretro-vr/
 RetroXR/mods/
 
 .desloppify/
+# Scorecard image desloppify regenerates on every run.
+scorecard.png
 
 # Python bytecode from running the repo-root Tools/ scripts.
 __pycache__/
