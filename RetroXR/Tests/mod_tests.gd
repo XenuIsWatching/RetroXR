@@ -266,8 +266,13 @@ func _group_rooms() -> void:
 	# drawing could be registered and never taken back.
 	var art_owner := "t.art"
 	var art_row := {"anchors": {"a": Vector2(0.5, 0.5)}, "rows": [["a"]]}
-	ConsolePadArt.register_mod_row("t.art:pad", art_row, art_owner)
+	_eq(ConsolePadArt.register_mod_row("t.art:pad", art_row, art_owner), "",
+		"pad art/a good row reports no error")
 	_ok(ConsolePadArt.has("t.art:pad"), "pad art/mod row registers")
+	# These three registries used to return void and drop bad input where they
+	# stand, while ModApi reported success and filed the contribution anyway.
+	_ok(not ConsolePadArt.register_mod_row("", art_row, art_owner).is_empty(),
+		"pad art/an empty systemid is refused out loud")
 	_eq(ConsolePadArt.owner_of("t.art:pad"), art_owner, "pad art/owner recorded")
 	_ok(not ConsolePadArt.row("t.art:pad").is_empty(), "pad art/row is served")
 	ConsolePadArt.drop_mod(art_owner)
@@ -336,9 +341,14 @@ func _group_media() -> void:
 	# Without a scraper mapping a platform's carts stay blank for ever, and
 	# nothing anywhere says why — so the mapping is a first-class registration.
 	_eq(ScreenscraperSystems.get_systemeid("t_media_platform"), -1, "media/unmapped platform")
-	ScreenscraperSystems.register_mod_system("t_media_platform", 4242)
+	_eq(ScreenscraperSystems.register_mod_system("t_media_platform", 4242), "",
+		"media/a good mapping reports no error")
 	_eq(ScreenscraperSystems.get_systemeid("t_media_platform"), 4242, "media/mapped platform")
 	_eq(ScreenscraperSystems.get_systemeid("nes"), 3, "media/shipped mapping unchanged")
+	_ok(not ScreenscraperSystems.register_mod_system("t_bad", 0).is_empty(),
+		"media/a non-positive screenscraper id is refused out loud")
+	_ok(not SpawnCatalog.register_mod_peripherals("t_bad", [], "t.bad").is_empty(),
+		"media/an empty peripheral list is refused rather than reported as added")
 
 
 # ── shaders/ ──────────────────────────────────────────────────────────────────

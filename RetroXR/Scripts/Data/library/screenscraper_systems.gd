@@ -135,7 +135,13 @@ static func get_systemeid(systemid: String) -> int:
 static var _mod_map: Dictionary = {}
 
 
-static func register_mod_system(systemid: String, systemeid: int) -> void:
-	if systemid.is_empty() or systemeid <= 0:
-		return
+## "" on success, else why the mapping was refused — the failure this table
+## describes above is invisible at runtime, so refusing one quietly is the worst
+## of the options available.
+static func register_mod_system(systemid: String, systemeid: int) -> String:
+	if systemid.is_empty():
+		return "systemid is empty"
+	if systemeid <= 0:
+		return "screenscraper system id must be positive, got %d" % systemeid
 	_mod_map[systemid] = systemeid
+	return ""

@@ -273,11 +273,16 @@ static func has(systemid: String) -> bool:
 static var _overlay := ModOverlayTable.new(_ROWS)
 
 
+## "" on success, else why the row was refused. An error string rather than a
+## silent return because ModApi reports what it registered back to the author,
+## and a dropped row that reported success is a Controls page with no anchors
+## and nothing anywhere saying why.
 static func register_mod_row(systemid: String, row_data: Dictionary,
-		owner_id: String = "") -> void:
+		owner_id: String = "") -> String:
 	if systemid.is_empty():
-		return
+		return "systemid is empty"
 	_overlay.add(systemid, row_data, owner_id)
+	return ""
 
 
 ## Which mod contributed a platform's pad art, or "" for a shipped one.

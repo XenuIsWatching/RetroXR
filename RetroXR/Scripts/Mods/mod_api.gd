@@ -81,36 +81,45 @@ func register_platform(d: Dictionary) -> bool:
 	if systemid.is_empty():
 		return _fail("register_platform needs a systemid")
 	var missing := PackedStringArray()
+	# A piece that is PRESENT and refused is a different failure from one that
+	# was never supplied, and this used to discard every sub-call's answer — so
+	# a platform whose pad art was rejected outright still reported success and
+	# was noted as registered.
+	var ok := true
 	if d.has("system_info"):
-		register_system_info(d["system_info"] as SystemInfo)
+		ok = register_system_info(d["system_info"] as SystemInfo) and ok
 	else:
 		missing.append("system_info")
 	if d.has("models"):
 		for row: Variant in (d["models"] as Array):
-			register_model(row as Dictionary)
+			ok = register_model(row as Dictionary) and ok
 	else:
 		missing.append("models")
 	if d.has("pad_art"):
-		register_pad_art(systemid, d["pad_art"] as Dictionary)
+		ok = register_pad_art(systemid, d["pad_art"] as Dictionary) and ok
 	else:
 		missing.append("pad_art (no Controls remap diagram)")
 	if d.has("media"):
-		register_media(systemid, d["media"] as Dictionary)
+		ok = register_media(systemid, d["media"] as Dictionary) and ok
 	else:
 		missing.append("media (carts come out the wrong size)")
 	if d.has("scraper_id"):
-		register_scraper_system(systemid, int(d["scraper_id"]))
+		ok = register_scraper_system(systemid, int(d["scraper_id"])) and ok
 	else:
 		missing.append("scraper_id (carts never get art)")
 	if not missing.is_empty():
 		_warn("platform %s is incomplete: %s" % [systemid, ", ".join(missing)])
+	if not ok:
+		return false
 	_note("platform", systemid)
 	return true
 
 
 ## The pad drawing behind this platform's Controls remap page.
 func register_pad_art(systemid: String, row: Dictionary) -> bool:
-	ConsolePadArt.register_mod_row(systemid, row, id)
+	var err := ConsolePadArt.register_mod_row(systemid, row, id)
+	if not err.is_empty():
+		return _fail("pad art %s: %s" % [systemid, err])
 	_note("platform", "%s pad art" % systemid)
 	return true
 
@@ -128,7 +137,9 @@ func register_media(systemid: String, dims: Dictionary) -> bool:
 ## Map this platform to a screenscraper.fr system id so its ROMs can be scraped
 ## at all. A platform absent from that table gets no art, ever.
 func register_scraper_system(systemid: String, systemeid: int) -> bool:
-	ScreenscraperSystems.register_mod_system(systemid, systemeid)
+	var err := ScreenscraperSystems.register_mod_system(systemid, systemeid)
+	if not err.is_empty():
+		return _fail("scraper %s: %s" % [systemid, err])
 	_note("scraper", "%s to %d" % [systemid, systemeid])
 	return true
 
@@ -179,7 +190,9 @@ func register_tv_shell(shell_id: String, scene_path: String, label: String) -> b
 ## already records and restores its scene path, and falls back to the generic pad
 ## when the mod is gone, with no help needed from here.
 func add_peripherals(systemid: String, items: Array) -> bool:
-	SpawnCatalog.register_mod_peripherals(systemid, items, id)
+	var err := SpawnCatalog.register_mod_peripherals(systemid, items, id)
+	if not err.is_empty():
+		return _fail("peripherals %s: %s" % [systemid, err])
 	for item: Variant in items:
 		_note("controller", str((item as Dictionary).get("label", "?")))
 	return true

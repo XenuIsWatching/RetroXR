@@ -376,9 +376,15 @@ static var _peripheral_owners: Dictionary = {}
 static var _mod_spawnables: Dictionary = {}
 
 
-static func register_mod_peripherals(systemid: String, items: Array, owner_id: String) -> void:
-	if systemid.is_empty() or items.is_empty():
-		return
+## "" on success, else why the rows were refused. An empty list is an error and
+## not a no-op: a mod that meant to add pads and added none would otherwise be
+## told it succeeded, and its console's spawn card would simply have no pads.
+static func register_mod_peripherals(systemid: String, items: Array,
+		owner_id: String) -> String:
+	if systemid.is_empty():
+		return "systemid is empty"
+	if items.is_empty():
+		return "no peripherals given for '%s'" % systemid
 	if not _mod_peripherals.has(systemid):
 		_mod_peripherals[systemid] = []
 	for item: Variant in items:
@@ -388,6 +394,7 @@ static func register_mod_peripherals(systemid: String, items: Array, owner_id: S
 	if not _peripheral_owners.has(owner_id):
 		_peripheral_owners[owner_id] = []
 	(_peripheral_owners[owner_id] as Array).append(systemid)
+	return ""
 
 
 ## A prop the spawn menu can offer directly. `menu` carries at least a label.
