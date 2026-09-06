@@ -620,12 +620,12 @@ func hide_osd() -> void:
 ## Snaps a captive cable plug into one of this TV's video sockets (used by save/load
 ## and netplay to restore connections). Defaults to Composite 1, which is where a
 ## caller that has no opinion — and every save written before there were four — means.
-func accept_plug_restore(plug: CablePlug, input: int = Source.COMPOSITE_1) -> void:
+func accept_plug_restore(plug: CablePlug, input: Source = Source.COMPOSITE_1) -> void:
 	_panel.accept_plug_restore(plug, input)
 
 
 ## Drop whatever captive lead is in one input's video socket.
-func release_input(input: int = Source.COMPOSITE_1) -> void:
+func release_input(input: Source = Source.COMPOSITE_1) -> void:
 	_panel.release_input(input)
 
 
@@ -811,10 +811,10 @@ func _source_available(source: Source) -> bool:
 ## so first-hit-in-enum-order would sit a computer monitor on a channel list rather
 ## than on the machine cabled to its only socket. Every set with a phono row still
 ## lands on Composite 1, which is what it always did.
-func _first_available_source() -> int:
+func _first_available_source() -> Source:
 	for i in SOURCE_NAMES.size():
-		if i != Source.TV and _source_available(i):
-			return i
+		if i != Source.TV and _source_available(i as Source):
+			return i as Source
 	return Source.TV
 
 
@@ -907,7 +907,7 @@ func has_channels() -> bool:
 	return _tuner != null and not _tuner.channels.is_empty()
 
 
-func get_source() -> int:
+func get_source() -> Source:
 	return current_source
 
 
