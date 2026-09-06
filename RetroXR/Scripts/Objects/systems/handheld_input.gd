@@ -261,8 +261,7 @@ func _exit_tree() -> void:
 	XRToolsRumbleManager.clear(self)
 	_rumble.stop_pads()
 	if _locomotion_manager != null:
-		_locomotion_manager.set_block(&"handheld_hold", LocomotionManager.CHANNEL_LEFT, false)
-		_locomotion_manager.set_block(&"handheld_hold", LocomotionManager.CHANNEL_RIGHT, false)
+		_locomotion_manager.clear_owner(VrHold.vr_block_owner(self))
 	if _capture:
 		_capture.release()
 
@@ -274,8 +273,13 @@ func _update_locomotion_block() -> void:
 	var right_held := (is_instance_valid(_holding_ctrl) and _holding_ctrl.tracker == &"right_hand") \
 				   or (is_instance_valid(secondary) and secondary.tracker == &"right_hand")
 	if _locomotion_manager != null:
-		_locomotion_manager.set_block(&"handheld_hold", LocomotionManager.CHANNEL_LEFT, left_held)
-		_locomotion_manager.set_block(&"handheld_hold", LocomotionManager.CHANNEL_RIGHT, right_held)
+		# Per-instance, never a shared literal. LocomotionManager erases a block
+		# BY KEY, so two handhelds sharing one key erase each other's claim --
+		# and a room can hold several, which is the whole premise of a link
+		# cable. One put down would have freed the hand still holding the other.
+		var owner_key := VrHold.vr_block_owner(self)
+		_locomotion_manager.set_block(owner_key, LocomotionManager.CHANNEL_LEFT, left_held)
+		_locomotion_manager.set_block(owner_key, LocomotionManager.CHANNEL_RIGHT, right_held)
 	# The desktop side is ScrollLockCapture's: it blocks WASD only while captured,
 	# and losing the grip here makes it ineligible, which drops both.
 	if _capture:
