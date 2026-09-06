@@ -158,7 +158,7 @@ static func all_ready(rows: Array) -> bool:
 	return overall(rows) == Verdict.READY
 
 
-static func verdict_word(verdict: int) -> String:
+static func verdict_word(verdict: Verdict) -> String:
 	return str(VERDICT_WORD.get(verdict, "?"))
 
 

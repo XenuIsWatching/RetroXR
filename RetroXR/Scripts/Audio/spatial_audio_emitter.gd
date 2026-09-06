@@ -64,7 +64,7 @@ var _ch_gain_r := 1.0
 
 ## Which source channel feeds each speaker. See set_channel_mode.
 enum ChannelMode { STEREO = 0, MONO_LEFT = 1, MONO_RIGHT = 2 }
-var _channel_mode: int = ChannelMode.STEREO
+var _channel_mode: ChannelMode = ChannelMode.STEREO
 # Last distance term measured, so a volume change can be applied against it
 # without waiting for the next frame.
 var _dist_factor := 1.0
@@ -269,11 +269,11 @@ func _send_gain(g: float) -> void:
 ## Godot's fallback backend has one player fed interleaved stereo and no separate
 ## speaker voices to route between, so it keeps playing the pair as authored —
 ## the same way set_channel_gains degrades there.
-func set_channel_mode(mode: int) -> void:
+func set_channel_mode(mode: ChannelMode) -> void:
 	_channel_mode = clampi(mode, ChannelMode.STEREO, ChannelMode.MONO_RIGHT)
 
 
-func get_channel_mode() -> int:
+func get_channel_mode() -> ChannelMode:
 	return _channel_mode
 
 

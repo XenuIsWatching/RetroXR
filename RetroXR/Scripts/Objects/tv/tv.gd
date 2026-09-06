@@ -209,7 +209,7 @@ var _tv_enabled: bool = true
 # Selected input and the built-in tuner behind Source.TV. The tuner is created on
 # first use rather than in _ready: most sets in a scene never leave the composite
 # inputs, and an idle one should cost nothing (no VlcPlayer, no discovery traffic).
-var current_source: int = Source.COMPOSITE_1
+var current_source: Source = Source.COMPOSITE_1
 var _tuner: TVTuner = null
 
 
@@ -763,7 +763,7 @@ func _report_channel_state() -> void:
 
 ## Apply one explicit channel state. Sending the result rather than only UP/DOWN
 ## makes the operation self-healing if a peer joined with a stale tuner index.
-func net_set_channel_state(source: int, rf: int, index: int) -> void:
+func net_set_channel_state(source: Source, rf: int, index: int) -> void:
 	set_source(source)
 	rf_channel = rf if RF_CHANNELS.has(rf) else RF_CHANNELS[0]
 	if current_source == Source.TV and index >= 0:
@@ -795,7 +795,7 @@ func cycle_source() -> void:
 ## A composite input needs a socket on the back panel; the aerial input needs the
 ## coax hole. The tuner needs neither and is always there, which is what makes it
 ## the safe fallback in set_source.
-func _source_available(source: int) -> bool:
+func _source_available(source: Source) -> bool:
 	if source < COMPOSITE_INPUTS:
 		return source < _panel.panel_inputs()
 	if source == Source.RF:
@@ -819,7 +819,7 @@ func _first_available_source() -> int:
 
 
 ## Select an input. Idempotent, so panels can call it freely.
-func set_source(source: int) -> void:
+func set_source(source: Source) -> void:
 	source = clampi(source, 0, SOURCE_NAMES.size() - 1)
 	# A cabinet without the socket cannot show that input. Fall back to the first it
 	# DOES have rather than to Composite 1 — that used to be safe because every

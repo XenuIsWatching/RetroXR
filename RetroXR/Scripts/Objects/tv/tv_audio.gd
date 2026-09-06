@@ -107,7 +107,7 @@ func _effective_volume() -> float:
 ## used to silence only its PICTURE (set_screen_enabled) and leave its sound
 ## running, so switching a console to the tuner played the channel over the top
 ## of the game you had just been playing.
-func volume_for(source: int) -> float:
+func volume_for(source: RetroTV.Source) -> float:
 	return _effective_volume() if _tv.current_source == source else 0.0
 
 

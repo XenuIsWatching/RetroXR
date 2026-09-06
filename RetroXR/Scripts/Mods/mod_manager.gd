@@ -284,7 +284,7 @@ func unreadable() -> Array[Dictionary]:
 	return _unreadable
 
 
-static func status_text(status: int) -> String:
+static func status_text(status: ModRecord.Status) -> String:
 	match status:
 		Status.DISABLED: return "Disabled"
 		Status.PENDING:  return "Restart to apply"

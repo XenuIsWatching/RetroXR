@@ -1559,7 +1559,7 @@ func _demote_from_rollback(available: Array) -> int:
 	return NetplayCores.Strategy.LOCKSTEP
 
 
-static func strategy_str(strategy: int) -> String:
+static func strategy_str(strategy: NetplayCores.Strategy) -> String:
 	match strategy:
 		NetplayCores.Strategy.ROLLBACK:
 			return "rollback"
