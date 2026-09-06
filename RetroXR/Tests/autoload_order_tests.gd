@@ -39,6 +39,11 @@ const MUST_PRECEDE := [
 		"the RomM save sync asks the network layer whether a session is live"],
 	["NetworkManager", "StateSync",
 		"same reason as SaveSync"],
+	["AppPrefs", "SpatialAudioListener",
+		"spatial_audio_listener.gd:51-62 — it PULLS AppPrefs.spatial_audio_sdk at "
+		+ "its own _ready rather than having AppPrefs push, and says so; the push "
+		+ "direction was tried and always fell through because AppPrefs ran first. "
+		+ "Reordering these two would silently stop applying the player's choice"],
 ]
 
 var _passed := 0
