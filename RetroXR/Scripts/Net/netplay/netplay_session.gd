@@ -3072,8 +3072,8 @@ func _resolve_net_id(system: Object) -> int:
 	for net_id: int in systems_override:
 		if systems_override[net_id] == system:
 			return int(net_id)
-	if _nm != null and _nm._object_sync != null and _nm._object_sync.has_method("id_of"):
-		return _nm._object_sync.id_of(system)
+	if _nm != null and _nm.object_sync() != null and _nm.object_sync().has_method("id_of"):
+		return _nm.object_sync().id_of(system)
 	return -1
 
 
@@ -3082,6 +3082,6 @@ func _resolve_system(net_id: int) -> Object:
 		return systems_override[net_id]
 	if system_override != null:
 		return system_override
-	if _nm != null and _nm._object_sync != null and _nm._object_sync.has_method("node_for_id"):
-		return _nm._object_sync.node_for_id(net_id)
+	if _nm != null and _nm.object_sync() != null and _nm.object_sync().has_method("node_for_id"):
+		return _nm.object_sync().node_for_id(net_id)
 	return null

@@ -32,7 +32,7 @@ class StubNM extends Node:
 	func is_host() -> bool: return true
 	func is_client() -> bool: return false
 	func is_active() -> bool: return active
-	func _resolve_world_root() -> Node: return world
+	func world_root_node() -> Node: return world
 	func netplay_schedule_disk(system: Object, op: int, md5: String, index: int) -> void:
 		disk_calls.append([system, op, md5, index])
 	func netplay_handoff_port(system: Object, port: int, owner: int) -> void:
@@ -406,8 +406,8 @@ func _make_pair() -> Pair:
 	p.client_root = _branch("Client")
 	p.host_nm = p.host_root.get_node("NetworkManager")
 	p.client_nm = p.client_root.get_node("NetworkManager")
-	p.host_os = p.host_nm._object_sync
-	p.client_os = p.client_nm._object_sync
+	p.host_os = p.host_nm.object_sync()
+	p.client_os = p.client_nm.object_sync()
 	_add_fixed_room_controls(p.host_root, false, false, 0.25, 0.9)
 	_add_fixed_room_controls(p.client_root, true, true, 1.0, 0.1)
 
@@ -898,9 +898,9 @@ func _test_hinges(p: Pair) -> void:
 	var power_host := MockPowerHost.new()
 	var console_model := RetroSystemModel.new()
 	power_host.add_child(console_model)
-	NetworkManager._object_sync._applying = true
+	NetworkManager.object_sync()._applying = true
 	console_model._on_power_slider_changed(1.0)
-	NetworkManager._object_sync._applying = false
+	NetworkManager.object_sync()._applying = false
 	_eq(power_host.toggles, 0,
 		"hinges/a replicated power-slider pose does not double-toggle its platform")
 	console_model._on_power_slider_changed(1.0)
@@ -1162,10 +1162,10 @@ func _test_relay(p: Pair) -> void:
 	third_nm.join_game("::1", PORT)
 	_ok(await _until(func() -> bool:
 		return p.host_nm.peers.size() == 3 and third_nm.peers.size() == 3 \
-			and third_nm._object_sync._registry.size() >= 2, 900),
+			and third_nm.object_sync()._registry.size() >= 2, 900),
 		"relay/a second client joins and receives the world")
 	var third_id := _peer_not_in(p.host_nm, [1, p.client_id])
-	var third_os: NetObjectSync = third_nm._object_sync
+	var third_os: NetObjectSync = third_nm.object_sync()
 
 	var host_obj := MockEventObject.new()
 	var client_obj := MockEventObject.new()

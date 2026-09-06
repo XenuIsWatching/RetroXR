@@ -640,6 +640,20 @@ func netplay_session() -> NetplaySession:
 	return _netplay
 
 
+## The chunked file mover, or null before a session exists. Its owner is this
+## facade, but every caller that needs it is one of this facade's own children.
+func file_transfer() -> NetFileTransfer:
+	return _file_transfer
+
+
+## The node a replicated object is parented under: the explicit world_root when
+## one is set, otherwise whatever scene is current. Public because both sync
+## layers ask it on every spawn, and a room with no root is the normal state
+## between scenes rather than an error.
+func world_root_node() -> Node:
+	return _resolve_world_root()
+
+
 ## True when a running netplay session covers `machine` — i.e. a cable seated on
 ## it has to be scheduled onto an agreed frame rather than joined on the spot.
 func netplay_covers(machine: Object) -> bool:

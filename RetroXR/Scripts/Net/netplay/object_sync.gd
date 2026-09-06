@@ -231,7 +231,7 @@ func local_spawn(obj: Node3D) -> void:
 # ── Registration ──────────────────────────────────────────────────────────────
 
 func _register_existing() -> void:
-	var root: Node = _nm._resolve_world_root()
+	var root: Node = _nm.world_root_node()
 	if root == null:
 		return
 	for node: Node in get_tree().get_nodes_in_group("spawned"):
@@ -342,7 +342,7 @@ func _request_snapshot() -> void:
 	if not _nm.is_host():
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
-	if not _world_ready or _applying or _nm._resolve_world_root() == null:
+	if not _world_ready or _applying or _nm.world_root_node() == null:
 		_pending_snapshot_peers[peer_id] = true
 		return
 	_send_snapshot(peer_id)
@@ -350,7 +350,7 @@ func _request_snapshot() -> void:
 
 func _send_snapshot(peer_id: int) -> void:
 	_register_existing()
-	var root: Node = _nm._resolve_world_root()
+	var root: Node = _nm.world_root_node()
 	if root == null:
 		return
 	var entries: Array = []
@@ -367,7 +367,7 @@ func _send_snapshot(peer_id: int) -> void:
 
 @rpc("authority", "call_remote", "reliable", 0)
 func _world_snapshot(entries: Array, room_state: Array) -> void:
-	var root: Node = _nm._resolve_world_root()
+	var root: Node = _nm.world_root_node()
 	if root == null:
 		return
 	var count: int = _suppressed(_world_snapshot_body.bind(root, entries, room_state))
@@ -474,7 +474,7 @@ func _clear_world(root: Node) -> void:
 func _request_spawn(entry: Dictionary) -> void:
 	if not _nm.is_host():
 		return
-	var root: Node = _nm._resolve_world_root()
+	var root: Node = _nm.world_root_node()
 	if root == null:
 		return
 	var spawned: Dictionary = _suppressed(
@@ -489,7 +489,7 @@ func _request_spawn(entry: Dictionary) -> void:
 
 @rpc("authority", "call_remote", "reliable", 0)
 func _spawn_object(entry: Dictionary) -> void:
-	var root: Node = _nm._resolve_world_root()
+	var root: Node = _nm.world_root_node()
 	if root == null:
 		return
 	_suppressed(_spawn_object_body.bind(root, entry))
@@ -1440,7 +1440,7 @@ func _augment_file_fields(node: Node, entry: Dictionary) -> void:
 		entry["file_md5"] = md5
 		entry["file_size"] = NetFileTransfer.size_of(path)
 		if NetFileTransfer.TRANSFER_KINDS.has(str(d["kind"])):
-			_nm._file_transfer.serve_register(md5, path)
+			_nm.file_transfer().serve_register(md5, path)
 		return
 	# Not cached yet — hash in the background, then broadcast the follow-up.
 	var net_id := id_of(node)
@@ -1460,7 +1460,7 @@ func _on_file_hashed(net_id: int, md5: String, path: String) -> void:
 	node.set_meta("net_md5", md5)
 	var d := _file_desc(node)
 	if NetFileTransfer.TRANSFER_KINDS.has(str(d.get("kind", ""))):
-		_nm._file_transfer.serve_register(md5, path)
+		_nm.file_transfer().serve_register(md5, path)
 	if _nm.is_host() and _nm.is_active():
 		_file_info.rpc(net_id, md5, NetFileTransfer.size_of(path))
 
@@ -1535,14 +1535,14 @@ func _resolve_file_fields(node: Node, entry: Dictionary) -> void:
 	_fetching[md5] = {"net_id": id_of(node), "prop": prop}
 	if node.has_method("net_set_download_status"):
 		node.call("net_set_download_status", "DOWNLOADING…")
-	_nm._file_transfer.request_file(md5, kind, size, path.get_extension())
+	_nm.file_transfer().request_file(md5, kind, size, path.get_extension())
 
 
 func _wire_transfer_signals() -> void:
 	if _ft_wired:
 		return
 	_ft_wired = true
-	var ft: NetFileTransfer = _nm._file_transfer
+	var ft: NetFileTransfer = _nm.file_transfer()
 	ft.transfer_progress.connect(_on_transfer_progress)
 	ft.transfer_done.connect(_on_transfer_done)
 	ft.transfer_failed.connect(_on_transfer_failed)
@@ -1621,7 +1621,7 @@ func _register_album_serve(album: String, manifest: Array) -> void:
 	for t: Variant in manifest:
 		var track_name := str((t as Dictionary).get("name", ""))
 		var tp := album.path_join(track_name) if is_dir else album
-		_nm._file_transfer.serve_register(str((t as Dictionary).get("md5", "")), tp)
+		_nm.file_transfer().serve_register(str((t as Dictionary).get("md5", "")), tp)
 
 
 ## Host: a background album hash finished — register the tracks and broadcast the
@@ -1675,7 +1675,7 @@ func _start_album_fetch(node: Node, album_name: String, tracks: Array) -> void:
 			_album_track_ready(net_id, md5, cached)
 		else:
 			_fetching[md5] = {"net_id": net_id, "album": true}
-			_nm._file_transfer.request_file(md5, "music", int(td.get("size", 0)),
+			_nm.file_transfer().request_file(md5, "music", int(td.get("size", 0)),
 				str(td["name"]).get_extension())
 
 
