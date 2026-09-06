@@ -512,14 +512,18 @@ func _load_manifest() -> Dictionary:
 	return _empty_manifest()
 
 
+## Through JsonStore, like every other player-facing store, rather than opening
+## the real file and writing into it.
+##
+## This one is the slot INDEX for a room: lose it and the player's saves are
+## still on disk but no longer listed. Writing in place meant a crash or a power
+## cut between open and store_string left a truncated file, and truncated JSON
+## does not parse, so the room would come back with no slots at all. JsonStore
+## stages a .part and renames it, so the manifest is either the old one or the
+## new one.
 func _save_manifest(m: Dictionary) -> bool:
 	DirAccess.make_dir_recursive_absolute(slot_dir())
-	var f := FileAccess.open(_manifest_file(), FileAccess.WRITE)
-	if not f:
-		push_error("ScenePersistence: cannot write manifest (err %d)" % FileAccess.get_open_error())
-		return false
-	f.store_string(JSON.stringify(m, "\t"))
-	return true
+	return JsonStore.write_dict(_manifest_file(), m, "ScenePersistence")
 
 
 func _write_scene_to_file(root: Node, path: String) -> bool:

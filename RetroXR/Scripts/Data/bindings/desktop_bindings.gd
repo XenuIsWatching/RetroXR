@@ -121,10 +121,10 @@ static func _current_layer() -> Dictionary:
 
 
 ## Save the current InputMap state as the global layer.
-static func save() -> void:
+static func save() -> bool:
 	var data := _load_file()
 	data["global"] = _current_layer()
-	_save_file(data)
+	return _save_file(data)
 
 
 ## Save the current InputMap state as one system's profile. Falls through to
@@ -133,15 +133,14 @@ static func save() -> void:
 ##
 ## The WHOLE map is written, not just the rows touched, which is what makes a
 ## profile an override rather than a patch — the same rule as the other stores.
-static func save_for_system(systemid: String) -> void:
+static func save_for_system(systemid: String) -> bool:
 	if systemid.is_empty():
-		save()
-		return
+		return save()
 	var data := _load_file()
 	if not data.has("per_system"):
 		data["per_system"] = {}
 	data["per_system"][systemid] = _current_layer()
-	_save_file(data)
+	return _save_file(data)
 
 
 ## True when this system carries a key map of its own.
