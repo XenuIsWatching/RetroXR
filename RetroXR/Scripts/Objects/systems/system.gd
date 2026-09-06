@@ -2560,44 +2560,16 @@ func net_link_group() -> Array:
 ## LinkCoordinator ownership while the plugs themselves never moved.
 func net_link_buses() -> Array:
 	var buses: Array = []
-	var seen_cables := {}
-	if not is_inside_tree():
-		return buses
-	for plug in get_tree().get_nodes_in_group("link_plug") \
-			+ get_tree().get_nodes_in_group("controller_plug"):
-		var cable: Object = plug.get("cable")
-		if cable == null or not is_instance_valid(cable) or seen_cables.has(cable) \
-				or not cable.has_method("linked_machines"):
-			continue
-		seen_cables[cable] = true
+	for cable: Object in _link_cables():
 		var bus: Array = cable.linked_machines()
-		for entry: Dictionary in bus:
-			if entry.get("machine") == self:
-				buses.append(bus)
-				break
+		if _bus_has_self(bus):
+			buses.append(bus)
 	return buses
 
 
 func net_refresh_link_cables() -> void:
-	# There is no tree to sweep on the way out. Netplay only ever called this
-	# from a running room, but power-off calls it too now, and a machine can be
-	# stopped as its room is torn down -- when get_tree() is already null.
-	if not is_inside_tree():
-		return
-	var seen_cables := {}
-	for plug in get_tree().get_nodes_in_group("link_plug") \
-			+ get_tree().get_nodes_in_group("controller_plug"):
-		var cable: Object = plug.get("cable")
-		if cable == null or not is_instance_valid(cable) or seen_cables.has(cable) \
-				or not cable.has_method("linked_machines"):
-			continue
-		seen_cables[cable] = true
-		var touches := false
-		for entry: Dictionary in cable.linked_machines():
-			if entry.get("machine") == self:
-				touches = true
-				break
-		if touches and cable.has_method("rejoin"):
+	for cable: Object in _link_cables():
+		if _bus_has_self(cable.linked_machines()) and cable.has_method("rejoin"):
 			# Why a rejoin and not a resolve is LinkCable.rejoin()'s to explain.
 			cable.call("rejoin")
 
@@ -2637,20 +2609,46 @@ static func merge_link_buses(anchor: Object, buses: Array) -> Array:
 ## side to walk out of, and a search from this machine would silently decide a
 ## cabled GameCube was on no bus.
 func net_link_bus() -> Array:
+	for cable: Object in _link_cables():
+		var bus: Array = cable.linked_machines()
+		if _bus_has_self(bus):
+			return bus
+	return []
+
+
+## Every distinct link cable in the room, in group order.
+##
+## Swept from the LEADS rather than from this machine's sockets, for the reason
+## net_link_bus() gives above — and it is the pair of GROUPS that is easy to get
+## wrong, which is why three methods asking the same question now ask it once. A
+## sweep that forgot controller_plug would decide a cabled GameCube was on no
+## bus at all, silently, while going on working for the two leads that do sit in
+## a LinkPort.
+##
+## Empty off the tree. A machine can be stopped as its room is torn down, when
+## get_tree() is already null — power-off reaches here, not only netplay.
+func _link_cables() -> Array:
+	var cables: Array = []
 	if not is_inside_tree():
-		return []
+		return cables
+	var seen := {}
 	for plug in get_tree().get_nodes_in_group("link_plug") \
 			+ get_tree().get_nodes_in_group("controller_plug"):
 		var cable: Object = plug.get("cable")
-		if cable == null or not is_instance_valid(cable):
+		if cable == null or not is_instance_valid(cable) or seen.has(cable) \
+				or not cable.has_method("linked_machines"):
 			continue
-		if not cable.has_method("linked_machines"):
-			continue
-		var bus: Array = cable.linked_machines()
-		for entry: Dictionary in bus:
-			if entry.get("machine") == self:
-				return bus
-	return []
+		seen[cable] = true
+		cables.append(cable)
+	return cables
+
+
+## True when a linked_machines() list includes this machine.
+func _bus_has_self(bus: Array) -> bool:
+	for entry: Dictionary in bus:
+		if entry.get("machine") == self:
+			return true
+	return false
 
 
 ## Stop the local netplay core and clear the gate.
