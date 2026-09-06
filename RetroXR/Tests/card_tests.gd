@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 114
+const EXPECTED_CASES := 127
 
 var _pass := 0
 var _fail := 0
@@ -44,6 +44,7 @@ func _ready() -> void:
 	_test_gc_pictures()
 	_test_ps1_contract()
 	_test_shared_contract()
+	_test_ops()
 
 	# A case that never RAN is not a case that passed, and GDScript has no
 	# try/catch: a decoder that indexes past its buffer aborts the function it is
@@ -483,3 +484,56 @@ func _smallest_save_size(fmt: CardFormat) -> int:
 		"gamecube":    return GCCard.DENTRY_SIZE + GCCard.BLOCK_SIZE
 		"playstation": return PS1Card.FRAME_SIZE + PS1Card.BLOCK_SIZE
 	return 0
+
+
+# --- ops/ ---------------------------------------------------------------------
+#
+# CardSaveOps is the layer the two card panels drive: it decides what a row may
+# do before the player presses anything, so every refusal here is a message
+# rather than a failure discovered half way through writing the card.
+#
+# Only the pure half is exercised. holder_of, write_card, restore_save and the
+# backup calls want a live scene tree, a RomM server or both, and belong with
+# the probes.
+
+func _test_ops() -> void:
+	var gc := CardFormats.for_family("gamecube")
+
+	# A RomM row names the game in "title", a card's own listing in "name", and
+	# the panel shows one label for both.
+	_eq(CardSaveOps.title_of({"title": "SOULCALIBUR", "name": "slot-1"}), "SOULCALIBUR",
+		"ops/a title is preferred when the row carries one")
+	_eq(CardSaveOps.title_of({"name": "slot-1"}), "slot-1",
+		"ops/the slot name is the fallback label")
+	_eq(CardSaveOps.title_of({"title": "", "name": "slot-1"}), "slot-1",
+		"ops/an empty title falls back too")
+	_eq(CardSaveOps.title_of({}), "", "ops/a row with neither has no label")
+
+	# Size in bytes is the server's unit; blocks are the card's.
+	_eq(CardSaveOps.blocks_of(gc, {"size": _smallest_save_size(gc)}),
+		gc.blocks_for_size(_smallest_save_size(gc)),
+		"ops/a size is converted to the card's own blocks")
+	_eq(CardSaveOps.blocks_of(null, {"size": 999999}), 1,
+		"ops/with no format a row still costs something rather than nothing")
+
+	# present_slots reads the card image itself, so a blank card holds nothing.
+	var blank := gc.blank_image()
+	_eq(CardSaveOps.present_slots(gc, blank).size(), 0,
+		"ops/a blank card has no slots present")
+	_eq(CardSaveOps.present_slots(null, blank).size(), 0,
+		"ops/with no format nothing is reported present")
+
+	# The three answers restore_blocker gives, in the order it gives them.
+	var row := {"slot": "GAFE01", "size": _smallest_save_size(gc)}
+	_eq(CardSaveOps.restore_blocker(gc, row, {}, 59), "",
+		"ops/a save that fits an empty card is not blocked")
+	_eq(CardSaveOps.restore_blocker(gc, row, {"GAFE01": true}, 59), "already on this card",
+		"ops/a save already on the card is refused by name")
+	var tight := CardSaveOps.restore_blocker(gc, row, {}, 0)
+	_ok(tight.contains("free"), "ops/a card with no room says how much it needs", tight)
+	_ok(tight.contains(gc.unit_noun()),
+		"ops/and says it in the card family's own word", tight)
+	# Presence is checked BEFORE size: a save already there needs no room, and
+	# "needs 1 block, 0 free" would be a confusing thing to say about it.
+	_eq(CardSaveOps.restore_blocker(gc, row, {"GAFE01": true}, 0), "already on this card",
+		"ops/presence is reported ahead of a size refusal")
