@@ -90,18 +90,37 @@ static var _cache: Dictionary = {}
 ## has never heard of, and can correct a shipped descriptor without shipping a
 ## replacement .tres over the top of ours.
 static var _mod_infos: Dictionary = {}
+## systemid -> the mod that contributed it, so it can be taken back again.
+static var _mod_owners: Dictionary = {}
 
 
 ## Add or replace a descriptor. The systemid comes off the resource itself, so a
 ## mod cannot file one under a name it does not answer to.
-static func register_mod_info(info: SystemInfo) -> void:
+static func register_mod_info(info: SystemInfo, owner_id: String = "") -> void:
 	if info == null or info.systemid.is_empty():
 		return
 	_mod_infos[info.systemid] = info
+	_mod_owners[info.systemid] = owner_id
 	# The negative cache is why this matters: for_system() caches a MISS as null,
 	# so a systemid asked about before the mod registered would stay null for the
 	# session. Dropping the entry is cheaper than reasoning about who asked first.
 	_cache.erase(info.systemid)
+
+
+## Take back one mod's descriptors.
+##
+## Not on ModOverlayTable like the five tables that are: there is no shipped
+## const table to overlay — the base layer is res://SystemInfo/*.tres, resolved
+## by path. The negative cache is dropped for the same reason registration drops
+## it, in the other direction: a systemid answered from the mod for a whole
+## session must not keep answering from it once the mod is gone.
+static func drop_mod(owner_id: String) -> void:
+	for a_systemid: String in _mod_owners.keys():
+		if _mod_owners[a_systemid] != owner_id:
+			continue
+		_mod_infos.erase(a_systemid)
+		_mod_owners.erase(a_systemid)
+		_cache.erase(a_systemid)
 
 
 ## Load the descriptor for a systemid, or null when none exists. Cached.

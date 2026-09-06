@@ -22,8 +22,15 @@ var manifest: ModManifest = null
 var _hooks: ModHooks = null
 ## kind -> Array[String] of human-readable labels.
 var _record: Dictionary = {}
-## Problems raised during this mod's own registration.
+## Problems raised during this mod's own registration, shown on the Mods page.
 var _problems: PackedStringArray = []
+## The subset of those that were REFUSALS rather than warnings.
+##
+## Kept apart because the two mean opposite things for whether the mod loads: a
+## platform registered without pad art is incomplete and still works, while a
+## row the registry rejected is a contribution the mod believes it made and did
+## not. Only the second is grounds for withdrawing the mod.
+var _errors: PackedStringArray = []
 
 
 func _init(a_manifest: ModManifest, hooks: ModHooks) -> void:
@@ -62,7 +69,7 @@ func override_model(model_id: String, row: Dictionary) -> bool:
 func register_system_info(info: SystemInfo) -> bool:
 	if info == null or info.systemid.is_empty():
 		return _fail("register_system_info needs a SystemInfo carrying a systemid")
-	SystemInfo.register_mod_info(info)
+	SystemInfo.register_mod_info(info, id)
 	_note("platform", "%s descriptor" % info.systemid)
 	return true
 
@@ -127,7 +134,7 @@ func register_pad_art(systemid: String, row: Dictionary) -> bool:
 ## Cartridge and disc sizing. Without it a platform's carts come out the wrong
 ## size, and its discs do not exist at all.
 func register_media(systemid: String, dims: Dictionary) -> bool:
-	var err := MediaDimensions.register_mod_media(systemid, dims)
+	var err := MediaDimensions.register_mod_media(systemid, dims, id)
 	if not err.is_empty():
 		return _fail("media %s: %s" % [systemid, err])
 	_note("media", systemid)
@@ -137,7 +144,7 @@ func register_media(systemid: String, dims: Dictionary) -> bool:
 ## Map this platform to a screenscraper.fr system id so its ROMs can be scraped
 ## at all. A platform absent from that table gets no art, ever.
 func register_scraper_system(systemid: String, systemeid: int) -> bool:
-	var err := ScreenscraperSystems.register_mod_system(systemid, systemeid)
+	var err := ScreenscraperSystems.register_mod_system(systemid, systemeid, id)
 	if not err.is_empty():
 		return _fail("scraper %s: %s" % [systemid, err])
 	_note("scraper", "%s to %d" % [systemid, systemeid])
@@ -250,6 +257,38 @@ func problems() -> PackedStringArray:
 	return _problems
 
 
+## True when some contribution this mod tried to make was refused.
+func failed() -> bool:
+	return not _errors.is_empty()
+
+
+func errors_text() -> String:
+	return "; ".join(_errors)
+
+
+## Take back everything this mod registered.
+##
+## The rollback the registries' own drop_mod docs describe — "only used when a
+## mod fails part-way through register(), so a half-registered mod leaves
+## nothing standing" — which until now nothing outside the tests called, so a
+## mod that failed half way through kept the half that worked.
+##
+## Every table a mod can reach is named here rather than in mod_manager, so
+## adding a register_* method and forgetting to make it withdrawable is one
+## file's mistake instead of two.
+func withdraw() -> void:
+	SystemModelRegistry.drop_mod(id)
+	SystemInfo.drop_mod(id)
+	ConsolePadArt.drop_mod(id)
+	MediaDimensions.drop_mod(id)
+	ScreenscraperSystems.drop_mod(id)
+	RoomCatalog.drop_mod(id)
+	SpawnCatalog.drop_mod(id)
+	ScenePersistence.drop_mod_objects(id)
+	RetroTV.drop_mod_shells(id)
+	_hooks.drop_owner(id)
+
+
 ## "2 consoles, 1 room, 4 props" — the one-line summary on a mod's list row.
 func summary() -> String:
 	var parts := PackedStringArray()
@@ -277,6 +316,7 @@ func _note(kind: String, label: String) -> void:
 
 func _fail(msg: String) -> bool:
 	_problems.append(msg)
+	_errors.append(msg)
 	push_warning("[mod:%s] %s" % [id, msg])
 	return false
 

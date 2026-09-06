@@ -350,6 +350,33 @@ func _group_media() -> void:
 	_ok(not SpawnCatalog.register_mod_peripherals("t_bad", [], "t.bad").is_empty(),
 		"media/an empty peripheral list is refused rather than reported as added")
 
+	# These three tables tracked no owner, so what a mod contributed to them
+	# could be registered and never taken back — the exact defect the shared
+	# overlay tables were extracted to end, in the three that did not adopt one.
+	var withdrawn := "t.withdraw"
+	MediaDimensions.register_mod_media("t_withdraw_platform",
+		{"disc_diameter": 0.12}, withdrawn)
+	_eq(ScreenscraperSystems.register_mod_system("t_withdraw_platform", 909, withdrawn), "",
+		"withdraw/a mapping registers under an owner")
+	var info := SystemInfo.new()
+	info.systemid = "t_withdraw_platform"
+	SystemInfo.register_mod_info(info, withdrawn)
+	_ok(SystemInfo.for_system("t_withdraw_platform") != null, "withdraw/descriptor is served")
+
+	MediaDimensions.drop_mod(withdrawn)
+	ScreenscraperSystems.drop_mod(withdrawn)
+	SystemInfo.drop_mod(withdrawn)
+	_eq(MediaDimensions.disc_loader("t_withdraw_platform"), MediaDimensions.LOADER_NONE,
+		"withdraw/media goes back")
+	_eq(ScreenscraperSystems.get_systemeid("t_withdraw_platform"), -1,
+		"withdraw/the scraper mapping goes back")
+	_ok(SystemInfo.for_system("t_withdraw_platform") == null,
+		"withdraw/the descriptor goes back, negative cache and all")
+	# Another mod's rows, and every shipped row, survive one mod being dropped.
+	_eq(ScreenscraperSystems.get_systemeid("t_media_platform"), 4242,
+		"withdraw/another owner's mapping survives")
+	_eq(ScreenscraperSystems.get_systemeid("nes"), 3, "withdraw/shipped mapping survives")
+
 
 # ── shaders/ ──────────────────────────────────────────────────────────────────
 

@@ -133,15 +133,29 @@ static func get_systemeid(systemid: String) -> int:
 ## without one gets no box art, no wheel and no cart label -- ever. That failure
 ## is invisible: the carts simply stay blank, and nothing anywhere says why.
 static var _mod_map: Dictionary = {}
+## systemid -> the mod that contributed it, so it can be taken back again.
+static var _mod_owners: Dictionary = {}
 
 
 ## "" on success, else why the mapping was refused — the failure this table
 ## describes above is invisible at runtime, so refusing one quietly is the worst
 ## of the options available.
-static func register_mod_system(systemid: String, systemeid: int) -> String:
+static func register_mod_system(systemid: String, systemeid: int,
+		owner_id: String = "") -> String:
 	if systemid.is_empty():
 		return "systemid is empty"
 	if systemeid <= 0:
 		return "screenscraper system id must be positive, got %d" % systemeid
 	_mod_map[systemid] = systemeid
+	_mod_owners[systemid] = owner_id
 	return ""
+
+
+## Take back one mod's mappings. A mapping left standing after its mod is gone
+## points a platform that no longer exists at a scraper system that does.
+static func drop_mod(owner_id: String) -> void:
+	for systemid: String in _mod_owners.keys():
+		if _mod_owners[systemid] != owner_id:
+			continue
+		_mod_map.erase(systemid)
+		_mod_owners.erase(systemid)

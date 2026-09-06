@@ -200,6 +200,18 @@ func _mount_and_register(rec: ModRecord) -> void:
 		return
 	var api := ModApi.new(manifest, _hooks)
 	(inst as RetroMod).register(api)
+	# A mod whose contributions were REFUSED is not a loaded mod. Every registry
+	# has carried a drop_mod for this since the overlay tables were shared, each
+	# documented as the rollback for a registration that failed part-way — and
+	# nothing outside the tests had ever called one, so a mod that failed half
+	# way through kept the half that worked and was listed as fully loaded.
+	#
+	# Warnings do not qualify: a platform registered without pad art is
+	# incomplete and still plays, which is why _warn and _fail are counted apart.
+	if api.failed():
+		api.withdraw()
+		rec.fail("registration was refused: %s" % api.errors_text())
+		return
 	rec.api = api
 	rec.status = ModRecord.Status.LOADED
 	if not shadowing.is_empty():

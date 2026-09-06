@@ -447,10 +447,13 @@ static func load_label_texture(systemid: String, rom_path: String) -> Texture2D:
 ##   slot_load      bool     front slot rather than a hinged tray
 ##   front_tray     bool     tray slides from the front face
 static var _mod_media: Dictionary = {}
+## systemid -> the mod that contributed it, so it can be taken back again.
+static var _mod_owners: Dictionary = {}
 
 
 ## Returns "" when the descriptor was accepted.
-static func register_mod_media(systemid: String, dims: Dictionary) -> String:
+static func register_mod_media(systemid: String, dims: Dictionary,
+		owner_id: String = "") -> String:
 	if systemid.is_empty():
 		return "no systemid"
 	if dims.has("cart_size") and not (dims["cart_size"] is Vector3):
@@ -460,7 +463,20 @@ static func register_mod_media(systemid: String, dims: Dictionary) -> String:
 	if dims.has("slot_load") and not dims.has("disc_diameter"):
 		return "slot_load needs a disc_diameter, or there is no disc to load"
 	_mod_media[systemid] = dims.duplicate(true)
+	_mod_owners[systemid] = owner_id
 	return ""
+
+
+## Take back one mod's sizings. Not on ModOverlayTable like the five tables that
+## are: the readers below reach into individual keys of a row and fall through to
+## a shipped default per key, rather than resolving a whole row, so there is no
+## merged table for the overlay to serve. What was missing was only the owner.
+static func drop_mod(owner_id: String) -> void:
+	for systemid: String in _mod_owners.keys():
+		if _mod_owners[systemid] != owner_id:
+			continue
+		_mod_media.erase(systemid)
+		_mod_owners.erase(systemid)
 
 
 static func is_mod_media(systemid: String) -> bool:
