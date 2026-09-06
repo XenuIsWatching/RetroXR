@@ -657,6 +657,39 @@ func _load_system_model() -> void:
 		_system_body.hide()
 	_model.configure_buttons(_power_button, _reset_button, _eject_button)
 	_model.configure_controller_ports(_port_zones)
+	_build_video_channels()
+	_model.configure_cartridge_slot(_cartridge_slot)
+	# So a unit that mounts AS a cartridge can carry a grab point naming this
+	# slot, and seat by its connector instead of by its centre. See
+	# RetroExpansion._build_connector.
+	_cartridge_slot.add_to_group(ExpansionPort.GROUP_CART_SLOT)
+	_wire_push_tray()
+	# The serial socket, for the consoles that have one. Placed by the model for
+	# the same reason the A/V sockets are: it goes on the back panel, and only
+	# the thing that draws the back panel knows where that is.
+	_model.build_serial_port(self, systemid)
+	_model.configure_collision(self)
+	_build_port_zones()
+	_build_memcard_slots()
+	_build_disc_loader(is_bespoke)
+	_build_handheld()
+	# Restore a saved lid pose — a clamshell's hinge (DS/3DS/GBA SP) or a console's
+	# cartridge-bay flap (the NES). Last, and for every model rather than only the
+	# handhelds, because a disc loader and configure_cartridge_slot both re-gate the
+	# bay above and either would win over the restored pose.
+	if _lid_angle_from_save >= 0.0:
+		_model.set_lid_angle_deg(_lid_angle_from_save)
+		_restore_tray_open()
+
+
+
+
+## One attach point and cable per video channel.
+##
+## Channel 0 is the scene's own CableAttachPoint; a second screen (the DS,
+## the 3DS) gets a Node3D of its own. A machine that describes no channels
+## is classic hardware with one unlabelled full-frame output.
+func _build_video_channels() -> void:
 	# Video-out channels: one attach point + cable per channel. Channel 0 is
 	# the scene's CableAttachPoint; extra channels get their own Node3D.
 	var described: Array = _model.get_video_channels()
@@ -681,17 +714,15 @@ func _load_system_model() -> void:
 		video_out_enabled = _video_out_from_save == 1
 	else:
 		video_out_enabled = true
-	_model.configure_cartridge_slot(_cartridge_slot)
-	# So a unit that mounts AS a cartridge can carry a grab point naming this
-	# slot, and seat by its connector instead of by its centre. See
-	# RetroExpansion._build_connector.
-	_cartridge_slot.add_to_group(ExpansionPort.GROUP_CART_SLOT)
-	_wire_push_tray()
-	# The serial socket, for the consoles that have one. Placed by the model for
-	# the same reason the A/V sockets are: it goes on the back panel, and only
-	# the thing that draws the back panel knows where that is.
-	_model.build_serial_port(self, systemid)
-	_model.configure_collision(self)
+
+
+## Show the controller ports this console really had.
+##
+## The SystemInfo descriptor wins over the model's default when it has an
+## opinion, clamped to the snap zones the cabinet actually carries. A
+## multitap extends players past this on its own, and a handheld exposes
+## none at all -- it IS its own controller, driven by HandheldInput.
+func _build_port_zones() -> void:
 	# Native controller ports: prefer the per-system SystemInfo descriptor (the
 	# real console's built-in port count) over the model's default, clamped to
 	# the cabinet's available snap zones. A multitap plugged into a port extends
@@ -708,6 +739,16 @@ func _load_system_model() -> void:
 		var active := i < port_count
 		_port_zones[i].visible = active
 		_port_zones[i].enabled = active
+
+
+## Show the memory-card slots this console takes, and let the model place
+## the ones that exist.
+##
+## Cartridge systems keep their battery save on the cartridge and show
+## none. The model is configured LAST and only for live slots, because a
+## shell may gate its slots behind a door -- the Wii's are under the memory
+## flap -- and that gate has to win over this blanket enable.
+func _build_memcard_slots() -> void:
 	# Memory-card slots only on hardware that takes them; cartridge systems keep
 	# their battery save on the cartridge itself. A PlayStation shows one, a
 	# GameCube or Wii two.
@@ -726,6 +767,19 @@ func _load_system_model() -> void:
 			mouth.visible = active
 		if active:
 			_model.configure_memory_card_slot(_memcard_slots[i], i)
+
+
+## Build whatever this console loads a disc through, or nothing.
+##
+## Three shapes: a hinged lid, a front-sliding tray, and a true slot that
+## draws the disc in. The first two are one loader with different geometry
+## and different wording on the button; the third is MediaSlot instead of
+## MediaTray. Cartridge hardware takes none of it and hides the button.
+##
+## `bespoke` is passed rather than re-derived: a shell that brings its own
+## body also brings its own tray mechanism, so several of the procedural
+## decisions below do not apply to it.
+func _build_disc_loader(bespoke: bool) -> void:
 	# Disc loader: tray consoles (PS1/GameCube…) get an OPEN button gating a
 	# closed-by-default tray; slot loaders (PS2) get an always-open slot with
 	# an EJECT button. Cartridge systems hide the button entirely.
@@ -744,7 +798,7 @@ func _load_system_model() -> void:
 	# brings its own mechanism — the PS2 Slim's hinged cover is a lid whatever the
 	# platform row says the family does — so it keeps the lid wording and geometry.
 	_front_tray = _disc_loader == MediaDimensions.LOADER_TRAY \
-		and MediaDimensions.has_front_tray(systemid) and not is_bespoke
+		and MediaDimensions.has_front_tray(systemid) and not bespoke
 	if has_loader:
 		var eject_label := _eject_button.get_node_or_null("ButtonLabel") as Label3D
 		if eject_label:
@@ -808,7 +862,7 @@ func _load_system_model() -> void:
 			_tray.unloaded.connect(_on_cartridge_removed)
 		# Slot loaders take the disc through a slit in the FRONT face: move the
 		# snap zone to the slit mouth and add the slit visual there.
-		if _disc_loader == MediaDimensions.LOADER_SLOT and not is_bespoke:
+		if _disc_loader == MediaDimensions.LOADER_SLOT and not bespoke:
 			_cartridge_slot.position = Vector3(0, 0.03, 0.125)
 			_model.build_disc_slit(self, systemid)
 		# Front-loading disc bay: hand the physical ride/eject/grab/collision to the
@@ -828,6 +882,15 @@ func _load_system_model() -> void:
 			add_child(_slot)
 			_slot.inserted.connect(_on_cartridge_inserted)
 			_slot.removed.connect(_on_cartridge_removed)
+
+
+## A handheld is its own controller.
+##
+## Built-in screen, on-device controls, and the HandheldInput component that
+## turns the device into port 0. Dual-screen clamshells keep the cabinet's
+## START/STOP button, repositioned by their own configure_buttons -- the
+## back-edge power knob does not fit them.
+func _build_handheld() -> void:
 	# Handhelds: built-in screen, on-device controls, and the held-input
 	# component that turns the device itself into the port-0 controller.
 	# Dual-screen clamshells keep the cabinet START/STOP button (repositioned
@@ -850,15 +913,6 @@ func _load_system_model() -> void:
 		_handheld_input.setup(self)
 		# Route port-0 rumble to the holding hands via the existing path.
 		_port_controllers[0] = _handheld_input
-	# Restore a saved lid pose — a clamshell's hinge (DS/3DS/GBA SP) or a console's
-	# cartridge-bay flap (the NES). Last, and for every model rather than only the
-	# handhelds, because a disc loader and configure_cartridge_slot both re-gate the
-	# bay above and either would win over the restored pose.
-	if _lid_angle_from_save >= 0.0:
-		_model.set_lid_angle_deg(_lid_angle_from_save)
-		_restore_tray_open()
-
-
 ## A handheld routes the trigger and thumbstick into the emulated pad, leaving
 ## the push-out gesture nothing to bind to. Consoles keep it. Catching either
 ## back off the laser works regardless. Queried by
