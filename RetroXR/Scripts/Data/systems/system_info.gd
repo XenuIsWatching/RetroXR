@@ -96,8 +96,9 @@ static var _mod_owners: Dictionary = {}
 
 ## Add or replace a descriptor. The systemid comes off the resource itself, so a
 ## mod cannot file one under a name it does not answer to.
-## "" on success, else why the descriptor was refused, like every other
-## registrar a mod reaches.
+##
+## "" on success, else why it was refused, like every other registrar a mod
+## reaches.
 static func register_mod_info(info: SystemInfo, owner_id: String = "") -> String:
 	if info == null:
 		return "no descriptor given"
@@ -142,11 +143,3 @@ static func for_system(a_systemid: String) -> SystemInfo:
 		info = ResourceLoader.load(path) as SystemInfo
 	_cache[a_systemid] = info
 	return info
-
-
-## "cartridge" / "disc_tray" / "disc_insert" for logging and UI.
-func media_type_name() -> String:
-	match media_type:
-		MediaType.DISC_TRAY:   return "disc_tray"
-		MediaType.DISC_INSERT: return "disc_insert"
-		_:                     return "cartridge"
