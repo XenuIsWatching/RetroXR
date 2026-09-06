@@ -1435,7 +1435,16 @@ GDScript UI → Libretro Node (instance) → Wrapper (per-node) → Core + Handl
 - **rcheevos** (submodule, `libretro-godot/external/rcheevos/`) — RetroAchievements support, compiled into the extension. Carries no external dependency of its own.
 - **Vulkan-Headers** (submodule, `libretro-godot/external/vulkan-headers/`) — headers for the Vulkan HW-render path.
 - **moodycamel::ReaderWriterQueue** — Lock-free SPSC queue for cross-thread communication
-- **godot-xr-tools v4.5.1** — VR locomotion, interactions, finger poses (`RetroXR/addons/godot-xr-tools/`)
+- **godot-xr-tools v4.5.1 — FORKED IN PLACE, not a vendored drop-in.** VR locomotion,
+  interactions, finger poses (`RetroXR/addons/godot-xr-tools/`). `plugin.cfg` still
+  says 4.5.1 and it is no longer that: 30 commits have landed on it here, 59 files,
+  +2841/-381, in snap_zone, player_body, the grab driver and pickable teardown —
+  the local patch behind `function_pickup._on_grip_pressed` asking a controller
+  whether it wants the grip, the snap zone releasing what it holds when it leaves
+  the tree, and the `_property_get_revert` returns Godot 4.7 made mandatory.
+  **Dropping a fresh upstream copy over this silently reverts all of it**, and the
+  symptoms are grabs and teardown, which no headless suite covers. Diff before
+  upgrading: `git log --oneline -- RetroXR/addons/godot-xr-tools`.
 - **vlc-godot** (libVLC) — the `VlcPlayer` GDExtension; single video backend for both the DVD
   player and the VHS/VCR. Replaced `eirteam.ffmpeg` (dropped 2026-07-14; libVLC also does x265).
 - **godot-pdfium** (PDFium) — the `PDFRenderer` GDExtension for rendering PDF pages (books) to
