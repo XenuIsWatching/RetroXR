@@ -30,8 +30,12 @@ func _ready() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--only="):
 			_only = arg.substr("--only=".length())
+	# Restore BEFORE quitting: this suite writes the player's real ra_config.json,
+	# and a suite that dies on its watchdog would otherwise leave the test
+	# credentials sitting in it.
 	get_tree().create_timer(60.0).timeout.connect(func() -> void:
 		push_error("[ra] TIMEOUT")
+		_restore()
 		get_tree().quit(1))
 
 	_snapshot()

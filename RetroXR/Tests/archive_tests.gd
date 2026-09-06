@@ -28,8 +28,12 @@ func _ready() -> void:
 		if arg.begins_with("--only="):
 			_only = arg.substr("--only=".length())
 	# A suite that hangs reports nothing at all, so bound it.
+	# Clean BEFORE quitting: a suite that dies on its watchdog would otherwise
+	# leave its fixture archives under user://, and the next run reads whatever
+	# is there as if it had just built it.
 	get_tree().create_timer(120.0).timeout.connect(func() -> void:
 		push_error("[archive] TIMEOUT")
+		_clean()
 		get_tree().quit(1))
 
 	_clean()

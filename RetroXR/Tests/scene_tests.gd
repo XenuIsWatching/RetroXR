@@ -110,8 +110,12 @@ func _extends_retro_controller(script_path: String) -> bool:
 	return false
 
 func _ready() -> void:
+	# Restore BEFORE quitting: this suite writes the player's real prefs, arcade
+	# manifest and active slots, so dying on the watchdog without this leaves
+	# their room pointing at a slot the test invented.
 	get_tree().create_timer(120.0).timeout.connect(func():
 		print("[test] TIMEOUT")
+		_restore()
 		get_tree().quit(1))
 	get_tree().current_scene = self
 
