@@ -16,6 +16,7 @@
     "netplay_tests": 685,
     "object_sync_tests": 129,
     "poster_tests": 112,
+    "ra_tests": 29,
     "romm_tests": 336,
     "rope_tests": 82,
     "scene_tests": 153,
