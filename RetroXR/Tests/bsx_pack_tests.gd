@@ -25,7 +25,7 @@ extends Node
 ## after it simply never prints, leaving a green run that checked less than
 ## it claims. card_tests records finding this the hard way; mutation-testing
 ## cores_data_tests found it again.
-const EXPECTED_CASES := 44
+const EXPECTED_CASES := 62
 
 var _passed := 0
 var _failed := 0
@@ -40,6 +40,7 @@ func _ready() -> void:
 	_group_detect()
 	_group_title()
 	_group_patch()
+	_group_format()
 
 	_eq(_passed + _failed, EXPECTED_CASES, "suite/every case ran")
 
@@ -260,3 +261,68 @@ func _ips(records: Array) -> PackedByteArray:
 		out.append_array(r)
 	out.append_array("EOF".to_ascii_buffer())
 	return out
+
+
+## ── format/ ───────────────────────────────────────────────────────────
+##
+## BsxPackFormat is the CardFormat view of a pack: the reading half is
+## implemented and the writing half deliberately is not, because flash is
+## reclaimed in whole blocks and nothing here has watched the BS-X do it. A wrong
+## guess would not fail loudly, it would destroy a download obtainable only from
+## a broadcast that no longer exists.
+##
+## Instantiated directly rather than through CardFormats, which is the documented
+## way to reach it: registering it would file packs under save/memcards/, and
+## snes9x reads its broadcast packets out of the loaded ROM's own folder.
+func _group_format() -> void:
+	var fmt := BsxPackFormat.new()
+
+	_eq(fmt.id(), "bsx", "format/the family id")
+	_eq(fmt.extension(), "bs", "format/a pack is a .bs")
+
+	# Eight blocks whatever is on it, unlike a GameCube card whose size is a
+	# property of the card. The argument is ignored rather than parsed.
+	_eq(fmt.total_blocks(PackedByteArray()), BsxPack.BLOCK_COUNT,
+		"format/a pack is eight blocks whatever it is handed")
+
+	var blank := fmt.blank_image()
+	_ok(fmt.is_card_image(blank), "format/a blank pack is a pack")
+	_eq(fmt.list_saves(blank).size(), 0, "format/and holds no programmes")
+
+	# The placeholder header claims every block (BLANK_BLOCK_ALLOC is 0xFF), so a
+	# reader that counted it called an untouched pack full -- the panel said
+	# "8 of 8 blocks used" directly above "Nothing written on this pack yet".
+	_eq(fmt.free_blocks(blank), BsxPack.BLOCK_COUNT,
+		"format/a blank pack is entirely free despite its placeholder bitmap")
+
+	# A programme in block 0 claiming blocks 0 and 1.
+	var pack := fmt.blank_image()
+	var name := "BS ZELDA".to_ascii_buffer()
+	for i in BsxPack.TITLE_LEN:
+		pack[BsxPack.HEADER + i] = name[i] if i < name.size() else 0x20
+	pack[BsxPack.HEADER + BsxPack.OFF_BLOCK_ALLOC] = 0x03
+
+	var saves := fmt.list_saves(pack)
+	_eq(saves.size(), 1, "format/a named programme is listed")
+	_eq(str(saves[0]["name"]), "BS ZELDA", "format/under its broadcast title")
+	_eq(int(saves[0]["blocks"]), 2, "format/with the block count its bitmap claims")
+	_eq(int(saves[0]["block"]), 0, "format/and the block its header sits in")
+
+	# Empty by contract, not by accident: a broadcast carries no product code and
+	# a pack stores no icon, so these are stated rather than left to a caller to
+	# discover. with_icons costs nothing here and exists to honour the signature.
+	_eq(str(saves[0]["serial"]), "", "format/a broadcast has no serial")
+	_eq((saves[0]["icons"] as Array).size(), 0, "format/and a pack stores no icon")
+
+	_eq(fmt.free_blocks(pack), BsxPack.BLOCK_COUNT - 2,
+		"format/two claimed blocks leave six free")
+	_eq(fmt.block_of(pack, "BS ZELDA"), 0, "format/a programme is found by name")
+	_eq(fmt.block_of(pack, "BS MARIO"), -1, "format/and an absent one is -1")
+
+	# The writing half is deliberately unimplemented; the base class stubs answer
+	# empty. If these ever start returning data, the erase semantics were guessed.
+	_ok(fmt.extract_save(pack, 0).is_empty(),
+		"format/extract is deliberately not implemented")
+	_ok(fmt.insert_save(pack, PackedByteArray([1, 2, 3])).is_empty(),
+		"format/nor is insert")
+	_ok(fmt.delete_save(pack, 0).is_empty(), "format/nor delete")
