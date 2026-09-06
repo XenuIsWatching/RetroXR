@@ -26,7 +26,7 @@
 ##   - the light-gun name list does not know "Stunner" (the Saturn Virtua Gun's
 ##     US name), so a core naming its gun only that would not resolve;
 ##   - `attach_expanded_controller` (a multitap sub-port) announces the raw
-##     device type, skipping `_core_device_id`, so a gun on a multitap is a
+##     device type, skipping `core_device_id`, so a gun on a multitap is a
 ##     gamepad to fceumm until the next core start re-announces it.
 extends Node
 
@@ -181,13 +181,13 @@ func _system(sysid: String = "nes") -> RetroSystem:
 func _test_reads_as_lightgun() -> void:
 	for gun: String in ["Zapper", "Super Scope", "Konami Justifier", "GunCon",
 			"Light Phaser", "Menacer", "Lightgun"]:
-		_ok(RetroSystem._reads_as_lightgun(gun), "gun name/'%s' is a gun" % gun)
+		_ok(RetroSystem.reads_as_lightgun(gun), "gun name/'%s' is a gun" % gun)
 	# The rest of a NES port list, plus the devices most likely to be mistaken
 	# for one because they also report a screen position.
 	for other: String in ["Auto", "Gamepad", "Arkanoid", "Power Pad A",
 			"SNES Mouse", "Keyboard", "Multitap", "Oeka Kids Tablet",
 			"Pointer", "Touchscreen"]:
-		_ok(not RetroSystem._reads_as_lightgun(other), "gun name/'%s' is not a gun" % other)
+		_ok(not RetroSystem.reads_as_lightgun(other), "gun name/'%s' is not a gun" % other)
 
 
 # ---------------------------------------------------------------------------
@@ -201,36 +201,36 @@ func _test_core_device_id() -> void:
 	# The bug this suite exists for: 7 is not a device fceumm knows, and its
 	# switch turns an unknown id into a gamepad. Port 2 (index 1) is where a NES
 	# Zapper goes.
-	_eq(sys._core_device_id(DEVICE_LIGHTGUN, 1), 258, "device/fceumm gun -> Zapper")
-	_eq(sys._core_device_id(DEVICE_LIGHTGUN, 0), 258, "device/fceumm gun on port 1 -> Zapper")
+	_eq(sys.core_device_id(DEVICE_LIGHTGUN, 1), 258, "device/fceumm gun -> Zapper")
+	_eq(sys.core_device_id(DEVICE_LIGHTGUN, 0), 258, "device/fceumm gun on port 1 -> Zapper")
 
 	# A port that declares no gun keeps the generic id rather than borrowing the
 	# gun another port declares.
-	_eq(sys._core_device_id(DEVICE_LIGHTGUN, 2),
+	_eq(sys.core_device_id(DEVICE_LIGHTGUN, 2),
 		DEVICE_LIGHTGUN, "device/no gun on this port passes through")
 	# A port the core never declared at all.
-	_eq(sys._core_device_id(DEVICE_LIGHTGUN, 9),
+	_eq(sys.core_device_id(DEVICE_LIGHTGUN, 9),
 		DEVICE_LIGHTGUN, "device/unknown port passes through")
 
 	# Only a light gun is translated. A pad, a mouse, a keyboard and an unplug
 	# all have to reach the core exactly as sent.
 	for dev: int in [DEVICE_NONE, DEVICE_JOYPAD, DEVICE_MOUSE, DEVICE_KEYBOARD]:
-		_eq(sys._core_device_id(dev, 1), dev, "device/type %d untranslated" % dev)
+		_eq(sys.core_device_id(dev, 1), dev, "device/type %d untranslated" % dev)
 
 	# Nothing is known about the core until it starts, and a peripheral can be
 	# plugged into a machine that is off. The generic id is the honest answer;
 	# _reannounce_port_devices() corrects it once the core declares its list.
 	sys._controller_info = []
-	_eq(sys._core_device_id(DEVICE_LIGHTGUN, 1),
+	_eq(sys.core_device_id(DEVICE_LIGHTGUN, 1),
 		DEVICE_LIGHTGUN, "device/machine off passes through")
 
 	# A core that subclasses the light gun properly is taken at its word.
 	sys._controller_info = SNES_PORTS
-	_eq(sys._core_device_id(DEVICE_LIGHTGUN, 0), 263, "device/subclassed gun wins")
+	_eq(sys.core_device_id(DEVICE_LIGHTGUN, 0), 263, "device/subclassed gun wins")
 
 	# Base type beats the name, however early the name matches.
 	sys._controller_info = MIXED_PORTS
-	_eq(sys._core_device_id(DEVICE_LIGHTGUN, 0), 263, "device/base type beats name")
+	_eq(sys.core_device_id(DEVICE_LIGHTGUN, 0), 263, "device/base type beats name")
 
 	sys.free()
 

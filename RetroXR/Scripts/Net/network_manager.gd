@@ -350,7 +350,7 @@ func host_online(room_name := "") -> Error:
 		ep["punch_host"], ep["punch_port"])
 	if punched["result"] != Punchthrough.Result.OK:
 		_teardown_online()
-		status_changed.emit(_punch_failure(punched["result"]))
+		status_changed.emit(punch_failure(punched["result"]))
 		return ERR_CANT_CONNECT
 
 	var room: Dictionary = await _call_registry(func(cb: Callable) -> void:
@@ -414,7 +414,7 @@ func join_by_code(raw_code: String) -> Error:
 		room["punch_host"], room["oid"], room["punch_port"])
 	if punched["result"] != Punchthrough.Result.OK:
 		_teardown_online()
-		status_changed.emit(_punch_failure(punched["result"]))
+		status_changed.emit(punch_failure(punched["result"]))
 		return ERR_CANT_CONNECT
 
 	var err := join_game(punched["host_addr"], punched["host_port"],
@@ -520,7 +520,10 @@ func _teardown_online() -> void:
 ## What to say when a punch fails. Naming the likely cause matters more here
 ## than anywhere else in this file: roughly one attempt in five cannot be
 ## punched at all, and a player given a blank failure will simply retry it.
-func _punch_failure(result: int) -> String:
+##
+## Public because the suites assert against it directly: an underscore promises
+## the name may change freely, and a test that names it is a caller that cannot.
+func punch_failure(result: int) -> String:
 	match result:
 		Punchthrough.Result.NO_SUCH_HOST:
 			return "That game is no longer running."

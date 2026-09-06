@@ -1937,7 +1937,7 @@ func _host_assemble() -> void:
 		var f := _complete_upto + 1
 		if not _frame_ready(f):
 			break
-		_frames[f] = _flat_from_frame(_recv.get(f, {}),
+		_frames[f] = flat_from_frame(_recv.get(f, {}),
 			_recv_aux.get(f, {}), _recv_keys.get(f, {}))
 		_complete_upto = f
 		changed = true
@@ -2044,7 +2044,7 @@ func _drain_to_core() -> void:
 			stop("link operation failed at frame %d" % _next_post)
 			return
 		for i in range(_libs.size()):
-			_libs[i].PostNetplayInputs(_next_post, _slice_for_machine(flat, i))
+			_libs[i].PostNetplayInputs(_next_post, slice_for_machine(flat, i))
 		_next_post += 1
 		progressed = true
 	if progressed:
@@ -2965,7 +2965,10 @@ func _frame_ints() -> int:
 ## Assembled frame: one 5-int block per GLOBAL port, then one aux + keyboard
 ## block per machine. A linked handheld's tilt or keyboard belongs to that
 ## handheld alone and must not be dropped or copied into every other core.
-func _flat_from_frame(pm: Dictionary, aux_by_port: Dictionary,
+##
+## Public because the suites assert against it directly: an underscore promises
+## the name may change freely, and a test that names it is a caller that cannot.
+func flat_from_frame(pm: Dictionary, aux_by_port: Dictionary,
 		keys_by_machine: Dictionary) -> PackedInt32Array:
 	var port_ints := _port_ints()
 	var flat := PackedInt32Array()
@@ -2994,7 +2997,10 @@ func _flat_from_frame(pm: Dictionary, aux_by_port: Dictionary,
 ## One machine's share of an assembled frame, in the shape a core expects:
 ## its own four ports, then its own aux and key blocks. The C++ gate has never
 ## known about anything but its own machine and does not need to.
-func _slice_for_machine(flat: PackedInt32Array, machine_index: int) -> PackedInt32Array:
+##
+## Public because the suites assert against it directly: an underscore promises
+## the name may change freely, and a test that names it is a caller that cannot.
+func slice_for_machine(flat: PackedInt32Array, machine_index: int) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	out.resize(PORTS_PER_MACHINE * 5 + AUX_INTS + KEY_SLOTS * 2)
 	var base := machine_index * PORTS_PER_MACHINE * 5

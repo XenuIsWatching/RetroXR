@@ -3528,7 +3528,7 @@ func _reannounce_port_devices() -> void:
 		if _wii_link != null and _port_plugs[i] != null:
 			announce = _wii_link.cabinet_device_id(dev)
 		var lib_port := _libretro_port_for(dev, i)
-		set_controller_port_device(lib_port, _core_device_id(announce, lib_port))
+		set_controller_port_device(lib_port, core_device_id(announce, lib_port))
 
 
 ## Say what is on each port a SECOND time, once the core has actually run a frame.
@@ -3640,7 +3640,10 @@ func _libretro_port_for(device_type: int, physical_port: int) -> int:
 ## The core's own declared list is the source, so this needs no per-core table:
 ## prefer an entry whose base type IS a light gun, else one whose name reads as a
 ## gun, else announce what we were given.
-func _core_device_id(device_type: int, lib_port: int) -> int:
+##
+## Public because the suites assert against it directly: an underscore promises
+## the name may change freely, and a test that names it is a caller that cannot.
+func core_device_id(device_type: int, lib_port: int) -> int:
 	if device_type != RETRO_DEVICE_LIGHTGUN:
 		return device_type
 	var by_name := -1
@@ -3651,12 +3654,17 @@ func _core_device_id(device_type: int, lib_port: int) -> int:
 			var id := int(dev.get("id", 0))
 			if (id & RETRO_DEVICE_MASK) == RETRO_DEVICE_LIGHTGUN:
 				return id
-			if by_name < 0 and _reads_as_lightgun(String(dev.get("name", ""))):
+			if by_name < 0 and reads_as_lightgun(String(dev.get("name", ""))):
 				by_name = id
 	return by_name if by_name >= 0 else device_type
 
 
-static func _reads_as_lightgun(device_name: String) -> bool:
+## Whether a core's device NAME reads as a light gun, for the cores that
+## describe one without using the light-gun base type.
+##
+## Public because the suites assert against it directly: an underscore promises
+## the name may change freely, and a test that names it is a caller that cannot.
+static func reads_as_lightgun(device_name: String) -> bool:
 	var lower := device_name.to_lower()
 	for word: String in _LIGHTGUN_WORDS:
 		if lower.contains(word):
@@ -3810,7 +3818,7 @@ func _bind_port(lib_port: int, plug: Node3D, cabinet_index: int) -> void:
 		if _wii_link != null:
 			_wii_link.evict_remote_from(lib_port)
 			announce = _wii_link.cabinet_device_id(device_type)
-	announce = _core_device_id(announce, lib_port)
+	announce = core_device_id(announce, lib_port)
 	print("[RetroSystem] port %d bound: device_type=%d -> libretro port %d (announced %d)" %
 		[cabinet_index, device_type, lib_port, announce])
 	if _claims_port_device(device_type):

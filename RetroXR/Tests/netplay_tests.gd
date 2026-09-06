@@ -610,27 +610,27 @@ func _test_room_code() -> void:
 	# The failure copy is the whole point of typing the failures. A player who
 	# cannot be punched to must be told what to try, because roughly one
 	# attempt in five lands here and a blank message just gets retried.
-	var unpunchable: String = nm._punch_failure(Punchthrough.Result.UNPUNCHABLE)
+	var unpunchable: String = nm.punch_failure(Punchthrough.Result.UNPUNCHABLE)
 	_ok(unpunchable.contains("hotspot"),
 		"roomcode/an unpunchable pair is told the likely cause")
 	_ok(unpunchable.contains("LAN") or unpunchable.contains("Wi-Fi"),
 		"roomcode/and what to try instead")
-	_ok(nm._punch_failure(Punchthrough.Result.NO_SUCH_HOST).contains("no longer"),
+	_ok(nm.punch_failure(Punchthrough.Result.NO_SUCH_HOST).contains("no longer"),
 		"roomcode/a room that stopped says so, not that the network failed")
-	_ok(nm._punch_failure(Punchthrough.Result.UNREACHABLE).contains("LAN"),
+	_ok(nm.punch_failure(Punchthrough.Result.UNREACHABLE).contains("LAN"),
 		"roomcode/a dead registry points at LAN hosting")
 
 	# A punch server that answers the socket and then ignores the conversation
 	# is not the same fault as one that cannot be reached, and saying so cost a
 	# real debugging session once. These must not drift back together.
-	var protocol_msg: String = nm._punch_failure(Punchthrough.Result.PROTOCOL_ERROR)
+	var protocol_msg: String = nm.punch_failure(Punchthrough.Result.PROTOCOL_ERROR)
 	_ok(protocol_msg.contains("punch"),
 		"roomcode/a silent punch server names the punch server")
-	_ok(protocol_msg != nm._punch_failure(Punchthrough.Result.UNREACHABLE),
+	_ok(protocol_msg != nm.punch_failure(Punchthrough.Result.UNREACHABLE),
 		"roomcode/and does not read as an unreachable registry")
 	_ok(protocol_msg.contains("LAN"),
 		"roomcode/while still pointing at the way out")
-	_ok(unpunchable != nm._punch_failure(Punchthrough.Result.UNREACHABLE),
+	_ok(unpunchable != nm.punch_failure(Punchthrough.Result.UNREACHABLE),
 		"roomcode/the two failures do not read the same")
 
 	nm.get_parent().queue_free()
@@ -852,7 +852,7 @@ func _test_wire() -> void:
 	port0_aux[15] = 1
 	port0_aux[22] = -15
 	port0_aux[24] = 1
-	var flat := np._flat_from_frame({0: [1, 2, 3, 4, 5], 2: [6, 7, 8, 9, 10]},
+	var flat := np.flat_from_frame({0: [1, 2, 3, 4, 5], 2: [6, 7, 8, 9, 10]},
 		{0: port0_aux}, {0: [70 | 65536, 102]})
 	_eq(flat.size(), 20 + NetplaySession.AUX_INTS + NetplaySession.KEY_SLOTS * 2,
 		"wire/an assembled frame is one fixed-size block")
@@ -876,11 +876,11 @@ func _test_wire() -> void:
 	far_aux[13] = 40
 	far_aux[14] = 50
 	far_aux[15] = 1
-	var linked_flat := np._flat_from_frame({},
+	var linked_flat := np.flat_from_frame({},
 		{0: near_aux, 4: far_aux},
 		{0: [65, 97], 1: [66 | 65536, 98]})
-	var near_slice := np._slice_for_machine(linked_flat, 0)
-	var far_slice := np._slice_for_machine(linked_flat, 1)
+	var near_slice := np.slice_for_machine(linked_flat, 0)
+	var far_slice := np.slice_for_machine(linked_flat, 1)
 	_eq(near_slice[20], 1, "wire/the anchor keeps its own aux flags")
 	_eq(near_slice[21], 10, "wire/the anchor keeps its own sensor")
 	_eq(far_slice[20], 1 << 4, "wire/the far machine keeps its own aux flags")
@@ -1995,7 +1995,7 @@ func _test_link() -> void:
 	barrier_np._libs = [barrier_near.lib, barrier_far.lib]
 	barrier_np._lib = barrier_near.lib
 	barrier_np._next_post = 5
-	barrier_np._frames[5] = barrier_np._flat_from_frame({}, {}, {})
+	barrier_np._frames[5] = barrier_np.flat_from_frame({}, {}, {})
 	barrier_np._apply_link_op(1, PackedInt32Array([0, 1]),
 		PackedInt32Array([0, 0]), 5)
 	barrier_np._drain_to_core()

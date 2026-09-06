@@ -142,16 +142,16 @@ func _run() -> void:
 	var probe_dir := "res://probe_out"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(probe_dir))
 
-	# RetroSystem._core_device_id, fed the list this very core just declared.
+	# RetroSystem.core_device_id, fed the list this very core just declared.
 	var sys: Object = load("res://Scripts/Objects/systems/system.gd").new()
 	sys.set("_controller_info", info)
-	var resolved: int = sys.call("_core_device_id", 7, 1)
+	var resolved: int = sys.call("core_device_id", 7, 1)
 	print("[zapper] resolver: lightgun on port 2 -> %d %s"
 		% [resolved, "PASS" if resolved == 258 else "FAIL (expected fceumm's Zapper, 258)"])
-	var no_gun: int = sys.call("_core_device_id", 7, 3)
+	var no_gun: int = sys.call("core_device_id", 7, 3)
 	print("[zapper] resolver: lightgun on port 4 (no gun declared) -> %d %s"
 		% [no_gun, "PASS" if no_gun == 7 else "FAIL (expected the id to pass through)"])
-	var pad: int = sys.call("_core_device_id", 1, 1)
+	var pad: int = sys.call("core_device_id", 1, 1)
 	print("[zapper] resolver: joypad on port 2 -> %d %s"
 		% [pad, "PASS" if pad == 1 else "FAIL (only a light gun may be translated)"])
 	sys.free()
