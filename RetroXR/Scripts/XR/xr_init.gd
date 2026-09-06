@@ -19,7 +19,7 @@ func _enter_tree() -> void:
 		sm.current_scene_id = scene_id
 
 
-func _ready():
+func _ready() -> void:
 	DesktopBindings.load_and_apply()
 	var xr_interface = XRServer.find_interface("OpenXR")
 	if xr_interface and xr_interface.is_initialized():

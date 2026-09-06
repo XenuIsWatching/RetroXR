@@ -28,7 +28,7 @@ var _pickup: XRToolsFunctionPickup
 # The device-mounted hand this controller is currently showing (null if none).
 var _shown_hand: Node3D
 
-func _ready():
+func _ready() -> void:
 	# React to this controller's grabs/drops to show/hide the held device's hand.
 	_pickup = get_node_or_null("FunctionPickup") as XRToolsFunctionPickup
 	if _pickup:
@@ -55,7 +55,7 @@ func _ready():
 		xri.connect("session_begun", _art.refresh)
 	_art.refresh.call_deferred()
 
-func _process(delta):
+func _process(delta: float) -> void:
 	_drive_fade(delta)
 	_check_hold_state()
 
