@@ -82,6 +82,7 @@ func _ready() -> void:
 	_test_ghost_rows()
 	_test_index_rewrite()
 	await _test_http_stalls()
+	_test_rom_hasher()
 
 	_restore_ledger()
 
@@ -2096,3 +2097,72 @@ func _test_launch_path() -> void:
 	DirAccess.remove_absolute(dir.path_join(real))
 	DirAccess.remove_absolute(dir)
 
+
+
+## ── hasher/ ─────────────────────────────────────────────────────────────
+##
+## RomHasher identifies a ROM to ScreenScraper, which accepts md5 or sha1 as
+## ALTERNATIVE identifiers -- either alone is enough for a match. So a wrong
+## digest does not raise anything: the scrape simply returns no game, and the
+## player sees a cartridge with no art and no name and nothing saying why.
+##
+## Checked against the published vectors for "abc" rather than against whatever
+## this code happens to produce, which is the only way the check can fail if the
+## hashing is wrong.
+func _test_rom_hasher() -> void:
+	var dir := OS.get_user_data_dir().path_join("__romhasher_selftest")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var path: String = dir.path_join("rom.bin")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_buffer("abc".to_ascii_buffer())
+	f.close()
+
+	var sums := RomHasher.compute_checksums(path)
+	_eq(str(sums.get("md5", "")), "900150983CD24FB0D6963F7D28E17F72",
+		"hasher/md5 matches the published vector for abc")
+	_eq(str(sums.get("sha1", "")), "A9993E364706816ABA3E25717850C26C9CD0D89D",
+		"hasher/sha1 matches the published vector for abc")
+	_eq(int(sums.get("size", -1)), 3, "hasher/and the size is the file's own")
+
+	# Uppercase is the contract the docstring states, and ScreenScraper is
+	# matched on the string -- a lowercase digest is a different key.
+	_eq(str(sums["md5"]), str(sums["md5"]).to_upper(), "hasher/md5 comes back uppercase")
+	_eq(str(sums["sha1"]), str(sums["sha1"]).to_upper(), "hasher/sha1 too")
+
+	# An empty ROM still hashes rather than reporting failure: {} means "could not
+	# read", and conflating the two would retry a scrape forever on a 0-byte file.
+	var empty_path: String = dir.path_join("empty.bin")
+	var e := FileAccess.open(empty_path, FileAccess.WRITE)
+	e.close()
+	var empty_sums := RomHasher.compute_checksums(empty_path)
+	_eq(str(empty_sums.get("md5", "")), "D41D8CD98F00B204E9800998ECF8427E",
+		"hasher/an empty file hashes to the empty-string digest")
+	_eq(int(empty_sums.get("size", -1)), 0, "hasher/with a size of zero")
+
+	# A file that cannot be opened is the one empty-dictionary case.
+	_ok(RomHasher.compute_checksums(dir.path_join("nope.bin")).is_empty(),
+		"hasher/a missing file yields nothing at all")
+
+	# Larger than one 4 MB read, so the chunk loop runs more than once. A hasher
+	# that only ever hashed its first chunk would agree with every case above.
+	var big_path: String = dir.path_join("big.bin")
+	var b := FileAccess.open(big_path, FileAccess.WRITE)
+	var block := PackedByteArray()
+	block.resize(1 << 20)
+	block.fill(0x5A)
+	for i in 5:
+		b.store_buffer(block)
+	b.close()
+	var big := RomHasher.compute_checksums(big_path)
+	_eq(int(big.get("size", -1)), 5 << 20, "hasher/a file past one chunk reports its whole size")
+	# Cross-checked against Godot's own whole-file digest rather than against
+	# anything this code produced. A chunk loop that hashed only its first 4 MB
+	# read would satisfy every case above and disagree here.
+	_eq(str(big.get("md5", "")), FileAccess.get_md5(big_path).to_upper(),
+		"hasher/a multi-chunk file agrees with the engine's own md5")
+	_eq(str(sums["md5"]), FileAccess.get_md5(path).to_upper(),
+		"hasher/and so does a single-chunk one")
+
+	for leaf in ["rom.bin", "empty.bin", "big.bin"]:
+		DirAccess.remove_absolute(dir.path_join(leaf))
+	DirAccess.remove_absolute(dir)
