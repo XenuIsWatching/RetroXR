@@ -25,7 +25,7 @@ extends Node
 ## after it simply never prints, leaving a green run that checked less than
 ## it claims. card_tests records finding this the hard way; mutation-testing
 ## cores_data_tests found it again.
-const EXPECTED_CASES := 33
+const EXPECTED_CASES := 44
 
 var _passed := 0
 var _failed := 0
@@ -39,6 +39,7 @@ func _ready() -> void:
 	_group_blank()
 	_group_detect()
 	_group_title()
+	_group_patch()
 
 	_eq(_passed + _failed, EXPECTED_CASES, "suite/every case ran")
 
@@ -169,3 +170,93 @@ func _group_title() -> void:
 	junk.resize(BsxPack.SIZE)
 	junk.fill(0x41)
 	_eq(BsxPack.title_of(junk), "", "title/a file with no BS header has no title")
+
+
+## ── patch/ ────────────────────────────────────────────────────────────────────
+##
+## BsPatch.apply_ips, the IPS reader behind a Satellaview programme that will not
+## start from its dump alone (BS F-Zero Grand Prix is the measured case).
+##
+## The patches themselves are not ours to ship, so every fixture here is built
+## byte by byte. That is the only way to reach the record shapes that matter: a
+## real patch is mostly ordinary writes, and the shape most likely to be read
+## wrongly -- a size-0 record, which is a run and NOT an empty write -- may not
+## appear in the one patch someone happens to test against.
+func _group_patch() -> void:
+	var rom := PackedByteArray()
+	rom.resize(16)
+	rom.fill(0x00)
+
+	# A plain record: 3-byte offset, 2-byte size, then the payload.
+	_eq(Array(BsPatch.apply_ips(rom, _ips([_rec(2, [0xAA, 0xBB])]))).slice(0, 5),
+		[0x00, 0x00, 0xAA, 0xBB, 0x00],
+		"patch/a plain record writes its bytes at the offset")
+
+	# The trap the header names: size 0 means a run, not nothing. Read as an
+	# empty write it would silently drop every run-length record in the patch.
+	_eq(Array(BsPatch.apply_ips(rom, _ips([_rle(1, 4, 0x7F)]))).slice(0, 6),
+		[0x00, 0x7F, 0x7F, 0x7F, 0x7F, 0x00],
+		"patch/a size-0 record is a run of one byte, not an empty write")
+
+	# A patch may legitimately write past the end of the file it patches.
+	var grown := BsPatch.apply_ips(rom, _ips([_rec(20, [0x11, 0x22])]))
+	_eq(grown.size(), 22, "patch/a record past the end grows the rom")
+	_eq(grown[20], 0x11, "patch/and lands its bytes there")
+
+	_eq(BsPatch.apply_ips(rom, _ips([])), rom,
+		"patch/a patch with no records leaves the rom alone")
+
+	# Everything below must come back EMPTY: the caller falls back to the
+	# unpatched rom on empty, so a misread patch must never look like a result.
+	_ok(BsPatch.apply_ips(rom, "NOTIPS__".to_ascii_buffer()).is_empty(),
+		"patch/a file that is not IPS is refused")
+	_ok(BsPatch.apply_ips(rom, "PATCH".to_ascii_buffer()).is_empty(),
+		"patch/a patch too short to hold a record is refused")
+
+	# No EOF marker: the records ran out instead of ending. A truncated download
+	# would otherwise apply whatever records did arrive and look successful.
+	var no_eof := "PATCH".to_ascii_buffer()
+	no_eof.append_array(_rec(2, [0xAA, 0xBB]))
+	_ok(BsPatch.apply_ips(rom, no_eof).is_empty(),
+		"patch/a patch with no EOF marker is refused")
+
+	# Cut inside a record's own payload.
+	var cut := "PATCH".to_ascii_buffer()
+	cut.append_array(PackedByteArray([0x00, 0x00, 0x02, 0x00, 0x08, 0xAA]))
+	_ok(BsPatch.apply_ips(rom, cut).is_empty(),
+		"patch/a record claiming more payload than is there is refused")
+
+	# The identity case the ordinary launch takes: no .ips beside the programme,
+	# so the file itself is what the core loads and no copy is made.
+	_eq(BsPatch.patch_path_for(""), "", "patch/no path, no patch")
+	_eq(BsPatch.resolved_path("res://__bs_no_such_file.bs"),
+		"res://__bs_no_such_file.bs",
+		"patch/a programme with no patch beside it is handed over untouched")
+
+
+## One IPS record: 3-byte big-endian offset, 2-byte big-endian size, payload.
+func _rec(offset: int, payload: Array) -> PackedByteArray:
+	var out := PackedByteArray([
+		(offset >> 16) & 0xFF, (offset >> 8) & 0xFF, offset & 0xFF,
+		(payload.size() >> 8) & 0xFF, payload.size() & 0xFF,
+	])
+	out.append_array(PackedByteArray(payload))
+	return out
+
+
+## A run-length record: size 0, then a 2-byte count and the byte to repeat.
+func _rle(offset: int, run: int, value: int) -> PackedByteArray:
+	return PackedByteArray([
+		(offset >> 16) & 0xFF, (offset >> 8) & 0xFF, offset & 0xFF,
+		0x00, 0x00,
+		(run >> 8) & 0xFF, run & 0xFF, value,
+	])
+
+
+## "PATCH" + records + "EOF".
+func _ips(records: Array) -> PackedByteArray:
+	var out := "PATCH".to_ascii_buffer()
+	for r: PackedByteArray in records:
+		out.append_array(r)
+	out.append_array("EOF".to_ascii_buffer())
+	return out
