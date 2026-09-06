@@ -235,6 +235,54 @@ func _test_auth_hardening() -> void:
 	_ok(not _srv._locked_out("10.0.0.6"), "auth/another address is unaffected")
 	_srv._failures.clear()
 
+	# A session is only as good as its expiry. The Set-Cookie has always said
+	# Max-Age=86400, but that is a request to the browser: what the server
+	# enforces is this. Before it did, a token stayed valid for as long as the
+	# app ran, and the dictionary holding them only ever grew.
+	var saved_pin: String = _srv.pin
+	_srv.pin = "1234"
+	_srv._sessions.clear()
+	var live := "live_token"
+	var dead := "dead_token"
+	var now := Time.get_unix_time_from_system()
+	_srv._sessions[live] = now + WebFileServer.SESSION_SECONDS
+	_srv._sessions[dead] = now - 1.0
+	var cookie := func(t: String) -> Dictionary:
+		return {"cookie": "rvrsession=%s" % t}
+	_ok(_srv._is_authed(cookie.call(live)), "auth/a live session is accepted")
+	_ok(not _srv._is_authed(cookie.call(dead)), "auth/an expired session is refused")
+	_ok(not _srv._sessions.has(dead),
+		"auth/and is forgotten rather than checked again")
+	_ok(not _srv._is_authed(cookie.call("never_issued")),
+		"auth/a token the server never issued is refused")
+	_ok(not _srv._is_authed({}), "auth/no cookie at all is refused")
+
+	# _prune_sessions runs when a login is issued, which is the only moment the
+	# dictionary can grow.
+	_srv._sessions["stale"] = now - 500.0
+	_srv._prune_sessions()
+	_ok(not _srv._sessions.has("stale"), "auth/pruning drops an expired session")
+	_ok(_srv._sessions.has(live), "auth/and keeps a live one")
+	_srv._sessions.clear()
+	_srv.pin = saved_pin
+
+	# The PIN guards a directory of the player's ROMs and saves on the LAN, and
+	# there are only 10000 of them, so it must at least cost all 10000. randi()
+	# is the seeded PRNG _gen_token already refuses for the same reason.
+	var cfg := ScraperConfig.new()
+	var pins: Dictionary = {}
+	var all_in_range := true
+	for i in 400:
+		var p: int = cfg._random_pin()
+		if p < 0 or p >= 10000:
+			all_in_range = false
+		pins[p] = true
+	_ok(all_in_range, "auth/every generated pin is in 0..9999")
+	# Distinctness is what a seeded stream would not give across runs; within one
+	# run this only catches a generator stuck on a value or a tiny range.
+	_ok(pins.size() > 200, "auth/generated pins are spread across the range",
+		"got %d distinct in 400 draws" % pins.size())
+
 
 func _test_extract_pin() -> void:
 	_eq(_srv._extract_pin("pin=1234"), "1234", "parse/a form pin is read")

@@ -28,11 +28,34 @@ var web_server_pin: String = ""
 
 
 ## Returns the web-server PIN, generating & persisting a random 4-digit one if unset.
+##
+## From the crypto RNG, for the reason WebFileServer._gen_token already states
+## about its own tokens: randi() is a SEEDED PRNG, so its stream is reproducible
+## and a value drawn from it can be predicted rather than guessed. This PIN is
+## the only thing standing between anyone on the same network and the player's
+## ROM and save directories, and there are only 10000 of them — it should at
+## least cost an attacker all 10000.
+##
+## Rejection sampling rather than a plain modulo: 2^32 is not a multiple of
+## 10000, so the low 7296 values would come up fractionally more often than the
+## rest. The loop discards the short tail instead, and retries with probability
+## under one in half a million.
 func ensure_web_server_pin() -> String:
 	if web_server_pin.length() != 4 or not web_server_pin.is_valid_int():
-		web_server_pin = "%04d" % (randi() % 10000)
+		web_server_pin = "%04d" % _random_pin()
 		save_config()
 	return web_server_pin
+
+
+func _random_pin() -> int:
+	var crypto := Crypto.new()
+	var limit := 4294967296 - (4294967296 % 10000)
+	while true:
+		var bytes := crypto.generate_random_bytes(4)
+		var value := bytes.decode_u32(0)
+		if value < limit:
+			return value % 10000
+	return 0
 
 
 func load_config() -> void:

@@ -19,8 +19,18 @@ var _upload_progress: Dictionary = {}
 ## 4-digit PIN required to log in. Set by the owner before start(); an empty PIN
 ## disables authentication (open access) as a safety fallback.
 var pin: String = ""
-## Valid session tokens (token → true), created on successful login.
+## Live sessions, token -> the Unix time the session stops being accepted.
+##
+## An EXPIRY rather than a bare true. The Set-Cookie below has always said
+## Max-Age=86400, but that is a request to the browser and nothing more: a
+## client that keeps sending the cookie is a client the server kept trusting,
+## for as long as the app stayed running. The dictionary also only ever grew,
+## so every login since launch stayed valid at once.
 var _sessions: Dictionary = {}
+
+## How long a login lasts. Must match the Max-Age on the cookie, or the two
+## halves of the same promise disagree.
+const SESSION_SECONDS := 86400
 
 
 ## Root of the served media filesystem (roms, books, videos, dvds).
@@ -233,7 +243,12 @@ func _is_authed(headers: Dictionary) -> bool:
 	if pin.is_empty():
 		return true
 	var token := _cookie(headers.get("cookie", ""), "rvrsession")
-	return not token.is_empty() and _sessions.has(token)
+	if token.is_empty() or not _sessions.has(token):
+		return false
+	if Time.get_unix_time_from_system() >= float(_sessions[token]):
+		_sessions.erase(token)
+		return false
+	return true
 
 
 ## Validates the submitted PIN and, on success, issues a session cookie.
@@ -251,7 +266,8 @@ func _handle_login(peer: StreamPeerTCP, body: PackedByteArray) -> void:
 		return
 	_failures.erase(who)
 	var token := _gen_token()
-	_sessions[token] = true
+	_prune_sessions()
+	_sessions[token] = Time.get_unix_time_from_system() + SESSION_SECONDS
 	var body_bytes := '{"ok":true}'.to_utf8_buffer()
 	var hdr := "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nSet-Cookie: rvrsession=%s; Path=/; Max-Age=86400; SameSite=Strict\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" \
 			   % [token, body_bytes.size()]
@@ -326,6 +342,20 @@ func _cookie(header: String, key: String) -> String:
 		if eq != -1 and kv.substr(0, eq) == key:
 			return kv.substr(eq + 1)
 	return ""
+
+
+## Forget sessions that have run out.
+##
+## Called when one is issued rather than on a timer: logins are the only thing
+## that grows this, so that is the moment the dictionary can get bigger, and it
+## keeps the server free of periodic work while nobody is using it. Expiry
+## itself is enforced at every request by _is_authed — this only stops the
+## dictionary keeping dead tokens for the life of the process.
+func _prune_sessions() -> void:
+	var now := Time.get_unix_time_from_system()
+	for token: String in _sessions.keys():
+		if now >= float(_sessions[token]):
+			_sessions.erase(token)
 
 
 ## A session token, from the crypto RNG.
