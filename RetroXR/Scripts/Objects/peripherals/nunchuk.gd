@@ -75,11 +75,10 @@ var _locomotion_manager: LocomotionManager = null
 
 ## Which controller's pointer this is currently blocking, or null.
 ##
-## Held as the controller itself rather than as the left/right pair Wiimote and
-## LightGun keep, because a Nunchuk is only ever in one hand. That also makes the
-## shared count impossible to unbalance: blocking a second time is a no-op, and
-## releasing when nothing is held does nothing at all.
-var _blocking_ctrl: XRController3D = null
+## A Nunchuk is only ever in one hand, so both hands of the shared blocker are
+## released against the hand holding it — the flag for the other one is never
+## set, and release() drops the claim whether or not the controller survived.
+var _pointer_block := VrPointerBlock.new()
 
 # Motion
 var _prev_velocity := Vector3.ZERO
@@ -154,34 +153,13 @@ func _update_locomotion_block() -> void:
 ## TVRemote and HandheldInput all block it, and this hid the controller model and
 ## took the locomotion channel but left the pointer alone.
 ##
-## Reference-counted through a `block_count` meta on the controller's
-## FunctionPointer, the same as those five, so several pickables can block one
-## pointer independently and it returns only when the last of them lets go. A
-## Nunchuk and the Wiimote it plugs into are very often one in each hand, which is
-## exactly the case a plain visible = false would get wrong.
+## Reference-counted, because a Nunchuk and the Wiimote it plugs into are very
+## often one in each hand — which is exactly the case a plain visible = false
+## gets wrong. That counting lives in VrPointerBlock with the other five; this
+## script kept its own copy of it after they were converted, and a divergent
+## copy is precisely how a hand's count gets left standing.
 func _update_pointer_block(ctrl: XRController3D, should_block: bool) -> void:
-	var target: XRController3D = ctrl if should_block else null
-	if target == _blocking_ctrl:
-		return
-	_add_pointer_block(_blocking_ctrl, -1)
-	_add_pointer_block(target, 1)
-	_blocking_ctrl = target
-
-
-func _add_pointer_block(ctrl: XRController3D, delta_count: int) -> void:
-	if not is_instance_valid(ctrl):
-		return
-	var pointer: Node3D = ctrl.get_node_or_null("FunctionPointer")
-	if pointer == null:
-		return
-	var count: int = maxi(0, pointer.get_meta("block_count", 0) + delta_count)
-	pointer.set_meta("block_count", count)
-	pointer.visible = count == 0
-	# FunctionPickup._process_pointer_highlight reads the RayCast directly and
-	# never looks at visibility, so hiding the laser alone leaves it able to grab.
-	var ray: RayCast3D = pointer.get_node_or_null("RayCast") as RayCast3D
-	if ray:
-		ray.enabled = count == 0
+	_pointer_block.set_block(ctrl, should_block)
 
 
 func reload_bindings() -> void:
@@ -328,9 +306,10 @@ func _exit_tree() -> void:
 	_allow_drop = true
 	# clear_owner and not two set_block(false) calls: a Nunchuk freed mid-hold
 	# never reaches _on_dropped_signal, and a block left behind is a hand that
-	# can never walk again. The pointer has exactly the same hazard, and releasing
-	# it takes no argument because _blocking_ctrl already knows whose it is.
-	_update_pointer_block(null, false)
+	# can never walk again. The pointer has exactly the same hazard, and by this
+	# point the holding controller may already be freed — which release() takes
+	# as Variant for, since a typed parameter rejects it before the callee can.
+	_pointer_block.release(_holding_ctrl, _holding_ctrl)
 	if _locomotion_manager != null:
 		_locomotion_manager.clear_owner(VrHold.vr_block_owner(self))
 	super._exit_tree()
