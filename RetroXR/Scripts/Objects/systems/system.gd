@@ -974,10 +974,6 @@ func _audio_tv() -> Node3D:
 ## Where this machine's sound goes: its speakers plus the set it reaches, if
 ## any. Read by SystemAudio, which this node owns and drives.
 func audio_route() -> Dictionary:
-	return _audio_route()
-
-
-func _audio_route() -> Dictionary:
 	var route := _audio_speakers()
 	route["tv"] = _audio_tv()
 	return route
@@ -990,7 +986,7 @@ func audio_speakers() -> Dictionary:
 	return _audio_speakers()
 
 
-## The speaker half of _audio_route, without resolving the sink.
+## The speaker half of audio_route, without resolving the sink.
 ##
 ## Split out because the gain path wants it every frame and does not care which
 ## set the sound is going to — and because _apply_av_feed has to invalidate the
@@ -3159,7 +3155,7 @@ func _on_options_ready(_categories: Dictionary, definitions: Dictionary, current
 	# preferred type. Devices first — the pad-type option is per-port and means
 	# nothing until the port has a device on it.
 	_reannounce_port_devices()
-	_reapply_pad_types()
+	reapply_pad_types()
 	if _options_panel.visible:
 		_options_panel.refresh()
 
@@ -3363,10 +3359,6 @@ func _ensure_port_devices_bound() -> void:
 ## same controller reporting a different pad_type_pref, and the core option has to
 ## follow it without the cable being pulled and pushed back.
 func reapply_pad_types() -> void:
-	_reapply_pad_types()
-
-
-func _reapply_pad_types() -> void:
 	for i in range(_port_controllers.size()):
 		var ctrl: Node = _port_controllers[i]
 		if not is_instance_valid(ctrl):
