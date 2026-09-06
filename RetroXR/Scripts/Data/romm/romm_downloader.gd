@@ -136,7 +136,7 @@ func _pump() -> void:
 			cache_evicted.emit(int(res["freed"]), int(res["count"]))
 		if not bool(res["enough"]):
 			download_finished.emit(rom_id, false, "",
-				"Not enough space for %s (%s)" % [entry.get("name", fs_name), _human_size(size)])
+				"Not enough space for %s (%s)" % [entry.get("name", fs_name), ByteSize.human(size)])
 			_pump()
 			return
 
@@ -889,18 +889,8 @@ static func verify_transfer(have: int, code: int, served: int, got: int,
 ## "204 MB of 204 MB", which reads as a bug in the message rather than a real
 ## mismatch — and that is precisely the size of a zip's own headers.
 static func _size_pair(got: int, want: int) -> String:
-	var a := _human_size(got)
-	var b := _human_size(want)
+	var a := ByteSize.human(got)
+	var b := ByteSize.human(want)
 	if a == b:
 		return "%d of %d bytes" % [got, want]
 	return "%s of %s" % [a, b]
-
-
-static func _human_size(bytes: int) -> String:
-	if bytes >= 1073741824:
-		return "%.1f GB" % (float(bytes) / 1073741824.0)
-	if bytes >= 1048576:
-		return "%.0f MB" % (float(bytes) / 1048576.0)
-	if bytes >= 1024:
-		return "%.0f KB" % (float(bytes) / 1024.0)
-	return "%d B" % bytes

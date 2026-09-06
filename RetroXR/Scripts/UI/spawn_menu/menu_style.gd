@@ -361,14 +361,11 @@ static func is_vr_mode() -> bool:
 ## Byte counts as the menu shows them — download sizes, cache budgets. Here
 ## rather than in a view because both OPTIONS and the RomM toasts print them,
 ## and the two must agree on the rounding.
+## Kept as the menu's spelling of ByteSize.human, which owns the rounding now:
+## a byte-identical copy had grown in RommDownloader, so the two could have
+## disagreed about the same file.
 static func human_bytes(bytes: int) -> String:
-	if bytes >= 1073741824:
-		return "%.1f GB" % (float(bytes) / 1073741824.0)
-	if bytes >= 1048576:
-		return "%.0f MB" % (float(bytes) / 1048576.0)
-	if bytes >= 1024:
-		return "%.0f KB" % (float(bytes) / 1024.0)
-	return "%d B" % bytes
+	return ByteSize.human(bytes)
 
 
 ## The root every *_2d options panel puts inside its viewport: a full-rect
