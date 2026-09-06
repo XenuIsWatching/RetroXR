@@ -105,6 +105,8 @@ func _run() -> void:
 		["routing/pulling the picture cord leaves the sound", _r_pull_picture],
 		["routing/picture and sound on different inputs: picture wins", _r_video_wins],
 		["routing/a machine on VGA is filed on the VGA input", _r_vga],
+		["osd/a set in the tree has its OSD nodes wired", _o_wired],
+		["osd/routing the OSD does not throw on a fresh set", _o_route],
 		["display/a monitor lands on its own socket, not the tuner", _d_monitor_default],
 		["display/removed TV models migrate to retained primitives", _d_legacy_tv_models],
 		["wiring/VGA alone reaches the monitor", _w_vga_only],
@@ -426,6 +428,48 @@ func _r_video_wins() -> void:
 	await _lead([[0, outs[0], two[0]]])
 	await _lead([[1, outs[1], three[1]], [2, outs[2], three[2]]])
 	_check_eq(_which_input(tv, deck), RetroTV.Source.COMPOSITE_2, "the picture decides")
+
+
+## The OSD's five nodes are @onready, so they exist only once the set is in the
+## tree. They were briefly handed to TvOsd from _init, where all five are null —
+## which left every set's OSD dead and threw from _process on every frame, on
+## every TV in the room. Nothing here noticed: 142 checks passed throughout,
+## because not one of them touched the OSD.
+##
+## Cheap to assert and it cannot pass by accident: a null reference is exactly
+## what the defect leaves behind.
+func _o_wired() -> void:
+	var tv := TV_SCENE.instantiate() as RetroTV
+	tv.freeze = true
+	add_child(tv)
+	tv.add_to_group("spawned")
+	_spawned.append(tv)
+	var osd := tv.get_node_or_null("TvOsd")
+	_ok(osd != null, "osd/a set in the tree has its OSD nodes wired")
+	if osd == null:
+		return
+	for field: String in ["_label", "_vol_label", "_viewport", "_text_2d",
+			"_vol_text_2d"]:
+		_ok(osd.get(field) != null,
+			"osd/a set in the tree has its OSD nodes wired (%s)" % field)
+
+
+## route() reads _label.text first, so a set whose OSD was never wired throws
+## here rather than degrading. Driving it directly is what a frame does.
+func _o_route() -> void:
+	var tv := TV_SCENE.instantiate() as RetroTV
+	tv.freeze = true
+	add_child(tv)
+	tv.add_to_group("spawned")
+	_spawned.append(tv)
+	var osd := tv.get_node_or_null("TvOsd")
+	if osd == null:
+		_ok(false, "osd/routing the OSD does not throw on a fresh set")
+		return
+	osd.call("show_text", "PROBE")
+	osd.call("route")
+	_ok(str(osd.get("_label").text) != "" or str(osd.get("_text_2d").text) != "",
+		"osd/routing the OSD does not throw on a fresh set")
 
 
 ## A computer monitor and a tower: one DE-15 at each end and no phono row anywhere.

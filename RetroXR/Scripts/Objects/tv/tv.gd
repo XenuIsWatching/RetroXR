@@ -327,8 +327,9 @@ func _init() -> void:
 	_osd = TvOsd.new()
 	_osd.name = "TvOsd"
 	add_child(_osd)
-	_osd.setup(self, _osd_label, _vol_osd_label, _osd_viewport,
-		_osd_text_2d, _vol_osd_text_2d)
+	# Its setup is the one that cannot happen here: it is handed this set's OSD
+	# nodes, and those are @onready, so at _init they are all still null. See
+	# _ready, which calls it once they exist.
 	_audio = TvAudio.new()
 	_audio.name = "TvAudio"
 	add_child(_audio)
@@ -344,6 +345,12 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	# The OSD's nodes are @onready, so this is the first moment they exist. Every
+	# other helper takes only `self` and is set up in _init; this one is handed
+	# five nodes, and doing it there left them null for the life of the set —
+	# route() then threw on every frame of every TV, which is invisible off-device.
+	_osd.setup(self, _osd_label, _vol_osd_label, _osd_viewport,
+		_osd_text_2d, _vol_osd_text_2d)
 	# Off its own cast lights' layer; see ScreenCastLight.SCREEN_LAYER.
 	ScreenCastLight.mark_screen(_screen_mesh)
 	super._ready()
