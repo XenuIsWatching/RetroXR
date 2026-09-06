@@ -1152,14 +1152,6 @@ func _on_spawn_requested(type: String) -> void:
 			obj = SNES_MOUSE_SCENE.instantiate() as Node3D
 		"retro_multitap":
 			obj = RETRO_MULTITAP_SCENE.instantiate() as Node3D
-		# No port to pick: a remote is wireless and pairs with SYNC, and a nunchuk
-		# plugs into a remote rather than into a console.
-		# Nor this: the dongle clips into a remote's expansion port, and the
-		# Nunchuk then clips into the dongle rather than into the remote.
-		# Also no port to pick, for the opposite reason: its plug fits exactly one
-		# socket in the room, the Wii's own sensor bar jack.
-		# A lead with a box in the middle, so it spawns like a lead — both its
-		# connectors are free and it picks its own sockets up off the floor.
 		"keyboard_receiver":
 			obj = KEYBOARD_RECEIVER_SCENE.instantiate() as Node3D
 		"mouse_receiver":

@@ -1155,9 +1155,9 @@ func _local_by_name(systemid: String) -> Dictionary:
 func _on_new_pack_pressed(systemid: String) -> void:
 	var path := BsxPack.create_blank(RomLibrary.rom_dir_for_system(systemid))
 	if path.is_empty():
-		push_warning("[spawn] could not create a memory pack in %s" % systemid)
+		push_warning("[SpawnView] could not create a memory pack in %s" % systemid)
 		return
-	print("[spawn] new memory pack: %s" % path)
+	print("[SpawnView] new memory pack: %s" % path)
 	_invalidate_local_scan(systemid)
 	if _cartridges_browser:
 		_cartridges_browser.refresh_detail()
@@ -1796,7 +1796,7 @@ func _spawn_row(label: String, token: String) -> Button:
 
 func _on_scrape_pressed(rom_path: String, systemid: String, btn: Button) -> void:
 	if _scrape_in_progress:
-		print("[SpawnMenu] Scrape already in progress, ignoring request for: %s" % rom_path.get_file())
+		print("[SpawnView] Scrape already in progress, ignoring request for: %s" % rom_path.get_file())
 		# A toast, not a notice: the status slot is showing the running scrape's
 		# own progress, and a notice would replace that text.
 		notify("scrape:busy", "⚠️", "Scrape Already In Progress",
@@ -1816,14 +1816,14 @@ func _on_scrape_pressed(rom_path: String, systemid: String, btn: Button) -> void
 	while thread.is_alive():
 		await get_tree().process_frame
 	var checksums: Dictionary = thread.wait_to_finish()
-	print("[SpawnMenu] Checksums done: ", checksums)
+	print("[SpawnView] Checksums done: ", checksums)
 
 	if checksums.is_empty():
 		_scrape_in_progress = false
 		btn.text = String.chr(MenuIcons.SCRAPE)
 		btn.disabled = false
 		_hide_scrape_status()
-		push_warning("[SpawnMenu] Failed to compute checksums for: %s" % rom_path)
+		push_warning("[SpawnView] Failed to compute checksums for: %s" % rom_path)
 		return
 
 	# Connect one-shot signals for this scrape
@@ -1838,7 +1838,7 @@ func _on_scrape_pressed(rom_path: String, systemid: String, btn: Button) -> void
 			btn.text = String.chr(MenuIcons.SCRAPE)
 			btn.disabled = false
 		_hide_scrape_status()
-		print("[SpawnMenu] Scrape completed for: %s" % rom_path.get_file())
+		print("[SpawnView] Scrape completed for: %s" % rom_path.get_file())
 		_show_scrape_popup(rom_path, systemid, result)
 
 	failed_cb = func(error: String):
@@ -1849,7 +1849,7 @@ func _on_scrape_pressed(rom_path: String, systemid: String, btn: Button) -> void
 			btn.text = String.chr(MenuIcons.SCRAPE)
 			btn.disabled = false
 		_hide_scrape_status()
-		push_warning("[SpawnMenu] Scrape failed: %s" % error)
+		push_warning("[SpawnView] Scrape failed: %s" % error)
 		_show_scrape_error_popup(error)
 
 	scraper_client.scrape_completed.connect(completed_cb)
@@ -2084,7 +2084,7 @@ func _flush_romm_notices() -> void:
 
 
 func _on_romm_auth_failed(detail: String) -> void:
-	push_warning("[RomM] auth failed: %s" % detail)
+	push_warning("[SpawnView] auth failed: %s" % detail)
 	notify("romm:conn", "❌", "RomM sign-in expired — check OPTIONS", -1.0, MenuToasts.DWELL_FAIL)
 
 
