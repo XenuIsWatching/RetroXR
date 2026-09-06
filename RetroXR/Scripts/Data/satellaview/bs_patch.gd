@@ -73,18 +73,9 @@ static func resolved_path(rom_path: String) -> String:
 ## be served from a copy made for the previous pair.
 static func _cache_path(rom_path: String, patch_path: String) -> String:
 	var key := "%s|%d|%s|%d" % [
-		rom_path.get_file(), _file_size(rom_path),
-		patch_path.get_file(), _file_size(patch_path)]
+		rom_path.get_file(), ByteSize.on_disk(rom_path),
+		patch_path.get_file(), ByteSize.on_disk(patch_path)]
 	return CACHE_DIR.path_join(key.sha256_text().substr(0, 16) + ".bs")
-
-
-static func _file_size(path: String) -> int:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return 0
-	var n := f.get_length()
-	f.close()
-	return n
 
 
 ## Apply an IPS patch. Returns the patched image, or an empty array when `ips` is

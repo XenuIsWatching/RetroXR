@@ -217,7 +217,7 @@ func _worker(args: Dictionary) -> void:
 				return
 
 		# ── Verified and in place ────────────────────────────────────────────
-		var transfer_size := _file_size(dest)
+		var transfer_size := ByteSize.on_disk(dest)
 		if i == 0 and is_multi:
 			var extracted := _extract_multi(dest, systemid, owned, archive_extractor)
 			if not str(extracted.get("error", "")).is_empty():
@@ -327,7 +327,7 @@ func _attempt_download(args: Dictionary, entry: Dictionary, dest: String, part: 
 		return {"status": "transient", "error": "Could not reach the server"}
 
 	# Resume when a .part is already on disk.
-	var have := _file_size(part)
+	var have := ByteSize.on_disk(part)
 	var file: FileAccess
 	if have > 0:
 		file = FileAccess.open(part, FileAccess.READ_WRITE)
@@ -381,7 +381,7 @@ func _attempt_download(args: Dictionary, entry: Dictionary, dest: String, part: 
 			return {"status": "terminal", "error": "Server refused the download (%d)" % code}
 
 	# ── Verify before promoting the .part ────────────────────────────────────
-	var got := _file_size(part)
+	var got := ByteSize.on_disk(part)
 	var archive := _is_archive(part)
 
 	var verdict := verify_transfer(have, code, int(resp.get("total", 0)), got,
@@ -518,12 +518,6 @@ static func _archive_plan(reader: ZIPReader, dest_dir: String) -> Array[Dictiona
 		plan.append({"entry": raw_name, "relative": relative, "path": out_path})
 
 	return plan
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -826,15 +820,6 @@ static func _is_archive(path: String) -> bool:
 	if magic[0] == 0x37 and magic[1] == 0x7A and magic[2] == 0xBC and magic[3] == 0xAF:
 		return true
 	return false
-
-
-static func _file_size(path: String) -> int:
-	if not FileAccess.file_exists(path):
-		return 0
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return 0
-	return f.get_length()
 
 
 ## Did the bytes on disk arrive whole? Returns "" when they did, and the reason

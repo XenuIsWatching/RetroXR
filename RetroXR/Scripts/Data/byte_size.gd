@@ -1,4 +1,4 @@
-## ByteSize — one rounding for every byte count the player reads.
+## ByteSize — measuring a byte count, and showing it the one way.
 ##
 ## Download sizes, cache budgets, "3.4 MB of 12 MB" on a progress row. MenuStyle
 ## already said in as many words that the callers "must agree on the rounding",
@@ -36,3 +36,17 @@ static func human(bytes: int) -> String:
 	if bytes >= KB:
 		return "%.0f KB" % (float(bytes) / float(KB))
 	return "%d B" % bytes
+
+
+## How big the file at `path` is, or 0 when it cannot be opened.
+##
+## Opens and asks rather than reading: get_file_as_bytes() would pull a
+## whole core download into memory to answer a question about its length.
+## FirmwareInstaller and StorageCleanup had this byte for byte apiece.
+static func on_disk(path: String) -> int:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return 0
+	var n := int(f.get_length())
+	f.close()
+	return n

@@ -137,7 +137,7 @@ func _record_for(manifest: ModManifest, path: String,
 	rec.id = manifest.id
 	rec.manifest = manifest
 	rec.path = path
-	rec.size = _file_size(path)
+	rec.size = ByteSize.on_disk(path)
 	rec.files = files.size()
 	var inventory_err := manifest.inventory_error(files)
 	if not inventory_err.is_empty():
@@ -145,15 +145,6 @@ func _record_for(manifest: ModManifest, path: String,
 	elif not manifest.runs_here():
 		rec.refuse("not built for %s" % OS.get_name())
 	return rec
-
-
-static func _file_size(path: String) -> int:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return 0
-	var n := f.get_length()
-	f.close()
-	return n
 
 
 # ── loading ───────────────────────────────────────────────────────────────────

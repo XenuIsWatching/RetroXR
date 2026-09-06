@@ -286,7 +286,7 @@ func _attempt(job: Dictionary, staging: String) -> Dictionary:
 		# caught by status, since have + total then equals the corrupt length.
 		return {"status": "restart", "error": "The server did not resume the download"}
 
-	var got := _file_size(staging)
+	var got := ByteSize.on_disk(staging)
 	var whole := have + int(out.get("total", 0))
 	if whole > have and got != whole:
 		return {"status": "restart",
@@ -374,14 +374,6 @@ static func _staging_path(key: String) -> String:
 	var safe := key.replace("/", "_").replace(":", "_").replace("\\", "_")
 	return CoreDownloadManager.default_core_root().path_join("temp").path_join(safe + ".part")
 
-
-static func _file_size(path: String) -> int:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return 0
-	var n := int(f.get_length())
-	f.close()
-	return n
 
 
 # ── Main-thread emitters ──────────────────────────────────────────────────────

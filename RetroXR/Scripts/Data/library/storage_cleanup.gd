@@ -399,7 +399,7 @@ static func _add_file(found: Dictionary, kind: String, path: String) -> void:
 	# nothing — the category then reports a count with no paths behind it.
 	(entry["paths"] as Array).append(path)
 	entry["count"] = int(entry["count"]) + 1
-	entry["bytes"] = int(entry["bytes"]) + _file_size(path)
+	entry["bytes"] = int(entry["bytes"]) + ByteSize.on_disk(path)
 	found[kind] = entry
 
 
@@ -412,14 +412,6 @@ static func _add_dir(found: Dictionary, kind: String, path: String) -> void:
 	found[kind] = entry
 
 
-static func _file_size(path: String) -> int:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return 0
-	var n := int(f.get_length())
-	f.close()
-	return n
-
 
 static func _dir_size(path: String) -> int:
 	var total := 0
@@ -430,7 +422,7 @@ static func _dir_size(path: String) -> int:
 	var fname := dir.get_next()
 	while fname != "":
 		var full := path.path_join(fname)
-		total += _dir_size(full) if dir.current_is_dir() else _file_size(full)
+		total += _dir_size(full) if dir.current_is_dir() else ByteSize.on_disk(full)
 		fname = dir.get_next()
 	dir.list_dir_end()
 	return total
@@ -439,7 +431,7 @@ static func _dir_size(path: String) -> int:
 static func _unlink(path: String) -> int:
 	if not FileAccess.file_exists(path):
 		return 0
-	var size := _file_size(path)
+	var size := ByteSize.on_disk(path)
 	return size if DirAccess.remove_absolute(path) == OK else 0
 
 
