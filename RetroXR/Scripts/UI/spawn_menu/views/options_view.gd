@@ -1374,14 +1374,6 @@ func _build_scraper_options(vbox: VBoxContainer) -> void:
 	)
 
 
-## RomM server connection and sync settings. The sub-tab carries the name and
-## the logo, so there is no in-body header here.
-## Persist the RomM config AND hand it to the sync layer.
-##
-## RommSaveSync.setup() has existed since that layer landed and nothing ever
-## called it, so a server, a token or a switch changed here stayed invisible to
-## it until the app was restarted — the sync thread went on using the config it
-## read at boot. Every write in this tab goes through here now.
 ## Show or hide the unencrypted-connection note under the URL field.
 func _refresh_romm_scheme_note() -> void:
 	if _romm_scheme_note == null or not is_instance_valid(_romm_scheme_note):
@@ -1392,6 +1384,12 @@ func _refresh_romm_scheme_note() -> void:
 		_romm_scheme_note.text = "! Unencrypted (http). Your sign-in is sent in the clear."
 
 
+## Persist the RomM config AND hand it to the sync layer.
+##
+## RommSaveSync.setup() has existed since that layer landed and nothing ever
+## called it, so a server, a token or a switch changed here stayed invisible to
+## it until the app was restarted — the sync thread went on using the config it
+## read at boot. Every write in this tab goes through here now.
 func _save_romm_config() -> void:
 	romm_config.save_config()
 	SaveSync.setup(romm_config)
@@ -1402,6 +1400,8 @@ func _save_romm_config() -> void:
 	StateSync.setup(romm_config)
 
 
+## RomM server connection and sync settings. The sub-tab carries the name and
+## the logo, so there is no in-body header here.
 func _build_romm_options(vbox: VBoxContainer) -> void:
 	vbox.add_child(MenuStyle.spacer(10))
 
