@@ -244,6 +244,18 @@ private:
     void ApplyContactFriction();
     void SolveSelfCollision();
     void SolveSurfaceCollision(bool p_do_rest);
+    // The three phases of SolveSurfaceCollision, in the order it runs them.
+    // Split out for reading only: the arithmetic and its order are unchanged,
+    // which is what lets the bit-exact rope oracles keep gating this file.
+    void SweepParticleContacts(godot::PhysicsDirectSpaceState3D *p_space, bool p_do_rest);
+    void SolveSegmentCollision(godot::PhysicsDirectSpaceState3D *p_space, bool p_do_rest);
+    void RecoverWrongSideParticles(godot::PhysicsDirectSpaceState3D *p_space);
+    // Which cached contact slot a freshly reported plane belongs in: 1, 2, or 0
+    // to keep both slots as they are.
+    int ChooseContactSlot(int i, const godot::Vector3 &p_point, const godot::Vector3 &p_normal,
+                          bool p_keep1, bool p_keep2) const;
+    void AssignContactSlot(int i, int p_slot, const godot::Vector3 &p_point,
+                           const godot::Vector3 &p_normal, bool &r_keep1, bool &r_keep2);
     void ApplyAnchorCoupling();
     void UpdateSleepState();
     bool EnvironmentChangedWhileSleeping();

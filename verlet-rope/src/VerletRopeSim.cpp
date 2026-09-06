@@ -1275,9 +1275,64 @@ void VerletRope::SolveSelfCollision()
     }
 }
 
+// Which slot a freshly reported plane belongs in. The cascade is ordered by how
+// much the new normal agrees with what is already cached: an almost-exact match
+// refreshes that slot, a loose match (a cord sliding over a curved surface)
+// still refreshes it rather than banking a second nearly-parallel plane, which
+// would pinch the particle as if the smooth pipe were a sharp corner. Only once
+// neither cached plane can claim it does an empty slot take it.
+//
+// Returning 0 is a real outcome, not a fallthrough: when BOTH slots are valid
+// and neither normal matches, the stable two-plane manifold of a genuine edge
+// is kept and the new plane is dropped.
+int VerletRope::ChooseContactSlot(int i, const Vector3 &p_point, const Vector3 &p_normal,
+                                  bool p_keep1, bool p_keep2) const
+{
+    const double d1 = p_normal.dot(m_c_n1[i]);
+    const double d2 = p_normal.dot(m_c_n2[i]);
+    if (p_keep1 && d1 > 0.9)
+        return 1;
+    if (p_keep2 && d2 > 0.9)
+        return 2;
+    if (p_keep1 && d1 > 0.5)
+        return 1;
+    if (p_keep2 && d2 > 0.5)
+        return 2;
+    if (!p_keep1)
+        return 1;
+    if (!p_keep2)
+    {
+        // A second plane is for a real edge, so it has to be near the first.
+        // A distant one is a different surface: overwrite slot 1 instead of
+        // banking a manifold spanning two places the cord cannot touch at once.
+        return p_point.distance_to(m_c_p1[i]) < m_collision_radius * 3.0 ? 2 : 1;
+    }
+    return 0;
+}
+
+
+// Write a plane into a slot. Occupying a slot always validates it, including
+// the arms that overwrite one that was already valid.
+void VerletRope::AssignContactSlot(int i, int p_slot, const Vector3 &p_point,
+                                   const Vector3 &p_normal, bool &r_keep1, bool &r_keep2)
+{
+    if (p_slot == 1)
+    {
+        m_c_p1[i] = p_point;
+        m_c_n1[i] = p_normal;
+        r_keep1 = true;
+    }
+    else if (p_slot == 2)
+    {
+        m_c_p2[i] = p_point;
+        m_c_n2[i] = p_normal;
+        r_keep2 = true;
+    }
+}
+
+
 void VerletRope::SolveSurfaceCollision(bool p_do_rest)
 {
-    const int count = static_cast<int>(m_points.size());
     Ref<World3D> world = get_world_3d();
     if (world.is_null())
         return;
@@ -1285,6 +1340,17 @@ void VerletRope::SolveSurfaceCollision(bool p_do_rest)
     if (space_state == nullptr)
         return;
 
+    SweepParticleContacts(space_state, p_do_rest);
+    SolveSegmentCollision(space_state, p_do_rest);
+    if (p_do_rest)
+        RecoverWrongSideParticles(space_state);
+}
+
+
+// Phase one: each particle's own motion sweep, and its cached contact planes.
+void VerletRope::SweepParticleContacts(PhysicsDirectSpaceState3D *space_state, bool p_do_rest)
+{
+    const int count = static_cast<int>(m_points.size());
     for (int i = 0; i < count; ++i)
     {
         if (m_inv_mass[i] == 0.0f)
@@ -1334,58 +1400,23 @@ void VerletRope::SolveSurfaceCollision(bool p_do_rest)
                 const Vector3 nn = rest["normal"];
                 const Vector3 np = rest["point"];
                 if (nn != Vector3() && (m_points[i] - np).dot(nn) >= 0.0)
-                {
-                    if (keep1 && nn.dot(m_c_n1[i]) > 0.9)
-                    {
-                        m_c_p1[i] = np;
-                        m_c_n1[i] = nn;
-                    }
-                    else if (keep2 && nn.dot(m_c_n2[i]) > 0.9)
-                    {
-                        m_c_p2[i] = np;
-                        m_c_n2[i] = nn;
-                    }
-                    else if (keep1 && nn.dot(m_c_n1[i]) > 0.5)
-                    {
-                        // Sliding over a curved surface: update its tangent
-                        // plane. Retaining both nearby tangents pinches the
-                        // particle as if the smooth pipe were a sharp corner.
-                        m_c_p1[i] = np;
-                        m_c_n1[i] = nn;
-                    }
-                    else if (keep2 && nn.dot(m_c_n2[i]) > 0.5)
-                    {
-                        m_c_p2[i] = np;
-                        m_c_n2[i] = nn;
-                    }
-                    else if (!keep1)
-                    {
-                        m_c_p1[i] = np;
-                        m_c_n1[i] = nn;
-                        keep1 = true;
-                    }
-                    else if (!keep2 && np.distance_to(m_c_p1[i]) < m_collision_radius * 3.0)
-                    {
-                        m_c_p2[i] = np;
-                        m_c_n2[i] = nn;
-                        keep2 = true;
-                    }
-                    else if (!keep2)
-                    {
-                        m_c_p1[i] = np;
-                        m_c_n1[i] = nn;
-                    }
-                }
+                    AssignContactSlot(i, ChooseContactSlot(i, np, nn, keep1, keep2), np, nn,
+                                      keep1, keep2);
             }
             m_c_flags[i] = static_cast<uint8_t>((keep1 ? 1 : 0) | (keep2 ? 2 : 0));
         }
     }
 
-    // Whole-segment capsule collision. Point rays miss an obstacle whenever
-    // both particles clear it but the jacket between them does not. Translation
-    // is swept every tick; the final, rotated capsule is sampled on the resting
-    // contact cadence. The resulting point along the segment is constrained in
-    // the same iterative solve as stretch and bend.
+}
+
+
+// Phase two: whole-segment capsule collision. Point rays miss an obstacle
+// whenever both particles clear it but the jacket between them does not.
+// Translation is swept every tick; the final, rotated capsule is sampled on the
+// resting contact cadence. The resulting point along the segment is constrained
+// in the same iterative solve as stretch and bend.
+void VerletRope::SolveSegmentCollision(PhysicsDirectSpaceState3D *space_state, bool p_do_rest)
+{
     const int seg_count = static_cast<int>(m_seg_a.size());
     const auto set_capsule = [&](const Vector3 &a, const Vector3 &b) {
         const Vector3 segment = b - a;
@@ -1572,18 +1603,23 @@ void VerletRope::SolveSurfaceCollision(bool p_do_rest)
         }
     }
 
-    if (!p_do_rest)
-        return;
+}
 
-    // Wrong-side recovery: a particle that tunnelled through a slab gets locked
-    // on the far side — every time the stretch constraints pull it back, the
-    // motion sweep hits the slab's far face front-on and re-strands it, so the
-    // state is self-sustaining. Local contact info can't detect this;
-    // CONNECTIVITY can: cast the segment ray BOTH ways. A segment genuinely
-    // passing through a slab enters one face and exits through an opposing face
-    // (normals antiparallel), while a legit drape over an edge crosses roughly
-    // perpendicular faces. Require the state on two consecutive rest passes,
-    // then teleport the particle back to the entry face.
+
+// Phase three: wrong-side recovery. A particle that tunnelled through a slab
+// gets locked on the far side — every time the stretch constraints pull it
+// back, the motion sweep hits the slab's far face front-on and re-strands it,
+// so the state is self-sustaining. Local contact info can't detect this;
+// CONNECTIVITY can: cast the segment ray BOTH ways. A segment genuinely
+// passing through a slab enters one face and exits through an opposing face
+// (normals antiparallel), while a legit drape over an edge crosses roughly
+// perpendicular faces. Require the state on two consecutive rest passes, then
+// teleport the particle back to the entry face.
+//
+// Rest passes only — the caller gates it.
+void VerletRope::RecoverWrongSideParticles(PhysicsDirectSpaceState3D *space_state)
+{
+    const int seg_count = static_cast<int>(m_seg_a.size());
     for (int s = 0; s < seg_count; ++s)
     {
         const int prev = m_seg_a[s];
