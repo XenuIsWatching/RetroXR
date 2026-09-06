@@ -464,13 +464,7 @@ func active_scroll() -> ScrollContainer:
 
 
 func _load_prefs() -> Dictionary:
-	if not FileAccess.file_exists(PREFS_PATH):
-		return {}
-	var f := FileAccess.open(PREFS_PATH, FileAccess.READ)
-	if f == null:
-		return {}
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	return parsed if parsed is Dictionary else {}
+	return JsonStore.read_dict(PREFS_PATH, "NetView")
 
 
 ## Through JsonStore, like every other player-facing store: it stages a .part

@@ -233,6 +233,10 @@ func _on_restore_picked(s: Dictionary) -> void:
 				MenuToasts.DWELL_FAIL)
 			return
 		path = SramPaths.ensure_card(_card.family, _card.card_id)
+		if path.is_empty():
+			_notice("This card could not be created — nothing was written",
+				MenuToasts.DWELL_FAIL)
+			return
 	_notice("Downloading %s…" % str(s.get("rom_name", s.get("slot", ""))), 8.0)
 	CardSaveOps.restore_save(get_tree(), _fmt(), path, _card.card_id, s,
 		func(problem: String) -> void:

@@ -19,12 +19,7 @@ static func rom_dir_for_system(systemid: String) -> String:
 
 ## Create just the top-level roms/ root (no systemid). Safe to call any time.
 static func ensure_roms_root() -> void:
-	var path := default_roms_root()
-	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err == OK:
-		print("[RomLibrary] Ensured roms root: ", path)
-	else:
-		push_warning("[RomLibrary] Failed to create roms root '%s' (err %d)" % [path, err])
+	_ensure_root("roms")
 
 
 ## Create the ROM folder for a system (idempotent — always calls make_dir_recursive).
@@ -237,12 +232,7 @@ static func default_books_root() -> String:
 
 ## Create the books root if it doesn't already exist.
 static func ensure_books_root() -> void:
-	var path := default_books_root()
-	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err == OK:
-		print("[RomLibrary] Ensured books root: ", path)
-	else:
-		push_warning("[RomLibrary] Failed to create books root '%s' (err %d)" % [path, err])
+	_ensure_root("books")
 
 
 ## Scan the books root and return all PDF files sorted by name.
@@ -279,12 +269,7 @@ static func default_videos_root() -> String:
 
 ## Create the videos root if it doesn't already exist.
 static func ensure_videos_root() -> void:
-	var path := default_videos_root()
-	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err == OK:
-		print("[RomLibrary] Ensured videos root: ", path)
-	else:
-		push_warning("[RomLibrary] Failed to create videos root '%s' (err %d)" % [path, err])
+	_ensure_root("videos")
 
 
 ## Scan the videos root and return all video files sorted by name.
@@ -321,12 +306,7 @@ static func default_posters_root() -> String:
 
 ## Create the posters root if it doesn't already exist.
 static func ensure_posters_root() -> void:
-	var path := default_posters_root()
-	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err == OK:
-		print("[RomLibrary] Ensured posters root: ", path)
-	else:
-		push_warning("[RomLibrary] Failed to create posters root '%s' (err %d)" % [path, err])
+	_ensure_root("posters")
 
 
 ## Scan the posters root and return all image files sorted by name.
@@ -359,12 +339,7 @@ static func default_tv_root() -> String:
 
 ## Create the tv root if it doesn't already exist.
 static func ensure_tv_root() -> void:
-	var path := default_tv_root()
-	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err == OK:
-		print("[RomLibrary] Ensured tv root: ", path)
-	else:
-		push_warning("[RomLibrary] Failed to create tv root '%s' (err %d)" % [path, err])
+	_ensure_root("tv")
 
 
 ## Path to the DVDs root — real DVD images (a VIDEO_TS/ folder, or an .iso/.img
@@ -375,12 +350,7 @@ static func default_dvd_root() -> String:
 
 ## Create the dvd root if it doesn't already exist.
 static func ensure_dvd_root() -> void:
-	var path := default_dvd_root()
-	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err == OK:
-		print("[RomLibrary] Ensured dvd root: ", path)
-	else:
-		push_warning("[RomLibrary] Failed to create dvd root '%s' (err %d)" % [path, err])
+	_ensure_root("dvd")
 
 
 ## Scan the dvd root. Each disc is either a subfolder containing a VIDEO_TS/ dir,
@@ -420,12 +390,7 @@ static func default_music_root() -> String:
 
 ## Create the music root if it doesn't already exist.
 static func ensure_music_root() -> void:
-	var path := default_music_root()
-	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err == OK:
-		print("[RomLibrary] Ensured music root: ", path)
-	else:
-		push_warning("[RomLibrary] Failed to create music root '%s' (err %d)" % [path, err])
+	_ensure_root("music")
 
 
 ## True when the folder contains at least one playable audio file.
@@ -536,15 +501,30 @@ static func default_mods_root() -> String:
 ## readable. Since mods are only ever read, that is not an error worth shouting
 ## about — the scan below works fine either way.
 static func ensure_mods_root() -> bool:
-	var path := default_mods_root()
+	return _ensure_root("mods")
+
+
+## Create one of the player's folders if it is not already there.
+##
+## Quiet when it exists, which is the common case and was not the old
+## behaviour: make_dir_recursive_absolute answers OK for a directory that is
+## already present, so seven copies of this printed "Ensured <x> root" every
+## time anything asked, whether or not anything had happened.
+##
+## Returns whether the folder is now usable. Only the mods caller reads it --
+## the rest are called at startup for their effect -- but a helper that
+## swallowed the answer would have to be rewritten the first time another one
+## cared.
+static func _ensure_root(sub: String) -> bool:
+	var path := DataPaths.media_root(sub)
 	if DirAccess.dir_exists_absolute(path):
 		return true
 	var err := DirAccess.make_dir_recursive_absolute(path)
 	if err == OK:
-		print("[RomLibrary] Ensured mods root: ", path)
+		print("[RomLibrary] Created %s root: %s" % [sub, path])
 		return true
-	print("[RomLibrary] mods root '%s' is absent and could not be created (err %d)"
-		% [path, err])
+	push_warning("[RomLibrary] Failed to create %s root '%s' (err %d)"
+		% [sub, path, err])
 	return false
 
 

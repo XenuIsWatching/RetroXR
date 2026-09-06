@@ -116,15 +116,10 @@ static func list_states(core_name: String, rom_path: String) -> Array:
 ## older build, or one whose sidecar was lost, still loads — the frame falls back
 ## to 0, which only costs the netplay schedule its head start.
 static func read_meta(core_name: String, rom_path: String, state_id: String) -> Dictionary:
-	var path := meta_path(core_name, rom_path, state_id)
-	if not FileAccess.file_exists(path):
-		return {}
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return {}
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	f.close()
-	return parsed if parsed is Dictionary else {}
+	# Silent on a missing or unreadable sidecar (no owner passed): the docstring
+	# above says a state without one still loads, so this is an ordinary case
+	# rather than something to complain about in the log.
+	return JsonStore.read_dict(meta_path(core_name, rom_path, state_id))
 
 
 ## What the whole list costs on disk, for the tab's header. States are not small
@@ -204,8 +199,8 @@ static func write_job(job: Job) -> String:
 		"updated_at": int(Time.get_unix_time_from_system()),
 	}
 	# An overwrite keeps the row's original birthday rather than restamping it.
-	var existing: Variant = JSON.parse_string(_read_text(job.meta_path))
-	if existing is Dictionary and existing.has("created_at"):
+	var existing := JsonStore.read_dict(job.meta_path)
+	if existing.has("created_at"):
 		meta["created_at"] = int(existing["created_at"])
 	_write_atomic(job.meta_path, JSON.stringify(meta).to_utf8_buffer())
 
@@ -213,12 +208,6 @@ static func write_job(job: Job) -> String:
 		return "cannot write the save state to disk"
 	return ""
 
-
-static func _read_text(path: String) -> String:
-	if not FileAccess.file_exists(path):
-		return ""
-	var f := FileAccess.open(path, FileAccess.READ)
-	return f.get_as_text() if f != null else ""
 
 
 static func _write_atomic(path: String, bytes: PackedByteArray) -> bool:

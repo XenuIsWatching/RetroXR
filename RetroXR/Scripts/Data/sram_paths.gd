@@ -212,8 +212,11 @@ static func ensure_card(family: String, card_id: String) -> String:
 	DirAccess.make_dir_recursive_absolute(cards_dir(family))
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
+		# "" and not the path: a caller that is handed a path treats the card as
+		# present and formatted, and this one does not exist. Both callers
+		# already read "" as "no card", which is what this is.
 		push_error("[SramPaths] cannot create memory card %s" % path)
-		return path
+		return ""
 	f.store_buffer(fmt.blank_image())
 	f.close()
 	return path
