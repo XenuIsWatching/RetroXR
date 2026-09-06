@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 148
+const EXPECTED_CASES := 156
 
 var _pass := 0
 var _fail := 0
@@ -47,6 +47,7 @@ func _ready() -> void:
 	_test_ops()
 	_test_format_registry()
 	_test_format_contract()
+	_test_ps1_disc()
 
 	# A case that never RAN is not a case that passed, and GDScript has no
 	# try/catch: a decoder that indexes past its buffer aborts the function it is
@@ -637,3 +638,71 @@ func _unique(items: Array) -> Array:
 		if not seen.has(it):
 			seen.append(it)
 	return seen
+
+
+## ── disc/ ───────────────────────────────────────────────────────────────
+##
+## PS1Disc is what lets a memory card save name its game. A save carries only a
+## serial (BASCUS-94163 is FF7) and nothing else maps that to a title: gamelist
+## has no serial field and RomM does not index one. The disc does, in its
+## SYSTEM.CNF boot line.
+##
+## Every fixture is built here rather than shipped: a real image is a copyrighted
+## disc, and the bytes that matter are a few dozen.
+func _test_ps1_disc() -> void:
+	if not _group("disc"):
+		return
+
+	var dir := OS.get_user_data_dir().path_join("__ps1disc_selftest")
+	DirAccess.make_dir_recursive_absolute(dir)
+
+	# A real boot line, backslash and all. The image around it is NUL, which is
+	# the whole reason _read_serial searches BYTES: a disc is mostly zeros, and
+	# reading it as text stops dead at the first NUL a few bytes in. A fixture
+	# without that padding would pass against a text scan too, and prove nothing.
+	var boot := ("BOOT = cdrom:" + char(92) + "SCUS_941.63;1").to_ascii_buffer()
+	var img := PackedByteArray()
+	img.resize(4096)
+	for k in boot.size():
+		img[2048 + k] = boot[k]
+	var bin_path: String = dir.path_join("game.bin")
+	var f := FileAccess.open(bin_path, FileAccess.WRITE)
+	f.store_buffer(img)
+	f.close()
+
+	_eq(PS1Disc.serial_of(bin_path), "SCUS-94163",
+		"disc/a boot line buried in NULs still yields its serial")
+
+	# A .cue names the track that actually holds the data. Reading the .cue
+	# itself would find no boot line at all.
+	var cue_path: String = dir.path_join("game.cue")
+	var c := FileAccess.open(cue_path, FileAccess.WRITE)
+	c.store_string('FILE "game.bin" BINARY' + char(10) + "  TRACK 01 MODE2/2352" + char(10))
+	c.close()
+	_eq(PS1Disc.data_track(cue_path), bin_path,
+		"disc/a cue resolves to the track file it names")
+	_eq(PS1Disc.serial_of(cue_path), "SCUS-94163",
+		"disc/and the serial is read through it")
+
+	# Anything that is not a cue is the image itself; the path is returned even
+	# when nothing is there, since a path that will not open now may open later.
+	_eq(PS1Disc.data_track(bin_path), bin_path,
+		"disc/a raw image is its own data track")
+	_eq(PS1Disc.data_track(dir.path_join("missing.cue")), dir.path_join("missing.cue"),
+		"disc/an unreadable cue falls back to itself")
+
+	# No boot line, and no path: both answer "" rather than guessing.
+	var blank := PackedByteArray()
+	blank.resize(4096)
+	var b_path: String = dir.path_join("blank.bin")
+	var b := FileAccess.open(b_path, FileAccess.WRITE)
+	b.store_buffer(blank)
+	b.close()
+	_eq(PS1Disc.serial_of(b_path), "", "disc/an image with no boot line has no serial")
+	_eq(PS1Disc.serial_of(""), "", "disc/no path, no serial")
+	_eq(PS1Disc.serial_of(dir.path_join("nope.bin")), "",
+		"disc/a file that is not there has no serial")
+
+	for leaf in ["game.bin", "game.cue", "blank.bin"]:
+		DirAccess.remove_absolute(dir.path_join(leaf))
+	DirAccess.remove_absolute(dir)
