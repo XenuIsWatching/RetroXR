@@ -23,8 +23,22 @@ extends RefCounted
 ##
 ## Backslashes are folded to forward slashes first: a Windows-built archive uses
 ## them, and a check that only understood "/" would pass `..\..\x` untouched.
+## The replacement character. A NUL byte in an entry name would truncate the
+## path at the OS layer, so that what is checked and what is opened differ — but
+## a NUL can never reach this function as one. Godot decodes an undecodable byte
+## into U+FFFD before GDScript sees the string, which is why the check this
+## replaces (`to_utf8_buffer().has(0)`) could never fire: measured, that buffer
+## comes back EF BF BD and contains no zero at all.
+##
+## So the thing to refuse is the replacement character itself. It is what a NUL
+## becomes, and equally what any other byte the archive's encoding could not
+## decode becomes — a name we cannot reproduce faithfully is a name we should
+## not be writing to disk.
+const MANGLED := 0xFFFD
+
+
 static func safe_member(entry_name: String) -> String:
-	if entry_name.is_empty() or entry_name.to_utf8_buffer().has(0):
+	if entry_name.is_empty() or entry_name.contains(char(MANGLED)):
 		return ""
 	var normalized := entry_name.replace("\\", "/")
 	if normalized.is_absolute_path() or normalized.begins_with("/") \
