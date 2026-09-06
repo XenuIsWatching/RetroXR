@@ -25,18 +25,12 @@ class_name JsonStore
 extends RefCounted
 
 
-## Parse `path` as a JSON object. Returns {} for a file that is missing,
-## unreadable, unparseable, or not an object.
-##
-## `owner` is the label used in the warning; pass the calling class's name so a
-## complaint in the log says which store could not be read. An empty owner reads
-## a missing or bad file silently, which is what a disposable cache wants.
-## The same read, keeping the difference between "could not be read at all" and
+## Parse `path`, keeping the difference between "could not be read at all" and
 ## "read fine, but is not an object".
 ##
-## Returns null for the first and a Dictionary for the second — {} when the file
-## holds a JSON array or a bare number, which IS a successful read of something
-## that is not a store.
+## Returns null for the first — missing, unreadable or unparseable — and a
+## Dictionary for the second, which is {} when the file holds a JSON array or a
+## bare number. That IS a successful read of something that is not a store.
 ##
 ## read_dict below flattens both to {}, which is what almost every caller wants.
 ## The three config classes are the exception and the reason this exists: a
@@ -44,6 +38,10 @@ extends RefCounted
 ## that is not an object resets them to defaults. Collapsing those two would
 ## quietly change what happens to stored credentials on a corrupt file, and
 ## ra_tests pins both.
+##
+## `owner` is the label used in the warning; pass the calling class's name so a
+## complaint in the log says which store could not be read. An empty owner reads
+## a missing or bad file silently, which is what a disposable cache wants.
 static func parse_dict(path: String, owner: String = "") -> Variant:
 	if not FileAccess.file_exists(path):
 		return null
@@ -67,23 +65,16 @@ static func parse_dict(path: String, owner: String = "") -> Variant:
 	return {}
 
 
+## Parse `path` as a JSON object. Returns {} for a file that is missing,
+## unreadable, unparseable, or not an object — the flattening almost every
+## caller wants, and the one this class had before parse_dict was split out of
+## it for the three config classes.
+##
+## Delegates rather than repeating the ladder: the two were briefly written out
+## separately and had already drifted on one warning path.
 static func read_dict(path: String, owner: String = "") -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		if not owner.is_empty():
-			push_warning("%s: cannot read %s (error %d)"
-				% [owner, path, FileAccess.get_open_error()])
-		return {}
-	var text := f.get_as_text()
-	f.close()
-	var parsed: Variant = JSON.parse_string(text)
-	if parsed is Dictionary:
-		return parsed as Dictionary
-	if not owner.is_empty() and not text.strip_edges().is_empty():
-		push_warning("%s: %s is not a JSON object, ignoring it" % [owner, path])
-	return {}
+	var parsed: Variant = parse_dict(path, owner)
+	return parsed if parsed is Dictionary else {}
 
 
 ## Write `data` to `path` as tab-indented JSON, via a staging file.
