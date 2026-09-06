@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Tests/firmware_digest_tests.gd" id="1_fw"]
+
+[node name="FirmwareDigestTests" type="Node"]
+script = ExtResource("1_fw")

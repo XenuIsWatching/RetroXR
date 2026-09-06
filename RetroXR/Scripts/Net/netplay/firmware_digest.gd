@@ -16,11 +16,24 @@ extends RefCounted
 
 
 ## One line per file, sorted, hashed. Sorted because two peers must agree on the
-## digest of the same set regardless of the order their filesystems listed it.
+## digest of the same set regardless of the order their filesystems listed it —
+## two filesystems will not walk a directory in the same order, and a digest
+## that depended on that would refuse sessions between identical installs.
+##
+## Each name is LENGTH-PREFIXED, which is not decoration. With a plain
+## "name=hash" joined by newlines, one file whose name happens to contain an
+## equals sign and a newline encodes byte-for-byte the same as two ordinary
+## files — so a filename could forge the digest of a different firmware set,
+## and the check that exists to prove two peers hold the same BIOS would pass
+## on two that do not. The prefix makes the encoding unambiguous.
+##
+## Changing this changes the digest, so peers must run the same build to agree.
+## They already must: the core identity check beside this one compares build
+## strings, and a cross-build pair fails there first.
 static func of(rows: Dictionary) -> String:
 	var lines: Array[String] = []
 	for relative: String in rows:
-		lines.append("%s=%s" % [relative, str(rows[relative])])
+		lines.append("%d:%s=%s" % [relative.length(), relative, str(rows[relative])])
 	lines.sort()
 	return "\n".join(PackedStringArray(lines)).sha256_text()
 
