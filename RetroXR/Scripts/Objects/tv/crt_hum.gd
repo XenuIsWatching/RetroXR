@@ -52,9 +52,9 @@ const SPLICE_FADE := 0.02
 @export var volume: float = 0.1
 
 var _emitter: SpatialAudioEmitter = null
-var _idle: PackedVector2Array = []
-var _on: PackedVector2Array = []
-var _off: PackedVector2Array = []
+var _idle_clip: PackedVector2Array = []
+var _power_on_clip: PackedVector2Array = []
+var _power_off_clip: PackedVector2Array = []
 
 var _powered := false
 var _transient: PackedVector2Array = []   # empty once the transient has finished
@@ -64,9 +64,9 @@ var _fade_frames := 0
 
 
 func _ready() -> void:
-	_idle = PcmClip.load_frames(IDLE)
-	_on = PcmClip.load_frames(POWER_ON)
-	_off = PcmClip.load_frames(POWER_OFF)
+	_idle_clip = PcmClip.load_frames(IDLE)
+	_power_on_clip = PcmClip.load_frames(POWER_ON)
+	_power_off_clip = PcmClip.load_frames(POWER_OFF)
 	_fade_frames = int(SPLICE_FADE * AudioServer.get_mix_rate())
 
 	_emitter = SpatialAudioEmitter.new()
@@ -91,7 +91,7 @@ func set_powered(on: bool, transient: bool = true) -> void:
 	if on == _powered:
 		return
 	_powered = on
-	_transient = (_on if on else _off) if transient else PackedVector2Array()
+	_transient = (_power_on_clip if on else _power_off_clip) if transient else PackedVector2Array()
 	_t_read = 0
 	_loop_read = 0
 	if on:
@@ -126,19 +126,19 @@ func _next_frame() -> Vector2:
 		# 15.7 kHz phase jump at the join does not tick.
 		if _powered:
 			var left := _transient.size() - _t_read
-			if left < _fade_frames and not _idle.is_empty():
+			if left < _fade_frames and not _idle_clip.is_empty():
 				var f := 1.0 - float(left) / float(_fade_frames)
-				s = s.lerp(_idle[_loop_read % _idle.size()], f)
+				s = s.lerp(_idle_clip[_loop_read % _idle_clip.size()], f)
 				_loop_read += 1
 		if _t_read >= _transient.size():
 			_transient = PackedVector2Array()
 		return s
 
-	if not _powered or _idle.is_empty():
+	if not _powered or _idle_clip.is_empty():
 		return Vector2.ZERO
 
 	# The loop is exactly periodic by construction, so wrapping the read index is
 	# seamless — no crossfade needed here, unlike the splice above.
-	var v: Vector2 = _idle[_loop_read % _idle.size()]
+	var v: Vector2 = _idle_clip[_loop_read % _idle_clip.size()]
 	_loop_read += 1
 	return v
