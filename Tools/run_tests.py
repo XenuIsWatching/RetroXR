@@ -98,8 +98,14 @@ CASE = re.compile(r"^\[[a-z_]+\]\s+(PASS|FAIL|ok)\b", re.MULTILINE)
 # "N cases, PASS|FAIL"           netplay, poster, scene, time_of_day, web_server
 SUMMARY_PASSED = re.compile(r"(\d+)\s+passed,\s*(\d+)\s+failed")
 SUMMARY_TOTAL = re.compile(r"(\d+)\s+(?:checks|cases),", re.IGNORECASE)
+# "N failed"                     firmware_digest, locomotion
+#
+# The bare form goes last because it is a suffix of the two above; the alternation
+# is ordered so "3 case(s) failed" is not read as the number 3 followed by a bare
+# "failed" it would also match. Without it those two suites' failure counts came
+# from the per-case fallback instead of from the number the suite itself printed.
 SUMMARY_FAILED = re.compile(
-    r"(\d+)\s+(?:case\(s\)\s+failed|failure\(s\))", re.IGNORECASE)
+    r"(\d+)\s+(?:case\(s\)\s+failed|failure\(s\)|failed)", re.IGNORECASE)
 
 
 def find_godot(explicit: str | None) -> str:
