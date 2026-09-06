@@ -462,6 +462,35 @@ func on_plug_seating_changed() -> void:
 	call_deferred("_resolve")
 
 
+## Undo whatever _resolve() joined at the CORE level. A plain A/V lead has
+## nothing to undo — its cords are re-read from scratch every _resolve() — so
+## the base is a no-op and the three leads that put two cores on one emulated
+## wire override it.
+func _disconnect() -> void:
+	pass
+
+
+## Tear the join down and build it again from scratch.
+##
+## Public because a machine whose core has just been stopped and restarted needs
+## exactly this and has no business knowing how a cable does it. RetroSystem
+## used to reach in and call `_disconnect` then `_resolve` by name, guarded by
+## has_method() on both — two private names spelled out in another class, where
+## a rename turns the whole rejoin into a silent skip rather than an error.
+##
+## Why not a plain _resolve(): a link cable's cached endpoints still name the
+## same Libretro nodes, so resolving alone is a no-op, while StopContent has
+## already removed those nodes from LinkCoordinator. The disconnect is what
+## makes the rejoin real.
+##
+## Lives on the base, not on LinkCable, because GcGbaCable and PsxLinkCable are
+## link leads too and each defines its own _disconnect/_resolve pair. Given only
+## to LinkCable, they would silently stop being rejoined.
+func rejoin() -> void:
+	_disconnect()
+	_resolve()
+
+
 ## Work out what each cord joins, and tell every device involved.
 ##
 ## Reported as a list of {out_port, in_port} pairs — direction sorted here so a

@@ -528,24 +528,6 @@ func _ride_junction() -> void:
 	junction.look_at(here + dir, _junction_up)
 
 
-## Tear the bus down and join it again from scratch.
-##
-## Public because a machine whose core has just been stopped and restarted needs
-## exactly this and has no business knowing how the cable does it. RetroSystem
-## used to reach in and call `_disconnect` then `_resolve` by name, guarded by
-## has_method() on both — two private names spelled out in another class, which
-## is a rename away from silently doing nothing at all, because the has_method()
-## guard turns a missing method into a skip rather than an error.
-##
-## The reason it cannot be a plain `_resolve()`: the cable's cached endpoints
-## still name the same Libretro nodes, so resolving alone is a no-op, while
-## StopContent has already removed those nodes from LinkCoordinator. The
-## disconnect is what makes the rejoin real.
-func rejoin() -> void:
-	_disconnect()
-	_resolve()
-
-
 func _disconnect() -> void:
 	# Cleared first, and the ends read straight out of the dictionary.
 	#

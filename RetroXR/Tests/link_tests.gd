@@ -188,6 +188,14 @@ func _test_every_lead_states_its_bus() -> void:
 		await get_tree().process_frame
 		_ok(lead.has_method("linked_machines"), "%s can state its bus" % leads[path])
 		_ok(lead.has_method("held_machines"), "%s can name what it holds" % leads[path])
+		# RetroSystem rejoins a bus after restarting a core, and it finds the
+		# method by NAME — so a lead that does not answer to it is skipped in
+		# silence, and its pair keeps a bus pointing at Libretro nodes
+		# StopContent already removed from LinkCoordinator. All three must
+		# answer, which is why rejoin() sits on CompositeCable and not on the
+		# one subclass that happened to need it first.
+		_ok(lead.has_method("rejoin"), "%s can be rejoined after a core restart"
+			% leads[path])
 		if lead.has_method("linked_machines"):
 			# Seated in nothing, so it joins nothing — and must say that rather
 			# than fault, because _resolve asks before anything is plugged in.
