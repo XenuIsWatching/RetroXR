@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 127
+const EXPECTED_CASES := 146
 
 var _pass := 0
 var _fail := 0
@@ -45,6 +45,8 @@ func _ready() -> void:
 	_test_ps1_contract()
 	_test_shared_contract()
 	_test_ops()
+	_test_format_registry()
+	_test_format_contract()
 
 	# A case that never RAN is not a case that passed, and GDScript has no
 	# try/catch: a decoder that indexes past its buffer aborts the function it is
@@ -537,3 +539,92 @@ func _test_ops() -> void:
 	# "needs 1 block, 0 free" would be a confusing thing to say about it.
 	_eq(CardSaveOps.restore_blocker(gc, row, {"GAFE01": true}, 0), "already on this card",
 		"ops/presence is reported ahead of a size refusal")
+
+
+## ── registry/ (additions) ──────────────────────────────────────
+##
+## _test_registry above already pins the pairwise invariants. These three are
+## what it does not reach.
+func _test_format_registry() -> void:
+	if not _group("registry"):
+		return
+
+	# The pairwise checks above compare the two families we ship. This one holds
+	# for a third, which is when a clash would actually happen and when nobody
+	# would think to add a case.
+	var ids: Array = []
+	for fmt: CardFormat in CardFormats.all():
+		ids.append(fmt.id())
+	_eq(ids.size(), _unique(ids).size(), "registry/every family id is distinct")
+
+	# for_path lowercases before matching, so a card named by a tool that shouts
+	# still resolves. Nothing else covers the fold.
+	_eq(CardFormats.for_path("/x/y/CARD.RAW").id(), "gamecube",
+		"registry/the extension match is case-insensitive")
+
+	# BsxPackFormat is deliberately absent, and this is that decision written
+	# where a change would trip it. Membership would make SramPaths.card_save_path
+	# file a pack under save/memcards/, but snes9x reads its broadcast packets out
+	# of the loaded ROM's own folder — so a pack filed there boots perfectly and
+	# receives nothing. bsx_pack_format.gd says so in its own header.
+	_ok(CardFormats.for_family("bsx") == null,
+		"registry/the Satellaview pack is deliberately NOT a registered family")
+
+
+## ── contract/ ─────────────────────────────────────────────────────────────────
+##
+## The two adapters are thin forwards, so what is worth pinning is where they
+## deliberately DIFFER -- the places a caller would get wrong by assuming both
+## machines behave like the one it was written against.
+func _test_format_contract() -> void:
+	if not _group("contract"):
+		return
+
+	var ps: CardFormat = CardFormats.for_family("playstation")
+	var gc: CardFormat = CardFormats.for_family("gamecube")
+
+	# A PlayStation card is always one 128 KB image of 16 blocks with block 0 the
+	# directory, so the argument is ignored. A GameCube card's size is a property
+	# of the card, and a 59 and a 251 are both ordinary.
+	_eq(ps.total_blocks(PackedByteArray()), PS1Card.BLOCK_COUNT - 1,
+		"contract/a PlayStation card is fixed at 15 blocks whatever it is handed")
+	_eq(ps.total_blocks(ps.blank_image()), PS1Card.BLOCK_COUNT - 1,
+		"contract/including its own blank")
+	_eq(gc.total_blocks(gc.blank_image()), GCCard.total_blocks(gc.blank_image()),
+		"contract/a GameCube card reads its block count from the image")
+
+	# A save smaller than one block still occupies one.
+	_eq(ps.blocks_for_size(0), 1, "contract/a PlayStation save never costs 0 blocks")
+	_eq(gc.blocks_for_size(0), 1, "contract/nor does a GameCube save")
+	_eq(ps.blocks_for_size(PS1Card.FRAME_SIZE + PS1Card.BLOCK_SIZE * 3), 3,
+		"contract/a three-block PlayStation save costs three")
+
+	# Each blank is its own format's card and not the other's. This is the pair
+	# that catches a blank_image() wired to the wrong helper.
+	_ok(ps.is_card_image(ps.blank_image()), "contract/a blank PlayStation card is one")
+	_ok(gc.is_card_image(gc.blank_image()), "contract/a blank GameCube card is one")
+	_ok(not ps.is_card_image(gc.blank_image()),
+		"contract/a GameCube image is not a PlayStation card")
+	_ok(not gc.is_card_image(ps.blank_image()),
+		"contract/and not the other way round either")
+
+	# Icon rate is a real per-machine number, not a shared default: the
+	# PlayStation cycled at 6 Hz, a GameCube frame lasts four VBlanks (15 Hz).
+	_eq(ps.icon_fps(), 6.0, "contract/the PlayStation cycles icons at 6 Hz")
+	_eq(gc.icon_fps(), 15.0, "contract/the GameCube's fallback is 15 Hz")
+
+	# An empty card has every block free, and the noun the panel prints.
+	_eq(ps.free_blocks(ps.blank_image()), ps.total_blocks(ps.blank_image()),
+		"contract/a blank PlayStation card is entirely free")
+	_eq(gc.free_blocks(gc.blank_image()), gc.total_blocks(gc.blank_image()),
+		"contract/and so is a blank GameCube card")
+	_eq(ps.unit_noun(), "block", "contract/both machines count in blocks")
+	_eq(gc.unit_noun(), "block", "contract/on the GameCube too")
+
+
+func _unique(items: Array) -> Array:
+	var seen: Array = []
+	for it: Variant in items:
+		if not seen.has(it):
+			seen.append(it)
+	return seen
