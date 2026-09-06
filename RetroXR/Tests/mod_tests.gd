@@ -394,6 +394,22 @@ func _group_removal() -> void:
 	_ok(ScenePersistence._prune_unknown_types(clean, "test") == clean,
 		"removal/untouched when nothing is missing")
 
+	# An unknown entry with NO id. Every case above gives one, which is why this
+	# went unnoticed: the early return keyed on the dropped IDS rather than on
+	# whether anything was dropped, so an id-less row was pruned from the kept
+	# list and then handed back anyway in the original array. The validator
+	# rejected it and failed the entire slot — the outcome pruning exists to
+	# prevent. A save written before ids were recorded looks exactly like this.
+	var idless: Array = [
+		{"id": 0, "type": "table", "position": [0, 0, 0], "rotation": [0, 0, 0]},
+		{"type": "gone.mod:lamp", "position": [1, 0, 0], "rotation": [0, 0, 0]},
+	]
+	var pruned := ScenePersistence._prune_unknown_types(idless, "test")
+	_eq(pruned.size(), 1, "removal/an unknown entry with no id is still dropped")
+	_eq(_types_of(pruned), ["table"], "removal/and the known one survives")
+	_eq(ScenePersistence._objects_validation_error(pruned), "",
+		"removal/so the slot still validates")
+
 	# And the guard that must NOT be weakened: structural corruption is still
 	# all-or-nothing. Only an unrecognised type is survivable.
 	_ok(not ScenePersistence._objects_validation_error( [{"id": -1, "type": "table"}]).is_empty(),

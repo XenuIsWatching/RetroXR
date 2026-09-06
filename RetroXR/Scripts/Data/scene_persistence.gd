@@ -789,7 +789,13 @@ static func _prune_unknown_types(objects: Array, path: String) -> Array:
 			dropped_types[obj_type] = int(dropped_types.get(obj_type, 0)) + 1
 			continue
 		kept.append(entry)
-	if dropped_ids.is_empty():
+	# Keyed on what was DROPPED, not on the ids of what was dropped. An unknown
+	# entry carries an id only if the save recorded one, so an id-less entry used
+	# to leave dropped_ids empty, take this early return, and be handed back in
+	# `objects` — re-admitting the exact row the pruning had just removed. The
+	# validator then rejected it and failed the whole slot, which is the outcome
+	# this function exists to prevent.
+	if dropped_types.is_empty():
 		return objects
 	for value: Variant in kept:
 		if not (value is Dictionary):
@@ -802,12 +808,14 @@ static func _prune_unknown_types(objects: Array, path: String) -> Array:
 			if _is_integer(ref) and dropped_ids.has(int(ref)):
 				entry[field] = null
 	var summary := PackedStringArray()
+	var dropped_count := 0
 	for obj_type: String in dropped_types:
 		summary.append("%d %s" % [dropped_types[obj_type], obj_type])
+		dropped_count += int(dropped_types[obj_type])
 	# push_warning rather than push_error: the slot loaded, and the player is
 	# about to see the room. This is a report, not a failure.
 	push_warning("ScenePersistence: slot '%s' skipped %s — the mod that provided %s is not loaded"
-		% [path, ", ".join(summary), "them" if dropped_ids.size() > 1 else "it"])
+		% [path, ", ".join(summary), "them" if dropped_count > 1 else "it"])
 	return kept
 
 
