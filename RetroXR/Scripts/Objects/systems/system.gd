@@ -4011,6 +4011,20 @@ func net_release_cartridge() -> void:
 	_cartridge_slot.drop_object()
 
 
+## The same, for a memory card. `slot` is an index into MEMCARD_SLOT_NODES and
+## is clamped by the caller, so a console with one well still answers an event
+## from a peer that has two.
+##
+## Exists so the relay does not have to reach in by node name. It was the one
+## eject that had no method, which meant object_sync walked this machine's
+## children looking for a snap zone — the sort of thing that keeps working right
+## up until a console arranges its slots differently.
+func net_release_memory_card(slot: int) -> void:
+	if slot < 0 or slot >= _memcard_slots.size():
+		return
+	_memcard_slots[slot].drop_object()
+
+
 ## Restore a controller plug into a port after loading from a save file.
 func restore_controller_plug(port_index: int, plug: ControllerPlug) -> void:
 	if port_index < 0 or port_index >= _port_zones.size():

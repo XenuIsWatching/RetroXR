@@ -1183,13 +1183,7 @@ func _dispatch_event(kind: int, a: Dictionary) -> void:
 				a["sys"].restore_memory_card(a["card"], _memcard_slot_of(a))
 		NetEvents.EV_MEMCARD_REMOVE:
 			if _valid(a, ["sys"]):
-				# By NODE NAME rather than through a method: this also runs
-				# against the test double, which is a bare node with named
-				# children and no console API of its own.
-				var zone: Node = a["sys"].get_node_or_null(
-					RetroSystem.MEMCARD_SLOT_NODES[_memcard_slot_of(a)])
-				if zone != null:
-					zone.drop_object()
+				a["sys"].net_release_memory_card(_memcard_slot_of(a))
 		NetEvents.EV_TRAY:
 			if _valid(a, ["sys"]) and a["sys"].has_method("net_set_tray_open"):
 				a["sys"].net_set_tray_open(bool(a.get("open", false)))

@@ -204,6 +204,15 @@ class MockEventObject extends Node3D:
 			slot.name = slot_name
 			add_child(slot)
 
+	## The console API for ejecting a card, which the relay calls by name rather
+	## than reaching for a slot node. Mirrors RetroSystem.net_release_memory_card.
+	func net_release_memory_card(slot: int) -> void:
+		var names := ["MemoryCardSlot", "MemoryCardSlot2"]
+		if slot < 0 or slot >= names.size():
+			return
+		var zone := get_node_or_null(names[slot]) as MockSlot
+		if zone != null:
+			zone.drop_object()
 	func net_set_tray_open(open: bool) -> void:
 		tray_open = open
 		applying_seen = sync != null and sync.is_applying()
