@@ -591,8 +591,15 @@ func refresh_crt_derived() -> void:
 
 ## Set one CRT display-stage uniform live (from the TV options panel) and apply
 ## it to whichever material currently shows the CRT stage.
+## Loud on an unknown key, unlike set_crt_params below. The difference is who is
+## calling: this one comes from the options panel with a name compiled into this
+## build, so an unknown key is a renamed uniform and the symptom is a control
+## the player can drag that changes nothing. The bulk path takes a SAVE FILE,
+## where an unrecognised key is an ordinary older-or-newer build and skipping it
+## quietly is the whole point.
 func set_crt_param(pname: String, value: Variant) -> void:
 	if not _crt_params.has(pname):
+		push_warning("TVDisplay: no CRT parameter named '%s'" % pname)
 		return
 	_crt_params[pname] = value
 	for mat: ShaderMaterial in known_display_materials():
