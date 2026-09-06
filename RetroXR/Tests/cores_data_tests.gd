@@ -22,7 +22,7 @@ extends Node
 
 ## Cases in this file, NOT counting the guard below -- it is checked before
 ## it has recorded itself.
-const EXPECTED_CASES := 41
+const EXPECTED_CASES := 61
 
 var _passed := 0
 var _failed := 0
@@ -42,6 +42,7 @@ func _ready() -> void:
 	_group_sources()
 	_group_forced()
 	_group_manifest()
+	_group_recommended()
 
 	# A case that never RAN is not a case that passed. GDScript has no
 	# try/catch, so one bad index aborts the function it is in and every case
@@ -252,3 +253,99 @@ func _group_manifest() -> void:
 	m.remove("fceumm")
 	_ok(not m.is_downloaded("fceumm"), "manifest/removing forgets the core")
 	_eq(m.get_remote_date("fceumm"), "", "manifest/and its stamp with it")
+
+
+## ── recommended/ ──────────────────────────────────────────────────────
+##
+## CoreRecommendations is one core per system, badged in the downloader and
+## installed wholesale by "Download All Recommended". Its header states two
+## invariants that nothing checked, and neither fails loudly: a second pick for a
+## machine would make the download-all button fetch two cores for it, and a
+## core_names() that stopped deduplicating would re-fetch Genesis Plus GX once
+## for each of the five Sega machines it serves.
+func _group_recommended() -> void:
+	var table: Dictionary = CoreRecommendations.RECOMMENDED
+	_ok(table.size() > 20, "recommended/the table is populated",
+		"got %d" % table.size())
+
+	# Every row carries a pick and a reason. The "why" is not decoration: the
+	# header distinguishes entries measured on this hardware from ones inherited
+	# from community consensus, and a row with no reason cannot say which it is.
+	var missing_core := 0
+	var missing_why := 0
+	var empty_android := 0
+	for sysid: String in table:
+		var row: Dictionary = table[sysid]
+		if str(row.get("core", "")).is_empty():
+			missing_core += 1
+		if str(row.get("why", "")).is_empty():
+			missing_why += 1
+		if row.has("android") and str(row["android"]).is_empty():
+			empty_android += 1
+	_eq(missing_core, 0, "recommended/every system names a core")
+	_eq(missing_why, 0, "recommended/and says why it was picked")
+	_eq(empty_android, 0, "recommended/an android override is never blank")
+
+	# One core per system is what lets download-all install a full set without
+	# fetching two cores for one machine. A row whose pick is an Array would
+	# still read fine everywhere else.
+	var non_string := 0
+	for sysid: String in table:
+		if not (table[sysid].get("core") is String):
+			non_string += 1
+	_eq(non_string, 0, "recommended/a system picks exactly one core, not a list")
+
+	var names := CoreRecommendations.core_names()
+	var seen: Array[String] = []
+	var dupes := 0
+	for n: String in names:
+		if seen.has(n):
+			dupes += 1
+		seen.append(n)
+	_eq(dupes, 0, "recommended/core_names deduplicates")
+	_ok(names.size() < table.size(),
+		"recommended/and is shorter than the table, since one core serves several machines",
+		"%d names for %d systems" % [names.size(), table.size()])
+	_ok(not names.has(""), "recommended/and never yields an empty name")
+
+	# No opinion is an empty string, not a guess.
+	_eq(CoreRecommendations.core_for(""), "", "recommended/no system, no pick")
+	_eq(CoreRecommendations.core_for("__not_a_system"), "",
+		"recommended/an unknown system has no pick")
+	_ok(not CoreRecommendations.is_recommended("__not_a_system", "stella"),
+		"recommended/nothing is recommended for an unknown system")
+
+	# is_recommended must reject an empty core name even where the system HAS a
+	# pick, or a row with no core_name would badge itself.
+	var known := str(table.keys()[0])
+	var pick := CoreRecommendations.core_for(known)
+	_ok(CoreRecommendations.is_recommended(known, pick),
+		"recommended/a system's own pick is recommended")
+	_ok(not CoreRecommendations.is_recommended(known, ""),
+		"recommended/an empty core name never is")
+	_ok(not CoreRecommendations.is_recommended(known, "__other_core"),
+		"recommended/and neither is a different core")
+
+	# first() is a PARTITION, not a sort, and the header says why: sort_custom is
+	# not stable, so ranking by recommended-ness alone would shuffle everything
+	# else. These cases are what makes that difference visible.
+	var entries: Array = [
+		{"core_name": "aaa"}, {"core_name": "bbb"}, {"core_name": pick}, {"core_name": "ccc"},
+	]
+	var sorted_entries := CoreRecommendations.first(known, entries)
+	_eq(str(sorted_entries[0]["core_name"]), pick, "recommended/first puts the pick at the front")
+	_eq([str(sorted_entries[1]["core_name"]), str(sorted_entries[2]["core_name"]),
+		str(sorted_entries[3]["core_name"])], ["aaa", "bbb", "ccc"],
+		"recommended/and leaves every other entry in the order it arrived")
+	_eq(sorted_entries.size(), entries.size(), "recommended/losing none of them")
+
+	# A system with no opinion must hand the list back untouched rather than
+	# reordering it around an empty pick.
+	var untouched := CoreRecommendations.first("__not_a_system", entries)
+	_eq(untouched.size(), entries.size(), "recommended/no pick, no reordering")
+	_eq(str(untouched[0]["core_name"]), "aaa", "recommended/the list arrives as it was")
+
+	# The key is configurable because callers hold different row shapes.
+	var by_other: Array = [{"name": "zzz"}, {"name": pick}]
+	var keyed := CoreRecommendations.first(known, by_other, "name")
+	_eq(str(keyed[0]["name"]), pick, "recommended/first honours a different key")
