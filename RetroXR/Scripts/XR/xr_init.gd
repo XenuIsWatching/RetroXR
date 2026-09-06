@@ -26,6 +26,13 @@ func _ready() -> void:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 		# Use roomscale tracking so Y=0 is the physical floor
 		xr_interface.set_play_area_mode(XRInterface.XR_PLAY_AREA_ROOMSCALE)
+		# Which headset this is, and the starting points that follow from it. Here
+		# rather than in QualityManager._ready() because XR_META_headset_id needs
+		# the OpenXR instance, which does not exist when that autoload is built —
+		# and before the applies below, so the swapchain is allocated once at the
+		# size this device should have rather than a Quest 3's.
+		QualityManager.detect_device()
+		QualityManager.apply_device_defaults()
 		# The saved refresh rate, or the platform default where none is saved — the
 		# system setting alone does not pick one. QualityManager owns the value.
 		QualityManager.apply_display_rate()

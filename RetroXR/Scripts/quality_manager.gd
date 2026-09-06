@@ -194,6 +194,23 @@ const DISPLAY_RATE_HEADSET := 72.0
 ## waiting on that.
 const EYE_BUFFER_PANEL := 1.229
 
+## Which headset is running this, resolved once by detect_device(). Every measured
+## constant above was taken on a Quest 3, and applying them unchanged to a Quest 2
+## is what this exists to stop: a Quest 2 rendered EYE_BUFFER_PANEL, i.e. 51% more
+## pixels than its own runtime asked for, on an Adreno 650 at 525 MHz.
+enum Device { UNKNOWN, QUEST_2, QUEST_3, QUEST_3S, DESKTOP }
+
+## Per-device starting points for the knobs PRESETS deliberately does not carry.
+## UNKNOWN takes the conservative row on purpose: an unrecognised headset is far
+## likelier to be weak than strong, and guessing high is the bug this fixes.
+const DEVICE_DEFAULTS := {
+	Device.QUEST_2: {"eye_buffer_scale": 1.0},
+	Device.UNKNOWN: {"eye_buffer_scale": 1.0},
+	Device.QUEST_3: {"eye_buffer_scale": EYE_BUFFER_PANEL},
+	Device.QUEST_3S: {"eye_buffer_scale": EYE_BUFFER_PANEL},
+	Device.DESKTOP: {"eye_buffer_scale": EYE_BUFFER_PANEL},
+}
+
 ## Frames between tiny GPU-blurred regional samples for TV/handheld glow.
 ## Six is 12 Hz at the Quest baseline of 72 Hz: responsive after the blur, while
 ## avoiding a separate canvas draw for every active screen on every eye frame.
@@ -241,6 +258,13 @@ var window_mode: String = ""
 var resolution: String = ""
 
 var _desktop: bool
+## Resolved by detect_device(), which cannot run in _ready(): XR_META_headset_id
+## only answers once the OpenXR instance exists, and this autoload is built before
+## the XR rig. xr_init.gd calls it.
+var device: Device = Device.UNKNOWN
+## Whether a prefs file was on disk at boot. A device default is a first-launch
+## starting point, never an override of something the player chose.
+var _had_prefs_file: bool = false
 
 
 func _ready() -> void:
@@ -744,6 +768,59 @@ func set_eye_buffer_scale(scale: float) -> void:
 	save_prefs()
 
 
+## Resolve which headset this is, once, and cache it in `device`.
+##
+## Called from xr_init.gd rather than _ready(): XR_META_headset_id is an OpenXR
+## extension, so it only answers after the instance exists, and this autoload is
+## built before the XR rig. Safe to call more than once — later calls re-resolve.
+##
+## Four sources, each falling through on no answer. get_headset_id() returns ""
+## when the extension is not enabled or the runtime is not Meta's, which is why
+## the model name and the adapter name are behind it: SteamVR reaches neither of
+## the first two, and Adreno 650 vs 740 still separates the two headsets.
+func detect_device() -> Device:
+	if _desktop:
+		device = Device.DESKTOP
+		return device
+	device = Device.UNKNOWN
+	var id := ""
+	if Engine.has_singleton("OpenXRMetaHeadsetIDExtension"):
+		var ext: Object = Engine.get_singleton("OpenXRMetaHeadsetIDExtension")
+		if ext != null and ext.has_method("get_headset_id"):
+			id = str(ext.get_headset_id()).to_lower()
+	if id.is_empty():
+		var model := OS.get_model_name().to_lower()
+		if model != "genericdevice":
+			id = model
+	if id.is_empty():
+		id = RenderingServer.get_video_adapter_name().to_lower()
+	if id.contains("quest 2") or id.contains("quest2") or id.contains("adreno (tm) 650"):
+		device = Device.QUEST_2
+	elif id.contains("quest 3s") or id.contains("quest3s"):
+		device = Device.QUEST_3S
+	elif id.contains("quest 3") or id.contains("quest3") or id.contains("adreno (tm) 740"):
+		device = Device.QUEST_3
+	print("QualityManager: headset id '%s' -> device %d" % [id, device])
+	return device
+
+
+## Apply this device's starting points for the knobs no preset carries.
+##
+## Does nothing once a prefs file exists: a device default decides where a player
+## STARTS, and the row they later chose in the GRAPHICS tab outranks it for ever.
+## Call after detect_device() and before apply_eye_buffer_scale(), so the launch
+## allocates its swapchain once at the right size.
+func apply_device_defaults() -> void:
+	if _had_prefs_file:
+		return
+	if not DEVICE_DEFAULTS.has(device):
+		return
+	var row: Dictionary = DEVICE_DEFAULTS[device]
+	eye_buffer_scale = clampf(float(row["eye_buffer_scale"]),
+		EYE_BUFFER_SCALE_MIN, EYE_BUFFER_SCALE_MAX)
+	print("QualityManager: device default eye buffer x%.3f" % eye_buffer_scale)
+
+
 ## Resize the eye buffer, at startup or mid-session.
 ##
 ## Mid-session is supported by the engine: the property setter hands the value to
@@ -1234,6 +1311,7 @@ func _load_prefs() -> void:
 	var data := JsonStore.read_dict(PREFS_PATH, "QualityManager")
 	if data.is_empty():
 		return
+	_had_prefs_file = true
 	msaa_3d = clampi(JsonStore.get_int(data, "msaa_3d", msaa_3d),
 		Viewport.MSAA_DISABLED, Viewport.MSAA_8X)
 	post_aa = clampi(JsonStore.get_int(data, "post_aa", post_aa), PostAA.OFF, PostAA.SMAA) as PostAA
