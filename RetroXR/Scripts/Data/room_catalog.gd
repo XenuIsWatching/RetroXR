@@ -84,8 +84,8 @@ static func has_slots(room_id: String) -> bool:
 
 
 ## Every room that keeps save slots, in table order. Was SceneManager.SLOT_ROOMS.
-static func slot_rooms() -> Array:
-	var out: Array = []
+static func slot_rooms() -> Array[String]:
+	var out: Array[String] = []
 	for room_id: String in _table():
 		if has_slots(room_id):
 			out.append(room_id)

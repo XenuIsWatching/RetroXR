@@ -18,7 +18,7 @@ extends RefCounted
 const SAVE_PATH := "user://desktop_bindings.json"
 
 ## Gamepad button actions (joypad + trigger).
-const JOYPAD_ACTIONS: Array = [
+const JOYPAD_ACTIONS: Array[String] = [
 	"RETRO_JOYPAD_UP", "RETRO_JOYPAD_DOWN", "RETRO_JOYPAD_LEFT", "RETRO_JOYPAD_RIGHT",
 	"RETRO_JOYPAD_A",  "RETRO_JOYPAD_B",    "RETRO_JOYPAD_X",    "RETRO_JOYPAD_Y",
 	"RETRO_JOYPAD_L",  "RETRO_JOYPAD_R",    "RETRO_JOYPAD_L2",   "RETRO_JOYPAD_R2",
@@ -27,7 +27,7 @@ const JOYPAD_ACTIONS: Array = [
 ]
 
 ## Analog axis actions (each axis split into positive/negative actions).
-const ANALOG_ACTIONS: Array = [
+const ANALOG_ACTIONS: Array[String] = [
 	"RETRO_ANALOG_LEFT_X_NEGATIVE",  "RETRO_ANALOG_LEFT_X_POSITIVE",
 	"RETRO_ANALOG_LEFT_Y_NEGATIVE",  "RETRO_ANALOG_LEFT_Y_POSITIVE",
 	"RETRO_ANALOG_RIGHT_X_NEGATIVE", "RETRO_ANALOG_RIGHT_X_POSITIVE",
@@ -65,7 +65,7 @@ const ACTION_LABELS: Dictionary = {
 
 
 ## Every action this class manages, in one list.
-static func managed_actions() -> Array:
+static func managed_actions() -> Array[String]:
 	return JOYPAD_ACTIONS + ANALOG_ACTIONS
 
 

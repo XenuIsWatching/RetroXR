@@ -88,6 +88,12 @@ func game_info() -> Dictionary:
 	return ra.GetGameInfo() if ra != null else {}
 
 
+## Deliberately a bare Array, unlike the other list-returning functions here.
+##
+## The rows come straight out of the GDExtension, which hands back an untyped
+## Array — declaring Array[Dictionary] would mean an .assign() copy on every
+## call, and would turn a row of an unexpected shape into a runtime error inside
+## whichever panel is drawing rather than a row that renders oddly.
 func achievements() -> Array:
 	var ra: Object = _ra()
 	return ra.GetAchievements() if ra != null else []
