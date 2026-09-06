@@ -12,6 +12,7 @@
     "ereader_tests": 205,
     "expansion_tests": 223,
     "firmware_digest_tests": 14,
+    "hdhomerun_tests": 37,
     "link_tests": 190,
     "loading_overlay_tests": 39,
     "locomotion_tests": 23,
