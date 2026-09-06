@@ -94,33 +94,11 @@ func _build_ui() -> void:
 	row.add_child(_half_check)
 
 	# Size slider row: [label + value] then a full-width slider under it.
-	var size_header := HBoxContainer.new()
-	size_header.add_theme_constant_override("separation", 8)
-	rows.add_child(size_header)
-
-	var size_lbl := Label.new()
-	size_lbl.text = "Book size"
-	size_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	size_lbl.add_theme_font_size_override("font_size", 18)
-	size_lbl.add_theme_color_override("font_color", COLOR_ROW)
-	size_header.add_child(size_lbl)
-
-	_size_val = Label.new()
-	_size_val.text = "1.00×"
-	_size_val.add_theme_font_size_override("font_size", 18)
-	_size_val.add_theme_color_override("font_color", COLOR_TITLE)
-	_size_val.custom_minimum_size = Vector2(70, 0)
-	_size_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	size_header.add_child(_size_val)
-
-	_size_slider = HSlider.new()
-	_size_slider.min_value = 0.5
-	_size_slider.max_value = 2.5
-	_size_slider.step = 0.05
+	var size_row := MenuStyle.slider_row(rows, "Book size", 0.5, 2.5, 0.05, 70, 18, 48)
+	_size_slider = size_row[0]
+	_size_val = size_row[1]
 	_size_slider.value = 1.0
-	_size_slider.custom_minimum_size = Vector2(0, 48)
-	_size_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rows.add_child(_size_slider)
+	_size_val.text = "1.00×"
 
 	# value_changed fires continuously while dragging → live resize; the
 	# commit signal on drag end is what gets replicated to other players.

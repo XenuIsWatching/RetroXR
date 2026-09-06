@@ -227,33 +227,11 @@ func _build_comfort_options(vbox: VBoxContainer) -> void:
 		vbox.add_child(HSeparator.new())
 	else:
 		# FOV slider (desktop only)
-		var fov_header := HBoxContainer.new()
-		fov_header.add_theme_constant_override("separation", 10)
-		vbox.add_child(fov_header)
-
-		var fov_lbl := Label.new()
-		fov_lbl.text = "Field of View"
-		fov_lbl.add_theme_font_size_override("font_size", 22)
-		fov_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_TITLE)
-		fov_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fov_header.add_child(fov_lbl)
-
-		var fov_val := Label.new()
-		fov_val.text = "75°"
-		fov_val.add_theme_font_size_override("font_size", 20)
-		fov_val.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
-		fov_val.custom_minimum_size = Vector2(60, 0)
-		fov_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		fov_header.add_child(fov_val)
-
-		var fov_slider := HSlider.new()
-		fov_slider.min_value = 60.0
-		fov_slider.max_value = 110.0
-		fov_slider.step = 1.0
+		var fov_row := MenuStyle.menu_slider_row(vbox, "Field of View", 60.0, 110.0, 1.0, 60)
+		var fov_slider: HSlider = fov_row[0]
+		var fov_val: Label = fov_row[1]
 		fov_slider.value = 75.0
-		fov_slider.custom_minimum_size = Vector2(0, 48)
-		fov_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		vbox.add_child(fov_slider)
+		fov_val.text = "75°"
 
 		fov_slider.value_changed.connect(func(v: float) -> void:
 			fov_val.text = "%d°" % int(v)
@@ -263,34 +241,12 @@ func _build_comfort_options(vbox: VBoxContainer) -> void:
 		vbox.add_child(HSeparator.new())
 
 	# Height Offset slider
-	var ho_header := HBoxContainer.new()
-	ho_header.add_theme_constant_override("separation", 10)
-	vbox.add_child(ho_header)
-
-	var ho_lbl := Label.new()
-	ho_lbl.text = "Height Offset"
-	ho_lbl.add_theme_font_size_override("font_size", 22)
-	ho_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_TITLE)
-	ho_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ho_header.add_child(ho_lbl)
-
-	var ho_val := Label.new()
-	ho_val.text = "0.00 m"
-	ho_val.add_theme_font_size_override("font_size", 20)
-	ho_val.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
-	ho_val.custom_minimum_size = Vector2(80, 0)
-	ho_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	ho_header.add_child(ho_val)
-
-	var ho_slider := HSlider.new()
-	ho_slider.min_value = -1.0
-	ho_slider.max_value = 1.0
-	ho_slider.step = 0.01
+	var ho_row := MenuStyle.menu_slider_row(vbox, "Height Offset", -1.0, 1.0, 0.01, 80)
+	var ho_slider: HSlider = ho_row[0]
+	var ho_val: Label = ho_row[1]
 	ho_slider.value = 0.0
-	ho_slider.custom_minimum_size = Vector2(0, 48)
-	ho_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ho_val.text = "0.00 m"
 	ho_slider.add_theme_constant_override("grabber_offset", 0)
-	vbox.add_child(ho_slider)
 
 	ho_slider.value_changed.connect(func(v: float) -> void:
 		ho_val.text = "%+.2f m" % v
@@ -303,36 +259,14 @@ func _build_comfort_options(vbox: VBoxContainer) -> void:
 	# XR only, like Turn Style above: on desktop it only moves the eye height,
 	# which is what the Height Offset slider already does more directly.
 	if MenuStyle.is_vr_mode():
-		var ws_header := HBoxContainer.new()
-		ws_header.add_theme_constant_override("separation", 10)
-		vbox.add_child(ws_header)
-
-		var ws_lbl := Label.new()
-		ws_lbl.text = "World Scale"
-		ws_lbl.add_theme_font_size_override("font_size", 22)
-		ws_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_TITLE)
-		ws_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		ws_header.add_child(ws_lbl)
-
-		var ws_val := Label.new()
-		ws_val.add_theme_font_size_override("font_size", 20)
-		ws_val.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
-		ws_val.custom_minimum_size = Vector2(80, 0)
-		ws_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		ws_header.add_child(ws_val)
-
-		var ws_slider := HSlider.new()
-		ws_slider.min_value = 0.4
-		ws_slider.max_value = 1.5
-		ws_slider.step = 0.05
 		# Default matches DEFAULT_WORLD_SCALE in spawn_menu_controller.gd (applied
 		# at startup). Hardcoded rather than read from XRServer.world_scale because
 		# this view is built before the controller's deferred setup applies it.
+		var ws_row := MenuStyle.menu_slider_row(vbox, "World Scale", 0.4, 1.5, 0.05, 80)
+		var ws_slider: HSlider = ws_row[0]
+		var ws_val: Label = ws_row[1]
 		ws_slider.value = 0.85
 		ws_val.text = "%.2f×" % ws_slider.value
-		ws_slider.custom_minimum_size = Vector2(0, 48)
-		ws_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		vbox.add_child(ws_slider)
 
 		ws_slider.value_changed.connect(func(v: float) -> void:
 			ws_val.text = "%.2f×" % v
@@ -388,34 +322,13 @@ func _build_comfort_options(vbox: VBoxContainer) -> void:
 	ap_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ap_row.add_child(ap_lbl)
 
-	var ai_header := HBoxContainer.new()
-	ai_header.add_theme_constant_override("separation", 10)
-	vbox.add_child(ai_header)
-
-	var ai_lbl := Label.new()
-	ai_lbl.text = "Auto-save Interval"
-	ai_lbl.add_theme_font_size_override("font_size", 22)
-	ai_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_TITLE)
-	ai_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ai_header.add_child(ai_lbl)
-
-	var ai_val := Label.new()
-	ai_val.add_theme_font_size_override("font_size", 20)
-	ai_val.add_theme_color_override("font_color", MenuStyle.COLOR_LICENSE)
-	ai_val.custom_minimum_size = Vector2(80, 0)
-	ai_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	ai_header.add_child(ai_val)
-
-	var ai_slider := HSlider.new()
-	ai_slider.min_value = AppPrefs.AUTOSAVE_INTERVAL_MIN
-	ai_slider.max_value = AppPrefs.AUTOSAVE_INTERVAL_MAX
-	ai_slider.step = 15.0
+	var ai_row := MenuStyle.menu_slider_row(vbox, "Auto-save Interval", AppPrefs.AUTOSAVE_INTERVAL_MIN, AppPrefs.AUTOSAVE_INTERVAL_MAX, 15.0, 80)
+	var ai_slider: HSlider = ai_row[0]
+	var ai_val: Label = ai_row[1]
+	var ai_lbl: Label = ai_row[2]
 	ai_slider.value = AppPrefs.autosave_interval
 	ai_val.text = _interval_text(ai_slider.value)
-	ai_slider.custom_minimum_size = Vector2(0, 48)
-	ai_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ai_slider.add_theme_constant_override("grabber_offset", 0)
-	vbox.add_child(ai_slider)
 
 	ai_slider.value_changed.connect(func(v: float) -> void:
 		ai_val.text = _interval_text(v)

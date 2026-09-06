@@ -169,29 +169,52 @@ static func switch_row(parent: Container, text: String, initial_on := false,
 ## panel uses for a continuous setting: name and value on one line, the slider
 ## on the next.
 ##
-## Returns [slider, value_label]. The caller owns what the value SAYS — the
-## panels format differently ("%.2f", "%d×") and emit different signals — so
-## this builds the row and connects nothing.
+## Returns [slider, value_label, name_label]. The caller owns what the value
+## SAYS — the panels format differently ("%.2f", "%d×") and emit different
+## signals — so this builds the row and connects nothing. The name label is
+## returned because a row can be conditionally inert: the auto-save interval
+## dims its own name when the periodic switch is off.
 ##
 ## `value_width` is a parameter rather than a constant because the two panels
 ## that had their own copy of this chose 70 and 80, and quietly restyling either
 ## is not what sharing the builder is for.
 static func slider_row(parent: Container, text: String, minv: float, maxv: float,
-		step: float, value_width := 70, font_size := 18) -> Array:
+		step: float, value_width := 70, font_size := 18, height := 44) -> Array:
+	return _slider_row(parent, text, minv, maxv, step, value_width,
+		font_size, font_size, COLOR_LICENSE, COLOR_TITLE, height, 8)
+
+
+## The same row at the spawn menu's scale. The menu is read at arm's length in
+## a headset rather than on a panel held in one hand, so it runs larger — and it
+## swaps the two colours, leading with the bright TITLE on the setting's name
+## because there the name is what the player is scanning for.
+##
+## A second entry point rather than four more optional arguments on slider_row:
+## GDScript has no named arguments, so reaching a tenth parameter means writing
+## out the nine before it at every call site.
+static func menu_slider_row(parent: Container, text: String, minv: float, maxv: float,
+		step: float, value_width := 80) -> Array:
+	return _slider_row(parent, text, minv, maxv, step, value_width,
+		22, 20, COLOR_TITLE, COLOR_LICENSE, 48, 10)
+
+
+static func _slider_row(parent: Container, text: String, minv: float, maxv: float,
+		step: float, value_width: int, name_size: int, value_size: int,
+		name_color: Color, value_color: Color, height: int, separation: int) -> Array:
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
+	head.add_theme_constant_override("separation", separation)
 	parent.add_child(head)
 
 	var name_lbl := Label.new()
 	name_lbl.text = text
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_font_size_override("font_size", font_size)
-	name_lbl.add_theme_color_override("font_color", COLOR_LICENSE)
+	name_lbl.add_theme_font_size_override("font_size", name_size)
+	name_lbl.add_theme_color_override("font_color", name_color)
 	head.add_child(name_lbl)
 
 	var val_lbl := Label.new()
-	val_lbl.add_theme_font_size_override("font_size", font_size)
-	val_lbl.add_theme_color_override("font_color", COLOR_TITLE)
+	val_lbl.add_theme_font_size_override("font_size", value_size)
+	val_lbl.add_theme_color_override("font_color", value_color)
 	val_lbl.custom_minimum_size = Vector2(value_width, 0)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	head.add_child(val_lbl)
@@ -200,10 +223,10 @@ static func slider_row(parent: Container, text: String, minv: float, maxv: float
 	slider.min_value = minv
 	slider.max_value = maxv
 	slider.step = step
-	slider.custom_minimum_size = Vector2(0, 44)
+	slider.custom_minimum_size = Vector2(0, height)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(slider)
-	return [slider, val_lbl]
+	return [slider, val_lbl, name_lbl]
 
 
 ## The "float in place" row every pickable device with an options panel carries.
