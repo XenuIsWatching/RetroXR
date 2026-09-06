@@ -56,11 +56,32 @@ var _code_lbl:     Label = null
 static func create(menu: Node = null) -> SpawnMenuNetView:
 	var v := SpawnMenuNetView.new()
 	v._menu = menu
+	v.romm_client = _service(menu, "romm_client") as RommClient
+	v.romm_downloader = _service(menu, "romm_downloader") as RommDownloader
+	v.auto_scraper = _service(menu, "auto_scraper") as AutoScraper
 	v._build()
 	return v
 
 
+## One service off the menu, or null.
+##
+## The `in` test is why this exists rather than a plain property read: a probe
+## can build this view under a stand-in menu that carries none of them, and the
+## default `create(null)` is that case too.
+static func _service(menu: Node, service_name: String) -> Variant:
+	if menu == null or not (service_name in menu):
+		return null
+	return menu.get(service_name)
+
+
 var _menu: Node = null
+
+## Read once at construction, like every sibling view, rather than fetched by
+## string at the point of use -- the same services were being reached three
+## different ways across these files.
+var romm_client: RommClient = null
+var romm_downloader: RommDownloader = null
+var auto_scraper: AutoScraper = null
 
 
 func _build() -> void:
@@ -441,17 +462,7 @@ func _build_content_page() -> void:
 	_content = NetplayContent.new()
 	_content.name = "NetplayContent"
 	add_child(_content)
-	var client: RommClient = null
-	var downloader: RommDownloader = null
-	var scraper: AutoScraper = null
-	if _menu != null:
-		if "romm_client" in _menu:
-			client = _menu.get("romm_client")
-		if "romm_downloader" in _menu:
-			downloader = _menu.get("romm_downloader")
-		if "auto_scraper" in _menu:
-			scraper = _menu.get("auto_scraper")
-	_content.setup(NetworkManager, client, downloader, scraper)
+	_content.setup(NetworkManager, romm_client, romm_downloader, auto_scraper)
 	_content_page = NetContentPage.create(_content, _menu)
 	_page("Content").add_child(_content_page)
 

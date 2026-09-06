@@ -44,6 +44,9 @@ var romm_cache: RommCacheManifest = null
 var romm_art: RommArtCache = null
 var scraper_config: ScraperConfig = null
 var web_server: WebFileServer = null
+## Read here like its siblings; this one was fetched off the menu at the point
+## of use instead, which is the drift the others avoid.
+var romm_downloader: RommDownloader = null
 
 ## The menu, for the two things this view reads rather than owns: the RomM
 ## platform map (shared with the cartridge browser) and the toast stack. Typed
@@ -120,6 +123,7 @@ static func create(menu: Node) -> SpawnMenuOptionsView:
 	v.romm_art       = menu.romm_art
 	v.scraper_config = menu.scraper_config
 	v.web_server     = menu.web_server
+	v.romm_downloader = menu.romm_downloader
 	v._build()
 	return v
 
@@ -1051,7 +1055,7 @@ func _on_cleanup_scan_pressed() -> void:
 		return
 	# A live transfer's .part is indistinguishable from an abandoned one, and the
 	# sweep would offer to delete the download in progress.
-	var dl: Object = _menu.romm_downloader if _menu != null else null
+	var dl: Object = romm_downloader
 	if dl != null and dl.is_busy():
 		notify("cleanup", String.chr(MenuIcons.ERROR),
 			"Finish the download first — a running transfer looks like leftovers",
