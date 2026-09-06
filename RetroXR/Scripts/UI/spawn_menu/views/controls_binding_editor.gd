@@ -609,14 +609,26 @@ func _apply_xr_bindings() -> void:
 
 ## Write both halves out without the player touching a row. Materialises a
 ## platform's profile the moment its override switch goes on.
+## Write every store the current mode uses, and say so when one did not land.
+##
+## All three report whether the write reached disk. Dropping those meant a full
+## disk or a read-only profile was reported to the player as a saved binding,
+## and they would find out at the next launch with their controls back to
+## default. `and` is not used to combine them: every store must be attempted,
+## and short-circuiting would skip the rest after the first failure.
 func apply_all() -> void:
+	var ok := true
 	if MenuStyle.is_vr_mode():
-		ControllerBindings.save_for_system(_systemid,
+		ok = ControllerBindings.save_for_system(_systemid,
 			_edit_button_map, _edit_stick_map, _edit_lightgun_map,
-			_edit_wiimote_map, _edit_nunchuk_map, _edit_wiimote_sideways_map)
-	GamepadBindings.save_for_system(_systemid, _edit_pad_button_map, _edit_pad_stick_map)
+			_edit_wiimote_map, _edit_nunchuk_map, _edit_wiimote_sideways_map) and ok
+	ok = GamepadBindings.save_for_system(_systemid, _edit_pad_button_map,
+		_edit_pad_stick_map) and ok
 	if not MenuStyle.is_vr_mode():
-		DesktopBindings.save_for_system(_systemid)
+		ok = DesktopBindings.save_for_system(_systemid) and ok
+	if not ok:
+		push_error("[controls] a bindings write did not land; the map on disk "
+			+ "may not match what is on screen")
 	controller_bindings_changed.emit()
 
 

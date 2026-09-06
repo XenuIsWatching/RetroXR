@@ -93,13 +93,13 @@ const DEFAULT_STICK_MAP: Dictionary = {
 # ── File I/O ──────────────────────────────────────────────────────────────────
 
 ## Save global (fallback) gamepad bindings.
-static func save_global(button_map: Dictionary, stick_map: Dictionary) -> void:
+static func save_global(button_map: Dictionary, stick_map: Dictionary) -> bool:
 	var data := _load_file()
 	if not data.has("global"):
 		data["global"] = {}
 	data["global"]["buttons"] = button_map
 	data["global"]["sticks"] = stick_map
-	_save_file(data)
+	return _save_file(data)
 
 
 ## Override bookkeeping is BindingStore's; see the rules on that class.
@@ -149,10 +149,9 @@ static func get_global() -> Dictionary:
 
 ## Save per-system bindings. Falls back to save_global when systemid is empty —
 ## the fall-through the shared binding editor relies on to serve both pages.
-static func save_for_system(systemid: String, button_map: Dictionary, stick_map: Dictionary) -> void:
+static func save_for_system(systemid: String, button_map: Dictionary, stick_map: Dictionary) -> bool:
 	if systemid.is_empty():
-		save_global(button_map, stick_map)
-		return
+		return save_global(button_map, stick_map)
 	var data := _load_file()
 	if not data.has("per_system"):
 		data["per_system"] = {}
@@ -160,7 +159,7 @@ static func save_for_system(systemid: String, button_map: Dictionary, stick_map:
 		"buttons": button_map,
 		"sticks":  stick_map,
 	}
-	_save_file(data)
+	return _save_file(data)
 
 
 ## Encode a captured joypad InputEvent into a binding string ("" if unsupported).

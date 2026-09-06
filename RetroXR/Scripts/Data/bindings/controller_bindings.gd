@@ -231,7 +231,7 @@ const LIGHTGUN_SOURCE_LABELS: Dictionary = {
 ## null means "leave whatever is stored alone" rather than "clear it".
 static func save_global(button_map: Dictionary, stick_map: Dictionary, lightgun_map: Dictionary,
 		wiimote_map: Variant = null, nunchuk_map: Variant = null,
-		wiimote_sideways_map: Variant = null) -> void:
+		wiimote_sideways_map: Variant = null) -> bool:
 	var data := _load_file()
 	if not data.has("global"):
 		data["global"] = {}
@@ -244,7 +244,7 @@ static func save_global(button_map: Dictionary, stick_map: Dictionary, lightgun_
 		data["global"]["nunchuk"] = nunchuk_map
 	if wiimote_sideways_map != null:
 		data["global"]["wiimote_sideways"] = wiimote_sideways_map
-	_save_file(data)
+	return _save_file(data)
 
 
 ## Save per-system bindings. Falls back to save_global if systemid is empty.
@@ -259,11 +259,10 @@ static func save_global(button_map: Dictionary, stick_map: Dictionary, lightgun_
 ## caller does not supply them. Everything else is still replaced outright.
 static func save_for_system(systemid: String, button_map: Dictionary, stick_map: Dictionary,
 		lightgun_map: Dictionary, wiimote_map: Variant = null,
-		nunchuk_map: Variant = null, wiimote_sideways_map: Variant = null) -> void:
+		nunchuk_map: Variant = null, wiimote_sideways_map: Variant = null) -> bool:
 	if systemid.is_empty():
-		save_global(button_map, stick_map, lightgun_map, wiimote_map, nunchuk_map,
-			wiimote_sideways_map)
-		return
+		return save_global(button_map, stick_map, lightgun_map, wiimote_map,
+			nunchuk_map, wiimote_sideways_map)
 	var data := _load_file()
 	if not data.has("per_system"):
 		data["per_system"] = {}
@@ -284,7 +283,7 @@ static func save_for_system(systemid: String, button_map: Dictionary, stick_map:
 	if sideways != null:
 		entry["wiimote_sideways"] = sideways
 	data["per_system"][systemid] = entry
-	_save_file(data)
+	return _save_file(data)
 
 
 ## Override bookkeeping is BindingStore's; see the rules on that class.
