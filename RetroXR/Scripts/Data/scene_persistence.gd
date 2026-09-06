@@ -1570,6 +1570,70 @@ func _serialize_rope_layouts(root: Node3D) -> Array:
 ## An ordered chain, not a lookup table: `is` matches every ancestor, so a
 ## subtype has to be tested before the type it extends. The two places that
 ## matters are marked below.
+## The console entry, lifted out of _serialize_node's type chain.
+##
+## It is the one branch there that is more than a field map: five of its keys are
+## written conditionally, two of them from loops over the machine's channels, so
+## it carried as many lines as the next eight branches together. The chain keeps
+## its documented ORDER -- RetroDisc must still be tested before RetroCartridge,
+## which it extends -- and only this body moves.
+func _serialize_system(sys: RetroSystem, id: int, n3d: Node3D,
+		node_to_id: Dictionary) -> Dictionary:
+	var result := _base(id, "system", n3d).merged({
+		"systemid": sys.systemid,
+		"model_id": sys.model_id,
+		"tv": _ref(node_to_id, sys.connected_tv),
+		"cartridge": _ref(node_to_id, sys.get_snapped_cartridge()),
+		"memcard": _ref(node_to_id, sys.get_snapped_memcard(0)),
+		"memcard_b": _ref(node_to_id, sys.get_snapped_memcard(1)),
+		# Null once a player has pulled the lid off and put it down — a
+		# state worth keeping, since the pak under it is only reachable
+		# while the lid stays off.
+		"expansion_cover": _ref(node_to_id, sys.get_expansion_cover()),
+		"video_out": sys.video_out_enabled,
+		"ignore_gravity": sys.ignore_gravity,
+	})
+	# What is bolted to this machine. Written from the CONSOLE rather than
+	# from each unit because that is the side which seats them -- one
+	# restore_expansion call per unit, whichever way round a given pair
+	# stacks -- and because it keeps a whole tower in one entry, in the order
+	# it was built. Omitted when nothing is attached, so no room file that
+	# has no stack in it changes at all.
+	var units: Array = []
+	for unit in sys.get_expansions():
+		units.append(_ref(node_to_id, unit))
+	if not units.is_empty():
+		result["expansions"] = units
+	# Which physical gamepad drives it, for handhelds — they have no port to
+	# take a PadReceiver, so the choice lives on the machine. Written only
+	# when one is set, so nothing changes for the rooms that never touch it.
+	if not sys.pad_guid.is_empty():
+		result["pad_guid"] = sys.pad_guid
+		result["pad_ordinal"] = sys.pad_ordinal
+	# Clamshell lid angle (DS/3DS); omitted for systems without a lid.
+	var lid_angle := sys.get_lid_angle_deg()
+	if lid_angle >= 0.0:
+		result["lid_angle"] = lid_angle
+	# Extra video-out channels (dual-screen handhelds: ch 1 = BOTTOM).
+	var extra: Array = []
+	for ch in range(1, sys.get_channel_count()):
+		extra.append(_ref(node_to_id, sys.get_channel_tv(ch)))
+	if not extra.is_empty():
+		result["extra_tvs"] = extra
+	# Which composite input each lead is in, one per channel. Omitted while they
+	# are all in Composite 1, which is what a save without the key restores to —
+	# so the common case adds nothing to the file.
+	var tv_inputs: Array = []
+	var any_input := false
+	for ch in sys.get_channel_count():
+		var input := sys.get_channel_tv_input(ch)
+		any_input = any_input or input != 0
+		tv_inputs.append(input)
+	if any_input:
+		result["tv_inputs"] = tv_inputs
+	return result
+
+
 func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 	if not node is Node3D:
 		return {}
@@ -1584,60 +1648,7 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		return _base(id, str(node.get_meta(MOD_TYPE_META)), n3d)
 
 	if node is RetroSystem:
-		var sys := node as RetroSystem
-		var result := _base(id, "system", n3d).merged({
-			"systemid": sys.systemid,
-			"model_id": sys.model_id,
-			"tv": _ref(node_to_id, sys.connected_tv),
-			"cartridge": _ref(node_to_id, sys.get_snapped_cartridge()),
-			"memcard": _ref(node_to_id, sys.get_snapped_memcard(0)),
-			"memcard_b": _ref(node_to_id, sys.get_snapped_memcard(1)),
-			# Null once a player has pulled the lid off and put it down — a
-			# state worth keeping, since the pak under it is only reachable
-			# while the lid stays off.
-			"expansion_cover": _ref(node_to_id, sys.get_expansion_cover()),
-			"video_out": sys.video_out_enabled,
-			"ignore_gravity": sys.ignore_gravity,
-		})
-		# What is bolted to this machine. Written from the CONSOLE rather than
-		# from each unit because that is the side which seats them -- one
-		# restore_expansion call per unit, whichever way round a given pair
-		# stacks -- and because it keeps a whole tower in one entry, in the order
-		# it was built. Omitted when nothing is attached, so no room file that
-		# has no stack in it changes at all.
-		var units: Array = []
-		for unit in sys.get_expansions():
-			units.append(_ref(node_to_id, unit))
-		if not units.is_empty():
-			result["expansions"] = units
-		# Which physical gamepad drives it, for handhelds — they have no port to
-		# take a PadReceiver, so the choice lives on the machine. Written only
-		# when one is set, so nothing changes for the rooms that never touch it.
-		if not sys.pad_guid.is_empty():
-			result["pad_guid"] = sys.pad_guid
-			result["pad_ordinal"] = sys.pad_ordinal
-		# Clamshell lid angle (DS/3DS); omitted for systems without a lid.
-		var lid_angle := sys.get_lid_angle_deg()
-		if lid_angle >= 0.0:
-			result["lid_angle"] = lid_angle
-		# Extra video-out channels (dual-screen handhelds: ch 1 = BOTTOM).
-		var extra: Array = []
-		for ch in range(1, sys.get_channel_count()):
-			extra.append(_ref(node_to_id, sys.get_channel_tv(ch)))
-		if not extra.is_empty():
-			result["extra_tvs"] = extra
-		# Which composite input each lead is in, one per channel. Omitted while they
-		# are all in Composite 1, which is what a save without the key restores to —
-		# so the common case adds nothing to the file.
-		var tv_inputs: Array = []
-		var any_input := false
-		for ch in sys.get_channel_count():
-			var input := sys.get_channel_tv_input(ch)
-			any_input = any_input or input != 0
-			tv_inputs.append(input)
-		if any_input:
-			result["tv_inputs"] = tv_inputs
-		return result
+		return _serialize_system(node as RetroSystem, id, n3d, node_to_id)
 	elif node is RetroTV:
 		var tv := node as RetroTV
 		return _base(id, "tv", n3d).merged({
