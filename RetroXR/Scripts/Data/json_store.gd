@@ -56,6 +56,17 @@ static func read_dict(path: String, owner: String = "") -> Dictionary:
 ## was already at `path` untouched — a store that cannot be replaced is better
 ## than one replaced by half of itself.
 static func write_dict(path: String, data: Dictionary, owner: String = "") -> bool:
+	return write_text(path, JSON.stringify(data, "\t"), owner)
+
+
+## The staged write itself, for a caller that has already serialised its own
+## text — a save slot, which is not a plain Dictionary.
+##
+## Writes a .part beside the target, checks the store actually landed, and only
+## then replaces the real file. Writing in place instead means a crash or a power
+## cut between open and store leaves a truncated file, and truncated JSON does
+## not parse: the save is not merely stale, it is gone.
+static func write_text(path: String, text: String, owner: String = "") -> bool:
 	var part := path + ".part"
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var f := FileAccess.open(part, FileAccess.WRITE)
@@ -64,7 +75,7 @@ static func write_dict(path: String, data: Dictionary, owner: String = "") -> bo
 			push_error("%s: cannot write %s (error %d)"
 				% [owner, part, FileAccess.get_open_error()])
 		return false
-	f.store_string(JSON.stringify(data, "\t"))
+	f.store_string(text)
 	var err := f.get_error()
 	f.close()
 	if err != OK:

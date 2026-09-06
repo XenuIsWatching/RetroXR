@@ -672,13 +672,14 @@ func _encode(snapshot: Dictionary) -> String:
 	return JSON.stringify(snapshot, "\t")
 
 
+## Through JsonStore's staged write, for the same reason _save_manifest is: this
+## one writes the SLOT — the room, every object in it and where each one stood.
+## Writing in place meant a crash or a power cut between the open and the store
+## left a truncated file, and truncated JSON does not parse, so the save was not
+## stale but gone. The old version also returned true without ever asking
+## whether the store had landed.
 func _store_text(path: String, text: String) -> bool:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if not f:
-		push_error("ScenePersistence: cannot write '%s' (err %d)" % [path, FileAccess.get_open_error()])
-		return false
-	f.store_string(text)
-	return true
+	return JsonStore.write_text(path, text, "ScenePersistence")
 
 
 ## The fixture entries of a slot file — an empty array for one written before
