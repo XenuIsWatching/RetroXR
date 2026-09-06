@@ -501,14 +501,30 @@ func _empty_manifest() -> Dictionary:
 	return {"version": VERSION, "slots": []}
 
 
+## The slot index, or an empty one.
+##
+## A file that is ABSENT and a file that is present but unreadable both end up
+## as an empty manifest, because there is nothing better to return — but they
+## are not the same event and the second one is loud. A corrupt index means the
+## player's slots are still on disk while the room reports none, and the next
+## CRUD operation writes the empty manifest back over it, turning a bad read
+## into permanent loss. Saying so is what gives anyone a chance to notice
+## before that second step.
 func _load_manifest() -> Dictionary:
 	var path := _manifest_file()
-	if FileAccess.file_exists(path):
-		var f := FileAccess.open(path, FileAccess.READ)
-		if f:
-			var parsed: Variant = JSON.parse_string(f.get_as_text())
-			if parsed is Dictionary:
-				return parsed as Dictionary
+	if not FileAccess.file_exists(path):
+		return _empty_manifest()
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		push_error("ScenePersistence: cannot read slot manifest '%s' (error %d) — "
+			% [path, FileAccess.get_open_error()]
+			+ "the room will report no saves although its slots are still on disk")
+		return _empty_manifest()
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	if parsed is Dictionary:
+		return parsed as Dictionary
+	push_error("ScenePersistence: slot manifest '%s' is not readable JSON — " % path
+		+ "the room will report no saves although its slots are still on disk")
 	return _empty_manifest()
 
 

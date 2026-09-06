@@ -473,11 +473,12 @@ func _load_prefs() -> Dictionary:
 	return parsed if parsed is Dictionary else {}
 
 
+## Through JsonStore, like every other player-facing store: it stages a .part
+## and only then replaces the file, so a crash mid-write cannot leave a
+## half-written prefs file that reads back as no prefs at all.
 func _save_prefs() -> void:
-	var f := FileAccess.open(PREFS_PATH, FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify({
-			"name": _name_edit.text.strip_edges(),
-			"ip": _ip_edit.text.strip_edges(),
-			"code": RoomCode.normalize(_code_edit.text),
-		}))
+	JsonStore.write_dict(PREFS_PATH, {
+		"name": _name_edit.text.strip_edges(),
+		"ip": _ip_edit.text.strip_edges(),
+		"code": RoomCode.normalize(_code_edit.text),
+	}, "NetView")
