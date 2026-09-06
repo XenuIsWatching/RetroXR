@@ -64,7 +64,7 @@ func _populate() -> void:
 func _on_half_page_toggled(enabled: bool) -> void:
 	if _book and is_instance_valid(_book):
 		_book.half_page_mode = enabled
-		NetworkManager.report_event(NetEvents.EV_BOOK_HALF,
+		NetworkManager.report_event(NetEvents.Event.EV_BOOK_HALF,
 			{"book": _book, "on": enabled})
 
 
@@ -78,7 +78,7 @@ func _on_size_changed(factor: float) -> void:
 func _on_size_committed(factor: float) -> void:
 	if _book and is_instance_valid(_book):
 		_book.size_scale = factor
-		NetworkManager.report_event(NetEvents.EV_BOOK_SIZE,
+		NetworkManager.report_event(NetEvents.Event.EV_BOOK_SIZE,
 			{"book": _book, "scale": factor})
 
 

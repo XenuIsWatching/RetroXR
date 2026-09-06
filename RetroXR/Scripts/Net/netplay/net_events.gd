@@ -19,7 +19,7 @@
 class_name NetEvents
 extends RefCounted
 
-enum {
+enum Event {
 	EV_CART_INSERT,      # {sys, cart}
 	EV_CART_REMOVE,      # {sys}
 	EV_TAPE_INSERT,      # {vcr, tape}

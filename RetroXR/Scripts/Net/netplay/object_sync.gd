@@ -925,54 +925,54 @@ func _release(net_id: int, pos: Vector3, quat: Quaternion, lin: Vector3, ang: Ve
 ## Non-node arguments (an "open" flag, a "cmd" string) are deliberately absent:
 ## they have defaults at the apply site and a missing one is not a bug.
 const EV_NODE_KEYS := {
-	NetEvents.EV_CART_INSERT:     ["sys", "cart"],
-	NetEvents.EV_CART_REMOVE:     ["sys"],
-	NetEvents.EV_TAPE_INSERT:     ["vcr", "tape"],
-	NetEvents.EV_TAPE_REMOVE:     ["vcr"],
-	NetEvents.EV_TV_PLUG:         ["owner", "tv"],
-	NetEvents.EV_TV_UNPLUG:       ["tv"],
-	NetEvents.EV_RCA_PLUG:        ["cable", "dev"],
-	NetEvents.EV_RCA_UNPLUG:      ["cable"],
-	NetEvents.EV_PORT_PLUG:       ["sys", "ctrl"],
-	NetEvents.EV_PORT_UNPLUG:     ["sys"],
-	NetEvents.EV_SYS_POWER:       ["sys"],
-	NetEvents.EV_SYS_POWER_STATE: ["sys"],
-	NetEvents.EV_SYS_RESET:       ["sys"],
-	NetEvents.EV_TV_POWER:        ["tv"],
-	NetEvents.EV_TV_VOL_UP:       ["tv"],
-	NetEvents.EV_TV_VOL_DOWN:     ["tv"],
-	NetEvents.EV_TV_MUTE:         ["tv"],
-	NetEvents.EV_TV_CRT:          ["tv"],
-	NetEvents.EV_TV_STEREO:       ["tv"],
-	NetEvents.EV_TV_AUDIO_MODE:   ["tv"],
-	NetEvents.EV_TV_ASPECT:       ["tv"],
-	NetEvents.EV_TV_SOURCE:       ["tv"],
-	NetEvents.EV_TV_CHANNEL:      ["tv"],
-	NetEvents.EV_ROOM_LIGHTS:     ["switch"],
-	NetEvents.EV_PULL_LIGHT:      ["cord"],
-	NetEvents.EV_BLINDS:          ["blinds"],
-	NetEvents.EV_TIME_OF_DAY:     ["clock"],
-	NetEvents.EV_SYS_VIDEO_OUT:   ["sys"],
-	NetEvents.EV_SYS_GRAVITY:     ["sys"],
-	NetEvents.EV_TV_SIZE:         ["tv"],
-	NetEvents.EV_VCR_CMD:         ["vcr"],
-	NetEvents.EV_BOOK_PAGE:       ["book"],
-	NetEvents.EV_BOOK_SIZE:       ["book"],
-	NetEvents.EV_BOOK_HALF:       ["book"],
-	NetEvents.EV_MEMCARD_INSERT:  ["sys", "card"],
-	NetEvents.EV_MEMCARD_REMOVE:  ["sys"],
-	NetEvents.EV_TRAY:            ["sys"],
-	NetEvents.EV_DISK_OP:         ["sys"],
-	NetEvents.EV_DVD_INSERT:      ["dvd", "disc"],
-	NetEvents.EV_DVD_REMOVE:      ["dvd"],
-	NetEvents.EV_DVD_CMD:         ["dvd"],
-	NetEvents.EV_AUDIO_INSERT:    ["player", "media"],
-	NetEvents.EV_AUDIO_REMOVE:    ["player"],
-	NetEvents.EV_AUDIO_CMD:       ["player"],
+	NetEvents.Event.EV_CART_INSERT:     ["sys", "cart"],
+	NetEvents.Event.EV_CART_REMOVE:     ["sys"],
+	NetEvents.Event.EV_TAPE_INSERT:     ["vcr", "tape"],
+	NetEvents.Event.EV_TAPE_REMOVE:     ["vcr"],
+	NetEvents.Event.EV_TV_PLUG:         ["owner", "tv"],
+	NetEvents.Event.EV_TV_UNPLUG:       ["tv"],
+	NetEvents.Event.EV_RCA_PLUG:        ["cable", "dev"],
+	NetEvents.Event.EV_RCA_UNPLUG:      ["cable"],
+	NetEvents.Event.EV_PORT_PLUG:       ["sys", "ctrl"],
+	NetEvents.Event.EV_PORT_UNPLUG:     ["sys"],
+	NetEvents.Event.EV_SYS_POWER:       ["sys"],
+	NetEvents.Event.EV_SYS_POWER_STATE: ["sys"],
+	NetEvents.Event.EV_SYS_RESET:       ["sys"],
+	NetEvents.Event.EV_TV_POWER:        ["tv"],
+	NetEvents.Event.EV_TV_VOL_UP:       ["tv"],
+	NetEvents.Event.EV_TV_VOL_DOWN:     ["tv"],
+	NetEvents.Event.EV_TV_MUTE:         ["tv"],
+	NetEvents.Event.EV_TV_CRT:          ["tv"],
+	NetEvents.Event.EV_TV_STEREO:       ["tv"],
+	NetEvents.Event.EV_TV_AUDIO_MODE:   ["tv"],
+	NetEvents.Event.EV_TV_ASPECT:       ["tv"],
+	NetEvents.Event.EV_TV_SOURCE:       ["tv"],
+	NetEvents.Event.EV_TV_CHANNEL:      ["tv"],
+	NetEvents.Event.EV_ROOM_LIGHTS:     ["switch"],
+	NetEvents.Event.EV_PULL_LIGHT:      ["cord"],
+	NetEvents.Event.EV_BLINDS:          ["blinds"],
+	NetEvents.Event.EV_TIME_OF_DAY:     ["clock"],
+	NetEvents.Event.EV_SYS_VIDEO_OUT:   ["sys"],
+	NetEvents.Event.EV_SYS_GRAVITY:     ["sys"],
+	NetEvents.Event.EV_TV_SIZE:         ["tv"],
+	NetEvents.Event.EV_VCR_CMD:         ["vcr"],
+	NetEvents.Event.EV_BOOK_PAGE:       ["book"],
+	NetEvents.Event.EV_BOOK_SIZE:       ["book"],
+	NetEvents.Event.EV_BOOK_HALF:       ["book"],
+	NetEvents.Event.EV_MEMCARD_INSERT:  ["sys", "card"],
+	NetEvents.Event.EV_MEMCARD_REMOVE:  ["sys"],
+	NetEvents.Event.EV_TRAY:            ["sys"],
+	NetEvents.Event.EV_DISK_OP:         ["sys"],
+	NetEvents.Event.EV_DVD_INSERT:      ["dvd", "disc"],
+	NetEvents.Event.EV_DVD_REMOVE:      ["dvd"],
+	NetEvents.Event.EV_DVD_CMD:         ["dvd"],
+	NetEvents.Event.EV_AUDIO_INSERT:    ["player", "media"],
+	NetEvents.Event.EV_AUDIO_REMOVE:    ["player"],
+	NetEvents.Event.EV_AUDIO_CMD:       ["player"],
 }
 
 
-func report_event(kind: int, args: Dictionary) -> void:
+func report_event(kind: NetEvents.Event, args: Dictionary) -> void:
 	if _applying or not _nm.is_active():
 		return
 	if not _has_required_nodes(kind, args):
@@ -999,7 +999,7 @@ var events_refused: int = 0
 ## Returns false for an event that cannot be applied, having already said which
 ## key was missing — an assert would take the whole session down over one
 ## mis-sent event, which is worse than the event not happening.
-func _has_required_nodes(kind: int, args: Dictionary) -> bool:
+func _has_required_nodes(kind: NetEvents.Event, args: Dictionary) -> bool:
 	if not EV_NODE_KEYS.has(kind):
 		return true
 	for key: String in EV_NODE_KEYS[kind]:
@@ -1010,7 +1010,7 @@ func _has_required_nodes(kind: int, args: Dictionary) -> bool:
 	return true
 
 @rpc("any_peer", "call_remote", "reliable", 0)
-func _event_req(kind: int, wire: Dictionary) -> void:
+func _event_req(kind: NetEvents.Event, wire: Dictionary) -> void:
 	if not _nm.is_host():
 		return
 	var sender := multiplayer.get_remote_sender_id()
@@ -1023,20 +1023,20 @@ func _event_req(kind: int, wire: Dictionary) -> void:
 
 
 @rpc("authority", "call_remote", "reliable", 0)
-func _event_apply(kind: int, wire: Dictionary) -> void:
+func _event_apply(kind: NetEvents.Event, wire: Dictionary) -> void:
 	_apply_event(kind, wire)
 
 
-func _update_port_owner(kind: int, args: Dictionary, peer_id: int) -> void:
+func _update_port_owner(kind: NetEvents.Event, args: Dictionary, peer_id: int) -> void:
 	if not _nm.is_host():
 		return
-	if kind == NetEvents.EV_PORT_PLUG and _valid(args, ["sys", "ctrl"]):
+	if kind == NetEvents.Event.EV_PORT_PLUG and _valid(args, ["sys", "ctrl"]):
 		_nm.netplay_handoff_port(args["sys"], int(args.get("port", 0)), peer_id)
-	elif kind == NetEvents.EV_PORT_UNPLUG and _valid(args, ["sys"]):
+	elif kind == NetEvents.Event.EV_PORT_UNPLUG and _valid(args, ["sys"]):
 		_nm.netplay_handoff_port(args["sys"], int(args.get("port", 0)), 0)
 
 
-func _apply_event(kind: int, wire: Dictionary) -> void:
+func _apply_event(kind: NetEvents.Event, wire: Dictionary) -> void:
 	_suppressed(_dispatch_event.bind(kind, _decode_args(wire)))
 
 
@@ -1051,21 +1051,21 @@ func _apply_event(kind: int, wire: Dictionary) -> void:
 ## whose receiver is known — the TV, and NetworkManager itself — calls straight
 ## through, because a missing method there is a bug that should be a loud crash
 ## rather than a room that silently stops responding to one control.
-func _dispatch_event(kind: int, a: Dictionary) -> void:
+func _dispatch_event(kind: NetEvents.Event, a: Dictionary) -> void:
 	match kind:
-		NetEvents.EV_CART_INSERT:
+		NetEvents.Event.EV_CART_INSERT:
 			if _valid(a, ["sys", "cart"]):
 				a["sys"].restore_cartridge(a["cart"])
-		NetEvents.EV_CART_REMOVE:
+		NetEvents.Event.EV_CART_REMOVE:
 			if _valid(a, ["sys"]):
 				a["sys"].net_release_cartridge()
-		NetEvents.EV_TAPE_INSERT:
+		NetEvents.Event.EV_TAPE_INSERT:
 			if _valid(a, ["vcr", "tape"]):
 				a["vcr"].restore_tape(a["tape"])
-		NetEvents.EV_TAPE_REMOVE:
+		NetEvents.Event.EV_TAPE_REMOVE:
 			if _valid(a, ["vcr"]):
 				a["vcr"].net_release_tape()
-		NetEvents.EV_TV_PLUG:
+		NetEvents.Event.EV_TV_PLUG:
 			if _valid(a, ["owner", "tv"]):
 				# A console carries the cable channel and the set's own input
 				# ("in" is Composite 1-4, absent on events from before there
@@ -1078,145 +1078,145 @@ func _dispatch_event(kind: int, a: Dictionary) -> void:
 						int(a.get("in", 0)))
 				elif a["owner"].has_method("restore_cable_connection"):
 					a["owner"].restore_cable_connection(a["tv"])
-		NetEvents.EV_TV_UNPLUG:
+		NetEvents.Event.EV_TV_UNPLUG:
 			if _valid(a, ["tv"]):
 				a["tv"].release_input(int(a.get("in", 0)))
-		NetEvents.EV_RCA_PLUG:
+		NetEvents.Event.EV_RCA_PLUG:
 			# The lead names the socket by device + node name, so a peer needs no
 			# shared numbering of ports to put the same end in the same place.
 			if _valid(a, ["cable", "dev"]):
 				a["cable"].net_seat_plug(int(a.get("end", 0)), int(a.get("cord", 0)),
 					a["dev"], str(a.get("port", "")))
-		NetEvents.EV_RCA_UNPLUG:
+		NetEvents.Event.EV_RCA_UNPLUG:
 			if _valid(a, ["cable"]):
 				a["cable"].net_release_plug(int(a.get("end", 0)), int(a.get("cord", 0)))
-		NetEvents.EV_PORT_PLUG:
+		NetEvents.Event.EV_PORT_PLUG:
 			if _valid(a, ["sys", "ctrl"]):
 				a["ctrl"].restore_port_connection(a["sys"], int(a.get("port", 0)))
-		NetEvents.EV_PORT_UNPLUG:
+		NetEvents.Event.EV_PORT_UNPLUG:
 			if _valid(a, ["sys"]):
 				var port := int(a.get("port", 0))
 				a["sys"].net_release_controller_port(port)
-		NetEvents.EV_SYS_POWER:
+		NetEvents.Event.EV_SYS_POWER:
 			# Client intent — the host toggles for real. Un-suppressed so the
-			# host's own hook broadcasts NetEvents.EV_SYS_POWER_STATE afterwards.
+			# host's own hook broadcasts NetEvents.Event.EV_SYS_POWER_STATE afterwards.
 			if _nm.is_host() and _valid(a, ["sys"]):
 				_unsuppressed(a["sys"].toggle_power)
-		NetEvents.EV_SYS_POWER_STATE:
+		NetEvents.Event.EV_SYS_POWER_STATE:
 			if _valid(a, ["sys"]) and a["sys"].has_method("net_set_remote_power"):
 				a["sys"].net_set_remote_power(bool(a.get("on", false)))
-		NetEvents.EV_SYS_RESET:
+		NetEvents.Event.EV_SYS_RESET:
 			# Like power intent, reset is host-authoritative. RetroSystem.reset()
 			# frame-schedules the actual core reset when lockstep is active.
 			if _nm.is_host() and _valid(a, ["sys"]) and a["sys"].has_method("reset"):
 				_unsuppressed(a["sys"].reset)
-		NetEvents.EV_TV_POWER:
+		NetEvents.Event.EV_TV_POWER:
 			if _valid(a, ["tv"]):
 				a["tv"].remote_power_toggle()
-		NetEvents.EV_TV_VOL_UP:
+		NetEvents.Event.EV_TV_VOL_UP:
 			if _valid(a, ["tv"]):
 				a["tv"].remote_volume_up()
-		NetEvents.EV_TV_VOL_DOWN:
+		NetEvents.Event.EV_TV_VOL_DOWN:
 			if _valid(a, ["tv"]):
 				a["tv"].remote_volume_down()
-		NetEvents.EV_TV_MUTE:
+		NetEvents.Event.EV_TV_MUTE:
 			if _valid(a, ["tv"]):
 				a["tv"].remote_mute_toggle()
-		NetEvents.EV_TV_CRT:
+		NetEvents.Event.EV_TV_CRT:
 			if _valid(a, ["tv"]):
 				a["tv"].set_crt_enabled(bool(a.get("on", true)))
-		NetEvents.EV_TV_STEREO:
+		NetEvents.Event.EV_TV_STEREO:
 			if _valid(a, ["tv"]):
 				a["tv"].set_stereo_mode(int(a.get("mode", 0)))
-		NetEvents.EV_TV_AUDIO_MODE:
+		NetEvents.Event.EV_TV_AUDIO_MODE:
 			if _valid(a, ["tv"]):
 				a["tv"].set_audio_mode(int(a.get("mode", 0)))
-		NetEvents.EV_TV_ASPECT:
+		NetEvents.Event.EV_TV_ASPECT:
 			if _valid(a, ["tv"]):
 				a["tv"].set_widescreen(bool(a.get("on", false)))
-		NetEvents.EV_TV_SOURCE:
+		NetEvents.Event.EV_TV_SOURCE:
 			if _valid(a, ["tv"]):
 				a["tv"].set_source(int(a.get("source", 0)))
-		NetEvents.EV_TV_CHANNEL:
+		NetEvents.Event.EV_TV_CHANNEL:
 			if _valid(a, ["tv"]):
 				a["tv"].net_set_channel_state(int(a.get("source", 0)),
 					int(a.get("rf", 3)), int(a.get("index", -1)))
-		NetEvents.EV_ROOM_LIGHTS:
+		NetEvents.Event.EV_ROOM_LIGHTS:
 			if _valid(a, ["switch"]) and a["switch"].has_method("set_lights_on"):
 				a["switch"].set_lights_on(bool(a.get("on", true)))
-		NetEvents.EV_PULL_LIGHT:
+		NetEvents.Event.EV_PULL_LIGHT:
 			if _valid(a, ["cord"]) and a["cord"].has_method("set_lit_remote"):
 				a["cord"].set_lit_remote(bool(a.get("on", true)))
-		NetEvents.EV_BLINDS:
+		NetEvents.Event.EV_BLINDS:
 			if _valid(a, ["blinds"]) and a["blinds"].has_method("set_drop_remote"):
 				a["blinds"].set_drop_remote(float(a.get("drop", 1.0)))
-		NetEvents.EV_TIME_OF_DAY:
+		NetEvents.Event.EV_TIME_OF_DAY:
 			if _valid(a, ["clock"]) and a["clock"].has_method("net_set_time"):
 				a["clock"].net_set_time(float(a.get("time", 0.75)))
-		NetEvents.EV_SYS_VIDEO_OUT:
+		NetEvents.Event.EV_SYS_VIDEO_OUT:
 			if _valid(a, ["sys"]):
 				a["sys"].set_video_out_enabled(bool(a.get("on", true)))
-		NetEvents.EV_SYS_GRAVITY:
+		NetEvents.Event.EV_SYS_GRAVITY:
 			if _valid(a, ["sys"]):
 				a["sys"].set_ignore_gravity(bool(a.get("on", false)))
-		NetEvents.EV_TV_SIZE:
+		NetEvents.Event.EV_TV_SIZE:
 			if _valid(a, ["tv"]):
 				a["tv"].set_tv_scale(float(a.get("scale", 1.0)))
-		NetEvents.EV_VCR_CMD:
+		NetEvents.Event.EV_VCR_CMD:
 			# Transport is host-authoritative; the host executes the command and
 			# its state broadcast (send_media_state) drives every peer's local
 			# playback (M5 drift sync). Run un-suppressed so the transport hook's
 			# _net_push_state() actually broadcasts.
 			if _nm.is_host() and _valid(a, ["vcr"]):
 				_unsuppressed(_host_vcr_cmd.bind(a["vcr"], str(a.get("cmd", ""))))
-		NetEvents.EV_BOOK_PAGE:
+		NetEvents.Event.EV_BOOK_PAGE:
 			if _valid(a, ["book"]) and a["book"].has_method("set_page"):
 				a["book"].set_page(int(a.get("state", 0)), int(a.get("leaf", 0)))
-		NetEvents.EV_BOOK_SIZE:
+		NetEvents.Event.EV_BOOK_SIZE:
 			if _valid(a, ["book"]):
 				a["book"].set("size_scale", float(a.get("scale", 1.0)))
-		NetEvents.EV_BOOK_HALF:
+		NetEvents.Event.EV_BOOK_HALF:
 			if _valid(a, ["book"]):
 				a["book"].set("half_page_mode", bool(a.get("on", false)))
-		NetEvents.EV_MEMCARD_INSERT:
+		NetEvents.Event.EV_MEMCARD_INSERT:
 			if _valid(a, ["sys", "card"]):
 				a["sys"].restore_memory_card(a["card"], _memcard_slot_of(a))
-		NetEvents.EV_MEMCARD_REMOVE:
+		NetEvents.Event.EV_MEMCARD_REMOVE:
 			if _valid(a, ["sys"]):
 				a["sys"].net_release_memory_card(_memcard_slot_of(a))
-		NetEvents.EV_TRAY:
+		NetEvents.Event.EV_TRAY:
 			if _valid(a, ["sys"]) and a["sys"].has_method("net_set_tray_open"):
 				a["sys"].net_set_tray_open(bool(a.get("open", false)))
-		NetEvents.EV_DISK_OP:
+		NetEvents.Event.EV_DISK_OP:
 			# Client disc-swap intent — the host frame-schedules it for all
 			# peers through the netplay session (system.gd _request_disk_op).
 			if _nm.is_host() and _valid(a, ["sys"]):
 				_nm.netplay_schedule_disk(a["sys"], int(a.get("op", 0)),
 					str(a.get("md5", "")), int(a.get("index", 0)))
-		NetEvents.EV_DVD_INSERT:
+		NetEvents.Event.EV_DVD_INSERT:
 			if _valid(a, ["dvd", "disc"]):
 				a["dvd"].restore_disc(a["disc"])
-		NetEvents.EV_DVD_REMOVE:
+		NetEvents.Event.EV_DVD_REMOVE:
 			if _valid(a, ["dvd"]):
 				a["dvd"].net_release_disc()
-		NetEvents.EV_DVD_CMD:
+		NetEvents.Event.EV_DVD_CMD:
 			# DVD transport/menu is host-authoritative: the host executes the
 			# command and its state broadcast (send_media_state) drives every
 			# peer's local playback. Run un-suppressed so the command hook's
 			# _net_push_state() actually broadcasts.
 			if _nm.is_host() and _valid(a, ["dvd"]):
 				_unsuppressed(_host_dvd_cmd.bind(a["dvd"], str(a.get("cmd", ""))))
-		NetEvents.EV_AUDIO_INSERT:
+		NetEvents.Event.EV_AUDIO_INSERT:
 			if _valid(a, ["player", "media"]):
 				a["player"].restore_media(a["media"])
-		NetEvents.EV_AUDIO_REMOVE:
+		NetEvents.Event.EV_AUDIO_REMOVE:
 			# Through the deck's own loader, not the snap zone. A seated item is
 			# NOT held by the zone — MediaSlot/MediaTray both drop it and reparent
 			# it as they take ownership — so the old get_node("MediaSlot").
 			# drop_object() here unseated nothing at all on a tray deck.
 			if _valid(a, ["player"]):
 				a["player"].remove_media()
-		NetEvents.EV_AUDIO_CMD:
+		NetEvents.Event.EV_AUDIO_CMD:
 			# Audio transport is host-authoritative: the host executes and its
 			# state broadcast (send_media_state) drives every peer's local
 			# playback. Run un-suppressed so the command hook's _net_push_state()
@@ -1258,7 +1258,7 @@ func _host_dvd_cmd(dvd: Node, cmd: String) -> void:
 
 
 ## `index` is the band the needle lands on, and is carried the way
-## NetEvents.EV_TV_CHANNEL and NetEvents.EV_DISK_OP carry theirs.
+## NetEvents.Event.EV_TV_CHANNEL and NetEvents.Event.EV_DISK_OP carry theirs.
 func _host_audio_cmd(ap: Node, cmd: String, index: int) -> void:
 	match cmd:
 		"play": ap.remote_play()

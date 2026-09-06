@@ -224,7 +224,7 @@ func _media_loaded(media: Node3D) -> void:
 		album_path = media.get_album_path()
 	_track_idx = 0
 	_rebuild_tracks()
-	NetworkManager.report_event(NetEvents.EV_AUDIO_INSERT, {"player": self, "media": media})
+	NetworkManager.report_event(NetEvents.Event.EV_AUDIO_INSERT, {"player": self, "media": media})
 	if _autoplay_on_load() and not NetworkManager.is_active():
 		play()
 	_update_status()
@@ -242,7 +242,7 @@ func _media_unloaded() -> void:
 	stop()
 	album_path = ""
 	_tracks = PackedStringArray()
-	NetworkManager.report_event(NetEvents.EV_AUDIO_REMOVE, {"player": self})
+	NetworkManager.report_event(NetEvents.Event.EV_AUDIO_REMOVE, {"player": self})
 	_update_status()
 
 
@@ -488,7 +488,7 @@ const NET_DRIFT_TOLERANCE := 0.75   # seconds off host before a corrective seek
 ## locally. Returns true when forwarded (caller must then return).
 func _net_forward_cmd(cmd: String) -> bool:
 	if NetworkManager.is_client() and not NetworkManager.is_event_applying():
-		NetworkManager.report_event(NetEvents.EV_AUDIO_CMD, {"player": self, "cmd": cmd})
+		NetworkManager.report_event(NetEvents.Event.EV_AUDIO_CMD, {"player": self, "cmd": cmd})
 		return true
 	return false
 

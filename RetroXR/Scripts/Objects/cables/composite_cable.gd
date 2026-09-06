@@ -524,10 +524,10 @@ func _report_seating_changes() -> void:
 		if _last_seating.get(key, "") == where:
 			continue
 		if dev == null:
-			NetworkManager.report_event(NetEvents.EV_RCA_UNPLUG,
+			NetworkManager.report_event(NetEvents.Event.EV_RCA_UNPLUG,
 				{"cable": self, "end": seat["end"], "cord": seat["cord"]})
 		else:
-			NetworkManager.report_event(NetEvents.EV_RCA_PLUG, {
+			NetworkManager.report_event(NetEvents.Event.EV_RCA_PLUG, {
 				"cable": self, "end": seat["end"], "cord": seat["cord"],
 				"dev": dev, "port": seat["port"],
 			})
