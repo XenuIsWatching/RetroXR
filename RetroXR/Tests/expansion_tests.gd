@@ -450,7 +450,7 @@ func _group_media() -> void:
 	n64.restore_cartridge(cart)
 	await _wait(5)
 	var spec := n64.expansion_boot()
-	var roms: Array = n64._expansion_roms(spec)
+	var roms: Array = n64._expansion_launch.expansion_roms(spec)
 	_ok(roms.size() == 2, "media/ the assembled machine has two pieces of media")
 	_ok(roms.size() == 2 and roms[0] == "/roms/n64/game.z64" and roms[1] == "/roms/n64dd/disk.ndd",
 		"media/ the cartridge is what the core is handed, the disk is what it finds")
@@ -458,8 +458,8 @@ func _group_media() -> void:
 	# The list is resolved from the CARTRIDGE, not from rom_path — which
 	# _apply_expansion_launch moves onto the boot media. Without that, asking twice
 	# reported the disk as the console's own cart and handed the same path in twice.
-	n64._apply_expansion_launch()
-	var again: Array = n64._expansion_roms(n64.expansion_boot())
+	n64._expansion_launch.apply_expansion_launch()
+	var again: Array = n64._expansion_launch.expansion_roms(n64.expansion_boot())
 	_ok(again == roms, "media/ and asking again after a launch gives the same two")
 
 	# A machine booted from the STACK still gets a save file. The path is composed
@@ -507,7 +507,7 @@ func _group_media() -> void:
 	await _wait(5)
 	var bs_spec := sfc.expansion_boot()
 	_ok(str(bs_spec.get("core", "")) == "snes9x", "media/ the stack pins snes9x")
-	_ok(sfc._expansion_roms(bs_spec) == ["/roms/satellaview/BS-X.bs"],
+	_ok(sfc._expansion_launch.expansion_roms(bs_spec) == ["/roms/satellaview/BS-X.bs"],
 		"media/ and boots the pack from the console's slot, not the unit's")
 	await _clear()
 
@@ -536,7 +536,7 @@ func _group_media() -> void:
 	_ok(str(nest_boot.get("core", "")) == "snes9x", "nest/ the stack pins snes9x")
 	# The PACK is the content. The BS-X cartridge is never handed over: snes9x
 	# sources BS-X.bin from the system directory itself.
-	_ok(nest_sfc._expansion_roms(nest_boot) == ["/roms/satellaview/PACK.bs"],
+	_ok(nest_sfc._expansion_launch.expansion_roms(nest_boot) == ["/roms/satellaview/PACK.bs"],
 		"nest/ and the core is handed the pack, not the cartridge carrying it")
 
 	# It must also run with no base station bolted on, as the hardware does.
@@ -556,7 +556,7 @@ func _group_media() -> void:
 	# translated BS-X was silently dropped the moment a pack went in.
 	var nest_sub: Dictionary = nest_sfc.expansion_boot().get("subsystem", {})
 	_ok(str(nest_sub.get("ident", "")) == "bsx", "nest/ the stack declares the bsx pairing")
-	_ok(nest_sfc._expansion_roms(nest_sub)
+	_ok(nest_sfc._expansion_launch.expansion_roms(nest_sub)
 			== ["/roms/satellaview/BS-X.sfc", "/roms/satellaview/PACK.bs"],
 		"nest/ which is the shell first, then the pack")
 
@@ -564,14 +564,14 @@ func _group_media() -> void:
 	# shell, so a pairing that fell back too would hand the core the same ROM
 	# twice and look perfectly valid doing it.
 	await _unbolt(nest_bsx.get_node("MediaBay") as XRToolsSnapZone, nest_pack)
-	_ok(nest_sfc._expansion_roms(nest_sub).size() == 1,
+	_ok(nest_sfc._expansion_launch.expansion_roms(nest_sub).size() == 1,
 		"nest/ an empty bay leaves the pair incomplete, so the plain load runs")
-	_ok(nest_sfc._expansion_roms(nest_sfc.expansion_boot())
+	_ok(nest_sfc._expansion_launch.expansion_roms(nest_sfc.expansion_boot())
 			== ["/roms/satellaview/BS-X.sfc"],
 		"nest/ an empty BS-X cart boots the shell it carries")
 	nest_bsx.restore_media(nest_pack)
 	await _wait(5)
-	_ok(nest_sfc._expansion_roms(nest_sfc.expansion_boot())
+	_ok(nest_sfc._expansion_launch.expansion_roms(nest_sfc.expansion_boot())
 			== ["/roms/satellaview/PACK.bs"],
 		"nest/ and a pack in the bay outranks it")
 
@@ -580,7 +580,7 @@ func _group_media() -> void:
 	# would flush the pack's contents over the BS-X cartridge itself.
 	_ok(int(nest_sub.get("writable", -1)) == 1,
 		"nest/ the pack is the writable half of the pair")
-	_ok(nest_sfc._expansion_roms(nest_sub)[int(nest_sub["writable"])]
+	_ok(nest_sfc._expansion_launch.expansion_roms(nest_sub)[int(nest_sub["writable"])]
 			== "/roms/satellaview/PACK.bs",
 		"nest/ and that index really lands on the pack")
 
@@ -714,7 +714,7 @@ func _group_media() -> void:
 	var pbc_boot := genesis.expansion_boot()
 	_ok(str(pbc_boot.get("core", "")) == "genesis_plus_gx",
 		"media/ the converter stacks a genesis_plus_gx machine")
-	_ok(genesis._expansion_roms(pbc_boot) == ["/roms/master_system/game.sms"],
+	_ok(genesis._expansion_launch.expansion_roms(pbc_boot) == ["/roms/master_system/game.sms"],
 		"media/ and boots from the converter's bay")
 	await _clear()
 
@@ -734,7 +734,7 @@ func _group_media() -> void:
 	var fm_boot := sms.expansion_boot()
 	_ok(str(fm_boot.get("core", "")) == "genesis_plus_gx",
 		"media/ the FM unit stacks a genesis_plus_gx machine")
-	_ok(sms._expansion_roms(fm_boot) == ["/roms/master_system/other.sms"],
+	_ok(sms._expansion_launch.expansion_roms(fm_boot) == ["/roms/master_system/other.sms"],
 		"media/ and boots from the FM unit's bay")
 	await _clear()
 
@@ -779,7 +779,7 @@ func _group_launch() -> void:
 	var disk := await _cart("nintendo_64dd", "/roms/n64dd/disk.ndd")
 	dd.restore_media(disk)
 	await _wait(5)
-	n64._apply_expansion_launch()
+	n64._expansion_launch.apply_expansion_launch()
 	_ok(n64.rom_path == "/roms/n64dd/disk.ndd", "launch/ and boots from the disk")
 
 	# The cart+disk core is named per platform, because the buildbot publishes it
@@ -807,7 +807,7 @@ func _group_launch() -> void:
 	await _wait(5)
 	_ok(n64.resolve_core_name() == "mupen64plus_next",
 		"launch/ with a cartridge in, it is a mupen64plus_next machine")
-	n64._apply_expansion_launch()
+	n64._expansion_launch.apply_expansion_launch()
 	_ok(n64.rom_path == "/roms/n64/game.z64",
 		"launch/ and the core is handed the cartridge, not the disk")
 	_ok(not n64._all_forced_options("mupen64plus_next").has("mupen64plus-64dd-hardware"),
@@ -917,7 +917,7 @@ func _group_sgb() -> void:
 	# give a core a .sfc where it expects a .gb and look like a broken dump.
 	var sub: Dictionary = boot.get("subsystem", {})
 	_ok(str(sub.get("ident", "")) == "sgb", "sgb/ and declares the sgb pairing")
-	var pair := sfc._expansion_roms(sub)
+	var pair := sfc._expansion_launch.expansion_roms(sub)
 	_ok(pair.size() == 2 and pair[0] == "/roms/game_boy/game.gb",
 		"sgb/ whose FIRST half is the handheld's cartridge")
 	_ok(pair.size() == 2 and pair[1].get_file() == "SGB1.sfc",
@@ -953,7 +953,7 @@ func _group_sgb() -> void:
 	# _compose_sram_path returns "" without one. Asking before it runs gives an
 	# empty string that passes any "does not contain" check by doing nothing --
 	# which is how the first draft of the case below fooled itself.
-	sfc._apply_expansion_launch()
+	sfc._expansion_launch.apply_expansion_launch()
 	var sram := sfc._memcards._compose_sram_path("bsnes")
 	_ok(not sram.is_empty(), "sgb/ an assembled stack resolves a save path at all")
 	_ok(sram.get_file() == "dk_gb.srm",
@@ -967,12 +967,12 @@ func _group_sgb() -> void:
 	_ok(sgb.rom_path.is_empty(),
 		"sgb/ the unit carries no rom_path of its own")
 	await _unbolt(sgb.get_node("MediaBay") as XRToolsSnapZone, gb)
-	_ok(sfc._expansion_roms(sub).size() == 1,
+	_ok(sfc._expansion_launch.expansion_roms(sub).size() == 1,
 		"sgb/ an empty bay leaves the pair incomplete, so the plain load runs")
 	# Indexed defensively. Breaking rom_from_firmware empties this list, and an
 	# unguarded [0] aborted the whole group on the exact regression the case is
 	# here to catch -- so the later checks, including the BIOS gate, never ran.
-	var alone := sfc._expansion_roms(sfc.expansion_boot())
+	var alone := sfc._expansion_launch.expansion_roms(sfc.expansion_boot())
 	_ok(alone.size() == 1 and alone[0].get_file() == "SGB1.sfc",
 		"sgb/ and an empty adapter still boots its own cartridge")
 	await _clear()
@@ -1220,7 +1220,7 @@ func _group_sufami() -> void:
 	var sub: Dictionary = boot.get("subsystem", {})
 	_ok(str(sub.get("ident", "")) == "multicart_addon",
 		"sufami/ and pairs the carts through the Multi-Cart Link")
-	var pair := sfc._expansion_roms(sub)
+	var pair := sfc._expansion_launch.expansion_roms(sub)
 	_ok(pair == ["/roms/sufami_turbo/A.sfc", "/roms/sufami_turbo/B.sfc"],
 		"sufami/ handing over slot A first, then slot B")
 	_ok(not sub.has("writable"),
@@ -1231,7 +1231,7 @@ func _group_sufami() -> void:
 	# keeps half its progress and loses the rest without saying so.
 	var path_a := SramPaths.cart_save_path("snes9x", sfc.rom_path,
 		str(cart_a.get("save_id")))
-	var path_b := sfc._slot_b_save_path("snes9x")
+	var path_b := sfc.slot_b_save_path("snes9x")
 	_ok(path_b.get_file() == str(cart_b.get("save_id")) + ".srm",
 		"sufami/ the second cartridge has a save file of its own")
 	_ok(not path_b.is_empty() and path_b != path_a,
@@ -1244,22 +1244,22 @@ func _group_sufami() -> void:
 	await _unbolt(b, cart_b)
 	unit.restore_media(cart_c, 1)
 	await _wait(5)
-	_ok(sfc._slot_b_save_path("snes9x").get_file()
+	_ok(sfc.slot_b_save_path("snes9x").get_file()
 			== str(cart_c.get("save_id")) + ".srm",
 		"sufami/ and the save follows the cartridge, not the slot")
 	await _unbolt(b, cart_c)
 	unit.restore_media(cart_b, 1)
 	await _wait(5)
-	_ok(sfc._slot_b_save_path("snes9x") == path_b,
+	_ok(sfc.slot_b_save_path("snes9x") == path_b,
 		"sufami/ so putting the first one back finds its own save again")
 
 	# One cartridge is a machine in its own right: the core sniffs a lone cart's
 	# header and maps slot B empty. The pair must come up SHORT rather than
 	# doubling the one cartridge it has.
 	await _unbolt(b, cart_b)
-	_ok(sfc._expansion_roms(sub).size() == 1,
+	_ok(sfc._expansion_launch.expansion_roms(sub).size() == 1,
 		"sufami/ one empty slot leaves the pair incomplete, so the plain load runs")
-	_ok(sfc._expansion_roms(sfc.expansion_boot()) == ["/roms/sufami_turbo/A.sfc"],
+	_ok(sfc._expansion_launch.expansion_roms(sfc.expansion_boot()) == ["/roms/sufami_turbo/A.sfc"],
 		"sufami/ and a single cartridge boots on its own")
 	await _clear()
 
@@ -1272,7 +1272,7 @@ func _group_sufami() -> void:
 	var md := await _console("mega_drive")
 	md.restore_cartridge(one_bay)
 	await _wait(5)
-	_ok(md._slot_b_save_path("picodrive").is_empty(),
+	_ok(md.slot_b_save_path("picodrive").is_empty(),
 		"sufami/ and asks for no second save file at all")
 	await _clear()
 

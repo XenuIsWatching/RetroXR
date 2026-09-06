@@ -406,6 +406,10 @@ func _init() -> void:
 	_audio.name = "SystemAudio"
 	add_child(_audio)
 	_audio.setup(self)
+	_expansion_launch = ExpansionLaunch.new()
+	_expansion_launch.name = "ExpansionLaunch"
+	add_child(_expansion_launch)
+	_expansion_launch.setup(self)
 
 
 func _ready() -> void:
@@ -1912,7 +1916,7 @@ func power_on() -> void:
 	# Before the core is resolved and before the verdict is taken: an assembled
 	# machine boots from the stack, not from the console's own slot, and both of
 	# those read rom_path.
-	var stack_spec := _apply_expansion_launch()
+	var stack_spec := _expansion_launch.apply_expansion_launch()
 	var resolved_core := _resolve_core()
 	var resolved_dir := _resolve_dir()
 
@@ -1984,8 +1988,8 @@ func power_on() -> void:
 	# An assembled machine goes over as one piece if the core will take it that
 	# way; only if it will not do we fall back to a single path and say what the
 	# drive is about to lose.
-	if not _start_subsystem_content(resolved_dir, resolved_core, stack_spec):
-		_warn_missing_sidecar(stack_spec)
+	if not _expansion_launch.start_subsystem_content(resolved_dir, resolved_core, stack_spec):
+		_expansion_launch.warn_missing_sidecar(stack_spec)
 		_libretro.StartContent(resolved_dir, resolved_core, rom_path)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", false)
@@ -2745,7 +2749,7 @@ func _removable_media_options(core: String) -> Dictionary:
 func _all_forced_options(core: String) -> Dictionary:
 	var out: Dictionary = _model.get_forced_core_options() if _model != null else {}
 	out.merge(ForcedCoreOptions.all(core, systemid, rom_path, expansion_ids(),
-		card_family(), get_snapped_memcard(0) != null, _host_media_path()), true)
+		card_family(), get_snapped_memcard(0) != null, _expansion_launch.host_media_path()), true)
 	return out
 
 
@@ -2772,10 +2776,6 @@ func _all_forced_options(core: String) -> Dictionary:
 ## order they were attached in, so a stack reads the same however it was built.
 var _expansions: Array[RetroExpansion] = []
 
-## True while rom_path holds a path the STACK chose rather than the console's
-## own cartridge. Only that may be taken back out when the stack stops offering
-## one; a cartridge a player put in the slot is not ours to clear.
-var _stack_set_rom_path := false
 
 ## Option values this machine displaced in the shared <core>.opt, and the core
 ## the file belongs to, so power_off can put them back.
@@ -3070,226 +3070,19 @@ func get_expansions() -> Array[RetroExpansion]:
 	return out
 
 
-## The launch recipe for the machine as assembled, or {} when this combination
-## has none -- which is the ordinary state of a bare console.
+# ── Expansion launch ──────────────────────────────────────────────────────────
+# The launch half of the expansion subject lives in ExpansionLaunch now. The
+# hardware half — sockets, cover, seating, card swipes — stays here, because it
+# parents nodes to this console and reads its transform. Only expansion_boot is
+# called from outside, so only it keeps a forward.
+
 func expansion_boot() -> Dictionary:
-	var spec := ExpansionCatalog.boot_for(systemid, expansion_ids())
-	if spec.is_empty():
-		return spec
-	# A row that pins its core only while the console's own slot is filled drops
-	# that core for a lone disk, so the machine resolves one the way a bare
-	# console does -- the player's own pick, or the manager's default. Every
-	# other row keeps its core whether or not a cartridge is in the console.
-	if spec.get("core_only_with_host", false) and _host_media_path().is_empty():
-		spec = spec.duplicate()
-		spec.erase("core")
-		return spec
-	# `core` is a desktop core_name, and the buildbot does not publish every core
-	# under one name on every platform -- mupen64plus_next is plain on Windows and
-	# only _gles2/_gles3 on Android. A row naming one of those carries an
-	# `android` override, read here the way CoreRecommendations reads its own:
-	# without it a Quest resolved to a core that cannot be installed there, and
-	# the machine reported the core missing when it was asked to start.
-	var resolved := ExpansionCatalog.core_of(spec, OS.get_name() == "Android")
-	if resolved != str(spec.get("core", "")):
-		spec = spec.duplicate()
-		spec["core"] = resolved
-	return spec
+	return _expansion_launch.expansion_boot()
 
 
-## What is in the CONSOLE's own slot -- read from the cartridge, not from
-## rom_path, which the launch path overwrites with whatever the stack boots
-## from. Asking twice must give the same answer.
-func _host_media_path() -> String:
-	if is_instance_valid(_snapped_cartridge) \
-			and "rom_path" in _snapped_cartridge:
-		return str(_snapped_cartridge.get("rom_path"))
-	return ""
-
-
-## The paths the recipe names, in its order, skipping any bay that is empty. An
-## empty result means the stack has nothing to run, which is the ordinary state
-## of a drive with no disk in it and not a fault.
-##
-## The core is handed the FIRST survivor and no more: every combination in the
-## catalog loads through a plain retro_load_game with one path, because that is
-## what the cores themselves do. The rest of the list is not dead -- it is what
-## makes "cartridge if there is one, otherwise the disk" fall out of an ordered
-## list rather than a special case.
-func _expansion_roms(spec: Dictionary) -> Array[String]:
-	var out: Array[String] = []
-	for token: String in spec.get("roms", []):
-		var path := ""
-		if token == "host":
-			path = _host_media_path()
-		else:
-			# Three ways to name a unit's content, because the BS-X cartridge has
-			# two of them: the shell moulded into the cartridge and the pack in
-			# its bay. The plain form prefers the bay and falls back to the shell,
-			# which is what makes an empty BS-X cart still bootable. The two
-			# explicit forms do NOT fall back -- a subsystem pairing needs the
-			# halves kept apart, and a fallback there would hand the core the
-			# shell twice whenever the bay stood empty.
-			var kind := "expansion"
-			var id := ""
-			# No prefix here may be a literal prefix of another, or the order of
-			# this list silently starts deciding which one matches.
-			# "expansion_media_b:" and "expansion_media:" diverge at the
-			# sixteenth character -- "_" against ":" -- so neither contains the
-			# other. The longer is listed first regardless, as the house rule for
-			# whoever adds the next one.
-			for prefix in ["expansion_media_b:", "expansion_rom:",
-					"expansion_media:", "expansion:"]:
-				if token.begins_with(prefix):
-					kind = prefix.trim_suffix(":")
-					id = token.substr(prefix.length())
-					break
-			for unit in get_expansions():
-				if unit.expansion_id != id:
-					continue
-				match kind:
-					"expansion_rom":
-						path = unit.rom_path
-						if path.is_empty():
-							path = ExpansionCatalog.firmware_rom_path(id)
-					"expansion_media":
-						path = unit.get_media_path()
-					# The second cartridge of a unit that takes two. No fallback,
-					# for the same reason the first has none: a pairing needs its
-					# halves kept apart, and a unit with only one bay filled must
-					# come up SHORT so the count check sends it to the plain load.
-					"expansion_media_b":
-						path = unit.get_media_path(1)
-					_:
-						path = unit.get_media_path()
-						if path.is_empty():
-							path = unit.rom_path
-							if path.is_empty():
-								path = ExpansionCatalog.firmware_rom_path(id)
-				# A broadcast that cannot start from its dump alone is handed to
-				# the core as a PATCHED COPY, never as the player's file. With no
-				# patch beside it this is the same path back again.
-				path = BsPatch.resolved_path(path)
-				break
-		if not path.is_empty():
-			out.append(path)
-	return out
-
-
-## Say so when a disk is in the drive and the core is about to ignore it.
-##
-## mupen64plus_next attaches a 64DD disk to a cartridge only when the disk sits
-## beside the cartridge named after it, which is a convention no arrangement of
-## objects in a room can satisfy. The cartridge boots and looks completely
-## correct; the only tell is a missing line on the title screen. Better to say
-## it out loud than to let it pass for working.
-func _warn_missing_sidecar(spec: Dictionary) -> void:
-	var sidecar := str(spec.get("sidecar", ""))
-	if sidecar.is_empty() or _host_media_path().is_empty():
-		return
-	var disk := ""
-	for unit in get_expansions():
-		var p := unit.get_media_path()
-		if not p.is_empty():
-			disk = p
-			break
-	if disk.is_empty():
-		return
-	var expected := _host_media_path() + sidecar
-	if FileAccess.file_exists(expected):
-		return
-	push_warning("[RetroSystem] %s can only read a disk named %s from the cartridge's own folder; %s will be IGNORED and the cartridge will boot without the drive attached (see ExpansionCatalog)"
-		% [str(spec.get("core", "")), expected.get_file(), disk.get_file()])
-
-
-## Point rom_path at whatever the ASSEMBLED machine boots from, and return the
-## recipe so power_on can also ask about the sidecar and the pinned options.
-##
-## rom_path itself, rather than a second field carried alongside it: everything
-## downstream of here -- the power-on verdict, the content resolver, the SRAM
-## path, the achievements claim, the netplay hash -- reads that one field, and a
-## second source of truth would have to be threaded through all of them. The
-## console's own cartridge is not lost by this; it is still in the slot, which is
-## what _host_media_path asks, and the field is recomputed from scratch on the
-## next power-on.
-func _apply_expansion_launch() -> Dictionary:
-	var spec := expansion_boot()
-	var roms := _expansion_roms(spec) if not spec.is_empty() else ([] as Array[String])
-
-	if roms.is_empty():
-		# Nothing to boot from the stack: either it has been unbolted, or every
-		# bay in it is empty, which is the ordinary state of a drive with no disk
-		# in it. Either way the last disk this machine saw is not in it any more,
-		# and only what WE put in rom_path may be taken back out -- a cartridge
-		# in the console's own slot is not ours to clear.
-		if _stack_set_rom_path:
-			rom_path = _host_media_path()
-			_stack_set_rom_path = false
-		return spec
-
-	rom_path = roms[0]
-	_stack_set_rom_path = true
-	return spec
-
-
-## Hand the core every piece of the assembled machine at once, and say whether
-## that happened.
-##
-## This is what a cartridge and its expansion disk actually need. The single-path
-## load can only attach the two by filename convention -- the disk has to sit
-## beside the cartridge, named after it -- which no arrangement of objects in a
-## room can satisfy, so a stack that is plainly loaded boots as if the drive were
-## empty. libretro's own answer is a subsystem: the core publishes what
-## combinations it accepts and the frontend hands over the ordered set.
-##
-## Returns false whenever the ordinary load should be used instead: a combination
-## with no subsystem, a core bridge too old to have the call, or a bay standing
-## empty. An empty bay is the ordinary state of a drive with no disk in it, not a
-## fault, and the machine should still start on whatever IS loaded.
-##
-## The order is the CORE's, not the preference order the rest of this file uses.
-## For the 64DD the core declares its disk first and the cartridge second, which
-## is the reverse of which one a lone machine would boot from.
-func _start_subsystem_content(dir: String, core: String, spec: Dictionary) -> bool:
-	var sub: Dictionary = spec.get("subsystem", {})
-	if sub.is_empty():
-		return false
-	var ident := str(sub.get("ident", ""))
-	if ident.is_empty():
-		return false
-	if not _libretro.has_method("StartSubsystemContent"):
-		return false
-	var wanted: Array = sub.get("roms", [])
-	var paths := _expansion_roms(sub)
-	if paths.size() != wanted.size():
-		return false
-	# One of the pair can be a WRITABLE medium rather than a read-only ROM: a
-	# BS-X memory pack is flash, and the .bs handed over IS the flash, so what the
-	# core writes has to go back to that same file. Named by index because only
-	# the recipe knows which half of a pairing is the medium.
-	var writable := int(sub.get("writable", -1))
-	if writable >= 0 and writable < paths.size() and _libretro.has_method("SetPackPath"):
-		_libretro.SetPackPath(paths[writable])
-	# A second cartridge has a second battery, and the core keeps it in a region
-	# of its own. Set before the load, because the bridge reads the file back
-	# into the core as the content comes up.
-	var slot_b := _slot_b_save_path(core)
-	if not slot_b.is_empty() and _libretro.has_method("SetSramBPath"):
-		_libretro.SetSramBPath(slot_b)
-	print("[RetroSystem] subsystem load: %s %s <- %s" % [core, ident, str(paths)])
-	_libretro.StartSubsystemContent(dir, core, rom_path, ident, PackedStringArray(paths))
-	return true
-
-
-## Where the SECOND cartridge's battery is kept, or "" on every machine that
-## holds one cartridge.
-##
-## Keyed off that cartridge's OWN save_id, exactly as the first one is, so a save
-## follows the cartridge rather than the slot: swap which game is in slot B and
-## it brings its own progress with it, and putting it in slot A later finds the
-## same file. Keying it off the slot instead would give a linked pair one save
-## per POSITION, so lending a cartridge to a different game would overwrite it.
-func _slot_b_save_path(core: String) -> String:
+## Public because ExpansionLaunch and expansion_tests both call it; it was
+## private when its only caller was in this file.
+func slot_b_save_path(core: String) -> String:
 	if core.is_empty():
 		return ""
 	for unit in get_expansions():
@@ -4615,6 +4408,8 @@ func memcard_slots() -> Array[XRToolsSnapZone]:
 
 
 var _memcards: MemoryCardController = null
+## What a stacked expansion hands the core at boot - see ExpansionLaunch.
+var _expansion_launch: ExpansionLaunch = null
 
 
 ## The MemoryCard seated in `slot`, or null.
