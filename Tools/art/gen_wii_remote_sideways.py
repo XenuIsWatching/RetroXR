@@ -1,6 +1,6 @@
 """Turn the Wii Remote diagram on its side, and print the anchors that go with it.
 
-    python Tools/gen_wii_remote_sideways.py
+    python Tools/art/gen_wii_remote_sideways.py
 
 Reads the committed RetroXR/Textures/Controllers/wii_remote.svg and writes
 wii_remote_sideways.svg beside it. Unlike gen_wii_remote_art.py this needs no

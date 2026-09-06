@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draw RetroXR's app icons from the vector mark's geometry.
 
-    python Tools/gen_app_icons.py
+    python Tools/art/gen_app_icons.py
 
 Writes into RetroXR/Textures/ the four files export_presets.cfg points at, plus
 the 512 project icon:

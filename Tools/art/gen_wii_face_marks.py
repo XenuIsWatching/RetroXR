@@ -11,7 +11,7 @@ mark by its BUTTON so a minus stays a minus next to an A — has already been ma
 there. Re-deriving it here would be a second copy of that judgement, free to
 drift.
 
-    python Tools/gen_wii_face_marks.py
+    python Tools/art/gen_wii_face_marks.py
 
 Every mark comes out 128 square with the cap filling the frame, so the quad that
 carries it in the scene is simply the cap's diameter. That works out to one

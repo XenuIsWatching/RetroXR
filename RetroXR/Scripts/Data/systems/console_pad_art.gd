@@ -13,7 +13,7 @@
 ##
 ## Art must be redistributable and free of anyone's branding — see the
 ## ATTRIBUTIONS file beside the SVGs. Anchors are measured from a render rather
-## than chosen (Tools/nes_pad_anchors.py), because the drawing is not ours.
+## than chosen (Tools/art/nes_pad_anchors.py), because the drawing is not ours.
 class_name ConsolePadArt
 extends RefCounted
 
@@ -82,7 +82,7 @@ const _ROWS: Dictionary = {
 		# buttons and the grey shell into one blue.
 		"tint": false,
 		# Normalized to the SVG viewBox, so the diagram lays out at any size.
-		# MEASURED from a Godot render by Tools/nes_pad_anchors.py, not chosen:
+		# MEASURED from a Godot render by Tools/art/nes_pad_anchors.py, not chosen:
 		# the buttons are somebody else's drawing, so the dots have to be found
 		# in it. Re-run that tool if the art is ever replaced.
 		"anchors": {
@@ -123,7 +123,7 @@ const _ROWS: Dictionary = {
 		# of the button on different caps.
 		#
 		# Positions come from the art's own path data rather than from measuring a
-		# render — see Tools/gen_wii_remote_art.py, which composes the drawing and
+		# render — see Tools/art/gen_wii_remote_art.py, which composes the drawing and
 		# prints this block. The NES has to be measured because that drawing is
 		# somebody else's with unknown geometry; this one we assemble, so the
 		# centres are known exactly.
@@ -204,7 +204,7 @@ const _ROWS: Dictionary = {
 	#
 	# and the cross turns with the shell, so "up" takes the old "right" position
 	# and round. Both the art and this block come out of
-	# Tools/gen_wii_remote_sideways.py, which rotates the upright drawing and
+	# Tools/art/gen_wii_remote_sideways.py, which rotates the upright drawing and
 	# prints these numbers — the re-keying is the half no one can check by eye.
 	WII_SIDEWAYS: {
 		"label": "Wii Remote (sideways)",

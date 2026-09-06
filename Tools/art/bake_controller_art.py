@@ -13,7 +13,7 @@ It also prints the anchor table for controller_diagram.gd. Anchors are
 normalized to the cropped image, so they survive any later resize.
 
 Usage:
-    python Tools/bake_controller_art.py <pass_dir> [out_dir]
+    python Tools/art/bake_controller_art.py <pass_dir> [out_dir]
 
 The model is meta-quest-touch-plus from immersive-web/webxr-input-profiles (MIT).
 """

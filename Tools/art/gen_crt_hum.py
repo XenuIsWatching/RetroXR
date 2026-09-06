@@ -23,7 +23,7 @@ What a CRT actually emits:
   * A DEGAUSS THUNK at switch-on as the degaussing coil fires: a low thump plus
     the mechanical clack of the coil against the funnel.
 
-    python3 Tools/gen_crt_hum.py
+    python3 Tools/art/gen_crt_hum.py
 
 Writes 48 kHz mono WAVs. Idle loops are exactly periodic — every component
 completes a whole number of cycles in the loop, and the noise is built in the

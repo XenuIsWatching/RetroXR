@@ -28,7 +28,7 @@ probe (see CLAUDE.md "Headless Testing"):
 
 Then:
 
-    python Tools/nes_pad_anchors.py RetroXR/probe_out/pad_raw.png
+    python Tools/art/nes_pad_anchors.py RetroXR/probe_out/pad_raw.png
 
 Prints the anchor table for console_pad_art.gd and the leader-line intersection
 count over a sweep of panel sizes, which must stay 0.

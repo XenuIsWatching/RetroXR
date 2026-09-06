@@ -55,7 +55,7 @@ from them are:
 
     blender --background --python Tools/glb/decimate_stl.py -- \
         --in <scan>/Top.stl --in <scan>/Bottom.stl --out /tmp/shell.stl --target 8000
-    python Tools/nunchuk_scan_keys.py --scan <scan dir> --shell /tmp/shell.stl
+    python Tools/art/nunchuk_scan_keys.py --scan <scan dir> --shell /tmp/shell.stl
 
 The moulding seam and the stick's octagonal gate need no separate parts any
 more: both are geometry the shell already has.

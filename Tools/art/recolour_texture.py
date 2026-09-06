@@ -16,7 +16,7 @@ survives — only hue and saturation move. That is the difference between this a
 rebuilding a texture from luminance, which flattens whatever print was there (and
 preserved a chevron it was meant to remove, on the cushions).
 
-    python3 Tools/recolour_texture.py IN OUT --hue 70 170 --to-hue 36 \\
+    python3 Tools/art/recolour_texture.py IN OUT --hue 70 170 --to-hue 36 \\
         --sat-scale 0.35 --sat-max 0.20 --val-gain 1.2
 
 Angles are degrees on the 0-360 colour wheel: ~35 warm tan, ~90 green, ~210 blue.

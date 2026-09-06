@@ -6,7 +6,7 @@ a real poster or textile. That keeps the room free of the licensing question
 every "90s poster" image search runs into, and it means the art can be retuned
 by editing numbers rather than by re-downloading.
 
-    python3 Tools/gen_bedroom_art.py
+    python3 Tools/art/gen_bedroom_art.py
 
 Writes into RetroXR/imported-assets/bedroom/generated/. Godot imports these with
 default settings; none of them is a normal map, so no .import fixups are needed

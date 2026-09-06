@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Draw the SideQuest store art from the same mark as the app icons.
 
-    python Tools/gen_store_art.py
+    python Tools/art/gen_store_art.py
 
 Writes into game-icons/:
 
     retroxr-icon.jpg     1024x1024  square store icon, full bleed
     retroxr-listing.jpg  1280x720   16:9 cover, mark over the wordmark
 
-Reuses Tools/gen_app_icons.py for the headset and the palette so the store
+Reuses Tools/art/gen_app_icons.py for the headset and the palette so the store
 art and the shipped launcher icon can never drift apart. The lockup in
 game-icons/retroxr-lockup.svg is the 1600x520 sibling of this layout; that
 aspect suits mark-left/word-right, 16:9 does not, so this one stacks.

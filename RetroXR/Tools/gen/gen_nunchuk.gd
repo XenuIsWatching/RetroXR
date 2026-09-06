@@ -9,7 +9,7 @@
 ## Pipeline, and both steps are needed before this script has anything to read:
 ##
 ##   blender --background --python Tools/glb/decimate_stl.py -- ##       --in <scan>/Top.stl --in <scan>/Bottom.stl --out /tmp/shell.stl --target 8000
-##   python Tools/nunchuk_scan_keys.py --scan <scan dir> --shell /tmp/shell.stl
+##   python Tools/art/nunchuk_scan_keys.py --scan <scan dir> --shell /tmp/shell.stl
 ##
 ## Source: Wesk's "Wiimote Nunchuck Scan" on bitbuilt.net, released under the Unlicense
 ## (public domain). See RetroXR/Tools/scan/LICENSE.txt. The scans are 250 MB and are not
@@ -93,7 +93,7 @@ func _build_body() -> void:
 		"res://Scenes/Objects/controllers/wii/nunchuk_body.res")
 
 
-## Reads Tools/nunchuk_scan_keys.py's output: "NCTR", vertex and triangle counts,
+## Reads Tools/art/nunchuk_scan_keys.py's output: "NCTR", vertex and triangle counts,
 ## then the vertices and the indices. Expanded back to a soup so the ordinary
 ## _smooth/_save path runs -- including the winding check, which matters more here
 ## than anywhere else in this file because the winding came from another program's
@@ -101,7 +101,7 @@ func _build_body() -> void:
 func _build_scan_part(src: String, dst: String) -> void:
 	var f := FileAccess.open(src, FileAccess.READ)
 	if f == null:
-		push_error("[gen] missing %s -- run Tools/nunchuk_scan_keys.py" % src)
+		push_error("[gen] missing %s -- run Tools/art/nunchuk_scan_keys.py" % src)
 		return
 	if f.get_buffer(4).get_string_from_ascii() != "NCTR":
 		push_error("[gen] %s is not a .tri" % src)
@@ -194,7 +194,7 @@ func _build_boot() -> void:
 ## C and Z are CUT FROM THE LASER SCAN, not drawn here.
 ##
 ## Source: Wesk's "Wiimote Nunchuck Scan" on bitbuilt.net, released under the Unlicense
-## (public domain). Tools/nunchuk_scan_keys.py crops each key to its cap plus a 5.5 mm
+## (public domain). Tools/art/nunchuk_scan_keys.py crops each key to its cap plus a 5.5 mm
 ## skirt, welds it down to a few thousand triangles and writes Tools/scan/nunchuk_*.tri;
 ## the 250 MB scans themselves are not in this repo.
 ##

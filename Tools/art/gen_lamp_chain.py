@@ -19,7 +19,7 @@ happen in sequence rather than as one blob:
   * RECOIL — the chain springing back and dangling, so the rattle returns after
     the snap, sparser and decaying.
 
-    python3 Tools/gen_lamp_chain.py [OUT_DIR]
+    python3 Tools/art/gen_lamp_chain.py [OUT_DIR]
 
 48 kHz mono WAVs. Note the shipping target may not be 48 kHz: the Quest reports
 44100 whatever project.godot asks for, so whatever consumes these must build its

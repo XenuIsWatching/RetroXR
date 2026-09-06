@@ -21,7 +21,7 @@ Also prints the ANCHORS table for gamepad_diagram.gd, normalized to the viewBox
 so the diagram can be laid out at any size.
 
 Usage:
-    python Tools/gen_gamepad_art.py [out_dir]
+    python Tools/art/gen_gamepad_art.py [out_dir]
 """
 import sys
 from pathlib import Path

@@ -3,7 +3,7 @@ them for gen_nunchuk.gd.
 
     blender --background --python Tools/glb/decimate_stl.py -- \
         --in <scan>/Top.stl --in <scan>/Bottom.stl --out /tmp/shell.stl --target 8000
-    python Tools/nunchuk_scan_keys.py --scan <scan dir> --shell /tmp/shell.stl
+    python Tools/art/nunchuk_scan_keys.py --scan <scan dir> --shell /tmp/shell.stl
 
 Source: Wesk's "Wiimote Nunchuck Scan" on bitbuilt.net, released under the
 Unlicense (public domain) -- bitbuilt.net/forums/threads/wesks-3d-scans-license.5444/

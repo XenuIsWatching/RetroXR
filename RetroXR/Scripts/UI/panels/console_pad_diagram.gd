@@ -61,7 +61,7 @@ const GLYPH_EXT := ".svg"
 ## variant. The leader line to the arm itself is still the primary cue.
 const GLYPH_PX := 46.0
 
-## Mirrored in Tools/nes_pad_anchors.py, which verifies that no two leads cross
+## Mirrored in Tools/art/nes_pad_anchors.py, which verifies that no two leads cross
 ## at any panel size. Changing one without the other invalidates that check.
 const MAX_W := 1520.0
 const SLOT_W := 180.0

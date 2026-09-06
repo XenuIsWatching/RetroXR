@@ -24,7 +24,7 @@ NES. That art is someone else's with unknown geometry; this one we compose, so
 the centres are known exactly and re-deriving them is free. Re-run this if
 either upstream asset is ever refreshed.
 
-    python Tools/gen_wii_remote_art.py --in <wii.svg> --kenney <kenney.zip>
+    python Tools/art/gen_wii_remote_art.py --in <wii.svg> --kenney <kenney.zip>
 
 Both inputs are downloads, not vendored: the pack is 5 MB for six glyphs.
 """

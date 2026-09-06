@@ -1462,11 +1462,11 @@ carried alongside it.
   so it carries two live obligations: the About panel must keep crediting it,
   and the modified file stays CC BY-SA (it does not relicense anything else).
   Its anchors are MEASURED out of a Godot render by
-  `Tools/nes_pad_anchors.py` (red discs → A/B, black cross → d-pad, black pills →
+  `Tools/art/nes_pad_anchors.py` (red discs → A/B, black cross → d-pad, black pills →
   Select/Start) rather than chosen. That tool also counts leader-line
   intersections over a sweep of panel sizes, and the count must stay 0.
   ```bash
-  python Tools/nes_pad_anchors.py RetroXR/probe_out/nes_colour_raw.png
+  python Tools/art/nes_pad_anchors.py RetroXR/probe_out/nes_colour_raw.png
   ```
   **A console pad's art is drawn inside `_draw()`, not parented as a TextureRect**
   — a Control renders its own `_draw()` behind its children, so a child texture
