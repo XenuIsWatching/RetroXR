@@ -158,3 +158,6 @@ Tools/azahar-libretro-vr/
 RetroXR/mods/
 
 .desloppify/
+
+# Python bytecode from running the repo-root Tools/ scripts.
+__pycache__/
