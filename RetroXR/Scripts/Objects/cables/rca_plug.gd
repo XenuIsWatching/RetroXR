@@ -162,7 +162,7 @@ func _derive_cable_anchor() -> void:
 		return
 	# One rule, stated in PlugExit rather than here as well: an authored CordExit
 	# marker if the connector carries one, else the centre of its back face.
-	cable_anchor = tip.transform * PlugExit.derive_from_mesh(tip.mesh).origin
+	cable_anchor = PlugExit.origin_of(self, tip)
 
 
 ## True while a hand, a laser or a socket owns this plug's pose.

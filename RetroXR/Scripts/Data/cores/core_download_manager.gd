@@ -130,6 +130,18 @@ const JOB_PREFIX := "core:"
 const MAX_ATTEMPTS := 3
 const RETRY_DELAY_SEC := 1.5
 
+## Godot's HTTPRequest timeout defaults to 0, which is "wait for ever". Both of
+## these fetch a small document and both settle a callback the Cores tab is
+## waiting on, so a connection that opens and then stalls would leave the tab
+## spinning with no error and no way back — the version probe's pending count in
+## particular can only reach zero through `request_completed`.
+##
+## The core download deliberately has NO timeout: this is a total wall-clock
+## limit rather than an idle one, and a hundred-megabyte core over a slow link
+## is a legitimate request that would be cancelled part-way through.
+const LISTING_TIMEOUT := 20.0
+const VERSION_PROBE_TIMEOUT := 10.0
+
 
 static func job_key(core_name: String) -> String:
 	return JOB_PREFIX + core_name
@@ -188,6 +200,7 @@ func fetch_available_cores(callback: Callable) -> void:
 
 	_listing_request = HTTPRequest.new()
 	_listing_request.use_threads = true
+	_listing_request.timeout = LISTING_TIMEOUT
 	add_child(_listing_request)
 	_listing_request.request_completed.connect(
 		func(result, response_code, _headers, body):
@@ -266,6 +279,7 @@ func _probe_own_versions(done: Callable) -> void:
 	for core_name: String in names:
 		var http := HTTPRequest.new()
 		http.use_threads = true
+		http.timeout = VERSION_PROBE_TIMEOUT
 		add_child(http)
 		var settle := func() -> void:
 			http.queue_free()

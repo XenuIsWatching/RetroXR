@@ -75,11 +75,10 @@ func _derive_cable_anchor() -> void:
 	var tip := get_node_or_null("PlugTip") as MeshInstance3D
 	if tip == null or tip.mesh == null:
 		return
-	# One rule, stated in PlugExit rather than here as well: the cable trails -Z,
-	# matching VerletRope.plug_exit_axis, so the boss is at the mesh's min Z.
-	# RcaPlug already derives it this way; inlining the formula a second time is
-	# how the two drift.
-	cable_anchor = tip.transform * PlugExit.derive_from_mesh(tip.mesh).origin
+	# One rule, stated in PlugExit rather than here as well: an authored CordExit
+	# marker if the connector carries one, else the cable trails -Z, matching
+	# VerletRope.plug_exit_axis, so the boss is at the mesh's min Z.
+	cable_anchor = PlugExit.origin_of(self, tip)
 
 
 ## How far this plug may stray, as {anchor: Vector3, length: float}, or {} when

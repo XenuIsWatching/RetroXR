@@ -99,6 +99,22 @@ static func first_mesh(root: Node) -> Mesh:
 
 ## The old rule, kept as the fallback and stated once instead of twice: the centre
 ## of the shell's back face, cord along -Z. Every unconverted connector uses this.
+## Where the cord leaves this connector, in the connector's own frame: the
+## authored CordExit marker if it carries one, else the centre of the tip mesh's
+## back face.
+##
+## The whole rule, in one place. RcaPlug and CablePlug each had a comment saying
+## they followed it and a line implementing only the second half — they read the
+## mesh and could not have seen a marker — so a converted RCA or composite plug
+## would have been laid from its bounding box anyway, silently, and the comment
+## would have gone on saying otherwise.
+static func origin_of(connector: Node, tip: MeshInstance3D) -> Vector3:
+	var marker := connector.get_node_or_null(MARKER) as Node3D
+	if marker != null:
+		return marker.transform.origin
+	return tip.transform * derive_from_mesh(tip.mesh).origin
+
+
 static func derive_from_mesh(mesh: Mesh) -> Transform3D:
 	var ab: AABB = mesh.get_aabb()
 	return Transform3D(Basis.IDENTITY,
