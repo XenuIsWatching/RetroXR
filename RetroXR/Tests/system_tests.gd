@@ -633,8 +633,8 @@ func _test_seated_content() -> void:
 	sys.rom_path = "C:/roms/nes/Duck Hunt (World).nes"
 
 	# Nothing seated: the file on disk is all there is to go on.
-	_eq(sys._content_label(), "Duck Hunt (World)", "content/label falls back to the file")
-	_eq(sys._resolve_systemid(), "nes", "content/system falls back to the machine")
+	_eq(sys.content_label(), "Duck Hunt (World)", "content/label falls back to the file")
+	_eq(sys.resolve_systemid(), "nes", "content/system falls back to the machine")
 	_eq(sys._memcards._sram_slot(), "", "content/no cart means no save slot")
 	_eq(sys._memcards._compose_sram_path("fceumm"), "", "content/no cart means no save path")
 
@@ -644,18 +644,18 @@ func _test_seated_content() -> void:
 	cart.systemid = "fds"
 	sys._snapped_cartridge = cart
 
-	_eq(sys._content_label(), "Duck Hunt", "content/cart names the game")
+	_eq(sys.content_label(), "Duck Hunt", "content/cart names the game")
 	# A Famicom Disk System disc in a NES: the disc decides, because that is what
 	# picks the core and the save location.
-	_eq(sys._resolve_systemid(), "fds", "content/cart names the system")
+	_eq(sys.resolve_systemid(), "fds", "content/cart names the system")
 	_eq(sys._memcards._sram_slot(), "dh-001", "content/cart names the save slot")
 	_ok(not sys._memcards._compose_sram_path("fceumm").is_empty(), "content/cart has a save path")
 
 	# A blank label is not a label — the file name is better than an empty plate.
 	cart.game_label = ""
-	_eq(sys._content_label(), "Duck Hunt (World)", "content/blank cart label falls back")
+	_eq(sys.content_label(), "Duck Hunt (World)", "content/blank cart label falls back")
 	cart.systemid = ""
-	_eq(sys._resolve_systemid(), "nes", "content/blank cart system falls back")
+	_eq(sys.resolve_systemid(), "nes", "content/blank cart system falls back")
 
 	# No core resolved and no ROM are both "nothing to persist", not a path built
 	# out of empty strings.
@@ -1829,7 +1829,7 @@ func _test_audio_cabling_gate() -> void:
 	sys._av_speaker_l = -1
 	sys._av_speaker_r = -1
 	_ok(sys._audio._is_live(), "audio/captive-lead hardware is always live")
-	_ok(not bool(sys._audio_speakers().get("socketed", true)),
+	_ok(not bool(sys.audio_speakers().get("socketed", true)),
 		"audio/and reports itself unsocketed")
 
 	# Sockets, but no cord in any of them.
@@ -1846,7 +1846,7 @@ func _test_audio_cabling_gate() -> void:
 	# The speaker map the component reads. Deliberately answered WITHOUT
 	# resolving the sink: _apply_av_feed invalidates the gain cache one line
 	# before it assigns _av_tv, where _audio_tv() would still name the old set.
-	var spk: Dictionary = sys._audio_speakers()
+	var spk: Dictionary = sys.audio_speakers()
 	_eq(spk.get("left", 99), -1, "audio/the speaker map carries left")
 	_eq(spk.get("right", 99), 1, "audio/the speaker map carries right")
 	_ok(not spk.has("tv"), "audio/and does not resolve the sink")

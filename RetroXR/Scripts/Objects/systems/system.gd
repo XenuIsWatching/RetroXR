@@ -527,7 +527,7 @@ func _place_name_label() -> void:
 	if _model != null and (_model.has_baked_shell() or _model.prints_own_name()):
 		_system_name_label.visible = false
 		return
-	var body := _body_aabb()
+	var body := body_aabb()
 	if body.size.x <= 0.0 or body.size.y <= 0.0 or body.size.z <= 0.0:
 		return
 	var lbl := _system_name_label
@@ -579,13 +579,13 @@ func _place_name_label() -> void:
 ## for a console lands inside the tower.
 ##
 ## Cached in local space and keyed on the model instance, the same way
-## SystemAudio._centre_local is: _body_aabb walks every mesh in the model and a
+## SystemAudio._centre_local is: body_aabb walks every mesh in the model and a
 ## floating panel wants this every frame.
 func body_top_y() -> float:
 	var inst_id := _model.get_instance_id() if _model != null else 0
 	if inst_id != _body_top_model_id:
 		_body_top_model_id = inst_id
-		var aabb := _body_aabb()
+		var aabb := body_aabb()
 		_body_top_local = aabb.end.y if aabb.size.y > 0.0 else 0.0
 	# Through the transform, not added to it: the system may be scaled, and the
 	# cached figure is in local space.
@@ -600,10 +600,6 @@ func body_top_y() -> float:
 ## The bounding box of the machine's body, excluding parts a model excludes from
 ## it (a clamshell's raised lid). Read by SystemAudio to place its emitter.
 func body_aabb() -> AABB:
-	return _body_aabb()
-
-
-func _body_aabb() -> AABB:
 	var meshes: Array[MeshInstance3D] = []
 	var src: Node = null
 	if _model != null and _model.has_method("name_label_body"):
@@ -974,7 +970,7 @@ func _audio_tv() -> Node3D:
 ## Where this machine's sound goes: its speakers plus the set it reaches, if
 ## any. Read by SystemAudio, which this node owns and drives.
 func audio_route() -> Dictionary:
-	var route := _audio_speakers()
+	var route := audio_speakers()
 	route["tv"] = _audio_tv()
 	return route
 
@@ -982,17 +978,13 @@ func audio_route() -> Dictionary:
 ## The speaker half of audio_route, without resolving the sink. Separate on
 ## purpose: resolving the set is the expensive half, and two of SystemAudio's
 ## three callers do not need it.
-func audio_speakers() -> Dictionary:
-	return _audio_speakers()
-
-
 ## The speaker half of audio_route, without resolving the sink.
 ##
 ## Split out because the gain path wants it every frame and does not care which
 ## set the sound is going to — and because _apply_av_feed has to invalidate the
 ## gain cache one line BEFORE it assigns _av_tv, where _audio_tv() would still
 ## answer with the old sink.
-func _audio_speakers() -> Dictionary:
+func audio_speakers() -> Dictionary:
 	return {
 		"socketed": not _av_ports.is_empty(),
 		"left": _av_speaker_l,
@@ -1343,7 +1335,7 @@ func _build_av_ports() -> void:
 ## its own printing in its texture, and ours would sit on top of it.
 ##
 ## Parented to the cabinet rather than to the model, which keeps it out of
-## _body_aabb() — that walks the body and the model, and a plate merged into it would
+## body_aabb() — that walks the body and the model, and a plate merged into it would
 ## drag the nameplate off the front face.
 func _print_av_legend(ports: Array) -> void:
 	if _model == null or _model.has_baked_shell():
@@ -1404,7 +1396,7 @@ func _apply_av_feed(video_devs: Array[RetroTV], audio_dev: Node3D, l: int, r: in
 	# The cached pair is keyed on the gains last sent, not on the routing, so a
 	# cord moving between sockets has to invalidate it or the new silence (or the
 	# new sound) never reaches the mixer. Told rather than inferred: SystemAudio
-	# reads the routing through _audio_speakers() and cannot see it change.
+	# reads the routing through audio_speakers() and cannot see it change.
 	#
 	# Safe to call here, one line BEFORE _av_tv is assigned, because everything
 	# route_changed touches is keyed on the speakers rather than on the set. It
@@ -2821,7 +2813,7 @@ func roof_above_cartridge_slot() -> float:
 		return _roof_over_slot
 	if _cartridge_slot == null:
 		return 0.0
-	var aabb := _body_aabb()
+	var aabb := body_aabb()
 	if aabb.size.x <= 0.0:
 		return 0.0
 	_roof_over_slot = aabb.end.y - _cartridge_slot.position.y
@@ -2831,7 +2823,7 @@ func roof_above_cartridge_slot() -> float:
 func _build_expansion_hardware() -> void:
 	if systemid.is_empty():
 		return
-	var aabb := _body_aabb()
+	var aabb := body_aabb()
 	if aabb.size.x <= 0.0:
 		return          # no meshes yet; nothing to measure against
 	var span := Vector2(aabb.size.x, aabb.size.z)
@@ -4315,7 +4307,7 @@ var _net_no_content_override := false
 ## another cabinet holding the session, or a system RetroAchievements has no
 ## console for, is an ordinary outcome and not worth a message.
 func _claim_achievements_session() -> void:
-	if not RA.claim_session(self, _resolve_systemid(), _libretro):
+	if not RA.claim_session(self, resolve_systemid(), _libretro):
 		return
 	if not RA.achievement_unlocked.is_connected(_on_achievement_unlocked):
 		RA.achievement_unlocked.connect(_on_achievement_unlocked)
@@ -4366,10 +4358,6 @@ func _machine_toast() -> AchievementToast:
 ## What is loaded, for a label or a save name — the cartridge's title, else the
 ## ROM's. Read by the memory-card controller when naming a backup.
 func content_label() -> String:
-	return _content_label()
-
-
-func _content_label() -> String:
 	if _snapped_cartridge and "game_label" in _snapped_cartridge:
 		var lbl := str(_snapped_cartridge.get("game_label"))
 		if not lbl.is_empty():
@@ -4381,10 +4369,6 @@ func _content_label() -> String:
 ## when one is seated, else the machine's. The controllers this node owns ask
 ## for it when naming a save.
 func resolve_systemid() -> String:
-	return _resolve_systemid()
-
-
-func _resolve_systemid() -> String:
 	if _snapped_cartridge and "systemid" in _snapped_cartridge:
 		var sid := str(_snapped_cartridge.get("systemid"))
 		if not sid.is_empty():
