@@ -774,34 +774,57 @@ func set_eye_buffer_scale(scale: float) -> void:
 ## extension, so it only answers after the instance exists, and this autoload is
 ## built before the XR rig. Safe to call more than once — later calls re-resolve.
 ##
-## Four sources, each falling through on no answer. get_headset_id() returns ""
-## when the extension is not enabled or the runtime is not Meta's, which is why
-## the model name and the adapter name are behind it: SteamVR reaches neither of
-## the first two, and Adreno 650 vs 740 still separates the two headsets.
+## Three sources, tried until one MAPS to a device — not until one merely answers.
+## That distinction is load-bearing and was measured, not assumed: on a Quest 2
+## the headset-id extension returns a per-device UUID, a perfectly non-empty
+## string naming no model. Stopping at the first non-empty answer therefore left
+## every headset UNKNOWN, which looks correct on a Quest 2 (it shares that row)
+## and silently demotes a Quest 3 to the conservative eye buffer.
+##
+## OS.get_model_name() reports "Quest 2" here and is what actually resolves it;
+## the adapter name is last because Adreno 650 vs 740 still separates the two
+## where neither of the others answers, e.g. a non-Meta runtime.
 func detect_device() -> Device:
 	if _desktop:
 		device = Device.DESKTOP
 		return device
 	device = Device.UNKNOWN
-	var id := ""
-	if Engine.has_singleton("OpenXRMetaHeadsetIDExtension"):
-		var ext: Object = Engine.get_singleton("OpenXRMetaHeadsetIDExtension")
-		if ext != null and ext.has_method("get_headset_id"):
-			id = str(ext.get_headset_id()).to_lower()
-	if id.is_empty():
-		var model := OS.get_model_name().to_lower()
-		if model != "genericdevice":
-			id = model
-	if id.is_empty():
-		id = RenderingServer.get_video_adapter_name().to_lower()
-	if id.contains("quest 2") or id.contains("quest2") or id.contains("adreno (tm) 650"):
-		device = Device.QUEST_2
-	elif id.contains("quest 3s") or id.contains("quest3s"):
-		device = Device.QUEST_3S
-	elif id.contains("quest 3") or id.contains("quest3") or id.contains("adreno (tm) 740"):
-		device = Device.QUEST_3
-	print("QualityManager: headset id '%s' -> device %d" % [id, device])
+	for id: String in [_headset_id_ext(), OS.get_model_name(),
+			RenderingServer.get_video_adapter_name()]:
+		var mapped := _device_from_id(id)
+		print("QualityManager: headset source '%s' -> device %d" % [id, mapped])
+		if mapped != Device.UNKNOWN:
+			device = mapped
+			break
 	return device
+
+
+## The XR_META_headset_id string, or "" when the extension is off or absent.
+## Measured on a Quest 2 (Horizon OS build 52242990024200150) this returns a
+## per-device UUID rather than a model name, so it is a source like any other and
+## the caller must not stop merely because it answered.
+func _headset_id_ext() -> String:
+	if not Engine.has_singleton("OpenXRMetaHeadsetIDExtension"):
+		return ""
+	var ext: Object = Engine.get_singleton("OpenXRMetaHeadsetIDExtension")
+	if ext == null or not ext.has_method("get_headset_id"):
+		return ""
+	return str(ext.get_headset_id())
+
+
+## Map one identifying string to a device, or UNKNOWN when it names none.
+## 3S is tested before 3 because "quest 3s" contains "quest 3".
+func _device_from_id(raw: String) -> Device:
+	var id := raw.to_lower()
+	if id.is_empty() or id == "genericdevice":
+		return Device.UNKNOWN
+	if id.contains("quest 3s") or id.contains("quest3s"):
+		return Device.QUEST_3S
+	if id.contains("quest 3") or id.contains("quest3") or id.contains("adreno (tm) 740"):
+		return Device.QUEST_3
+	if id.contains("quest 2") or id.contains("quest2") or id.contains("adreno (tm) 650"):
+		return Device.QUEST_2
+	return Device.UNKNOWN
 
 
 ## Apply this device's starting points for the knobs no preset carries.
