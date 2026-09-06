@@ -892,14 +892,16 @@ func _on_tuner_status(banner: String) -> void:
 		show_osd_timed(banner, 3.0)
 
 
-## The tuner, built if this is the first ask. Used by the options panel.
-func get_tuner() -> TVTuner:
+## The tuner, built if this is the first ask -- which is why it is not called
+## get_: it can spin up a VlcPlayer and start channel discovery. has_channels()
+## is the question to ask when you only want to know.
+func ensure_tuner() -> TVTuner:
 	return _ensure_tuner()
 
 
 ## Whether the tuner exists AND has a channel list — without building one.
 ## Callers that merely want to know (the remote, greying its channel keys) must
-## use this: get_tuner() would spin up a VlcPlayer and start discovery just
+## use this: ensure_tuner() would spin up a VlcPlayer and start discovery just
 ## because somebody pointed a remote at the set.
 func has_channels() -> bool:
 	return _tuner != null and not _tuner.channels.is_empty()
@@ -1002,11 +1004,6 @@ func _lock_grab_scale() -> void:
 func _on_tv_dropped(_pickable: Node3D) -> void:
 	# Safety net: reassert our scale in case the release disturbed it.
 	_resize.apply()
-
-
-## True when the TV is switched on (used by the remote's POWER cell tint).
-func is_powered_on() -> bool:
-	return _tv_enabled
 
 
 ## True when audio is muted (used by the remote's MUTE cell tint).

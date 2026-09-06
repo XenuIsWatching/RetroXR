@@ -110,7 +110,7 @@ func _populate() -> void:
 
 	# Opening the panel is the first thing that legitimately needs a tuner on a
 	# set that has never left COMPONENT — the user is asking to see the channels.
-	var tuner := _tv.get_tuner()
+	var tuner := _tv.ensure_tuner()
 	if tuner and not tuner.channels_changed.is_connected(_refresh_channels):
 		tuner.channels_changed.connect(_refresh_channels)
 	_refresh_channels()
@@ -120,7 +120,7 @@ func _refresh_channels() -> void:
 	var ui := _get_ui()
 	if not ui or not _tv or not is_instance_valid(_tv):
 		return
-	var tuner := _tv.get_tuner()
+	var tuner := _tv.ensure_tuner()
 	if tuner == null:
 		return
 	ui.populate_channels(tuner.channels, tuner.current_index)
@@ -139,12 +139,12 @@ func _on_channel_selected(index: int) -> void:
 
 func _on_tuner_settings_changed(auto: bool, host: String) -> void:
 	if _tv and is_instance_valid(_tv):
-		_tv.get_tuner().set_tuner_config(auto, host)
+		_tv.ensure_tuner().set_tuner_config(auto, host)
 
 
 func _on_channels_refresh() -> void:
 	if _tv and is_instance_valid(_tv):
-		_tv.get_tuner().reload_channels()
+		_tv.ensure_tuner().reload_channels()
 
 
 ## A CRT filter slider/dropdown moved — apply live to the local TV.

@@ -66,7 +66,7 @@ func _build() -> void:
 	_sv.add_child(cam)
 	cam.current = true
 
-	_tuner = _tv.get_tuner()
+	_tuner = _tv.ensure_tuner()
 	_tuner.channels_changed.connect(_on_channels)
 	print("[tvprobe] mode=%s, waiting for channels…" % _mode)
 

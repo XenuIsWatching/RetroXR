@@ -857,7 +857,7 @@ func _refresh_states() -> void:
 		# Colour: state tints first, then disabled/selected overrides.
 		var col := COLOR_GLYPH
 		if _target is RetroTV:
-			if id == "power" and (_target as RetroTV).is_powered_on():
+			if id == "power" and (_target as RetroTV).is_on():
 				col = COLOR_GLYPH_ON
 			elif id == "mute" and (_target as RetroTV).is_muted():
 				col = COLOR_GLYPH_MUTE
