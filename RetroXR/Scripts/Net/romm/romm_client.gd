@@ -60,7 +60,7 @@ func setup(cfg: RommConfig) -> void:
 ## GET /api/heartbeat — version + feature flags. Public.
 ## callback(ok: bool, data: Dictionary)
 func heartbeat(callback: Callable) -> void:
-	_get_json("/api/heartbeat", false, func(ok: bool, data: Variant, _code: int) -> void:
+	_fetch_json_async("/api/heartbeat", false, func(ok: bool, data: Variant, _code: int) -> void:
 		var dict: Dictionary = data if data is Dictionary else {}
 		if ok:
 			var sys: Dictionary = dict.get("SYSTEM", {}) if dict.get("SYSTEM") is Dictionary else {}
@@ -74,7 +74,7 @@ func heartbeat(callback: Callable) -> void:
 ## poll that lets repeat menu opens skip /api/roms entirely.
 ## callback(ok: bool, stats: Dictionary)
 func stats(callback: Callable) -> void:
-	_get_json("/api/stats", false, func(ok: bool, data: Variant, _code: int) -> void:
+	_fetch_json_async("/api/stats", false, func(ok: bool, data: Variant, _code: int) -> void:
 		callback.call(ok, data if data is Dictionary else {})
 	)
 
@@ -86,7 +86,7 @@ func stats(callback: Callable) -> void:
 ## GET /api/platforms — bare array of PlatformSchema. Not paginated.
 ## callback(ok: bool, platforms: Array)
 func platforms(callback: Callable) -> void:
-	_get_json("/api/platforms", true, func(ok: bool, data: Variant, _code: int) -> void:
+	_fetch_json_async("/api/platforms", true, func(ok: bool, data: Variant, _code: int) -> void:
 		callback.call(ok, data if data is Array else [])
 	)
 
@@ -96,7 +96,7 @@ func platforms(callback: Callable) -> void:
 ## call this per row.
 ## callback(ok: bool, rom: Dictionary)
 func rom_detail(rom_id: int, callback: Callable) -> void:
-	_get_json("/api/roms/%d" % rom_id, true, func(ok: bool, data: Variant, _code: int) -> void:
+	_fetch_json_async("/api/roms/%d" % rom_id, true, func(ok: bool, data: Variant, _code: int) -> void:
 		callback.call(ok, data if data is Dictionary else {})
 	)
 
@@ -112,7 +112,7 @@ func rom_by_hash(md5: String, sha1: String, callback: Callable) -> void:
 	else:
 		callback.call(false, {})
 		return
-	_get_json("/api/roms/by-hash" + query, true, func(ok: bool, data: Variant, _code: int) -> void:
+	_fetch_json_async("/api/roms/by-hash" + query, true, func(ok: bool, data: Variant, _code: int) -> void:
 		callback.call(ok, data if data is Dictionary else {})
 	)
 
@@ -121,7 +121,7 @@ func rom_by_hash(md5: String, sha1: String, callback: Callable) -> void:
 ## deletions, which `updated_after` cannot express.
 ## callback(ok: bool, ids: Array)
 func rom_identifiers(callback: Callable) -> void:
-	_get_json("/api/roms/identifiers", true, func(ok: bool, data: Variant, _code: int) -> void:
+	_fetch_json_async("/api/roms/identifiers", true, func(ok: bool, data: Variant, _code: int) -> void:
 		callback.call(ok, data if data is Array else [])
 	)
 
@@ -139,7 +139,7 @@ func rom_count(platform_id: int, callback: Callable) -> void:
 		+ "&with_filter_values=false&with_files=false"
 	if platform_id > 0:
 		path += "&platform_ids=%d" % platform_id
-	_get_json(path, true, func(ok: bool, data: Variant, _code: int) -> void:
+	_fetch_json_async(path, true, func(ok: bool, data: Variant, _code: int) -> void:
 		var dict: Dictionary = data if data is Dictionary else {}
 		callback.call(ok, int(dict.get("total", 0)))
 	)
@@ -278,7 +278,13 @@ func test_connection(callback: Callable) -> void:
 # Internals
 # ---------------------------------------------------------------------------
 
-func _get_json(path: String, authed: bool, callback: Callable) -> void:
+## Async, and named so: the get_ prefix is reserved here for functions that
+## return the thing they name, and this one delivers through `callback` and
+## returns nothing. It was the only get_-prefixed exception among 175.
+##
+## Not _request_json, which is the lower-level call just below that this wraps
+## -- one takes a method and headers, this one is the authed GET over it.
+func _fetch_json_async(path: String, authed: bool, callback: Callable) -> void:
 	var headers := config.auth_headers() if (authed and config != null) else PackedStringArray()
 	if authed and headers.is_empty():
 		# Not signed in at all. Surface this the same way a rejected token does —
