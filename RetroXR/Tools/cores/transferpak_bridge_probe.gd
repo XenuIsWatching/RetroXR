@@ -33,6 +33,10 @@ var _gb2 := ""
 var _state_path := ""
 var _asked := false
 var _keys: Array[String] = []
+## How many ports to fill. Two is the real test -- one cartridge per port is
+## what the shared globals cannot do -- but one isolates a core that cannot
+## survive a second pak at all.
+var _ports := 2
 var _saw_core := false
 
 
@@ -47,6 +51,8 @@ func _ready() -> void:
 			_gb2 = s.substr(6)
 		elif s.begins_with("--state="):
 			_state_path = s.substr(8)
+		elif s.begins_with("--ports="):
+			_ports = int(s.substr(8))
 		elif s.begins_with("--frames="):
 			_target = int(s.substr(9))
 
@@ -82,9 +88,12 @@ func _ready() -> void:
 	# Answer for two ports, with two DIFFERENT cartridges. Set before the load,
 	# so the table is already populated when the core first asks.
 	_lib.SetTransferPak(0, _gb1, "%s/%s.sav" % [sav_dir, _gb1.get_file().get_basename()])
-	_lib.SetTransferPak(1, _gb2, "%s/%s.sav" % [sav_dir, _gb2.get_file().get_basename()])
+	if _ports > 1:
+		_lib.SetTransferPak(1, _gb2, "%s/%s.sav" % [sav_dir, _gb2.get_file().get_basename()])
+	print("[tpb] ports=%d" % _ports)
 	print("[tpb] SetTransferPak port0=%s" % _gb1.get_file())
-	print("[tpb] SetTransferPak port1=%s" % _gb2.get_file())
+	if _ports > 1:
+		print("[tpb] SetTransferPak port1=%s" % _gb2.get_file())
 
 	# PLAIN load. No subsystem, no sidecar -- so the globals stay empty and the
 	# only way a cartridge reaches a pak is the interface.
@@ -104,7 +113,7 @@ func _on_options_ready(_categories: Dictionary, definitions: Dictionary, current
 		print("[tpb] FAIL core published fewer than two pak options")
 		get_tree().quit(1)
 		return
-	for i in 2:
+	for i in _ports:
 		_lib.SetCoreOption(_keys[i], "transfer")
 		print("[tpb] %s = transfer (was %s)" % [_keys[i], current.get(_keys[i], "<unset>")])
 
@@ -135,7 +144,7 @@ func _on_savestate_ready(data: PackedByteArray, frame: int) -> void:
 
 	# Both present is the whole point: one cartridge in one pak, a DIFFERENT one
 	# in another, in the same state. Impossible through the shared globals.
-	var ok := not h1.is_empty() and not h2.is_empty()
+	var ok := not h1.is_empty() if _ports == 1 else (not h1.is_empty() and not h2.is_empty())
 	print("[tpb] %s" % ("PASS both ports carry their own cartridge" if ok
 		else "FAIL per-port media did not reach the core"))
 	_finish(0 if ok else 1)
