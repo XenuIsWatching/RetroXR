@@ -2051,6 +2051,7 @@ func power_on() -> void:
 		and BiosBoot.boots_with_no_content(resolved_core, systemid)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", true)
+	_bind_all_pak_storage()
 	# An assembled machine goes over as one piece if the core will take it that
 	# way; only if it will not do we fall back to a single path and say what the
 	# drive is about to lose.
@@ -2595,6 +2596,7 @@ func net_start_core(core: String, port_mask: int, start_frame: int, options: Dic
 	_protect_active_rom()
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", true)
+	_bind_all_pak_storage()
 	_libretro.StartContent(_resolve_dir(), resolved_core, rom_path)
 	if no_content:
 		ClassDB.class_call_static("Libretro", "SetNoContentPassesNull", false)
@@ -3369,14 +3371,23 @@ static func _decide_pad_type(allowed: Array, desired: String, current: String) -
 func _apply_pak_option(lib_port: int, ctrl: Node) -> void:
 	if not is_instance_valid(ctrl) or not ctrl.has_method("pak_option_value"):
 		return
+	# Bind the bytes FIRST, and before the option key is even required. Setting
+	# the option first starts the core's delayed pak insert, and a Controller Pak
+	# that arrives before its file does reads whatever the cartridge's own .srm
+	# left at that offset.
+	#
+	# The key only exists once the core has published its options, so gating this
+	# on the key meant a pak already seated at boot had its paths pushed at
+	# options_ready -- AFTER the core had already read the pak while initialising
+	# the controllers. With the option persisted at its target value from the last
+	# session there was then no transition to make it read again, so the cartridge
+	# stayed absent until the machine was power cycled. Nothing here needs the
+	# core's options, so nothing here waits for them.
+	_bind_pak_storage(lib_port, ctrl)
 	var key := _pak_option_key(lib_port)
 	if key.is_empty():
 		return
 	var seated: String = ctrl.call("pak_option_value")
-	# Bind the bytes BEFORE the option is set. Setting it first starts the core's
-	# delayed pak insert, and a Controller Pak that arrives before its file does
-	# reads whatever the cartridge's own .srm left at that offset.
-	_bind_pak_storage(lib_port, ctrl)
 	var allowed := _option_values(key)
 	var current := String(_options_values.get(key, ""))
 	var target := _decide_pak(allowed, seated, current)
@@ -3520,6 +3531,21 @@ func _ensure_port_devices_bound() -> void:
 ## mode while it stays plugged in: a DualShock toggled out of analogue mode is the
 ## same controller reporting a different pad_type_pref, and the core option has to
 ## follow it without the cable being pulled and pushed back.
+## Push every seated pak's storage at the core BEFORE content starts.
+##
+## The core reads a Transfer Pak's cartridge while it initialises the
+## controllers, which happens inside StartContent -- so a table filled after
+## that is filled too late and the pak comes up holding nothing. None of this
+## needs the core's published options, so it can run first, and must.
+func _bind_all_pak_storage() -> void:
+	for i in range(_port_controllers.size()):
+		var ctrl: Node = _port_controllers[i]
+		if not is_instance_valid(ctrl):
+			continue
+		var dev: int = ctrl.get("device_type") if "device_type" in ctrl else 1
+		_bind_pak_storage(_libretro_port_for(dev, i), ctrl)
+
+
 func reapply_pad_types() -> void:
 	for i in range(_port_controllers.size()):
 		var ctrl: Node = _port_controllers[i]
