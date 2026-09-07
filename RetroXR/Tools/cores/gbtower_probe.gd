@@ -34,6 +34,10 @@ var _secs := 70.0
 ## globals shared by all four ports. Running both is the only way to tell
 ## a bug in the bridge from a bug in the core's pak emulation.
 var _leg := "bridge"
+## Which RDP plugin to pin. GLideN64 is known not to run the GB Tower
+## (GLideN64 issue 1846); the core's own option text says to use
+## Angrylion for compatibility and GLideN64 only for performance.
+var _rdp := ""
 var _t := 0.0
 var _shot_at := 0.0
 var _held := 0
@@ -54,6 +58,8 @@ func _ready() -> void:
 			_out = s.substr(6)
 		elif s.begins_with("--leg="):
 			_leg = s.substr(6)
+		elif s.begins_with("--rdp="):
+			_rdp = s.substr(6)
 		elif s.begins_with("--secs="):
 			_secs = float(s.substr(7))
 	if _n64.is_empty() or _gb.is_empty():
@@ -91,6 +97,9 @@ func _ready() -> void:
 	#
 	# The key comes from what the core wrote on a previous run rather than being
 	# composed -- the prefix is whatever CORE_NAME it was built with.
+	if not _rdp.is_empty():
+		CoreOptionsStore.merge_values(root, CORE, {"mupen64plus-rdp-plugin": _rdp})
+		print("[gbt] pinned rdp-plugin = %s before boot" % _rdp)
 	var saved: Dictionary = CoreOptionsStore.load_values(root, CORE)
 	for key: String in saved:
 		if key.ends_with("-pak1"):
@@ -124,17 +133,24 @@ func _ready() -> void:
 		{"t":  6.0, "b": BTN_START}, {"t":  8.0, "b": BTN_A},
 		{"t": 10.0, "b": BTN_START}, {"t": 12.0, "b": BTN_A},
 		{"t": 14.0, "b": BTN_START},
-		# The route, and every step of it is B where A would be the guess: B
-		# acknowledges the Game Pak Check (A sits on its OK? button and re-runs
-		# the check), and B again on POKEMON STADIUM opens the row the GB Tower
-		# lives on. Then one RIGHT onto the tower itself.
+		# B acknowledges the Game Pak Check; A sits on its OK? button and re-runs
+		# the check. B again on POKEMON STADIUM opens the row the tower is on.
 		{"t": 17.0, "b": BTN_B},
 		{"t": 21.0, "b": BTN_B},
 		{"t": 25.0, "b": BTN_RIGHT},
-		{"t": 29.0, "b": BTN_RIGHT},
-		{"t": 33.0, "b": BTN_B},
-		{"t": 39.0, "b": BTN_B},
-		{"t": 45.0, "b": BTN_B},
+		{"t": 29.0, "b": BTN_B},
+		# Inside, the tower asks which Game Pak to use and shows one slot per
+		# controller. Only port 1 holds a cartridge, so walk LEFT onto it before
+		# confirming -- confirming an EMPTY slot is itself answered with "the
+		# Transfer Pak is not set properly", which is indistinguishable from a
+		# broken pak unless you know where the cursor was.
+		{"t": 34.0, "b": BTN_LEFT},
+		{"t": 36.0, "b": BTN_LEFT},
+		{"t": 38.0, "b": BTN_LEFT},
+		{"t": 41.0, "b": BTN_B},
+		# And then NOTHING. The tower answers the confirm with "Loading. Please
+		# wait..." and B during that load cancels it, which the game reports as the
+		# pak not being set properly -- the same message as a real fault.
 	]
 
 
