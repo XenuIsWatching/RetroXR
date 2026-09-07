@@ -98,13 +98,21 @@ func _ready() -> void:
 	# confirm. Timed rather than driven off the picture -- reading the menu would
 	# need OCR, and a shot every second is enough to see where it actually got to.
 	_steps = [
-		# Only as far as the Game Pak Check, and then STOP. That screen names the
-		# cartridge in each port, so it is the oracle: "Game Pak None" with a
-		# cartridge seated is the whole bug. Pressing B past it just hides the
-		# thing being measured.
+		# Attract sequence and title.
 		{"t":  6.0, "b": BTN_START}, {"t":  8.0, "b": BTN_A},
 		{"t": 10.0, "b": BTN_START}, {"t": 12.0, "b": BTN_A},
-		{"t": 14.0, "b": BTN_START}, {"t": 16.0, "b": BTN_A},
+		{"t": 14.0, "b": BTN_START},
+		# The route, and every step of it is B where A would be the guess: B
+		# acknowledges the Game Pak Check (A sits on its OK? button and re-runs
+		# the check), and B again on POKEMON STADIUM opens the row the GB Tower
+		# lives on. Then one RIGHT onto the tower itself.
+		{"t": 17.0, "b": BTN_B},
+		{"t": 21.0, "b": BTN_B},
+		{"t": 25.0, "b": BTN_RIGHT},
+		{"t": 29.0, "b": BTN_RIGHT},
+		{"t": 33.0, "b": BTN_B},
+		{"t": 39.0, "b": BTN_B},
+		{"t": 45.0, "b": BTN_B},
 	]
 
 
