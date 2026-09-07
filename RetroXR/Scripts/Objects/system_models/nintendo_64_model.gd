@@ -117,25 +117,51 @@ func _seat_button(btn: Node3D, seat_path: String) -> void:
 	btn.scale = Vector3(0.45, 0.45, 0.45)
 
 
-## The cabinet lays its phono row on the back of the 0.3 x 0.1 x 0.25 box it
-## draws for a model with no body of its own -- z -0.135, y 0. This case is
-## 0.26 x 0.073 x 0.19 and stands from y 0 rather than straddling it, so left
-## alone the jacks hang 40 mm off the back with half of each below the table.
-## Same correction as the ports and buttons above.
+## ONE socket, not three. An N64's picture and both audio channels leave through a
+## single AV MULTI OUT shell; the trio of phonos is on the far end of the lead, at
+## the television.
+##
+## The channel LIST is still the stereo trio inherited from the default model --
+## that is what says this machine's sound is stereo and which speaker each cord
+## feeds. Only the packaging differs, which is the whole of what this says.
+##
+## It also deletes the derived AvLegend, and that is the reason this changed rather
+## than a tidy-up done alongside it. The plate is 39.6 mm tall and hangs 28.8 mm
+## below the row it labels; on a 45 mm base its bottom third sank through the case
+## and the table. _print_av_legend skips a multi-way machine, so modelling the real
+## rear removes the plate instead of shrinking it.
+func av_ports_are_multi_way() -> bool:
+	return true
+
+
+## The N64's own socket, not the Wii's. The shell is the same 12-pin Multi Out --
+## Nintendo used one from the Super Nintendo to the Wii -- but the Wii moved the
+## signals to different pins, so an RVL-009 gives no picture here and the SNS-008
+## this port takes gives none there. n64_av_port.gd's plug group is where that is
+## enforced; naming the scene here is what stops the cabinet handing this machine
+## the Wii's hole.
+func av_multi_port_scene() -> String:
+	return "res://Scenes/Objects/system_models/nintendo_64/n64_av_port.tscn"
+
+
+## Seat that socket on the marker the scene authored, which carries its BASIS as
+## well as its place. That is the difference from the phono row this replaced: those
+## were seated by position and then turned here with a blanket rotation, which a
+## round jack does not mind and a keyed tongue does. Setting rotation after the seat
+## would throw the marker's roll away and put the key in upside down -- see the
+## AvSeat note in nintendo_64_primitive.tscn for why no render of an EMPTY socket
+## can catch that.
+##
+## Pushed out along the seat's own +Z by nothing: unlike the Wii, whose marker sits
+## on the panel plane, this one is already authored at the 2 mm proud offset.
 func configure_av_ports(ports: Array) -> void:
-	for i in ports.size():
-		var port := ports[i] as Node3D
-		if port == null:
-			continue
-		var seat := get_node_or_null("Rear/AvSeat%d" % (i + 1)) as Node3D
-		if seat == null:
-			continue
-		port.global_transform = seat.global_transform
-		# 180 about X so the socket's local +Z points out of the back panel,
-		# which is the side a plug arrives from. Set AFTER the seat, or the
-		# marker's own basis (identity, facing forward) wins and every plug
-		# goes in through the machine.
-		port.rotation = Vector3(PI, 0.0, 0.0)
+	if ports.is_empty():
+		return
+	var port := ports[0] as Node3D
+	var seat := get_node_or_null("Rear/AvSeat") as Node3D
+	if port == null or seat == null:
+		return
+	port.global_transform = seat.global_transform
 
 
 func configure_cartridge_slot(slot: Node3D) -> void:

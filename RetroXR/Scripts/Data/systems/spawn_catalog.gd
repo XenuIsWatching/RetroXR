@@ -61,6 +61,12 @@ const _PERIPHERALS: Dictionary = {
 		{"kind": "peripheral", "label": "Rumble Pak", "spawn": "rumble_pak"},
 		{"kind": "peripheral", "label": "Controller Pak", "spawn": "controller_pak"},
 		{"kind": "peripheral", "label": "Transfer Pak", "spawn": "transfer_pak"},
+		# An AV MULTI OUT at the machine and three phonos at the set, so a plain
+		# composite lead fits the television and nothing at this end. The SNS number
+		# is Nintendo's, not a typo: one stereo AV cable served the Super Nintendo,
+		# the N64 and the GameCube, so it kept the first one's code. (The console's
+		# own NUS-004 is the Controller Pak, two rows up.)
+		{"kind": "peripheral", "label": "SNS-008", "spawn": "n64_av_cable"},
 	],
 	# The remote is named here even though it fits no socket: it is the Wii's
 	# controller, and a player who spawns a Wii should be offered one without
@@ -79,9 +85,14 @@ const _PERIPHERALS: Dictionary = {
 		# Listed first among equals in spirit: without it the remote has nothing to
 		# look at, and no amount of pressing SYNC produces a pointer.
 		{"kind": "peripheral", "label": "Sensor Bar", "spawn": "sensor_bar"},
-		# The one console whose lead is not interchangeable with anybody else's: an
-		# AV Multi Out at the machine and three phonos at the set, so a plain
+		# An AV Multi Out at the machine and three phonos at the set, so a plain
 		# composite lead fits the television and nothing at this end.
+		#
+		# Still the one lead that fits NOTHING else, even now the N64 wears the same
+		# shell: Nintendo kept the connector from the Super Nintendo to the Wii and
+		# moved the signals on the last of them, so the SNS-008 serves three consoles
+		# and the RVL-009 serves one. The two ports declare different plug groups for
+		# exactly that reason.
 		{"kind": "peripheral", "label": "RVL-009", "spawn": "wii_av_cable"},
 	],
 	"virtual_boy": [
@@ -127,9 +138,9 @@ const _NO_STANDINS: Array[String] = ["nes", "atari_2600", "playstation"]
 
 ## Platforms that name their own A/V lead above, so the generic one would be a
 ## second cable doing the same job. The NES puts out one audio channel and lists the
-## mono lead its console shipped with; the Wii has no phono sockets at all, so the
-## generic lead would fit its television and nothing on the console.
-const _OWN_AV_LEAD: Array[String] = ["nes", "wii"]
+## mono lead its console shipped with; the Wii and the N64 have no phono sockets at
+## all, so the generic lead would fit their television and nothing on the console.
+const _OWN_AV_LEAD: Array[String] = ["nes", "wii", "nintendo_64"]
 
 ## Hardware whose picture leaves on a captive pigtail rather than through sockets
 ## (av_port_channels() is empty), so a spawned lead has nothing to enter at that

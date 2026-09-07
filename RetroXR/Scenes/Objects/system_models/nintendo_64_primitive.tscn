@@ -215,18 +215,49 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.102, 0.045, 0.045)
 
 [node name="Rear" type="Node3D" parent="."]
 
-; A/V OUT. The back face of the base is at z -0.095, and a phono socket seats
-; 10 mm PROUD of the panel it sits in -- rca_port pushes its jack back by that
-; much so the flange lands on the face -- hence -0.105 and not -0.095. y 0.020
-; keeps the row inside the 45 mm base, clear of the deck above.
+; AV MULTI OUT -- ONE socket, which is what the real machine has. This was three
+; phono jacks until the cabinet's derived AvLegend was measured against the case:
+; the plate is 39.6 mm tall and hangs 28.8 mm BELOW the jack row it labels, so on
+; a 45 mm base the whole "AV OUT" heading sank through the console and the table.
+; A multi-way machine is skipped by _print_av_legend, so modelling the real rear
+; deletes the plate rather than shrinking it.
 ;
-; Not the real machine's rear order: an N64 has one AV MULTI OUT shell here, not
-; three phono jacks, and this model wears the three the cabinet builds.
-[node name="AvSeat1" type="Marker3D" parent="Rear"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.018, 0.02, -0.105)
+; z -0.097: the back face is at -0.095 and a Multi Out seats 2 mm PROUD of it, not
+; the phono row's 10. The 27 x 15 shroud is WIDER than the 23.5 x 12 bezel, so it
+; cannot enter the hole -- it stops flat on the bezel's own 2 mm face. Use another
+; connector's number and the plug floats off the back or sinks into it.
+;
+; x +0.095: the LEFT of the rear face as you stand behind the machine, which is
+; where a real N64 has it (the DC inlet is on the right, and is not modelled). The
+; model's front is +Z, so from behind +X is the left. The bezel is 23.5 mm wide,
+; leaving ~22 mm to the 130 mm edge.
+;
+; y 0.022: mid-height of the 45 mm base. The 15 mm shroud spans 0.015..0.030, well
+; inside it; the face is continuous across the BaseLower/BaseLeft seam at 0.023.
+;
+; THE BASIS IS ON THE MARKER, and it is load-bearing -- unlike the phono row this
+; replaces, which was seated by position and then turned by the model script. A
+; round jack does not care about roll; a KEYED tongue does. R_y(180) here points
+; local +Z out of the back face and keeps +Y up. R_x(180) also points +Z out of
+; the back and rolls the key 180 degrees, and BOTH matrices are symmetric -- so
+; the row/column trap cannot tell them apart and neither can a printed basis. The
+; check that can fail is a render of a SEATED plug, never an empty socket.
+[node name="AvSeat" type="Marker3D" parent="Rear"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.095, 0.022, -0.097)
 
-[node name="AvSeat2" type="Marker3D" parent="Rear"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -0.105)
-
-[node name="AvSeat3" type="Marker3D" parent="Rear"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.018, 0.02, -0.105)
+; The socket's own printing, because a multi-way machine gets no derived legend and
+; would otherwise sit there unlabelled. Below the shroud, 0.2 mm proud of the face.
+;
+; R_y(180), the SAME turn the seat above takes, and for a second reason: a Label3D
+; draws on its local XY plane facing +Z, so the basis has to put +Z out of the back
+; AND keep +Y up. R_x(180) does the first and not the second -- it would hang the
+; words upside down and, because it leaves local +X pointing world +X while a viewer
+; standing behind the machine has world -X on their right, mirrored as well. The
+; Wii's own AvLabel looks like R_x(180) in its file only because its parent Back node
+; is already turned; this one's parent is identity.
+[node name="AvLabel" type="Label3D" parent="Rear"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.095, 0.0105, -0.0952)
+pixel_size = 5e-05
+modulate = Color(0.3, 0.3, 0.29, 1)
+text = "AV MULTI OUT"
+font_size = 48

@@ -165,6 +165,7 @@ const TV_REMOTE_SCENE        := preload("res://Scenes/Objects/appliances/tv_remo
 const COMPOSITE_CABLE_SCENE  := preload("res://Scenes/Objects/cables/composite_cable.tscn")
 const MONO_CABLE_SCENE       := preload("res://Scenes/Objects/cables/mono_composite_cable.tscn")
 const WII_AV_CABLE_SCENE     := preload("res://Scenes/Objects/system_models/wii/wii_av_cable.tscn")
+const N64_AV_CABLE_SCENE     := preload("res://Scenes/Objects/system_models/nintendo_64/n64_av_cable.tscn")
 const VGA_CABLE_SCENE        := preload("res://Scenes/Objects/cables/vga_cable.tscn")
 const TRS_CABLE_SCENE        := preload("res://Scenes/Objects/cables/trs_cable.tscn")
 const LINK_CABLE_SCENE       := preload("res://Scenes/Objects/cables/link_cable.tscn")
@@ -216,6 +217,7 @@ const MOUSE_RECEIVER_SCENE    := preload("res://Scenes/Objects/controllers/mouse
 ## middle, and it spawns and restores as one.
 const LEAD_SCENES := {
 	"wii_av_cable": WII_AV_CABLE_SCENE,
+	"n64_av_cable": N64_AV_CABLE_SCENE,
 	"vga_cable": VGA_CABLE_SCENE,
 	"trs_cable": TRS_CABLE_SCENE,
 	"link_cable": LINK_CABLE_SCENE,

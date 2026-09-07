@@ -1361,9 +1361,15 @@ func _build_av_ports() -> void:
 			_av_stereo = true
 	var built: Array = []
 	if _model.av_ports_are_multi_way():
-		# One socket for the lot — the Wii's AV Multi Out. Which cord carries which
-		# signal is WiiAvPort.channel_for's business from here on.
-		var multi: PackedScene = load("res://Scenes/Objects/system_models/wii/wii_av_port.tscn")
+		# One socket for the lot — an AV Multi Out. Which cord carries which signal is
+		# MultiAvPort.channel_for's business from here on; WHICH socket is the model's,
+		# because the shell is shared across the Nintendo consoles and the pinout is
+		# not. The Wii's is the fallback for a model that claims multi-way and names
+		# nothing, so that mistake costs a wrong-shaped hole rather than no picture.
+		var path: String = _model.av_multi_port_scene()
+		if path.is_empty():
+			path = "res://Scenes/Objects/system_models/wii/wii_av_port.tscn"
+		var multi: PackedScene = load(path)
 		if multi != null:
 			var port := multi.instantiate() as RcaPort
 			port.name = "AvMultiOut"

@@ -425,10 +425,24 @@ func uses_av_ports() -> bool:
 ## shell. Folding that into the channel list would have made "what this machine puts
 ## out" and "how many holes it has" the same question, and they are not.
 ##
-## The socket built is WiiAvPort, whose channel_for(cord) is what tells the three
-## cords apart once they are all in it.
+## The socket built is a MultiAvPort, whose channel_for(cord) is what tells the three
+## cords apart once they are all in it. Which one is av_multi_port_scene's business.
 func av_ports_are_multi_way() -> bool:
 	return false
+
+
+## WHICH multi-way socket, for a machine that says true above.
+##
+## Asked of the model rather than fixed in the cabinet because the shell is shared and
+## the pinout is not. Nintendo put the same 12-pin Multi Out on the SNES, the N64, the
+## GameCube and the Wii; the first three take one another's leads and the Wii takes
+## none of them. A single socket scene would have let a Wii cable carry an N64's
+## picture, which is a thing the hardware refuses.
+##
+## Empty means "use the cabinet's fallback", which keeps a model that claims multi-way
+## and forgets this from losing its picture in silence.
+func av_multi_port_scene() -> String:
+	return ""
 
 
 ## Which channel this machine's RF modulator puts it on, or -1 for "no such switch".

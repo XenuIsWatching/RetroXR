@@ -1,0 +1,260 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/cables/composite_cable.gd" id="1_cablescript"]
+[ext_resource type="Script" path="res://Scripts/Objects/cables/rca_plug.gd" id="2_plugscript"]
+[ext_resource type="ArrayMesh" path="res://Scenes/Objects/cables/rca_plug_yellow.res" id="3_rcaplug"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="4_pickhigh"]
+[ext_resource type="PackedScene" uid="uid://dh8grd7s3n8kg" path="res://addons/godot-xr-tools/objects/grab_points/grab_point_snap.tscn" id="5_snapgp"]
+[ext_resource type="Script" path="res://Scripts/Objects/cables/n64_av_plug.gd" id="6_n64plugscript"]
+[ext_resource type="ArrayMesh" path="res://Scenes/Objects/system_models/wii/wii_av_plug.res" id="7_avplugmesh"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_plug"]
+radius = 0.028
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_plug"]
+bounce = 0.0
+friction = 0.8
+
+; Laser target, deliberately wider than the physics sphere — a plug is a small
+; thing to hit with a beam from across the room, and this shape only answers the
+; pointer (mask 0).
+[sub_resource type="SphereShape3D" id="SphereShape3D_pointer"]
+radius = 0.032
+
+; The Multi Out shell is 27 x 15 x 30 mm against a phono plug's 8 mm barrel, so it
+; gets its own pair. Sized to the SHROUD rather than to the whole plug: the 13 mm
+; tongue is inside the console whenever the connector matters, and a sphere covering
+; it would let the shell be grabbed through the back panel.
+[sub_resource type="SphereShape3D" id="SphereShape3D_avplug"]
+radius = 0.017
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_avpointer"]
+radius = 0.024
+
+; The SNS-008 Stereo AV Cable: ONE AV Multi Out at the console end, three phonos at
+; the set. 1.80 m, which is what the rope block below builds.
+;
+; An SNS number on an N64 accessory is not a slip. Nintendo shipped ONE stereo AV
+; cable for the Super Nintendo, the Nintendo 64 and the GameCube — same shell, same
+; pinout, same part — so it kept the Super Nintendo's code throughout. (NUS-004 is the
+; Controller Pak, which is a different thing already on this console's spawn card.) A
+; Super Nintendo or GameCube model added later wants THIS lead, not one of its own.
+;
+; Geometrically this file is the RVL-009 with a different plug script, and that is the
+; honest state of the hardware rather than laziness: the Wii wears the same connector
+; and moved the signals to other pins, so the only real difference between the two
+; leads is which sockets accept them. n64_av_plug.gd carries it, in one string.
+;
+; The console end is a SHARED end — one connector carrying all three cords — which
+; is why this scene ships four plugs for three cords. CompositeCable counts from the
+; longer side and treats the short one as shared; which signal each cord carries is
+; then MultiAvPort.channel_for's business, not the plug's. See both.
+;
+; Everything else is composite_cable.tscn: same cords, same colours, same rope, and
+; the same rule that what a cord carries is decided by the two sockets its ends sit
+; in. Run the yellow plug into the set's white socket and you get exactly what that
+; does on the real hardware.
+; GREY jacket, not the black every other lead in the room wears. Nintendo moulded its
+; stereo AV cable grey from the Super Nintendo onward, so the cord is the same grey as
+; the Multi Out shroud it leaves — the value is gen_wii_av.gd's SHROUD_GREY, and the
+; two have to be changed together or the cord will read as a different part from the
+; connector on its end. Shared with the RVL-009 because the real ones are the same
+; grey, not because this file was copied from it.
+;
+; cord_colors is untouched: the three phonos at the far end stay yellow, white and
+; red, because the real lead colour-codes its CONNECTORS and not its sheath. That is
+; the same split composite_cable.tscn documents.
+;
+; `script` FIRST, then the export. Properties are applied in file order and an
+; exported one does not exist until the script is attached, so a wire_color written
+; above this line is silently dropped and the lead comes back black.
+[node name="N64AvCable" type="Node3D"]
+script = ExtResource("1_cablescript")
+wire_color = Color(0.46, 0.46, 0.44, 1.0)
+
+; ── End A: the AV Multi Out ─────────────────────────────────────
+; Turned about Y so the cord trails toward the far end: the plug mesh is authored
+; connector-on-+Z with the cord leaving -Z, which is also VerletRope's
+; plug_exit_axis, so an unturned plug here would leave its tail with a hairpin.
+; On the centreline, unlike the phono ends — there is nothing to spread it against.
+
+[node name="PlugA0" type="RigidBody3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, -0.75)
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_plug")
+mass = 0.05
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("6_n64plugscript")
+
+; The colliders sit on the BODY, not on the origin. This connector's origin is its
+; MATING face — the frame a snap zone seats to — and the whole moulding lies BEHIND
+; it, so a shape left at the origin ends up half buried in the console while the part
+; a hand reaches for carries nothing. That is exactly what happened when the stand-in
+; cylinder, which sat in FRONT of its origin, was swapped for the real mesh: the plug
+; became ungrabbable the moment it was plugged in.
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugA0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.015)
+shape = SubResource("SphereShape3D_avplug")
+
+[node name="PlugTip" type="MeshInstance3D" parent="PlugA0"]
+mesh = ExtResource("7_avplugmesh")
+
+[node name="PointerArea" type="StaticBody3D" parent="PlugA0"]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugA0/PointerArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.015)
+shape = SubResource("SphereShape3D_avpointer")
+
+[node name="PickableHighlight" type="Node3D" parent="PlugA0"]
+script = ExtResource("4_pickhigh")
+
+[node name="SnapGrabPoint" parent="PlugA0" instance=ExtResource("5_snapgp")]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0)
+
+; ── End B ────────────────────────────────────────────────────────────────────
+; Unturned: their cords already trail -Z, back toward end A.
+
+[node name="PlugB0" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.003, 0, 0.75)
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_plug")
+mass = 0.05
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("2_plugscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugB0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.013)
+shape = SubResource("SphereShape3D_plug")
+
+[node name="PlugTip" type="MeshInstance3D" parent="PlugB0"]
+mesh = ExtResource("3_rcaplug")
+
+[node name="PointerArea" type="StaticBody3D" parent="PlugB0"]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugB0/PointerArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.013)
+shape = SubResource("SphereShape3D_pointer")
+
+[node name="PickableHighlight" type="Node3D" parent="PlugB0"]
+script = ExtResource("4_pickhigh")
+
+[node name="SnapGrabPoint" parent="PlugB0" instance=ExtResource("5_snapgp")]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="PlugB1" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.75)
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_plug")
+mass = 0.05
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("2_plugscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugB1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.013)
+shape = SubResource("SphereShape3D_plug")
+
+[node name="PlugTip" type="MeshInstance3D" parent="PlugB1"]
+mesh = ExtResource("3_rcaplug")
+
+[node name="PointerArea" type="StaticBody3D" parent="PlugB1"]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugB1/PointerArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.013)
+shape = SubResource("SphereShape3D_pointer")
+
+[node name="PickableHighlight" type="Node3D" parent="PlugB1"]
+script = ExtResource("4_pickhigh")
+
+[node name="SnapGrabPoint" parent="PlugB1" instance=ExtResource("5_snapgp")]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="PlugB2" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.003, 0, 0.75)
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_plug")
+mass = 0.05
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("2_plugscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugB2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.013)
+shape = SubResource("SphereShape3D_plug")
+
+[node name="PlugTip" type="MeshInstance3D" parent="PlugB2"]
+mesh = ExtResource("3_rcaplug")
+
+[node name="PointerArea" type="StaticBody3D" parent="PlugB2"]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlugB2/PointerArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.013)
+shape = SubResource("SphereShape3D_pointer")
+
+[node name="PickableHighlight" type="Node3D" parent="PlugB2"]
+script = ExtResource("4_pickhigh")
+
+[node name="SnapGrabPoint" parent="PlugB2" instance=ExtResource("5_snapgp")]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0)
+
+; 1.80 m overall, the length a real composite lead shipped at, split so the
+; breakouts are part of it: a 1.50 m trunk (50 x 30 mm) plus a 150 mm tail at each
+; end (5 x 30 mm). Buying length with segment COUNT rather than a longer segment
+; keeps the boot and the minimum bend radius where cable.tscn tuned them in
+; millimetres. 80 particles against that lead's 60, so reckon on ~1.4 ms per
+; physics tick — it is a spawned object, not one per station.
+;
+; 3 mm cords, measured — thinner than the 4.4 mm the plain composite lead uses, so
+; three of them make a 9 mm ribbon rather than a 13 mm one. The cords are drawn from
+; ribbon_colors and the trunk needs no rope_color of its own.
+;
+; collision_radius is the ribbon's HALF-WIDTH, not the standoff over the tube that
+; cable.tscn uses. The solver only ever collides the centreline, so on a round cord
+; the radius is the cord; on a ribbon it has to cover the outermost cord or that one
+; sinks through whatever the cable is lying on. 3 mm pitch x 2 gaps / 2 + 1.5 mm tube
+; = 4.5 mm. Get this wrong low and the outer cord dips under the floor whenever the
+; ribbon happens to lie on edge.
+;
+; The plug's strain relief is sized against this — see CORD_R in Tools/gen/gen_wii_av.gd,
+; which has to end wider than the ribbon it grips. Change one and change the other.
+;
+; The cost is that a ribbon lying FLAT now floats 4.4 mm rather than resting on
+; its tube. Both cannot be right from one radius on one centreline; poke-through
+; reads worse than clearance. Fixing it properly means giving the solver the
+; ribbon frame so the standoff can follow |side . normal|, which is a
+; VerletRope change, not a scene value.
+[node name="VerletRope" type="VerletRope" parent="."]
+segment_count = 50
+segment_length = 0.03
+constraint_iterations = 8
+bend_stiffness = 0.2
+tube_radius = 0.0015
+tube_sides = 6
+smoothing = 2
+surface_collision_mask = 7
+collision_radius = 0.0045
+self_collision = true
+end_align_stiffness = 0.7
+end_stiffness = 0.45
+end_stiff_segments = 2
+fray_segments_start = 5
+fray_segments_end = 5
+fray_taper_segments = 3

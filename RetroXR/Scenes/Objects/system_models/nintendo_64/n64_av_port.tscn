@@ -1,0 +1,62 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" uid="uid://ce7vysyvondf8" path="res://addons/godot-xr-tools/objects/snap_zone.tscn" id="1_snapzone"]
+[ext_resource type="Script" path="res://Scripts/Objects/cables/n64_av_port.gd" id="2_portscript"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/system_models/wii/wii_av_jack.tscn" id="3_avjack"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/snap_highlight.gd" id="4_snaphigh"]
+
+; The shroud's own block, so the ghost reads as "the grey Multi Out plug goes here"
+; rather than as a generic glowing box.
+[sub_resource type="BoxMesh" id="BoxMesh_plug_ghost"]
+size = Vector3(0.027, 0.015, 0.03)
+
+[sub_resource type="StandardMaterial3D" id="Mat_plug_ghost"]
+transparency = 1
+albedo_color = Color(0.2, 0.5, 1, 0.45)
+emission_enabled = true
+emission = Color(0, 0.15, 0.5, 1)
+emission_energy_multiplier = 0.4
+
+; The N64's AV MULTI OUT, and the SAME PHYSICAL SHELL the Wii's is — which is why the
+; jack mesh above is loaded out of the wii/ folder rather than copied. Nintendo used one
+; 12-pin Multi Out from the Super Nintendo to the Wii, so gen_wii_av.gd's calipered
+; shroud/tongue/bezel figures are this connector's figures too. What differs is the
+; PINOUT, and that lives in the plug group n64_av_port.gd declares — not in geometry.
+; Do not fork the mesh to make the two feel different; they are not different.
+;
+; A socket, placed the way rca_port.tscn places its own: the ZONE sits where a seated
+; plug's ORIGIN belongs and the jack is pushed back by that much so its panel face lands
+; on the case. Copy this node's transform from an existing port and the plug still seats
+; right.
+;
+; 2 mm, not the RCA pair's 10 or the VGA pair's 7.5. A seated Multi Out plug's origin is
+; its shroud face, and the 27 x 15 shroud is WIDER than the 23.5 x 12 bezel, so it cannot
+; enter — it stops flat on the bezel's own 2 mm face. See the MATING note in
+; Tools/gen/gen_wii_av.gd. Use another connector's number and the plug floats off the
+; back of the console or sinks into it.
+;
+; grab_distance is the zone's REACH, drawn as a sphere of that radius. 25 mm, not the 60
+; every phono socket uses: that number suits a jack on a full-size deck with nothing near
+; it, and on the Wii's panel it reached 46 mm past the socket 14 mm away and — being
+; empty — swallowed the click whole, because the pickup classifier gives up when its
+; front hit is a socket holding nothing rather than looking past it. Roughly a plug's
+; width, which is as much catch as a 23.5 x 12 mm socket wants. The N64's rear is emptier
+; than the Wii's, but the cartridge deck and the machine's own body are still within 60.
+[node name="N64AvPort" instance=ExtResource("1_snapzone")]
+grab_distance = 0.025
+script = ExtResource("2_portscript")
+
+; Named N64AvJack, not RcaJack, on purpose: RcaPort's _tint_jack and show_jack both look
+; for a child by that name, so both quietly no-op here. That is wanted — a Multi Out has
+; no colour code to apply.
+[node name="N64AvJack" parent="." instance=ExtResource("3_avjack")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.002)
+
+[node name="SnapHighlight" type="Node3D" parent="."]
+script = ExtResource("4_snaphigh")
+
+; Back along -Z from the mating face, which is where the shroud actually sits.
+[node name="HighlightMesh" type="MeshInstance3D" parent="SnapHighlight"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.015)
+mesh = SubResource("BoxMesh_plug_ghost")
+surface_material_override/0 = SubResource("Mat_plug_ghost")

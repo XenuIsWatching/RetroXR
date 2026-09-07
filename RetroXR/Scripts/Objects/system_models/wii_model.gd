@@ -222,6 +222,15 @@ func av_ports_are_multi_way() -> bool:
 	return true
 
 
+## The RVL-009's socket, named rather than left to the cabinet's fallback. The shell is
+## the one every Nintendo console since the SNES wears, but the Wii moved the signals to
+## different pins, so this port takes the Wii's lead and refuses the SNS-008 the other
+## three share. Naming it here is what keeps that true when a second multi-way machine
+## exists.
+func av_multi_port_scene() -> String:
+	return "res://Scenes/Objects/system_models/wii/wii_av_port.tscn"
+
+
 ## Seat that socket on the marker the scene authored, which carries its basis as well
 ## as its place — the key has to land on the EJECT side of the panel, and no basis
 ## derived here could say so. See the AvSeat note in wii_primitive.tscn.

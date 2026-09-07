@@ -17,6 +17,8 @@ const VCR_SCENE := preload("res://Scenes/Objects/appliances/vcr_player.tscn")
 const CABLE_SCENE := preload("res://Scenes/Objects/cables/composite_cable.tscn")
 const SYSTEM_SCENE := preload("res://Scenes/Objects/system.tscn")
 const VGA_CABLE := preload("res://Scenes/Objects/cables/vga_cable.tscn")
+const N64_AV_CABLE := preload("res://Scenes/Objects/system_models/nintendo_64/n64_av_cable.tscn")
+const WII_AV_CABLE := preload("res://Scenes/Objects/system_models/wii/wii_av_cable.tscn")
 const TRS_CABLE := preload("res://Scenes/Objects/cables/trs_cable.tscn")
 const SPEAKERS := preload("res://Scenes/Objects/appliances/speaker_pair.tscn")
 const RF_SWITCH := preload("res://Scenes/Objects/appliances/rf_switch.tscn")
@@ -105,6 +107,9 @@ func _run() -> void:
 		["routing/pulling the picture cord leaves the sound", _r_pull_picture],
 		["routing/picture and sound on different inputs: picture wins", _r_video_wins],
 		["routing/a machine on VGA is filed on the VGA input", _r_vga],
+		["routing/an N64 wears ONE multi-out, not a phono row", _r_n64_multi_out],
+		["routing/its lead carries all three signals down one shell", _r_n64_lead],
+		["routing/a Wii lead does not fit an N64, nor the reverse", _r_multi_out_keying],
 		["osd/a set in the tree has its OSD nodes wired", _o_wired],
 		["osd/routing the OSD does not throw on a fresh set", _o_route],
 		["display/a monitor lands on its own socket, not the tuner", _d_monitor_default],
@@ -511,6 +516,140 @@ func _r_vga() -> void:
 	await _wait(40)
 	_check_eq(_which_input(tv, sys), RetroTV.Source.VGA, "the tower is filed on VGA")
 	_ok(sys.connected_tv == tv, "and the tower knows which monitor it feeds")
+
+
+## A console with one hole in the back, and what the room does with it.
+##
+## The three cases below are one bug each. The machine used to wear the cabinet's
+## generic phono row, whose derived AvLegend is 39.6 mm tall and hangs 28.8 mm BELOW
+## the jacks -- so on a 45 mm case its bottom third went through the table. Fixing
+## that by modelling the real rear is what these pin: one socket rather than three,
+## a lead whose single shell still carries all three signals, and a plug group that
+## keeps the two Nintendo multi-outs apart.
+func _n64() -> Node3D:
+	var sys := SYSTEM_SCENE.instantiate() as Node3D
+	sys.systemid = "nintendo_64"
+	sys.model_id = "nintendo_64"
+	sys.freeze = true
+	sys.position = Vector3(_spawned.size() * 3.0 + 2.0, 1, 0)
+	add_child(sys)
+	sys.add_to_group("spawned")
+	_spawned.append(sys)
+	await _wait(60)
+	return sys
+
+
+func _r_n64_multi_out() -> void:
+	var sys := await _n64()
+	var multi := sys.find_child("AvMultiOut", true, false) as RcaPort
+	_ok(multi != null, "an N64 builds a socket named AvMultiOut")
+	if multi == null:
+		return
+	_ok(multi is N64AvPort, "and it is the N64's own port, not the Wii's")
+	_check_eq(multi.plug_group(), "n64_av_plug", "which takes the SNS-008 shell")
+	_check_eq(multi.direction, RcaPort.Direction.OUT, "a console's A/V is an output")
+
+	# ONE hole, and no phono row beside it. The old row is what the legend was
+	# measured against, so a stray RcaPort here means the plate is back.
+	var phonos := 0
+	for node in sys.find_children("*", "RcaPort", true, false):
+		if node != multi:
+			phonos += 1
+	_check_eq(phonos, 0, "and it is the only A/V socket on the machine")
+
+	# The plate itself. AvLegend parents to the cabinet, so ask the cabinet.
+	_ok(sys.find_child("AvLegend", true, false) == null,
+		"no derived legend, so nothing hangs below the case")
+
+	# Stereo is decided by the CHANNEL LIST, not by the number of holes -- the two
+	# stopped being the same thing when the Wii arrived, and reading the sockets
+	# instead is what once fed the left cord to both speakers.
+	_ok(sys._av_stereo, "one hole, still a stereo machine")
+
+
+func _r_n64_lead() -> void:
+	var tv := _tv()
+	var sys := await _n64()
+	var multi := sys.find_child("AvMultiOut", true, false) as RcaPort
+	if multi == null:
+		_skip("this build's N64 has no multi-out")
+		return
+	var ins := _input_ports(tv, RetroTV.Source.COMPOSITE_4)
+
+	var lead := N64_AV_CABLE.instantiate() as Node3D
+	lead.position = Vector3(1.0, 1, -0.5)
+	add_child(lead)
+	_spawned.append(lead)
+	await _wait(20)
+	# FOUR plugs for three cords: the console end is shared, so every cord enters
+	# the same shell. Seat it once, then the three phonos at the set.
+	multi.pick_up_object(lead.get_node("PlugA0") as RcaPlug)
+	await _wait(6)
+	for c in 3:
+		(ins[c] as RcaPort).pick_up_object(lead.get_node("PlugB%d" % c) as RcaPlug)
+		await _wait(6)
+	await _wait(30)
+
+	_check_eq(_which_input(tv, sys), RetroTV.Source.COMPOSITE_4,
+		"the set files the console on the input its lead reaches")
+	_ok(sys.connected_tv == tv, "and the console knows which set it feeds")
+	# The sound, read through the console's own accessor. All three signals came
+	# down ONE shell, so a wrong cord map here would surface as a machine that is
+	# seen and not heard, or heard on one side only.
+	var route: Dictionary = sys.audio_speakers()
+	_check_eq(route.get("left"), 0, "left channel lands on the left speaker")
+	_check_eq(route.get("right"), 1, "right channel lands on the right speaker")
+
+
+## The cord index is what tells the three apart inside one connector, and the two
+## Nintendo multi-outs are the same SHELL with different pins -- a Wii lead in an
+## N64 gives no picture on real hardware, which is why adapters are sold. So the
+## room has to refuse it, and the only thing standing between the two is the group.
+func _r_multi_out_keying() -> void:
+	# The BUILT socket, not a bare new() -- snap_require is set in _ready from
+	# plug_group(), and it is the field the zone actually gates on. Comparing the two
+	# functions instead would pass on a port that never wired its filter up.
+	var sys := await _n64()
+	var multi := sys.find_child("AvMultiOut", true, false) as XRToolsSnapZone
+	_ok(multi != null, "the console's socket is a snap zone")
+	if multi == null:
+		return
+	_check_eq(multi.snap_require, "n64_av_plug",
+		"and it gates on the N64's group, which is what refuses a lead")
+
+	# The two leads, as the room builds them. A plug joins its own group in _ready,
+	# so group membership IS the fit. Do not reach for pick_up_object to test this:
+	# it seats whatever it is handed and bypasses the gate entirely, which is why
+	# this case exists separately from the one above.
+	var ours := N64_AV_CABLE.instantiate() as Node3D
+	var theirs := WII_AV_CABLE.instantiate() as Node3D
+	add_child(ours)
+	add_child(theirs)
+	_spawned.append(ours)
+	_spawned.append(theirs)
+	await _wait(20)
+	var our_plug := ours.get_node("PlugA0") as RcaPlug
+	var their_plug := theirs.get_node("PlugA0") as RcaPlug
+
+	_ok(our_plug.is_in_group(multi.snap_require), "the SNS-008 fits the N64")
+	_ok(not their_plug.is_in_group(multi.snap_require),
+		"and the RVL-009 does not, the way the real pinouts do not")
+	_ok(their_plug.is_in_group("wii_av_plug"), "the RVL-009 still fits a Wii")
+	_ok(not our_plug.is_in_group("wii_av_plug"), "and the SNS-008 does not")
+
+	# Same cord map on both, because the SIGNALS are the same three -- it is the
+	# pins they travel on that differ. Read off the base so a subclass that
+	# reorders them is caught here rather than as crossed sound in a room.
+	var wii_port := WiiAvPort.new()
+	for port: MultiAvPort in [multi as MultiAvPort, wii_port]:
+		_check_eq(port.channel_for(0), RcaPort.Channel.VIDEO, "cord 0 is the picture")
+		_check_eq(port.channel_for(1), RcaPort.Channel.AUDIO_L, "cord 1 is left")
+		_check_eq(port.channel_for(2), RcaPort.Channel.AUDIO_R, "cord 2 is right")
+		# A lead with more cords than the connector has signals is a scene mistake.
+		# Carrying the picture is easier to see than crashing the room.
+		_check_eq(port.channel_for(3), RcaPort.Channel.VIDEO, "out of range is the picture")
+		_check_eq(port.channel_for(-1), RcaPort.Channel.VIDEO, "and so is below range")
+	wii_port.free()
 
 
 func _d_monitor_default() -> void:
