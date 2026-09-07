@@ -38,6 +38,11 @@ var _leg := "bridge"
 ## (GLideN64 issue 1846); the core's own option text says to use
 ## Angrylion for compatibility and GLideN64 only for performance.
 var _rdp := ""
+## Which RSP plugin to pin. The GB Tower is a candidate for custom
+## microcode, and an HLE RSP that does not implement it would leave the
+## CPU running at full speed while the framebuffer stays entirely blank --
+## which is exactly what is measured here, and is independent of the RDP.
+var _rsp := ""
 var _t := 0.0
 var _shot_at := 0.0
 var _held := 0
@@ -60,6 +65,8 @@ func _ready() -> void:
 			_leg = s.substr(6)
 		elif s.begins_with("--rdp="):
 			_rdp = s.substr(6)
+		elif s.begins_with("--rsp="):
+			_rsp = s.substr(6)
 		elif s.begins_with("--secs="):
 			_secs = float(s.substr(7))
 	if _n64.is_empty() or _gb.is_empty():
@@ -97,6 +104,9 @@ func _ready() -> void:
 	#
 	# The key comes from what the core wrote on a previous run rather than being
 	# composed -- the prefix is whatever CORE_NAME it was built with.
+	if not _rsp.is_empty():
+		CoreOptionsStore.merge_values(root, CORE, {"mupen64plus-rsp-plugin": _rsp})
+		print("[gbt] pinned rsp-plugin = %s before boot" % _rsp)
 	if not _rdp.is_empty():
 		CoreOptionsStore.merge_values(root, CORE, {"mupen64plus-rdp-plugin": _rdp})
 		print("[gbt] pinned rdp-plugin = %s before boot" % _rdp)
