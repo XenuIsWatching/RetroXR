@@ -29,6 +29,11 @@ var _n64 := ""
 var _gb := ""
 var _out := "res://probe_out/gbt"
 var _secs := 70.0
+## "bridge" = the per-port interface this project added.
+## "subsystem" = the core's own upstream route, which sets one pair of
+## globals shared by all four ports. Running both is the only way to tell
+## a bug in the bridge from a bug in the core's pak emulation.
+var _leg := "bridge"
 var _t := 0.0
 var _shot_at := 0.0
 var _held := 0
@@ -47,6 +52,8 @@ func _ready() -> void:
 			_gb = s.substr(5)
 		elif s.begins_with("--out="):
 			_out = s.substr(6)
+		elif s.begins_with("--leg="):
+			_leg = s.substr(6)
 		elif s.begins_with("--secs="):
 			_secs = float(s.substr(7))
 	if _n64.is_empty() or _gb.is_empty():
@@ -91,7 +98,22 @@ func _ready() -> void:
 			print("[gbt] pinned %s = transfer before boot" % key)
 			break
 
-	_lib.StartContent(root, CORE, _n64)
+	if _leg == "subsystem":
+		# The core's own route: slot order is GB save, GB ROM, then the N64
+		# cartridge LAST. The wrapper refuses a load whose declared slots do not
+		# all exist, so the save has to be on disk before the call.
+		var save := "%s/%s.sav" % [sav_dir, _gb.get_file().get_basename()]
+		if not FileAccess.file_exists(save):
+			var blank := PackedByteArray()
+			blank.resize(0x8000)
+			var f := FileAccess.open(save, FileAccess.WRITE)
+			f.store_buffer(blank)
+			f.close()
+		print("[gbt] StartSubsystemContent ident=gb (core's own route)")
+		_lib.StartSubsystemContent(root, CORE, _n64, "gb", PackedStringArray([save, _gb, _n64]))
+	else:
+		print("[gbt] StartContent (plain, per-port bridge)")
+		_lib.StartContent(root, CORE, _n64)
 
 	# The route by hand: mash through the attract sequence and the title, then
 	# one RIGHT to move off the default menu entry onto the Game Boy tower, then
