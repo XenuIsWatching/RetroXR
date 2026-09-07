@@ -85,9 +85,20 @@ surface_material_override/0 = SubResource("Mat_dark")
 ; The zone is placed at the cartridge's ORIGIN, so seating it puts 40 mm of a
 ; 65 mm cartridge inside the body with the labelled top edge still showing —
 ; which is what makes a loaded pak readable at a glance.
+;
+; Turned a half turn about Z, which is what makes that true. A cartridge is
+; authored with its label toward +Y and its edge connector at -Y, so an
+; unrotated bay swallowed the printed end and left the bare contacts hanging out
+; of the mouth — in label-first, the one way round a cartridge does not go.
+; Symmetric under transpose, so the row/column convention does not bite here.
+;
+; snap_require is load-bearing, not decoration: can_preview refuses to draw the
+; snap ghost for a zone without one, and a ray grab has no path to a socket the
+; ghost never lit -- the cartridge falls to the floor instead of seating.
 [node name="CartridgeBay" parent="." instance=ExtResource("6_snapzone")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.045, 0)
+transform = Transform3D(-1, 0, 0, 0, -1, 0, 0, 0, 1, 0, -0.045, 0)
 grab_distance = 0.04
+snap_require = "cartridge"
 
 [node name="GrabPoint" type="Marker3D" parent="."]
 visible = false

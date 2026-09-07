@@ -937,9 +937,30 @@ func _group_pak() -> void:
 		_ok(bay.snap_filter.call(gb), "pak/the bay takes a Game Boy cartridge")
 		_ok(not bay.snap_filter.call(snes), "pak/and refuses a Super Famicom one")
 
+		# snap_filter and pick_up_object are BOTH blind to snap_require, so a bay
+		# missing it passes every case above and cannot be loaded by hand: no ghost
+		# lights, and a ray grab -- which seats through the ghost and nothing else --
+		# drops the cartridge on the floor. can_preview is the gate a player meets.
+		_ok(bay.can_preview(gb), "pak/a Game Boy cartridge previews in the bay")
+		_ok(not bay.can_preview(snes), "pak/a Super Famicom one does not")
+		_ok(XRToolsSnapZone.find_preview_zone(gb, bay.global_position, 0.033) == bay,
+			"pak/and the bay is the zone a held cartridge finds")
+
 		bay.pick_up_object(gb)
 		await _wait(6)
 		_ok(tpak.get_cart() == gb, "pak/a seated cartridge is the pak's cartridge")
+
+		# Which way UP it seats. A cartridge is authored label toward +Y and edge
+		# connector at -Y, and the mouth is the pak's underside, so a correctly
+		# seated one is inverted relative to the pak: contacts up into the body,
+		# printed face down and out in the room. An unrotated bay reads +1 here
+		# and puts the cartridge in label-first.
+		var pak_up: Vector3 = tpak.global_transform.basis.y
+		_ok(gb.global_transform.basis.y.dot(pak_up) < -0.9,
+			"pak/a seated cartridge goes in contacts-first, not label-first")
+		var label := gb.get_node_or_null("LabelMesh") as Node3D
+		_ok(label != null and tpak.to_local(label.global_position).y < -0.053,
+			"pak/so its printed face clears the mouth instead of hiding inside")
 
 	# The decision itself, against both N64 cores' real vocabularies. A pak the
 	# running core cannot serve must leave the port alone rather than fit
