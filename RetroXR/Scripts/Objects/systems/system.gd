@@ -2034,6 +2034,7 @@ func power_on() -> void:
 		CoreOptionsStore.seed_values(resolved_dir, resolved_core,
 			BiosBoot.pinned_options(resolved_core, systemid, still_empty))
 	_apply_forced_core_options(resolved_dir, resolved_core)
+	_persist_pak_options(resolved_dir, resolved_core)
 	AppPrefs.apply_hw_render_for(resolved_core)
 	_libretro.SetSramPath(sram_path_for_run(resolved_core))
 	# Before StartContent: identification happens as the core comes up, so the
@@ -2591,6 +2592,7 @@ func net_start_core(core: String, port_mask: int, start_frame: int, options: Dic
 	if not _memcards.apply_netplay_sram():
 		_libretro.SetSramPath(sram_path_for_run(resolved_core))
 	_apply_forced_core_options(_resolve_dir(), resolved_core)
+	_persist_pak_options(_resolve_dir(), resolved_core)
 	AppPrefs.apply_hw_render_for(resolved_core)
 	_libretro.SetNetplayMode(true, port_mask, start_frame)
 	_protect_active_rom()
@@ -3168,6 +3170,53 @@ func slot_b_save_path(core: String) -> String:
 ##
 ## Not gated on there being a shell model: the BIOS-boot pins come from the core
 ## and the systemid, and a machine with no model still boots one.
+## Write each port's pak option into the core's option file BEFORE it boots.
+##
+## _apply_pak_option cannot do this: its key comes from the options the core
+## publishes, which do not exist until the core is already running. That is too
+## late for anything that reads a pak while starting. Pokemon Stadium runs its
+## Game Pak Check during boot and lists "Game Pak None" for a pak switched on
+## afterwards -- measured, with a cartridge correctly seated and reaching the
+## core, and the only thing that changed it was pinning the option here.
+##
+## It is also why power cycling appeared to help: the core serialises its whole
+## option set on shutdown, so the second launch booted with the pak already set.
+##
+## The key is taken from what the core wrote on a previous run rather than
+## composed -- the prefix is whatever CORE_NAME the core was built with. A core
+## that has never run here has no keys yet and simply gets nothing pinned; the
+## options_ready path still applies the pak, and records the key for next time.
+##
+## _apply_pak_option remains the authority once the core has published its
+## values: this cannot check them, so a pak a core has no word for (a Transfer
+## Pak on parallel_n64) is written here and corrected there.
+func _persist_pak_options(dir: String, core: String) -> void:
+	var saved: Dictionary = CoreOptionsStore.load_values(dir, core)
+	if saved.is_empty():
+		return
+	var out := {}
+	for i in range(_port_controllers.size()):
+		var ctrl: Node = _port_controllers[i]
+		if not is_instance_valid(ctrl) or not ctrl.has_method("pak_option_value"):
+			continue
+		var seated: String = ctrl.call("pak_option_value")
+		# Empty means the pad has no expansion port at all, which is NOT the same
+		# as an empty port -- see _decide_pak. Those ports are left alone.
+		if seated.is_empty():
+			continue
+		var dev: int = ctrl.get("device_type") if "device_type" in ctrl else 1
+		var lib_port := _libretro_port_for(dev, i)
+		if lib_port < 0:
+			continue
+		var suffix := "-pak%d" % (lib_port + 1)
+		for key: String in saved:
+			if key.ends_with(suffix):
+				out[key] = seated
+				break
+	if not out.is_empty() and CoreOptionsStore.merge_values(dir, core, out):
+		print("[RetroSystem] pak options pinned before boot: %s" % str(out))
+
+
 func _apply_forced_core_options(dir: String, core: String) -> void:
 	var forced := _all_forced_options(core)
 	if forced.is_empty():
