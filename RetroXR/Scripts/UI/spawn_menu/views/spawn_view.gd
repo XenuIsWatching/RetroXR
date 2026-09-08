@@ -954,6 +954,8 @@ func _populate_cartridges_detail(systemid: String, vbox: VBoxContainer) -> void:
 	# while a sync is in fact already running.
 	if _romm_platforms.has(systemid) and not RommCatalog.has_index(systemid):
 		var pid := int((_romm_platforms[systemid] as Dictionary).get("id", 0))
+		print("[RommSync] %s opened with no index at %s (platform id %d)"
+			% [systemid, RommCatalog.index_path(systemid), pid])
 		if pid > 0:
 			romm_catalog.sync_platform(systemid, pid, true)
 
@@ -2019,9 +2021,15 @@ func _romm_check_for_changes() -> void:
 		if not ok or stats.is_empty():
 			return
 		var changed := not romm_config.stats_unchanged(stats)
+		print("[RommSync] stats %s: was %s now %s" % [
+			"changed" if changed else "unchanged",
+			RommConfig.fingerprint_text(romm_config.last_stats),
+			RommConfig.fingerprint_text(stats)])
 		if changed:
 			romm_config.last_stats = stats
-			romm_config.save_config()
+			if not romm_config.save_config():
+				push_warning("[RommSync] could not save %s: the fingerprint will read as changed again next launch"
+					% RommConfig.config_path())
 		# The cached list is already on screen; this corrects it in the
 		# background and costs nothing visible.
 		romm_fetch_platforms()
@@ -2048,6 +2056,7 @@ func _queue_delta_syncs() -> void:
 			stale.append(sid)
 	if stale.is_empty() or _menu == null:
 		return
+	print("[RommSync] queuing delta syncs for %d indexed platform(s): %s" % [stale.size(), ", ".join(stale)])
 	_menu.queue_romm_sync(stale, false)
 
 
@@ -2134,6 +2143,7 @@ func _on_romm_sync_finished(systemid: String, ok: bool, added: int, removed: int
 	_romm_update_resync_btn()
 
 	if not ok:
+		push_warning("[RommSync] %s failed: %s" % [systemid, error])
 		notify(key, "❌", "RomM sync failed — %s" % error, -1.0, MenuToasts.DWELL_FAIL)
 		# Still announced: this is what pumps the sync queue, so returning
 		# quietly strands every platform behind the one that failed.
@@ -2143,7 +2153,11 @@ func _on_romm_sync_finished(systemid: String, ok: bool, added: int, removed: int
 	# Record the watermark so the next open can skip the network entirely.
 	var meta := RommCatalog.read_meta(systemid)
 	romm_config.set_sync_state(systemid, str(meta.get("updated_after", "")), int(meta.get("total", 0)))
-	romm_config.save_config()
+	print("[RommSync] %s finished: +%d -%d, watermark %s" % [systemid, added, removed,
+		str(meta.get("updated_after", "")) if meta.has("updated_after") else "(none)"])
+	if not romm_config.save_config():
+		push_warning("[RommSync] could not save %s: %s will full-sync again next launch"
+			% [RommConfig.config_path(), systemid])
 
 	if added > 0:
 		notify(key, "✅", "%s · %d new game%s" % [label, added, "" if added == 1 else "s"],

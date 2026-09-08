@@ -577,6 +577,10 @@ func sync_platform(systemid: String, platform_id: int, full: bool = false) -> bo
 		_thread = null
 		_syncing_systemid = ""
 		return false
+	var watermark := str(args["updated_after"])
+	print("[RommCatalog] %s: %s sync (platform id %d%s) into %s" % [systemid,
+		"full" if watermark.is_empty() else "delta", platform_id,
+		"" if watermark.is_empty() else ", since " + watermark, index_dir(systemid)])
 
 	# Announce before the first request goes out. `total` is only known once
 	# page one lands, and on a large platform that is several seconds of a ~3 MB

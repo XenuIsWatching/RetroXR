@@ -1767,7 +1767,10 @@ func pump_romm_sync_queue() -> void:
 		var entry: Dictionary = _romm_sync_queue.pop_front()
 		var systemid := str(entry.get("sid", ""))
 		var pid := int((_platforms().get(systemid, {}) as Dictionary).get("id", 0))
-		if pid > 0 and romm_catalog.sync_platform(systemid, pid, bool(entry.get("full", true))):
+		if pid <= 0:
+			print("[RommSync] %s skipped: no server platform id" % systemid)
+			continue
+		if romm_catalog.sync_platform(systemid, pid, bool(entry.get("full", true))):
 			return
 
 

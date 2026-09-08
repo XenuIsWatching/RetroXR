@@ -167,6 +167,14 @@ func get_sync_state(systemid: String) -> Dictionary:
 	return v if v is Dictionary else {}
 
 
+## The three compared fields of a /api/stats reply, for the log.
+static func fingerprint_text(stats: Dictionary) -> String:
+	if stats.is_empty():
+		return "(none)"
+	return "roms=%s platforms=%s bytes=%s" % [str(stats.get("ROMS", "?")),
+		str(stats.get("PLATFORMS", "?")), str(stats.get("TOTAL_FILESIZE_BYTES", "?"))]
+
+
 ## True when /api/stats reports the same library as the last time we looked.
 func stats_unchanged(stats: Dictionary) -> bool:
 	if last_stats.is_empty() or stats.is_empty():
