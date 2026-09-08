@@ -1,0 +1,46 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+; The moulded ABS every N64 expansion pak is made of, shared by all three so
+; there is one thing to tune rather than three copies to keep in step.
+;
+; ALBEDO AND ROUGHNESS ARE MEASURED OFF THE CONTROLLER SHELL, not chosen. The
+; paks clip into that shell and are the same plastic, so anything else reads as
+; a different part. Sampled over the 90% of the shell's own maps that is
+; unsaturated grey (dropping the coloured button islands and the connector):
+;
+;   albedo     sRGB 133, 132, 132   -> Color(0.522, 0.519, 0.519)
+;   roughness  median 0.373 of the ORM map's green channel
+;   metallic   0 -- the map's metal channel reads 0.5/255
+;
+; Picking by eye instead lands near 0.72 albedo and 0.55 roughness, which
+; renders about 50 grey levels paler than the shell a pak sits in.
+;
+; NO NORMAL MAP, and that is a measured decision rather than an omission. A
+; procedural noise grain was tried at the scale real ABS actually has -- a
+; spark-eroded texture is a few tenths of a millimetre -- and it changes
+; nothing: the high-pass deviation across a flat pak face came out 1.25 with the
+; grain and 1.38 without, because those features sit under a single pixel at any
+; distance a hand holds this thing. It cost a 256px texture and, being world
+; triplanar, three samples per fragment to do it. Coarsening it until it shows
+; would read as lumpy rubber rather than as injection moulding.
+;
+; The clearcoat is what makes it plastic instead of clay: one weak extra
+; specular lobe, so a moulded face catches a soft highlight the way ABS does.
+; Kept low and fairly rough -- an N64 pak is matte, not lacquered.
+;
+; It only shows against an ENVIRONMENT. Rendered against a flat background
+; colour with no sky, clearcoat changes nothing at any strength -- even at 1.0
+; with a mirror-smooth 0.05 coat the frame is identical, because the lobe has
+; nothing to reflect. Under a sky it moves ~11,700 pixels by up to 13 levels,
+; which is small but real, and is the difference between this reading as
+; moulded plastic and as matte clay. Judge it in the room, not in a probe with
+; BG_COLOR.
+
+[resource]
+resource_name = "N64 pak plastic"
+albedo_color = Color(0.522, 0.519, 0.519, 1)
+metallic = 0.0
+roughness = 0.373
+clearcoat_enabled = true
+clearcoat = 0.25
+clearcoat_roughness = 0.45

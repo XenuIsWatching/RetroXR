@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://b8uwrf51jd5xm" path="res://addons/godot-xr-tools/objects/grab_points/grab_point.gd" id="3_grabpoint"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_right.tscn" id="4_rhand"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_left.tscn" id="5_lhand"]
+[ext_resource type="Material" path="res://Scenes/Objects/controllers/n64/n64_pak_plastic.tres" id="9_plastic"]
 
 [sub_resource type="PhysicsMaterial" id="PhysMat_pak"]
 friction = 0.8
@@ -34,25 +35,18 @@ size = Vector3(0.057, 0.01, 0.026)
 [sub_resource type="BoxMesh" id="BoxMesh_battery"]
 size = Vector3(0.06, 0.03, 0.028)
 
-[sub_resource type="StandardMaterial3D" id="Mat_shell"]
-albedo_color = Color(0.72, 0.71, 0.68, 1)
-roughness = 0.55
-
-[sub_resource type="StandardMaterial3D" id="Mat_dark"]
-albedo_color = Color(0.1, 0.1, 0.11, 1)
-roughness = 0.62
-
 [sub_resource type="BoxMesh" id="BoxMesh_tongue"]
 size = Vector3(0.051, 0.035, 0.014)
 
-; The battery door, a shade darker so the bulge reads as a lid rather than as
-; more shell.
+; The battery door. A shade darker than the shared plastic so the bulge reads as
+; a lid rather than as more shell -- and retuned against that plastic's measured
+; 0.522 grey rather than against a lighter one.
 [sub_resource type="BoxMesh" id="BoxMesh_door"]
 size = Vector3(0.048, 0.022, 0.001)
 
 [sub_resource type="StandardMaterial3D" id="Mat_door"]
-albedo_color = Color(0.63, 0.62, 0.6, 1)
-roughness = 0.6
+albedo_color = Color(0.47, 0.466, 0.464, 1)
+roughness = 0.42
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
 size = Vector3(0.07, 0.05, 0.04)
@@ -74,12 +68,12 @@ shape = SubResource("BoxShape3D_body")
 [node name="Neck" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.003, -0.003)
 mesh = SubResource("BoxMesh_neck")
-surface_material_override/0 = SubResource("Mat_shell")
+surface_material_override/0 = ExtResource("9_plastic")
 
 [node name="Battery" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.023, -0.003)
 mesh = SubResource("BoxMesh_battery")
-surface_material_override/0 = SubResource("Mat_shell")
+surface_material_override/0 = ExtResource("9_plastic")
 
 [node name="Door" type="MeshInstance3D" parent="Battery"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.0142)
@@ -92,7 +86,7 @@ surface_material_override/0 = SubResource("Mat_door")
 [node name="Tongue" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0195, 0)
 mesh = SubResource("BoxMesh_tongue")
-surface_material_override/0 = SubResource("Mat_dark")
+surface_material_override/0 = ExtResource("9_plastic")
 
 ; IDENTITY. See the note in controller_pak.tscn — a snap zone composes the grab
 ; point, so this is what the y-table above is measured from.

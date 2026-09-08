@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://b8uwrf51jd5xm" path="res://addons/godot-xr-tools/objects/grab_points/grab_point.gd" id="3_grabpoint"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_right.tscn" id="4_rhand"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_left.tscn" id="5_lhand"]
+[ext_resource type="Material" path="res://Scenes/Objects/controllers/n64/n64_pak_plastic.tres" id="9_plastic"]
 
 [sub_resource type="PhysicsMaterial" id="PhysMat_pak"]
 friction = 0.8
@@ -44,16 +45,6 @@ size = Vector3(0.057, 0.018, 0.026)
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(0.057, 0.018, 0.026)
 
-; N64 controller grey, a shade lighter than the pad so the pak reads as a
-; separate part rather than a lump of the same moulding.
-[sub_resource type="StandardMaterial3D" id="Mat_shell"]
-albedo_color = Color(0.72, 0.71, 0.68, 1)
-roughness = 0.55
-
-[sub_resource type="StandardMaterial3D" id="Mat_dark"]
-albedo_color = Color(0.1, 0.1, 0.11, 1)
-roughness = 0.62
-
 [sub_resource type="BoxMesh" id="BoxMesh_tongue"]
 size = Vector3(0.051, 0.035, 0.014)
 
@@ -77,7 +68,7 @@ shape = SubResource("BoxShape3D_body")
 [node name="Body" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.007, -0.003)
 mesh = SubResource("BoxMesh_body")
-surface_material_override/0 = SubResource("Mat_shell")
+surface_material_override/0 = ExtResource("9_plastic")
 
 ; Points UP (+Y), into the bay. Buried once seated, which is right: it is only
 ; visible while the pak is loose in a hand or on a shelf. Named Tongue for
@@ -86,7 +77,7 @@ surface_material_override/0 = SubResource("Mat_shell")
 [node name="Tongue" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0195, 0)
 mesh = SubResource("BoxMesh_tongue")
-surface_material_override/0 = SubResource("Mat_dark")
+surface_material_override/0 = ExtResource("9_plastic")
 
 ; Every pak is the same grey brick and each holds a different set of notes, so
 ; the name is on the face. controller_pak.gd finds this node by name.
