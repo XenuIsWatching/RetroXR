@@ -50,6 +50,15 @@ enum PerfLevel { POWER_SAVINGS, SUSTAINED_LOW, SUSTAINED_HIGH, BOOST }
 ## texture. Each eye gets an explicit (0, 0) NDC focus, i.e. its optical centre.
 enum Foveation { OFF, LOW, MEDIUM, HIGH }
 
+## Physics steps one rendered frame may owe. Physics ticks at 90 Hz against a
+## 72 Hz display, so a frame that overruns owes several steps, paying them makes
+## it longer still, and at the engine default of 8 the debt never clears: every
+## 88-98 ms frame measured on a Quest 3 with a core running carried 8 steps
+## (2026-08-15, walking a fixed circle, Duck Hunt on fceumm). At 2 the worst
+## frame fell from 98 to 32 ms and the frame rate rose from 67 to 71; the many
+## small clips this trades for are what the sleep and interpolation hide.
+const MAX_PHYSICS_STEPS := 2
+
 const FOVEATION_TIERS := {
 	Foveation.LOW: {"min_radius": 45.0, "strength": 0.5},
 	Foveation.MEDIUM: {"min_radius": 30.0, "strength": 1.0},
@@ -276,6 +285,7 @@ var _had_prefs_file: bool = false
 
 func _ready() -> void:
 	_desktop = OS.get_name() != "Android"
+	Engine.max_physics_steps_per_frame = MAX_PHYSICS_STEPS
 	_read_vrs_overrides()
 	# The old full-frame readback needed a 30-frame Quest throttle. The new path
 	# transfers only an older, completed 12x8 pass, so both renderers use this cadence.
