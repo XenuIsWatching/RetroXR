@@ -47,11 +47,45 @@ var _pad_stick_map:  Dictionary = GamepadBindings.DEFAULT_STICK_MAP.duplicate()
 var _device: int = -1
 
 
+# The N64 expansion port on the boss on top of the case. Inert unless the scene
+# authors an ExpansionPort node -- see N64PakPort.
+var _pak_port := N64PakPort.new()
+
+
 func _ready() -> void:
 	device_type = RETRO_DEVICE_JOYPAD
 	super._ready()
 	add_to_group(ControllerBindings.CONSUMER_GROUP)
 	reload_bindings()
+	_pak_port.attach(self)
+
+
+# ── The expansion port ────────────────────────────────────────────────────────
+
+## A receiver carries the same port an N64 controller does, for the player who
+## is using a REAL gamepad. That player holds no virtual pad, so without this
+## the three paks have no socket they can reach: a Controller Pak's notes, a
+## Rumble Pak's buzz and a Transfer Pak's cartridge were all reachable only by
+## putting down the pad you were actually playing with.
+##
+## RetroSystem finds all of this by duck typing -- it asks a port controller for
+## `pak_option_value` and `get_pak` and does not care what class answers -- so
+## the two forwards below are the whole of the wiring on the system side.
+
+## The pak fitted to this receiver, or null.
+func get_pak() -> N64Pak:
+	return _pak_port.get_pak()
+
+
+## Put a pak back into the port after a load.
+func restore_pak(pak: N64Pak) -> void:
+	_pak_port.restore_pak(pak)
+
+
+## The core option value this receiver's port should take. "" would mean no port
+## at all, which is not the same as an empty one -- see N64PakPort.
+func pak_option_value() -> String:
+	return _pak_port.pak_option_value()
 
 
 func receiver_glyph() -> String:

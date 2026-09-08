@@ -1,7 +1,8 @@
-[gd_scene load_steps=8 format=3 uid="uid://padreceiver_01"]
+[gd_scene load_steps=13 format=3 uid="uid://padreceiver_01"]
 
 [ext_resource type="Script" path="res://Scripts/Objects/controllers/pad_receiver.gd" id="1_prscript"]
 [ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+[ext_resource type="PackedScene" uid="uid://ce7vysyvondf8" path="res://addons/godot-xr-tools/objects/snap_zone.tscn" id="3_snapzone"]
 
 ; 70 x 20 x 45 mm — a wireless dongle, small enough to sit unnoticed beside a
 ; console and large enough to grab without a laser.
@@ -30,6 +31,35 @@ emission_energy_multiplier = 1.6
 [sub_resource type="BoxMesh" id="BoxMesh_led"]
 size = Vector3(0.004, 0.002, 0.004)
 
+; The pak boss: a raised block on the top face with an N64 expansion port in it,
+; so a player on a REAL gamepad has somewhere to put a Controller, Rumble or
+; Transfer Pak. Without it the paks existed and the only socket that took them
+; was on a virtual pad that player is not holding.
+;
+; 20 mm tall because the pak's prong is 35 mm: the prong drops from the boss's
+; top face at y=40 through the boss and on into the body, stopping at y=5, five
+; millimetres clear of the underside. A flush slot in the 20 mm body alone would
+; put fifteen millimetres of prong out through the bottom and into the table.
+;
+; 57 x 20 in plan. The prong is only 14 mm deep, so the boss needs no more than
+; that plus walls -- and keeping it shallow is what leaves the front of the top
+; face free for the name and glyph, which is where they have to stay: they are
+; how you tell one receiver from another.
+[sub_resource type="BoxShape3D" id="BoxShape3D_boss"]
+size = Vector3(0.057, 0.02, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_boss"]
+size = Vector3(0.057, 0.02, 0.02)
+
+; The socket itself, set a hair below the boss's top face so it reads as an
+; opening rather than a painted panel. A seated pak's 57 x 26 lip covers it.
+[sub_resource type="StandardMaterial3D" id="Mat_socket"]
+albedo_color = Color(0.05, 0.05, 0.055, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_socket"]
+size = Vector3(0.053, 0.002, 0.016)
+
 [node name="PadReceiver" type="RigidBody3D"]
 collision_layer = 4
 collision_mask = 196613
@@ -49,11 +79,50 @@ surface_material_override/0 = SubResource("Mat_body")
 
 ; The face the PLAYER is on: the lead leaves the front toward the machine, so
 ; the back is what you look at. Proud of the shell by 0.5 mm for its own glow.
+[node name="BossMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0.0105)
+mesh = SubResource("BoxMesh_boss")
+surface_material_override/0 = SubResource("Mat_body")
+
+; Its own shape rather than a taller body box: the body is what the dongle IS,
+; and growing it to swallow the boss would put collision where there is no case.
+[node name="BossCollision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0.0105)
+shape = SubResource("BoxShape3D_boss")
+
+[node name="SocketMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0395, 0.0105)
+mesh = SubResource("BoxMesh_socket")
+surface_material_override/0 = SubResource("Mat_socket")
+
+; The expansion port. TURNED A HALF TURN ABOUT Z, which is what makes a pak go
+; in the right way up: a pak is authored to be pushed UP into the underside of a
+; controller, prong on +Y and body hanging below, and here it is pushed DOWN
+; into a box on a table, so the whole thing is inverted and stands proud on top.
+;
+; The zone sits 2 mm above the boss's face because a pak's origin is 2 mm behind
+; its mating face -- the same convention the controller's port uses, and the
+; reason both seat the FACE rather than the centre.
+;
+; A half turn is its own transpose, so the row-versus-column trap a .tscn basis
+; usually sets cannot bite here. It is asserted anyway, by measuring where a
+; seated pak's prong actually ends up: Tools/input/n64_pak_probe.tscn.
+;
+; snap_require narrows it to plugs and N64PakPort narrows it again to the
+; "n64_pak" group, so a cable end offered here is refused.
+[node name="ExpansionPort" parent="." instance=ExtResource("3_snapzone")]
+transform = Transform3D(-1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0.042, 0.0105)
+grab_distance = 0.035
+snap_require = "controller_plug"
+
 [node name="Led" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.026, 0.014, -0.0228)
 mesh = SubResource("BoxMesh_led")
 surface_material_override/0 = SubResource("Mat_led")
 
+; Moved to the FRONT of the top face: the pak boss takes the back of it from
+; z = +0.0005 rearward, and a label under a boss is a label nobody reads.
+;
 ; The bound pad's name, printed on the top face reading front-to-back. Rotated
 ; -90 about X to lie flat, and 8 mm of text at pixel_size 0.001 — the size this
 ; project prints a word on a face (see cassette_player.tscn, speaker_pair.tscn).
@@ -61,7 +130,7 @@ surface_material_override/0 = SubResource("Mat_led")
 ; outline exists to lift a floating billboard off a busy background, which is the
 ; opposite of a word printed flat.
 [node name="NameLabel" type="Label3D" parent="."]
-transform = Transform3D(-1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0.0202, -0.002)
+transform = Transform3D(-1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0.0202, -0.0175)
 pixel_size = 0.0006
 text = "NO PAD"
 font_size = 12
@@ -75,7 +144,7 @@ autowrap_mode = 3
 ; Font is assigned in code: it is a FontVariation chaining the symbol font behind
 ; the project default, and an unchained label renders every codepoint as tofu.
 [node name="GlyphLabel" type="Label3D" parent="."]
-transform = Transform3D(-1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0.0202, 0.0095)
+transform = Transform3D(-1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0.0202, -0.0065)
 pixel_size = 0.0006
 font_size = 22
 outline_size = 0

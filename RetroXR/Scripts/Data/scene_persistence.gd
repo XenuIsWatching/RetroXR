@@ -1416,6 +1416,13 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		(obj as SensorBar).restore_connection(
 			_resolve_ref(root, spawned, d.get("system")) as RetroSystem)
 	elif obj is InputReceiver:
+		# A pak goes back whether or not the receiver was plugged into anything —
+		# a loose dongle can still have one on it, exactly as a loose N64 pad can.
+		# Seated BEFORE the port connection below, so the machine is told what is
+		# in the port once, on connecting, rather than told "empty" and corrected.
+		if obj is PadReceiver:
+			(obj as PadReceiver).restore_pak(
+				_resolve_ref(root, spawned, d.get("pak")) as N64Pak)
 		var rx_port := int(d.get("port_index", -1))
 		if rx_port < 0:
 			return
@@ -1857,11 +1864,18 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		# Which PAD it is for as well as which port it is in — a receiver with no
 		# pad is a dongle for nothing.
 		var pr := node as PadReceiver
-		return _receiver_entry(pr, id, "pad_receiver", n3d, node_to_id).merged({
+		var pr_entry := _receiver_entry(pr, id, "pad_receiver", n3d, node_to_id).merged({
 			"pad_guid": pr.pad_guid,
 			"pad_name": pr.pad_name,
 			"pad_ordinal": pr.pad_ordinal,
 		})
+		# Which pak is on its boss, saved on the RECEIVER for the reason the
+		# controller's is saved on the pad: the port is the end that means
+		# something, and the pak's own entry is only where it is lying.
+		var pr_pak: Node = pr.get_pak()
+		if pr_pak != null:
+			pr_entry["pak"] = _ref(node_to_id, pr_pak)
+		return pr_entry
 	elif node is CompositeCable:
 		return _serialize_cable(node as CompositeCable, id, n3d, node_to_id)
 	elif node is PowerCord:

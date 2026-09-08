@@ -23,6 +23,7 @@ const PAKS: Dictionary = {
 }
 const SHOT := Vector2i(900, 900)
 const CART_SCENE := "res://Scenes/Objects/media/cartridge.tscn"
+const RECEIVER := "res://Scenes/Objects/controllers/pad_receiver.tscn"
 
 ## Where to look for the bay, in the pad's own space. Wider than the bay so a
 ## shell whose bay moved a little is still found, narrow enough to exclude the
@@ -126,8 +127,87 @@ func _run(video: bool) -> void:
 	for name: String in PAKS:
 		_check_pak(pad, zone, name, mouth)
 
+	await _check_receiver()
+
 	if video:
 		await _render(pad, zone)
+
+
+## The pad receiver carries the same port, for the player on a real gamepad.
+##
+## Measured rather than eyeballed because its zone is turned a HALF TURN about Z
+## -- a pak is authored to be pushed up into the underside of a controller, and
+## here it is pushed down into a box on a table -- and because the boss it sits
+## on has to be tall enough to swallow a 35 mm prong that a 20 mm case could not.
+##
+## RetroSystem reaches a pak by duck typing, so the two methods below are the
+## whole contract on the system side; a receiver missing either is a pak that
+## seats and does nothing.
+func _check_receiver() -> void:
+	var packed: PackedScene = load(RECEIVER)
+	if packed == null:
+		_ok("receiver/loads", false)
+		return
+	var rx: Node3D = packed.instantiate()
+	if rx is RigidBody3D:
+		(rx as RigidBody3D).freeze = true
+	add_child(rx)
+	await get_tree().process_frame
+
+	_ok("receiver/answers get_pak", rx.has_method("get_pak"))
+	_ok("receiver/answers pak_option_value", rx.has_method("pak_option_value"))
+	# "" is "no port at all", which RetroSystem treats as "leave this port
+	# alone". An empty port must say "none" instead, or a receiver would never
+	# clear a pak the core had already fitted.
+	_ok("receiver/an empty port reads none, not blank",
+		str(rx.call("pak_option_value")) == "none",
+		"read '%s'" % str(rx.call("pak_option_value")))
+
+	var zone: Node3D = rx.get_node_or_null("ExpansionPort")
+	_ok("receiver/has an expansion port", zone != null)
+	if zone == null:
+		rx.queue_free()
+		return
+
+	for name: String in PAKS:
+		var pak: Node3D = (load(PAKS[name]) as PackedScene).instantiate()
+		if pak is RigidBody3D:
+			(pak as RigidBody3D).freeze = true
+		rx.add_child(pak)
+		pak.transform = zone.transform          # where the zone seats it
+		var tongue: MeshInstance3D = pak.get_node_or_null("Tongue")
+		if tongue == null:
+			_ok("receiver/%s has a prong" % name, false)
+			pak.queue_free()
+			continue
+		var xf: Transform3D = rx.global_transform.affine_inverse() * tongue.global_transform
+		var tip: AABB = xf * tongue.get_aabb()
+		# The prong must point DOWN into the case, not up into the air. This is
+		# the case the half turn exists for, and the one an unrotated zone fails.
+		_ok("receiver/%s prong points into the case" % name,
+			tip.position.y < zone.position.y,
+			"prong spans y %.4f..%.4f, port face is at %.4f"
+			% [tip.position.y, tip.position.y + tip.size.y, zone.position.y])
+		# ...and must stop inside it rather than come out through the underside
+		# onto the table.
+		_ok("receiver/%s prong stays inside the case" % name, tip.position.y > 0.0,
+			"prong reaches y %.4f, the case bottom is 0" % tip.position.y)
+		# The body stands proud on top, which is what a pak on a dongle looks
+		# like: everything that is not the prong sits above the boss's face.
+		var lowest := INF
+		for n: Node in pak.find_children("*", "MeshInstance3D", true, false):
+			var mi := n as MeshInstance3D
+			if mi == tongue or mi.mesh == null or not mi.is_visible_in_tree():
+				continue
+			var b: AABB = (rx.global_transform.affine_inverse() * mi.global_transform) * mi.get_aabb()
+			lowest = minf(lowest, b.position.y)
+		_ok("receiver/%s body stands on the boss" % name,
+			absf(lowest - (zone.position.y - PAK_FACE_OFFSET)) < SEAT_TOLERANCE,
+			"body bottoms at %.4f, boss face is at %.4f"
+			% [lowest, zone.position.y - PAK_FACE_OFFSET])
+		pak.queue_free()
+	rx.queue_free()
+	await get_tree().process_frame
 
 
 ## A collider built from the shell mesh alone, on its own layer.
