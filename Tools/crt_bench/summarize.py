@@ -1,6 +1,10 @@
 """Summarize raw probe timings, retaining paired-run variability.
 
 python Tools/crt_bench/summarize.py timings.json
+
+"Before" is the first variant of the run's pair and "after" the second; the
+2026-09-07 reference/optimized file predates the pair field and is read as
+reference -> optimized.
 """
 import json
 from pathlib import Path
@@ -8,12 +12,14 @@ import statistics as st
 import sys
 
 data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8-sig"))
+before_name, after_name = data["metadata"].get("pair", ["reference", "optimized"])
+print(f"Pair: {before_name} -> {after_name}")
 print("| TVs | Distance | Before ms | After ms | Saved ms | Saved % | Paired savings range ms | Before/after p95 ms |")
 print("|---:|---:|---:|---:|---:|---:|---:|---:|")
 for key in sorted({(r["count"], r["distance"]) for r in data["runs"]}):
     runs = [r for r in data["runs"] if (r["count"], r["distance"]) == key]
-    before = sorted([r for r in runs if r["variant"] == "reference"], key=lambda r: r["repeat"])
-    after = sorted([r for r in runs if r["variant"] == "optimized"], key=lambda r: r["repeat"])
+    before = sorted([r for r in runs if r["variant"] == before_name], key=lambda r: r["repeat"])
+    after = sorted([r for r in runs if r["variant"] == after_name], key=lambda r: r["repeat"])
     if len(before) != 3 or len(after) != 3:
         print(f"Incomplete scenario {key}: {len(before)} before, {len(after)} after", file=sys.stderr)
         continue

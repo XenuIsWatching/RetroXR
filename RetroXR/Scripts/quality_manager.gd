@@ -253,6 +253,13 @@ var glow_enabled: bool = true
 ## desktop keeps it. _ready sets the platform default before the saved
 ## preference is read, so a player's choice on either wins.
 var screen_lights_enabled: bool = true
+## Which tube stage the televisions draw with. True installs the mobile tier
+## (crt_effect_mobile.gdshader: unshaded, opaque, no halation/grain/wear) in
+## place of the lit full-featured crt_effect.gdshader. The mobile renderer starts
+## fast; a saved preference on either platform wins, the same way the screen
+## lights do. Read at material creation by RetroTV.crt_shader(), so a change
+## reaches sets spawned afterwards.
+var crt_fast: bool = false
 ## Desktop window state. Empty resolution means "leave the window where it is".
 var window_mode: String = ""
 var resolution: String = ""
@@ -277,6 +284,7 @@ func _ready() -> void:
 	# to provide. Applied before _load_prefs so a saved preset wins.
 	apply_preset(Preset.LOW if not _desktop else Preset.MEDIUM, false)
 	screen_lights_enabled = RenderingServer.get_current_rendering_method() != "mobile"
+	crt_fast = RenderingServer.get_current_rendering_method() == "mobile"
 	_load_prefs()
 	# _load_prefs restores the saved foveation, which would undo a boot override.
 	_read_vrs_overrides()
@@ -1369,6 +1377,9 @@ func _load_prefs() -> void:
 	var screen_lights: Variant = data.get("screen_lights_enabled")
 	if typeof(screen_lights) == TYPE_BOOL:
 		screen_lights_enabled = screen_lights
+	var fast_crt: Variant = data.get("crt_fast")
+	if typeof(fast_crt) == TYPE_BOOL:
+		crt_fast = fast_crt
 
 
 func save_prefs() -> void:
@@ -1388,4 +1399,5 @@ func save_prefs() -> void:
 		"foveation_level": int(foveation_level),
 		"glow_enabled": glow_enabled,
 		"screen_lights_enabled": screen_lights_enabled,
+		"crt_fast": crt_fast,
 	}, "QualityManager")

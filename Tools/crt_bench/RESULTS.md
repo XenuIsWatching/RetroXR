@@ -67,7 +67,84 @@ OpenXR multiview. This is not a claim of exhaustive binocular visual validation.
 in the desktop probe's `user://visual` directory. Shader import, APK export and
 `git diff --check` passed. The benchmark app is separate from RetroXR.
 
-## Larger mobile redesign
+## The mobile tier: Quest 3 results, 2026-09-07
+
+The redesign the section below asked for is implemented as a SEPARATE shader,
+`crt_effect_mobile.gdshader` + `crt_mobile.gdshaderinc`, installed by
+`RetroTV.crt_shader()` when `QualityManager.crt_fast` is set (the mobile
+renderer's default; `crt_fast` in `graphics_prefs.json` overrides it on either
+platform). The full shader is untouched and still what the desktop draws.
+
+What it keeps: tube-UV anchoring, the analytic antialiasing of mask and raster,
+zero-mean mask and beam (so brightness does not drift with distance), the
+brightness-dependent beam, gamma, vignette, the OSD, the aspect fit, the rounded
+glass corner and a Fresnel sheen cue. The aperture grille is the same two-harmonic
+series evaluated from ONE sin/cos pair, so it matches the full shader's mode 1 to
+float precision. The beam is the same pixel-integrated periodic Gaussian
+truncated after its second Fourier harmonic, which at the shipped sigmas
+(0.18..0.35 scanlines) leaves under 0.6% of the profile out.
+
+What it drops: halation and the CRT-character bloom (four source taps), grain
+(a hash per pixel), convergence (colour derivatives), the composite notch and
+chroma smear (two taps each), the fingerprint mask (a texture tap), slot and
+shadow masks (drawn as the grille), and the lit PBR glass with its clearcoat.
+The material is unshaded and OPAQUE: the corner is an alpha scissor rather than
+a blended fade, so a screen no longer lives in the transparent pass.
+(`alpha_to_coverage` was tried for a smoothed edge and rendered the picture at
+half brightness on Forward+, 236 -> 120 on a white block, so the cut is a plain
+step.) Minification is a 2x2 box with taps snapped to texel corners, which
+covers four texels per axis for four taps where the full shader's 3x3 covers
+three; both under-cover past that, and dither at more than four texels per
+pixel shimmers on this tier (640-wide content beyond about 2.6 m on a Quest 3,
+256-wide beyond about 6.5 m).
+
+### Measured GPU viewport time, current -> mobile
+
+| TVs | Distance | Current ms | Mobile ms | Saved ms | Saved % | Paired savings range ms | Current/mobile p95 ms |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.35 m | 2.998 | 2.239 | +0.759 | +25.3% | +0.740 to +0.759 | 3.099 / 2.361 |
+| 1 | 1.00 m | 1.905 | 1.700 | +0.205 | +10.8% | +0.204 to +0.209 | 2.114 / 1.767 |
+| 1 | 2.00 m | 1.667 | 1.590 | +0.077 | +4.6% | +0.071 to +0.078 | 1.873 / 1.667 |
+| 9 | 0.35 m | 10.626 | 4.570 | +6.056 | +57.0% | +5.625 to +6.063 | 10.931 / 4.778 |
+| 9 | 1.00 m | 4.131 | 2.503 | +1.628 | +39.4% | +1.626 to +1.630 | 4.376 / 2.583 |
+| 9 | 2.00 m | 2.773 | 2.110 | +0.663 | +23.9% | +0.656 to +0.671 | 2.868 / 2.172 |
+
+Same protocol as the table above: Quest 3, Vulkan Mobile, 1680x1760 per eye,
+2x MSAA, foveation off, 72 Hz confirmed after session start, sustained-high
+requests, AB/BA/AB pairs of 600 measured frames after 120 settling, 36 runs.
+Raw samples: [quest3-mobile-timings.json](results/quest3-mobile-timings.json).
+Every paired range is positive and narrow, so unlike the fast-path table these
+are not within run-to-run variation. A first run of the same shader WITHOUT the
+corner scissor (fully opaque, no discard) measured within 0.2 ms of this table
+in every scenario (2.212 / 1.703 / 1.642 / 4.651 / 2.408 / 1.973 ms), so the
+scissor costs nothing measurable here.
+
+The nine-screen close case is the one that matters for a room: the eye buffer
+is covered several times over by overlapping screens, and an opaque screen is
+depth-rejected where a blended one is shaded in full. That is where 6 ms of a
+13.9 ms frame comes back. A single screen saves 0.1 to 0.8 ms depending on how
+much of the view it fills. These are synthetic-scene GPU timings, not a claim
+about whole-game frame rate.
+
+### Appearance
+
+The current/mobile visual pass (89 cases, [mobile-visual.json](results/mobile-visual.json))
+does not fail by design; it records the errors. With the default grille and the
+shipped settings, the mean absolute difference over the central half of the
+picture is 2.9 levels of 255 at 0.2 m, 4.7 at 0.5 m, 1.4 at 1 m and 0.3 at
+2 m; the 0.5 m figure is mostly the halation the full shader spreads into dark
+gaps between bright blocks. Slot and shadow mask cases read 15-17 levels because
+this tier draws the grille for them. The per-pixel maxima (up to 187) are the
+corner scissor against the fade and dither cells at footprints past four
+texels. A render of `tv.tscn` at Quest 3 density with both shaders, on and off,
+confirmed the corner, the collar and the dark glass match; the visible
+differences are the missing bloom around bright areas and the missing grain.
+
+Not covered: `screen_window`, `vcr_effect` and `tv_static` keep the full stage
+on every platform, so a DS window, a VHS tape and static still cost what they
+did on a Quest. The same include-swap would serve them; it was not done here.
+
+## The design brief this implemented
 
 The next high-impact experiment should be a separate mobile shader, beginning
 with an opaque unshaded picture and adding features one at a time. Use rounded

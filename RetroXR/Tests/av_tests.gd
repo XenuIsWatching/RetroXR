@@ -142,6 +142,8 @@ func _run() -> void:
 		["display/glass controls follow sliders, source, power and save", _d_glass_wear],
 		["display/two sets get their own window of one picture", _d_stage_per_tv],
 		["display/the picture shape follows the button on the TV input", _d_tv_aspect],
+		["display/the CRT button reaches the shader", _d_crt_button],
+		["display/the fast tier wears the mobile shader", _d_crt_fast_tier],
 		["guard/a host that is not shown is refused", _g_refused],
 		["guard/the shown host may paint", _g_allowed],
 		["guard/only the owner may take the picture down", _g_release],
@@ -1014,6 +1016,67 @@ func _d_stopped() -> void:
 	src.texture = null                   # switched off / stopped / unplugged
 	await _wait(6)
 	_check_eq(_shown(tv), tv._display._blue_texture, "a source that stops leaves no frozen frame")
+
+
+## The CRT button on the bezel writes the shader's `crt_enabled` uniform. It
+## shipped dead from 2026-08-31 (c4c4de0a) to 2026-09-07: the refactor that moved
+## the display pipeline into TvDisplay renamed the uniform strings to
+## "_tv.crt_enabled" / "_tv.stereo_mode" along with the variables, and a
+## ShaderMaterial accepts any parameter name, so nothing complained and the
+## tube stage stayed at the shader's own default whatever the button said.
+func _d_crt_button() -> void:
+	var tv := _tv()
+	await _wait(30)
+	var src := StubSource.new()
+	src.texture = _a_texture()
+	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
+	await _wait(4)
+	var mat := _glass(tv) as ShaderMaterial
+	_ok(mat != null and RetroTV.is_crt_shader(mat.shader), "the picture is on the set's CRT wrapper")
+	if mat == null:
+		return
+	_check_eq(mat.get_shader_parameter("crt_enabled"), true, "the tube stage starts on")
+	tv.set_crt_enabled(false)
+	await _wait(4)
+	_check_eq(mat.get_shader_parameter("crt_enabled"), false,
+		"the CRT button switches the shader's own uniform off")
+	tv.set_crt_enabled(true)
+	await _wait(4)
+	_check_eq(mat.get_shader_parameter("crt_enabled"), true, "and on again")
+	# The stereo window carries the same contract, through the same strings.
+	var stereo := tv._display._stereo_screen_material()
+	_check_eq(stereo.get_shader_parameter("crt_enabled"), true,
+		"the stereo window is built with the tube stage's real uniform")
+	_check_eq(stereo.get_shader_parameter("stereo_mode"), tv.stereo_mode,
+		"and the stereo mode's")
+
+
+## QualityManager.crt_fast picks crt_effect_mobile for every set built after it
+## is set; the shared params reach that shader by the same names.
+func _d_crt_fast_tier() -> void:
+	var was_fast := QualityManager.crt_fast
+	QualityManager.crt_fast = true
+	var tv := _tv()
+	await _wait(30)
+	var src := StubSource.new()
+	src.texture = _a_texture()
+	await _seat_stub(tv, RetroTV.Source.COMPOSITE_3, src)
+	await _wait(4)
+	QualityManager.crt_fast = was_fast
+	var mat := _glass(tv) as ShaderMaterial
+	_ok(mat != null and mat.shader == RetroTV.CRT_MOBILE_SHADER,
+		"a set built on the fast tier wears the mobile shader")
+	if mat == null:
+		return
+	_check_eq(_shown(tv), src.texture, "fed with the picture")
+	_check_eq(mat.get_shader_parameter("crt_mask_strength"), 0.55, "with the shared mask tuning")
+	_ok(float(mat.get_shader_parameter("crt_mask_triads")) > 0.0, "and the derived triad count")
+	_check_eq(mat.get_shader_parameter("crt_enabled"), true, "and the tube stage on")
+	_check_eq(tv._display._dark_material.shader, RetroTV.CRT_MOBILE_SHADER,
+		"its dark glass is the mobile shader too")
+	tv.remote_power_toggle()
+	await _wait(6)
+	_check_eq(_glass(tv), tv._display._dark_material, "which is what a set switched off wears")
 
 
 func _d_off() -> void:

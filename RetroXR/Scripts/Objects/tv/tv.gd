@@ -14,6 +14,21 @@ const WINDOW_SHADER := preload("res://Shaders/screen_window.gdshader")
 # because TvOsd.route and TvDisplay.update_crt both have to recognise it.
 const STATIC_SHADER := preload("res://Shaders/tv_static.gdshader")
 const GLASS_WEAR_TEXTURE := preload("res://Textures/TV/crt_glass_wear.png")
+# The mobile tier of CRT_SHADER: same uniforms, unshaded and opaque, with the
+# halation, grain, notch, wear and lit glass dropped. Handed out by crt_shader()
+# when QualityManager.crt_fast is set, which is the mobile renderer's default.
+const CRT_MOBILE_SHADER := preload("res://Shaders/crt_effect_mobile.gdshader")
+
+
+## The stock CRT wrapper for this session's renderer. Every place that INSTALLS
+## the stock shader goes through here; every place that RECOGNISES it uses
+## is_crt_shader, so a set built on one tier is still a CRT set on the other.
+static func crt_shader() -> Shader:
+	return CRT_MOBILE_SHADER if QualityManager.crt_fast else CRT_SHADER
+
+
+static func is_crt_shader(shader: Shader) -> bool:
+	return shader == CRT_SHADER or shader == CRT_MOBILE_SHADER
 
 ## Which input the set is showing. COMPOSITE_1..4 are the physical sockets on the
 ## back — a console, VCR or DVD deck on a composite lead — TV is the built-in tuner

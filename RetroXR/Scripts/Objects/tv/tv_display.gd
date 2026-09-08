@@ -103,7 +103,7 @@ func build_states() -> void:
 	dark_img.fill(Color.BLACK)
 	_dark_texture = ImageTexture.create_from_image(dark_img)
 	_dark_material = ShaderMaterial.new()
-	_dark_material.shader = RetroTV.CRT_SHADER
+	_dark_material.shader = RetroTV.crt_shader()
 	_dark_material.set_shader_parameter("source_tex", _dark_texture)
 	_dark_material.set_shader_parameter("crt_enabled", _tv.crt_enabled)
 	apply_crt_params(_dark_material)
@@ -232,15 +232,15 @@ func update_crt() -> void:
 		mat.set_shader_parameter("crt_powered", _tv.is_on())
 	# Writing a uniform a shader does not declare is harmless, so this does not
 	# have to know which of the display shaders is currently showing.
-	var cur: Variant = mat.get_shader_parameter("_tv.crt_enabled")
+	var cur: Variant = mat.get_shader_parameter("crt_enabled")
 	if (cur == true) != _tv.crt_enabled:
-		mat.set_shader_parameter("_tv.crt_enabled", _tv.crt_enabled)
+		mat.set_shader_parameter("crt_enabled", _tv.crt_enabled)
 		if _tv.crt_enabled:
 			apply_crt_params(mat)
 	if mat.shader == RetroTV.WINDOW_SHADER:
-		var cur_mode: Variant = mat.get_shader_parameter("_tv.stereo_mode")
+		var cur_mode: Variant = mat.get_shader_parameter("stereo_mode")
 		if cur_mode != _tv.stereo_mode:
-			mat.set_shader_parameter("_tv.stereo_mode", _tv.stereo_mode)
+			mat.set_shader_parameter("stereo_mode", _tv.stereo_mode)
 
 
 ## Show the selected host by SAMPLING the picture it offers, in a material this
@@ -334,12 +334,12 @@ func _crt_screen_material() -> ShaderMaterial:
 		# normal answer and every shipped shell gives it, so this is the stock
 		# CRT unless a mod set has genuinely different glass.
 		var custom: Shader = _tv.shell().screen_shader() if _tv.shell() != null else null
-		_crt_material.shader = custom if custom != null else RetroTV.CRT_SHADER
+		_crt_material.shader = custom if custom != null else RetroTV.crt_shader()
 		# Written unconditionally: a shader that does not declare this uniform
 		# ignores it harmlessly, and one that does needs it set before first draw
 		# (the shader's own default is ON, so a set with the tube off would
 		# otherwise show one frame of it).
-		_crt_material.set_shader_parameter("_tv.crt_enabled", _tv.crt_enabled)
+		_crt_material.set_shader_parameter("crt_enabled", _tv.crt_enabled)
 	return _crt_material
 
 
@@ -377,7 +377,7 @@ func _stage_screen_material(shader: Shader) -> ShaderMaterial:
 	if mat == null:
 		mat = ShaderMaterial.new()
 		mat.shader = shader
-		mat.set_shader_parameter("_tv.crt_enabled", _tv.crt_enabled)
+		mat.set_shader_parameter("crt_enabled", _tv.crt_enabled)
 		_stage_materials[shader] = mat
 	return mat
 
@@ -391,8 +391,8 @@ func _stereo_screen_material() -> ShaderMaterial:
 		_stereo_material.shader = RetroTV.WINDOW_SHADER
 		_stereo_material.set_shader_parameter("source_rect", Vector4(0.0, 0.0, 0.5, 1.0))
 		_stereo_material.set_shader_parameter("eye_shift", 0.5)
-		_stereo_material.set_shader_parameter("_tv.stereo_mode", _tv.stereo_mode)
-		_stereo_material.set_shader_parameter("_tv.crt_enabled", _tv.crt_enabled)
+		_stereo_material.set_shader_parameter("stereo_mode", _tv.stereo_mode)
+		_stereo_material.set_shader_parameter("crt_enabled", _tv.crt_enabled)
 	return _stereo_material
 
 
@@ -496,7 +496,7 @@ func apply_crt_params(mat: ShaderMaterial) -> void:
 
 
 func _is_tv_display_shader(shader: Shader) -> bool:
-	return shader == RetroTV.CRT_SHADER or shader == RetroTV.VCR_SHADER or shader == RetroTV.WINDOW_SHADER \
+	return RetroTV.is_crt_shader(shader) or shader == RetroTV.VCR_SHADER or shader == RetroTV.WINDOW_SHADER \
 		or shader == RetroTV.STATIC_SHADER
 
 
@@ -675,7 +675,7 @@ func apply_aspect() -> void:
 		if mat != null:
 			(mat as ShaderMaterial).set_shader_parameter("fit_scale", fit)
 	var override := _tv.screen_mesh().get_surface_override_material(0) as ShaderMaterial
-	if override != null and override.shader == RetroTV.CRT_SHADER:
+	if override != null and RetroTV.is_crt_shader(override.shader):
 		override.set_shader_parameter("fit_scale", fit)
 
 

@@ -103,9 +103,11 @@ xr_features/enable_meta_plugin=true
 meta_xr_features/hand_tracking=1
 screen/immersive_mode=true
 ''')
+mobile = (shaders / "crt_mobile.gdshaderinc").read_text() + (shaders / "crt_effect_mobile.gdshader").read_text()
 (out / "manifest.json").write_text(json.dumps({
     "current_sha256": hashlib.sha256(current.encode()).hexdigest(),
     "reference_sha256": hashlib.sha256(reference.encode()).hexdigest(),
+    "mobile_sha256": hashlib.sha256(mobile.encode()).hexdigest(),
     "time_frozen": True,
 }, indent=2))
 print(out)

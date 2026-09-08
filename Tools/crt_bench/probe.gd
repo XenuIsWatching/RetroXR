@@ -1,6 +1,17 @@
 extends Node3D
 ## Standalone synthetic CRT A/B test. No RetroXR autoloads or saved preferences.
+##
+## Three variants of the tube stage: `reference` (the frozen pre-optimisation
+## crt_band / crt_mask / crt_beam), `current` (the shipped crt_filter) and
+## `mobile` (crt_effect_mobile, the unshaded opaque tier, which exists for the
+## crt_effect caller only). A run compares one PAIR, given as `--pair=a,b` on the
+## command line or as the second word of user://mode.txt on device
+## ("benchmark current,mobile"). reference/current is an identity check and
+## fails on a difference of more than one 8-bit level; a pair that includes
+## `mobile` differs by design, so it reports the errors, saves every image pair
+## for viewing, and never fails.
 const WRAPPERS := ["crt_effect", "screen_window", "vcr_effect", "tv_static"]
+const SUFFIX := {"reference": "_reference", "current": "", "mobile": "_mobile"}
 const SAMPLES := 600
 const WARMUP := 120
 var materials: Dictionary = {}
@@ -11,17 +22,31 @@ var camera: Camera3D
 var xr: XRInterface
 var results: Array = []
 var run_mode := "benchmark"
+var pair: Array = ["current", "mobile"]
 
 func _ready() -> void:
 	_build_materials()
 	var visual := "--visual" in OS.get_cmdline_user_args()
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--pair="):
+			pair = Array(arg.trim_prefix("--pair=").split(","))
 	if FileAccess.file_exists("user://mode.txt"):
-		run_mode = FileAccess.get_file_as_string("user://mode.txt").strip_edges()
+		var words := FileAccess.get_file_as_string("user://mode.txt").strip_edges().split(" ", false)
+		if words.size() > 0:
+			run_mode = words[0]
+		if words.size() > 1:
+			pair = Array(words[1].split(","))
 		visual = run_mode == "visual"
+	assert(pair.size() == 2 and SUFFIX.has(pair[0]) and SUFFIX.has(pair[1]), "pair must name two of %s" % [SUFFIX.keys()])
+	print("[crtbench] pair ", pair)
 	if visual:
 		_visual.call_deferred()
 	else:
 		_benchmark.call_deferred()
+
+## True for the identity pair, where any difference is a defect.
+func _strict() -> bool:
+	return not pair.has("mobile")
 
 func _build_materials() -> void:
 	var img := Image.create(640, 480, false, Image.FORMAT_RGBA8)
@@ -35,17 +60,20 @@ func _build_materials() -> void:
 			img.set_pixel(x, y, c)
 	source = ImageTexture.create_from_image(img)
 	for wrapper in WRAPPERS:
-		var pair: Array[ShaderMaterial] = []
-		for suffix in ["_reference", ""]:
+		var variants := {}
+		for variant in SUFFIX:
+			var path := "res://Shaders/%s%s.gdshader" % [wrapper, SUFFIX[variant]]
+			if not ResourceLoader.exists(path):
+				continue
 			var mat := ShaderMaterial.new()
-			mat.shader = load("res://Shaders/%s%s.gdshader" % [wrapper, suffix])
+			mat.shader = load(path)
 			mat.set_shader_parameter("source_tex", source)
 			mat.set_shader_parameter("crt_enabled", true)
 			if wrapper == "screen_window":
 				mat.set_shader_parameter("source_rect", Vector4(0, 0, 0.5, 1))
 				mat.set_shader_parameter("eye_shift", 0.5)
-			pair.append(mat)
-		materials[wrapper] = pair
+			variants[variant] = mat
+		materials[wrapper] = variants
 
 func _screen(parent: Node, curved: bool = true) -> MeshInstance3D:
 	var screen := MeshInstance3D.new()
@@ -90,7 +118,7 @@ func _benchmark() -> void:
 	var vp := get_viewport()
 	RenderingServer.viewport_set_measure_render_time(vp.get_viewport_rid(), true)
 	var metadata := {"device": OS.get_model_name(), "renderer": RenderingServer.get_current_rendering_method(),
-		"gpu": RenderingServer.get_video_adapter_name(), "msaa": vp.msaa_3d,
+		"gpu": RenderingServer.get_video_adapter_name(), "msaa": vp.msaa_3d, "pair": pair,
 		"foveation": 0, "performance_request": "sustained_high", "samples": SAMPLES, "warmup": WARMUP,
 		"manifest": JSON.parse_string(FileAccess.get_file_as_string("res://manifest.json"))}
 	if xr != null and xr.is_initialized():
@@ -101,11 +129,13 @@ func _benchmark() -> void:
 		for i in range(screens.size()):
 			screens[i].position = Vector3((i % 3 - 1) * 0.37, (i / 3 - 1) * 0.2825, -1.0)
 		while true:
-			_set_variant(0 if run_mode == "capture_reference" else 1)
+			# capture_<variant>; "optimized" is the old name for "current".
+			var variant := run_mode.trim_prefix("capture_").replace("optimized", "current")
+			_set_variant(variant)
 			await _frames(WARMUP)
 			print("[crtbench] CAPTURE READY ", run_mode)
 			await _frames(600)
-			run_mode = FileAccess.get_file_as_string("user://mode.txt").strip_edges()
+			run_mode = FileAccess.get_file_as_string("user://mode.txt").strip_edges().split(" ", false)[0]
 		return
 	for count in [1, 9]:
 		for distance in [0.35, 1.0, 2.0]:
@@ -116,12 +146,13 @@ func _benchmark() -> void:
 				var row := i / 3 - 1 if count > 1 else 0
 				s.position = Vector3(col * 0.37, row * 0.2825, -distance)
 			# Prime both variants before the measured alternating runs.
-			for variant in [0, 1]:
+			for variant in pair:
 				_set_variant(variant)
 				await _frames(WARMUP)
 			for repeat in range(3):
 				# AB / BA / AB balances short-term thermal/clock drift.
-				for variant in ([0, 1] if repeat % 2 == 0 else [1, 0]):
+				var order: Array = pair if repeat % 2 == 0 else [pair[1], pair[0]]
+				for variant in order:
 					_set_variant(variant)
 					await _frames(WARMUP)
 					# The refresh request takes effect after OpenXR begins its session.
@@ -134,7 +165,7 @@ func _benchmark() -> void:
 					var sorted := times.duplicate()
 					sorted.sort()
 					var result := {"count": count, "distance": distance, "repeat": repeat,
-						"variant": "reference" if variant == 0 else "optimized",
+						"variant": variant,
 						"median_ms": sorted[SAMPLES / 2], "p95_ms": sorted[int(SAMPLES * 0.95)], "samples_ms": times}
 					results.append(result)
 					var short := result.duplicate()
@@ -144,7 +175,7 @@ func _benchmark() -> void:
 	print("[crtbench] COMPLETE ", ProjectSettings.globalize_path("user://timings.json"))
 	get_tree().quit()
 
-func _set_variant(variant: int) -> void:
+func _set_variant(variant: String) -> void:
 	for screen in screens:
 		screen.material_override = materials["crt_effect"][variant]
 
@@ -156,6 +187,38 @@ func _write_json(path: String, value: Variant) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	file.store_string(JSON.stringify(value, "\t"))
 
+## Error statistics between two RGBA8 images: the worst channel, how many
+## channels moved at all, and the mean absolute difference over the whole image
+## and over its central half, which is where the picture is when the corners are
+## what differ (the mobile tier paints its rounded corner black instead of
+## transparent, and the tube collar hides that in the real set).
+func _compare(a_img: Image, b_img: Image) -> Dictionary:
+	var a := a_img.get_data()
+	var b := b_img.get_data()
+	var w := a_img.get_width()
+	var h := a_img.get_height()
+	var max_error := 0
+	var changed := 0
+	var total := 0
+	var centre_max := 0
+	var centre_total := 0
+	var centre_n := 0
+	for i in range(a.size()):
+		var diff := absi(a[i] - b[i])
+		max_error = maxi(max_error, diff)
+		total += diff
+		if diff > 0:
+			changed += 1
+		var px := (i / 4) % w
+		var py := (i / 4) / w
+		if px >= w / 4 and px < 3 * w / 4 and py >= h / 4 and py < 3 * h / 4:
+			centre_max = maxi(centre_max, diff)
+			centre_total += diff
+			centre_n += 1
+	return {"max_byte_error": max_error, "changed_channels": changed,
+		"mean_error": float(total) / float(a.size()),
+		"centre_max_error": centre_max, "centre_mean_error": float(centre_total) / float(maxi(centre_n, 1))}
+
 func _visual() -> void:
 	var vp := SubViewport.new()
 	vp.size = Vector2i(512, 512)
@@ -163,12 +226,24 @@ func _visual() -> void:
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	vp.msaa_3d = Viewport.MSAA_2X
 	add_child(vp)
+	# A black world behind the quad: the full stage's transparent corner and the
+	# mobile stage's opaque black one then read the same, as they do behind the
+	# collar in tv.tscn.
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_COLOR
+	env.environment.background_color = Color.BLACK
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.3, 0.3, 0.3)
+	vp.add_child(env)
 	var cam := Camera3D.new()
 	cam.fov = 70
 	vp.add_child(cam)
 	var screen := _screen(vp, false)
 	var cases: Array = []
 	for wrapper in WRAPPERS:
+		if not (materials[wrapper].has(pair[0]) and materials[wrapper].has(pair[1])):
+			continue
 		for mode in range(4):
 			for pose in [[0.2, 0.0], [0.5, 0.0], [1.0, 0.0], [2.0, 0.0], [0.5, 0.7]]:
 				for eye in [-0.032, 0.032]:
@@ -190,7 +265,7 @@ func _visual() -> void:
 		screen.position = Vector3(0, 0, -c.get("distance", 0.5))
 		screen.rotation.y = c.get("angle", 0.0)
 		var images: Array[Image] = []
-		for variant in [0, 1]:
+		for variant in pair:
 			var mat: ShaderMaterial = materials[c.wrapper][variant]
 			if c.wrapper == "screen_window":
 				# SubViewports are mono; explicitly exercise each packed eye region.
@@ -206,26 +281,20 @@ func _visual() -> void:
 			var img := vp.get_texture().get_image()
 			img.convert(Image.FORMAT_RGBA8)
 			images.append(img)
-		var a := images[0].get_data()
-		var b := images[1].get_data()
-		var max_error := 0
-		var changed := 0
-		for i in range(a.size()):
-			var diff := absi(a[i] - b[i])
-			max_error = maxi(max_error, diff)
-			if diff > 0:
-				changed += 1
+		var stats := _compare(images[0], images[1])
+		var max_error: int = stats["max_byte_error"]
 		worst = maxi(worst, max_error)
-		if max_error > 1:
+		if _strict() and max_error > 1:
 			failed += 1
-		if max_error > 1 or index in [0, 4, 8, 9, 12]:
-			for variant in [0, 1]:
-				images[variant].save_png("user://visual/%03d_%d.png" % [index, variant])
-		c["max_byte_error"] = max_error
-		c["changed_channels"] = changed
+		if not _strict() or max_error > 1 or index in [0, 4, 8, 9, 12]:
+			for v in range(2):
+				images[v].save_png("user://visual/%03d_%s.png" % [index, pair[v]])
+		c.merge(stats)
 		report.append(c)
 		if index % 20 == 0:
 			print("[crtbench] visual %d/%d worst=%d" % [index + 1, cases.size(), worst])
-	_write_json("user://visual.json", {"cases": report, "worst_byte_error": worst, "failed": failed})
-	print("[crtbench] VISUAL COMPLETE cases=%d worst=%d failed=%d path=%s" % [cases.size(), worst, failed, ProjectSettings.globalize_path("user://visual.json")])
+	_write_json("user://visual.json", {"pair": pair, "strict": _strict(), "cases": report,
+		"worst_byte_error": worst, "failed": failed})
+	print("[crtbench] VISUAL COMPLETE pair=%s cases=%d worst=%d failed=%d path=%s" % [
+		pair, cases.size(), worst, failed, ProjectSettings.globalize_path("user://visual.json")])
 	get_tree().quit(1 if failed > 0 else 0)
