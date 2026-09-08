@@ -144,6 +144,41 @@ Not covered: `screen_window`, `vcr_effect` and `tv_static` keep the full stage
 on every platform, so a DS window, a VHS tape and static still cost what they
 did on a Quest. The same include-swap would serve them; it was not done here.
 
+### Where the full shader's time goes
+
+`mode.txt` = `ablate` runs the current `crt_effect` with one feature at a time
+switched off through its own uniform (each branch skips the work, exactly as
+the player's slider does), then everything off, the tube stage off, and the
+mobile tier. 300 measured frames after 60 settling, two rounds in opposite
+order, medians of the two. Raw: [quest3-ablation.json](results/quest3-ablation.json).
+
+| variant | 1 screen, 0.35 m | saved | 9 screens, 1 m | saved |
+|---|---:|---:|---:|---:|
+| full | 2.949 ms | | 3.963 ms | |
+| no glow (halation + character) | 2.732 | 0.217 | 3.485 | 0.478 |
+| no beam (scanlines) | 2.622 | 0.327 | 3.877 | 0.086 |
+| no mask | 2.623 | 0.326 | 3.755 | 0.208 |
+| no grain | 2.795 | 0.154 | 3.925 | 0.038 |
+| no sheen (glass reflection 0) | 2.807 | 0.142 | 3.826 | 0.137 |
+| no wear | 2.903 | 0.046 | 3.858 | 0.105 |
+| all of the above off | 2.050 | 0.899 | 3.017 | 0.946 |
+| crt_enabled off | 2.081 | 0.868 | 2.956 | 1.008 |
+| mobile tier | 2.172 | 0.777 | 2.373 | 1.590 |
+
+Close up, where the picture is one source tap, the beam and the mask are the
+two largest items at about 0.33 ms each for a screen filling the view (the six
+erf evaluations, and the four cosines plus band terms), then the glow, grain and
+sheen. Minified, the glow's four extra taps are the largest single item and the
+beam has mostly faded out (its early-out fires past 0.8 scanlines per pixel).
+The individual savings add to more than the "all off" figure because a skipped
+path also frees registers for the others.
+
+The mobile tier beats "everything off" by 0.6 ms in the nine-screen case while
+still drawing a mask and a beam: that gap is the structural cost the uniforms
+cannot switch off, namely the transparent pass, the 3x3 box (nine taps against
+four) and the lit clearcoat glass. Close up, its mask and beam together cost
+about 0.12 ms against 0.65 ms for the full versions.
+
 ## The design brief this implemented
 
 The next high-impact experiment should be a separate mobile shader, beginning

@@ -41,8 +41,95 @@ func _ready() -> void:
 	print("[crtbench] pair ", pair)
 	if visual:
 		_visual.call_deferred()
+	elif run_mode == "ablate":
+		_ablate.call_deferred()
 	else:
 		_benchmark.call_deferred()
+
+## Which feature of the FULL shader costs what: the current crt_effect with one
+## feature at a time switched off through its own uniform (every one of these
+## branches on the uniform and skips the work, so this is what a player's slider
+## does too), plus everything off at once, plus the mobile tier for scale.
+## Two scenes: one screen at 0.35 m (magnified, one source tap, the arithmetic
+## and the lit glass) and nine at 1 m (minified, the taps). Shorter runs than
+## the A/B: 60 settling and 300 measured frames, two rounds in opposite order.
+const ABLATIONS := {
+	"full": {},
+	"no_glow": {"crt_halation": 0.0, "crt_character": 0.0},
+	"no_wear": {"crt_glass_wear": 0.0},
+	"no_sheen": {"crt_glass_reflection": 0.0},
+	"no_beam": {"crt_scanline_strength": 0.0},
+	"no_mask": {"crt_mask_strength": 0.0},
+	"no_grain": {"crt_grain": 0.0},
+	"none": {"crt_halation": 0.0, "crt_character": 0.0, "crt_glass_wear": 0.0,
+		"crt_glass_reflection": 0.0, "crt_scanline_strength": 0.0,
+		"crt_mask_strength": 0.0, "crt_grain": 0.0},
+	"crt_off": {"crt_enabled": false},
+}
+const ABLATE_DEFAULTS := {"crt_halation": 0.08, "crt_character": 0.35, "crt_glass_wear": 0.35,
+	"crt_glass_reflection": 0.35, "crt_scanline_strength": 0.6, "crt_mask_strength": 0.55,
+	"crt_grain": 0.1, "crt_enabled": true}
+
+func _ablate() -> void:
+	xr = XRServer.find_interface("OpenXR")
+	if xr != null and xr.is_initialized():
+		get_viewport().use_xr = true
+		xr.set_display_refresh_rate(72.0)
+		xr.set_gpu_level(OpenXRInterface.PERF_SETTINGS_LEVEL_SUSTAINED_HIGH)
+		xr.set_cpu_level(OpenXRInterface.PERF_SETTINGS_LEVEL_SUSTAINED_HIGH)
+		var origin := XROrigin3D.new()
+		add_child(origin)
+		camera = XRCamera3D.new()
+		origin.add_child(camera)
+	else:
+		camera = Camera3D.new()
+		add_child(camera)
+	anchor = Node3D.new()
+	add_child(anchor)
+	for i in range(9):
+		screens.append(_screen(anchor))
+	var vp := get_viewport()
+	RenderingServer.viewport_set_measure_render_time(vp.get_viewport_rid(), true)
+	var full: ShaderMaterial = materials["crt_effect"]["current"]
+	var names: Array = ABLATIONS.keys()
+	names.append("mobile")
+	var samples := 300
+	for scene in [[1, 0.35], [9, 1.0]]:
+		var count: int = scene[0]
+		var distance: float = scene[1]
+		for i in range(screens.size()):
+			var s := screens[i]
+			s.visible = i < count
+			var col := i % 3 - 1 if count > 1 else 0
+			var row := i / 3 - 1 if count > 1 else 0
+			s.position = Vector3(col * 0.37, row * 0.2825, -distance)
+		for repeat in range(2):
+			var order := names.duplicate()
+			if repeat == 1:
+				order.reverse()
+			for name in order:
+				if name == "mobile":
+					_set_variant("mobile")
+				else:
+					for key in ABLATE_DEFAULTS:
+						full.set_shader_parameter(key, ABLATE_DEFAULTS[key])
+					for key in ABLATIONS[name]:
+						full.set_shader_parameter(key, ABLATIONS[name][key])
+					_set_variant("current")
+				await _frames(60)
+				var times: Array[float] = []
+				for frame in range(samples):
+					await RenderingServer.frame_post_draw
+					times.append(RenderingServer.viewport_get_measured_render_time_gpu(vp.get_viewport_rid()))
+				var sorted := times.duplicate()
+				sorted.sort()
+				var result := {"count": count, "distance": distance, "repeat": repeat, "variant": name,
+					"median_ms": sorted[samples / 2], "p95_ms": sorted[int(samples * 0.95)]}
+				results.append(result)
+				print("[crtbench] ablate ", JSON.stringify(result))
+				_write_json("user://ablate.json", {"runs": results})
+	print("[crtbench] COMPLETE ", ProjectSettings.globalize_path("user://ablate.json"))
+	get_tree().quit()
 
 ## True for the identity pair, where any difference is a defect.
 func _strict() -> bool:
