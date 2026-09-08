@@ -9,26 +9,40 @@
 [sub_resource type="PhysicsMaterial" id="PhysMat_pak"]
 friction = 0.8
 
-; 34 x 46 x 13 mm, inserted UPWARDS into the underside of the controller's centre
-; prong, so the long axis is Y and the pak hangs below the pad once seated.
+; 60 x 26 x 26 mm, inserted UPWARDS into the expansion bay on the underside of
+; the controller's centre prong, so the pak hangs below the pad once seated.
+;
+; SIZED TO THE BAY, which is measured, not guessed. The port on the current
+; shell is a rounded opening 55 mm wide and 24 mm deep in a boss 68 x 30, and
+; the rectangle that fits inside it without fouling its tapered ends is
+; 55 x 14 centred 55 mm behind the pad's origin. So:
+;
+;   insert   51 x 14   — 2 mm of clearance per side inside that rectangle
+;   body     60 x 26   — wider than the opening, so it caps it, and inside the
+;                        68 x 30 boss so it does not overhang onto the shell's
+;                        curved underside
+;
+; The previous shape was 34 x 46 x 13 with a 28 x 8 tongue, sized for the shell
+; this pad used before. That tongue covered about a fifth of this opening and
+; the pak read as a loose brick held near a hole rather than a part in a port.
 ;
 ; The ORIGIN is 2 mm behind the mating face, not on it — the same convention the
 ; Wii Remote's accessories use, and for the same reason: XRToolsSnapZone puts the
 ; object's ORIGIN on the zone, and the port's zone stands 2 mm proud of the shell
 ; it seats against. Built with the origin on the face, the pak floats 2 mm off the
-; pad with only its tongue bridging the gap.
+; pad with only its insert bridging the gap.
 ;
 ; In this frame, with the mating face at y = +0.002:
 ;
-;   tongue    0.0020 ..  0.0090   (buried in the prong once seated)
+;   prong     0.0020 ..  0.0370   (inside the controller once seated)
 ;   face                 0.0020
-;   body     -0.0440 ..  0.0020
-;   label               -0.0210   (on the wide face, readable in the hand)
+;   outer end -0.0160 ..  0.0020   (57 x 26, all that shows)
+;   label               -0.0070
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(0.034, 0.046, 0.013)
+size = Vector3(0.057, 0.018, 0.026)
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(0.034, 0.046, 0.013)
+size = Vector3(0.057, 0.018, 0.026)
 
 ; N64 controller grey, a shade lighter than the pad so the pak reads as a
 ; separate part rather than a lump of the same moulding.
@@ -41,10 +55,10 @@ albedo_color = Color(0.1, 0.1, 0.11, 1)
 roughness = 0.62
 
 [sub_resource type="BoxMesh" id="BoxMesh_tongue"]
-size = Vector3(0.028, 0.007, 0.008)
+size = Vector3(0.051, 0.035, 0.014)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
-size = Vector3(0.044, 0.056, 0.023)
+size = Vector3(0.067, 0.03, 0.036)
 
 [node name="ControllerPak" type="RigidBody3D" groups=["hand_held_device"]]
 collision_layer = 4
@@ -57,25 +71,27 @@ angular_damp = 8.0
 script = ExtResource("1_pakscript")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.007, -0.003)
 shape = SubResource("BoxShape3D_body")
 
 [node name="Body" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.007, -0.003)
 mesh = SubResource("BoxMesh_body")
 surface_material_override/0 = SubResource("Mat_shell")
 
-; Points UP (+Y), into the prong. Buried once seated, which is right: it is only
-; visible while the pak is loose in a hand or on a shelf.
+; Points UP (+Y), into the bay. Buried once seated, which is right: it is only
+; visible while the pak is loose in a hand or on a shelf. Named Tongue for
+; continuity — Tools/input/n64_pak_probe.tscn finds it by this name and measures
+; it against the bay opening.
 [node name="Tongue" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0055, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0195, 0)
 mesh = SubResource("BoxMesh_tongue")
 surface_material_override/0 = SubResource("Mat_dark")
 
 ; Every pak is the same grey brick and each holds a different set of notes, so
 ; the name is on the face. controller_pak.gd finds this node by name.
 [node name="CardLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0.0068)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.007, 0.0102)
 pixel_size = 0.00016
 alpha_cut = 1
 text = "CONTROLLER PAK"
@@ -85,7 +101,7 @@ autowrap_mode = 3
 
 ; IDENTITY, and load-bearing rather than lazy: a snap zone seats an object by
 ; composing its GRAB POINT, not its origin, so the whole y-table above is measured
-; from here. Given the body's own -0.021 offset it would seat the pak's CENTRE on
+; from here. Given the body's own -0.011 offset it would seat the pak's CENTRE on
 ; the port and bury half of it in the prong.
 [node name="GrabPoint" type="Marker3D" parent="."]
 visible = false
@@ -95,7 +111,7 @@ script = ExtResource("3_grabpoint")
 script = ExtResource("2_pickhigh")
 
 [node name="PointerArea" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.021, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.007, -0.003)
 collision_layer = 1048576
 collision_mask = 0
 

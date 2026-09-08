@@ -1,100 +1,25 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://dmxawyrf0uv07" path="res://Scripts/Objects/controllers/retro_controller.gd" id="1_ctrlscript"]
+[ext_resource type="Script" path="res://Scripts/Objects/controllers/n64_controller.gd" id="1_ctrlscript"]
 [ext_resource type="Script" uid="uid://myg1jnlsxhnm" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_right.tscn" id="3_rhand"]
 [ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_left.tscn" id="4_lhand"]
 [ext_resource type="PackedScene" uid="uid://ce7vysyvondf8" path="res://addons/godot-xr-tools/objects/snap_zone.tscn" id="5_snapzone"]
+[ext_resource type="PackedScene" path="res://imported-assets/controllers/n64/n64_controller.glb" id="6_shell"]
 
 [sub_resource type="PhysicsMaterial" id="PhysMat_ctrl"]
 friction = 0.8
 
-; A primitive stand-in for the three-pronged pad, in the same spirit as
-; retro_controller.tscn: no imported model, every part authored here.
+; 159.3 x 62.8 x 149.8 mm — the shell's own measured extent, printed by
+; Tools/glb/glb_report.py, not a guess. See ATTRIBUTION.txt beside the .glb.
 ;
-; 135 mm across the wings, with three grips hanging off it. The one number that
-; other files depend on is the CENTRE GRIP'S BOTTOM FACE at y = -0.060, because
-; that is where the expansion port is and the three paks are measured from it.
+; The 62.8 mm depth includes the expansion bay block, which hangs below
+; everything else on the shell.
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(0.135, 0.082, 0.056)
+size = Vector3(0.1593, 0.0628, 0.1498)
 
-[sub_resource type="BoxMesh" id="BoxMesh_plate"]
-size = Vector3(0.135, 0.02, 0.05)
-
-[sub_resource type="BoxMesh" id="BoxMesh_grip"]
-size = Vector3(0.032, 0.055, 0.03)
-
-[sub_resource type="StandardMaterial3D" id="Mat_shell"]
-albedo_color = Color(0.78, 0.77, 0.74, 1)
-roughness = 0.55
-
-[sub_resource type="StandardMaterial3D" id="Mat_dark"]
-albedo_color = Color(0.1, 0.1, 0.11, 1)
-roughness = 0.62
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_stick"]
-top_radius = 0.007
-bottom_radius = 0.009
-height = 0.012
-radial_segments = 16
-rings = 1
-
-[sub_resource type="StandardMaterial3D" id="Mat_stick"]
-albedo_color = Color(0.66, 0.65, 0.62, 1)
-roughness = 0.8
-
-[sub_resource type="BoxMesh" id="BoxMesh_dpad_h"]
-size = Vector3(0.024, 0.006, 0.008)
-
-[sub_resource type="BoxMesh" id="BoxMesh_dpad_v"]
-size = Vector3(0.008, 0.006, 0.024)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_face"]
-top_radius = 0.006
-bottom_radius = 0.006
-height = 0.005
-radial_segments = 20
-rings = 1
-
-[sub_resource type="StandardMaterial3D" id="Mat_a"]
-albedo_color = Color(0.16, 0.32, 0.7, 1)
-roughness = 0.35
-
-[sub_resource type="StandardMaterial3D" id="Mat_b"]
-albedo_color = Color(0.15, 0.5, 0.3, 1)
-roughness = 0.35
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_c"]
-top_radius = 0.0035
-bottom_radius = 0.0035
-height = 0.004
-radial_segments = 14
-rings = 1
-
-[sub_resource type="StandardMaterial3D" id="Mat_c"]
-albedo_color = Color(0.85, 0.72, 0.13, 1)
-roughness = 0.35
-
-[sub_resource type="StandardMaterial3D" id="Mat_start"]
-albedo_color = Color(0.74, 0.16, 0.16, 1)
-roughness = 0.35
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_shoulder"]
-top_radius = 0.005
-bottom_radius = 0.005
-height = 0.028
-radial_segments = 16
-rings = 1
-
-[sub_resource type="BoxMesh" id="BoxMesh_z"]
-size = Vector3(0.016, 0.008, 0.012)
-
-; The mouth of the expansion port on the underside of the centre grip. Stood 1 mm
-; proud of the face for the reason every dark recess in this project is: a box set
-; coplanar with the shell z-fights down to a sliver, and one set fully inside a
-; solid body cannot be seen at all.
-[sub_resource type="BoxMesh" id="BoxMesh_portmouth"]
-size = Vector3(0.03, 0.002, 0.01)
+[sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
+size = Vector3(0.169, 0.067, 0.159)
 
 [node name="N64Controller" type="RigidBody3D" groups=["hand_held_device"]]
 collision_layer = 4
@@ -108,133 +33,65 @@ script = ExtResource("1_ctrlscript")
 systemid = "nintendo_64"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.025, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0314, 0)
 shape = SubResource("BoxShape3D_body")
 
 [node name="Model" type="Node3D" parent="."]
 
-[node name="Plate" type="MeshInstance3D" parent="Model"]
-mesh = SubResource("BoxMesh_plate")
-surface_material_override/0 = SubResource("Mat_shell")
-
-; The three prongs. The outer two splay outwards a little so the silhouette reads
-; as a trident rather than three parallel bars.
-[node name="GripL" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(0.9848078, 0.17364818, 0, -0.17364818, 0.9848078, 0, 0, 0, 1, -0.05, -0.0325, 0.004)
-mesh = SubResource("BoxMesh_grip")
-surface_material_override/0 = SubResource("Mat_shell")
-
-[node name="GripC" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0325, 0.004)
-mesh = SubResource("BoxMesh_grip")
-surface_material_override/0 = SubResource("Mat_shell")
-
-[node name="GripR" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(0.9848078, -0.17364818, 0, 0.17364818, 0.9848078, 0, 0, 0, 1, 0.05, -0.0325, 0.004)
-mesh = SubResource("BoxMesh_grip")
-surface_material_override/0 = SubResource("Mat_shell")
-
-[node name="DPad" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.043, 0.0115, -0.008)
-mesh = SubResource("BoxMesh_dpad_h")
-surface_material_override/0 = SubResource("Mat_dark")
-
-[node name="DPadCross" type="MeshInstance3D" parent="Model/DPad"]
-mesh = SubResource("BoxMesh_dpad_v")
-surface_material_override/0 = SubResource("Mat_dark")
-
-[node name="StickL" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.014, 0.002)
-mesh = SubResource("CylinderMesh_stick")
-surface_material_override/0 = SubResource("Mat_stick")
-
-[node name="FaceA" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.04, 0.0115, 0.005)
-mesh = SubResource("CylinderMesh_face")
-surface_material_override/0 = SubResource("Mat_a")
-
-[node name="FaceB" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0525, 0.0115, -0.004)
-mesh = SubResource("CylinderMesh_face")
-surface_material_override/0 = SubResource("Mat_b")
-
-[node name="CUp" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0465, 0.0115, -0.019)
-mesh = SubResource("CylinderMesh_c")
-surface_material_override/0 = SubResource("Mat_c")
-
-[node name="CDown" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0465, 0.0115, -0.005)
-mesh = SubResource("CylinderMesh_c")
-surface_material_override/0 = SubResource("Mat_c")
-
-[node name="CLeft" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0395, 0.0115, -0.012)
-mesh = SubResource("CylinderMesh_c")
-surface_material_override/0 = SubResource("Mat_c")
-
-[node name="CRight" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0535, 0.0115, -0.012)
-mesh = SubResource("CylinderMesh_c")
-surface_material_override/0 = SubResource("Mat_c")
-
-[node name="Start" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0115, -0.017)
-mesh = SubResource("CylinderMesh_face")
-surface_material_override/0 = SubResource("Mat_start")
-
-[node name="ShoulderL" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, -0.052, 0.004, -0.0255)
-mesh = SubResource("CylinderMesh_shoulder")
-surface_material_override/0 = SubResource("Mat_shell")
-
-[node name="ShoulderR" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 0.052, 0.004, -0.0255)
-mesh = SubResource("CylinderMesh_shoulder")
-surface_material_override/0 = SubResource("Mat_shell")
-
-; Z sits under the centre prong, where the middle finger falls. The one control
-; on this pad that is behind rather than on top.
-[node name="TriggerZ" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.012, -0.013)
-mesh = SubResource("BoxMesh_z")
-surface_material_override/0 = SubResource("Mat_dark")
-
-[node name="PortMouth" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0595, 0.004)
-mesh = SubResource("BoxMesh_portmouth")
-surface_material_override/0 = SubResource("Mat_dark")
-
-; The expansion port, on the underside of the centre prong. The prong's bottom
-; face is at y = -0.060 and the zone stands 2 mm PROUD of it, which is what puts
-; a seated pak's mating face exactly on the shell — see the frame table in any of
-; the three pak scenes, all of which are measured against this number.
+; No rotation. The shell already arrives in RetroXR's frame — +Y out of the
+; button face, +X to the player's right, +Z toward the player — which was
+; confirmed by MEASURING the outward normals of Btn_L, Btn_R and Btn_Z (all
+; three point -Z, so -Z is the rear edge the cable and shoulders live on) and
+; then by rendering it, NOT by reasoning about axis signs. Tools/glb/
+; prepare_n64_pad.py bakes the centimetre-to-metre scale into the file, so no
+; import scale is needed either.
 ;
-; snap_require narrows it to plugs; retro_controller.gd narrows it again to the
-; "n64_pak" group, so a cable end offered here is refused.
+; The offset only re-centres the mesh and puts the button face at y = 0: the
+; raw shell sits x-centred, y 0.0008..0.0636, z -0.0703..+0.0794.
+[node name="Shell" parent="Model" instance=ExtResource("6_shell")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06355, -0.00455)
+
+; The expansion bay, measured off the shell's own underside. Its mouth is the
+; LOWEST face on the whole controller (y = 0.0008 raw, -0.0628 here), spanning
+; x +-25.5 mm and z -66..-38 mm, with the connector pins 37 mm up inside it.
+;
+; The zone stands 2 mm proud of that mouth, which is what puts a seated pak's
+; mating face on the surface rather than 2 mm inside it — see the frame table in
+; any of the three pak scenes.
+;
+; Centred on the opening's FULL-WIDTH band, not on the bay block. The opening is
+; a rounded 55 x 24 mm hole that tapers at both ends -- 29 mm wide at z = -70,
+; 55 mm from -62 to -48, 44 mm at -46 -- so the rectangle an insert can actually
+; occupy is 55 x 14 centred at z = -55, and that is what the three paks are
+; sized to. Centring on the block instead would push the insert into the taper.
+;
+; snap_require narrows it to plugs; n64_controller.gd inherits RetroController's
+; narrowing to the "n64_pak" group, so a cable end offered here is refused.
 [node name="ExpansionPort" parent="." instance=ExtResource("5_snapzone")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.062, 0.004)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0648, -0.0550)
 grab_distance = 0.035
 snap_require = "controller_plug"
 
+; The cable leaves the middle of the rear edge, between the shoulders.
 [node name="CableAttachPoint" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.004, -0.026)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.014, -0.0745)
 
 [node name="PickableHighlight" type="Node3D" parent="."]
 script = ExtResource("2_pickhigh")
 
 [node name="PointerArea" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.025, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0314, 0)
 collision_layer = 1048576
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
-shape = SubResource("BoxShape3D_body")
+shape = SubResource("BoxShape3D_pointer")
 
+; On the outer grips, which run x 46..74 mm out and z 1..47 mm toward the player.
 [node name="HandRight" parent="." instance=ExtResource("3_rhand")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.05, -0.02, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.060, -0.035, 0.024)
 visible = false
 
 [node name="HandLeft" parent="." instance=ExtResource("4_lhand")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.05, -0.02, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.060, -0.035, 0.024)
 visible = false

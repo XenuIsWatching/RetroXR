@@ -10,24 +10,41 @@
 [sub_resource type="PhysicsMaterial" id="PhysMat_pak"]
 friction = 0.8
 
-; 63 x 55 x 22 mm. WIDER than the other two paks and than the port it seats in,
-; which is not a mistake to tidy up: a Game Boy cartridge is 57 mm across and the
-; expansion port is 34, so the real accessory is a narrow tongue under a body
-; wide enough to swallow a cartridge. Trimming the body to the port's width would
-; leave the cartridge overhanging both sides.
+; The Transfer Pak (NUS-019): a plug into the controller's expansion bay, and a
+; body deep enough to swallow most of a Game Boy cartridge.
 ;
-; Same frame convention as the other paks — mating face at y = +0.002, origin 2 mm
-; behind it so the port seats the FACE and not the centre:
+; THE CARTRIDGE LIES FLAT AND SLIDES IN FROM THE BACK, across the pak, NOT down
+; its length, and NOT upright in line with the plug: Wikipedia describes the
+; unit's back as carrying
+; "a receptacle slot for a Game Boy game cartridge to slide in parallel to the
+; back", and the retail copy has you "slide the Game Boy cartridge into a slot
+; on top of the Transfer Pak" before plugging the Pak into the controller. Both
+; describe a cartridge lying flat against the pak's back panel, perpendicular to
+; the plug — which is why the body here is deep in Z rather than long in Y, and
+; why the bay is turned a quarter turn about X.
 ;
-;   tongue    0.0020 ..  0.0090   (buried in the prong once seated)
+; THE PRONG GOES INSIDE THE BAY, and it is PERPENDICULAR TO THE GAME SLOT: it
+; rises 35 mm along +Y into the controller while the cartridge slides in along
+; Z. Those two axes are at right angles on the real accessory and they are here.
+; 51 x 14 is the rectangle that fits the port -- see controller_pak.tscn for the
+; measurement -- and all three paks share it because it is the same port.
+;
+; The body is WIDER than the port on purpose, and that is not a mistake to tidy
+; up: a Game Boy cartridge is 57 mm across, so the housing has to be wider than
+; anything that fits the port. It also runs well past the shell's rear edge,
+; which is what the real accessory does.
+;
+; Frame, with the mating face at y = +0.002:
+;
+;   prong     0.0020 ..  0.0370   (51 x 14, inside the controller once seated)
 ;   face                 0.0020
-;   body     -0.0530 ..  0.0020
-;   bay zone            -0.0450   (a cartridge's ORIGIN, so it stands half in)
+;   body     -0.0240 ..  0.0020   (63 wide x 52 deep, centred 14 mm rearward)
+;   cart slot           -0.0140   (a cartridge's ORIGIN, lying flat)
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(0.063, 0.055, 0.022)
+size = Vector3(0.063, 0.026, 0.052)
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(0.063, 0.055, 0.022)
+size = Vector3(0.063, 0.026, 0.052)
 
 [sub_resource type="StandardMaterial3D" id="Mat_shell"]
 albedo_color = Color(0.72, 0.71, 0.68, 1)
@@ -38,16 +55,17 @@ albedo_color = Color(0.1, 0.1, 0.11, 1)
 roughness = 0.62
 
 [sub_resource type="BoxMesh" id="BoxMesh_tongue"]
-size = Vector3(0.028, 0.007, 0.008)
+size = Vector3(0.051, 0.035, 0.014)
 
-; The slot a cartridge goes into, on the underside. Stood 1 mm proud of the face
-; rather than flush: a dark box set coplanar with the shell z-fights down to a
-; sliver, and one set fully inside a solid body cannot be seen at all.
+; The slot a cartridge goes into, on the REAR face now that the cartridge lies
+; flat. Stood 1 mm proud rather than flush: a dark box set coplanar with the
+; shell z-fights down to a sliver, and one set fully inside a solid body cannot
+; be seen at all.
 [sub_resource type="BoxMesh" id="BoxMesh_mouth"]
-size = Vector3(0.059, 0.002, 0.011)
+size = Vector3(0.059, 0.011, 0.002)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
-size = Vector3(0.073, 0.065, 0.032)
+size = Vector3(0.073, 0.036, 0.062)
 
 [node name="TransferPak" type="RigidBody3D" groups=["hand_held_device"]]
 collision_layer = 4
@@ -60,43 +78,53 @@ angular_damp = 8.0
 script = ExtResource("1_pakscript")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0255, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.011, -0.014)
 shape = SubResource("BoxShape3D_body")
 
 [node name="Body" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0255, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.011, -0.014)
 mesh = SubResource("BoxMesh_body")
 surface_material_override/0 = SubResource("Mat_shell")
 
+; Points UP (+Y), into the bay. Named Tongue for continuity —
+; Tools/input/n64_pak_probe.tscn finds it by this name and measures it against
+; the bay opening.
 [node name="Tongue" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0055, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0195, 0)
 mesh = SubResource("BoxMesh_tongue")
 surface_material_override/0 = SubResource("Mat_dark")
 
 [node name="WellMouth" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0525, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.014, -0.0405)
 mesh = SubResource("BoxMesh_mouth")
 surface_material_override/0 = SubResource("Mat_dark")
 
-; The cartridge bay. A Game Boy cartridge enters from BELOW and stands upright in
-; the pak, which is the one orientation that needs no rotation: MediaDimensions
-; gives it as 57 x 65 x 8, already tall on Y.
+; The cartridge bay. A Game Boy cartridge enters from the BACK (-Z) and lies
+; FLAT inside the pak, its broad faces up and down — see the note at the top for
+; the sources that settle that.
 ;
-; The zone is placed at the cartridge's ORIGIN, so seating it puts 40 mm of a
-; 65 mm cartridge inside the body with the labelled top edge still showing —
-; which is what makes a loaded pak readable at a glance.
+; Turned a quarter turn about X, which is what makes it true. MediaDimensions
+; gives the cartridge as 57 x 65 x 8, authored standing up with its label toward
+; +Y and its edge connector at -Y. R_x(-90) sends that connector to +Z, so the
+; cartridge slides in contacts-first from the rear and its label ends up facing
+; down, readable when the controller is turned over.
 ;
-; Turned a half turn about Z, which is what makes that true. A cartridge is
-; authored with its label toward +Y and its edge connector at -Y, so an
-; unrotated bay swallowed the printed end and left the bare contacts hanging out
-; of the mouth — in label-first, the one way round a cartridge does not go.
-; Symmetric under transpose, so the row/column convention does not bite here.
+; The basis below is written by ROWS, which is what a .tscn stores, and this is
+; NOT a symmetric matrix — a quarter turn reads differently under the two
+; conventions, so it cannot silently be its own transpose the way a half turn
+; can. n64_pak_probe.tscn asserts the seated cartridge really does lie flat with
+; its connector toward +Z rather than trusting these nine numbers.
+;
+; The zone sits at the cartridge's ORIGIN, so seating one leaves about 18 mm of
+; a 65 mm cartridge standing out of the mouth — enough to grab and to read, and
+; little enough that the pak looks like it is holding the cartridge rather than
+; balancing it.
 ;
 ; snap_require is load-bearing, not decoration: can_preview refuses to draw the
 ; snap ghost for a zone without one, and a ray grab has no path to a socket the
 ; ghost never lit -- the cartridge falls to the floor instead of seating.
 [node name="CartridgeBay" parent="." instance=ExtResource("6_snapzone")]
-transform = Transform3D(-1, 0, 0, 0, -1, 0, 0, 0, 1, 0, -0.045, 0)
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, -0.014, -0.0255)
 grab_distance = 0.04
 snap_require = "cartridge"
 
@@ -108,7 +136,7 @@ script = ExtResource("3_grabpoint")
 script = ExtResource("2_pickhigh")
 
 [node name="PointerArea" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0255, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.011, -0.014)
 collision_layer = 1048576
 collision_mask = 0
 

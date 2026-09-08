@@ -69,6 +69,7 @@ const SECTIONS: Array = [
 		["NES console", "greenestbanana", "CC BY 4.0"],
 		["NES controller", "donnichols", "CC BY 4.0"],
 		["Nightstand", "ilyafom1", "CC BY 4.0"],
+		["Nintendo 64 controller", "synthetic worlds — @syntheticworlds", "CC BY 4.0"],
 		["PlayStation controller", "synthetic worlds — @syntheticworlds", "CC BY 4.0"],
 		["PlayStation hardware", "Rusty Hardy — @rustificus", "CC BY 4.0"],
 		["SNES mouse", "Peardian", "CC BY 4.0"],

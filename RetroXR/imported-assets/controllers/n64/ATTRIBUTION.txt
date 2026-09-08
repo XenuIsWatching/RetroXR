@@ -1,0 +1,79 @@
+n64_controller.glb
+------------------
+
+Derived from "Nintendo 64 Controller" by synthetic worlds (@syntheticworlds),
+published on Sketchfab 2016-07-24 under CC Attribution 4.0 -- redistributable,
+modifiable and usable commercially, on the one condition that the maker is
+credited:
+
+    model    https://sketchfab.com/3d-models/nintendo-64-controller-0cec163531b5428a8b77114314364712
+    author   https://syntheticworlds.co.uk
+    licence  CC BY 4.0 -- https://creativecommons.org/licenses/by/4.0/
+    credit   mesh by Sean O'Connor, textures by Jon Blenky
+
+CC BY's condition is live and unsatisfied by this file alone, so the credit is
+ALSO carried in the About panel (Scripts/UI/spawn_menu/views/about_view.gd,
+"Nintendo 64 controller"). Do not remove that row. The same maker's PlayStation
+pad is already credited there under the same licence.
+
+The mesh was made for a VR game room, which is why it arrives with every control
+already separated -- the thing that makes the animated pad possible at all.
+
+
+What was done to it, by Tools/glb/prepare_n64_pad.py
+----------------------------------------------------
+
+Re-run that script to rebuild this file from the source; it is deterministic and
+verifies its own work (`--verify`).
+
+  TRADEMARKS REMOVED. Two marks, cleared from all three texture maps:
+
+    - the "Nintendo(R)" wordmark on the front face, inside its moulded badge
+    - the Nintendo 64 "N" logo and the "NUS-005 ... 64 CONTROLLER" legend
+      moulded into the underside
+
+  Each appears in EVERY map, which is the trap this asset sets. The wordmark is
+  embossed in the normal map, cut into the roughness map at full contrast, AND
+  printed into the base colour at about six grey levels out of 255 — invisible
+  in a min/max summary of the region, and perfectly legible in a render as flat
+  grey lettering. Clearing the normal map alone removes the moulding and leaves
+  the printing exactly as readable as before.
+
+  The badge's OUTLINE is deliberately kept and only its interior cleared, so the
+  face still carries the moulded oval a real pad has: an empty badge reads as a
+  blank plate rather than as a scrubbed one. The underside legend has no such
+  frame and went entirely.
+
+  Cleared regions are RECONSTRUCTED from the surface around them (normalised
+  convolution plus matched grain), not patched from elsewhere on the map and not
+  filled flat.
+
+  GEOMETRY. The source ships the body twice — `Body` at 2102 triangles and a
+  3520-triangle `N64_Controller_BACKUP` occupying the identical AABB. Both would
+  draw, z-fighting the shell against itself. The duplicate is dropped, leaving
+  3520 triangles total across 13 meshes.
+
+  The four Sketchfab/FBX wrapper nodes are collapsed into one root (their two
+  rotations cancel to identity, checked before discarding them), and the
+  centimetre-scale geometry is baked to metres — NOT left to the importer's
+  root scale, which would leave every button's local transform in centimetres
+  and put the animation's press depths out by a factor of 100.
+
+  TEXTURES. The three maps arrive at 4096x4096, ~19 MB of GLB and roughly 50 MB
+  of Quest VRAM for one hand prop. Cut to 2048 (normal — it carries all the
+  moulded relief), 1024 (base colour) and 512 (roughness), for a 2.3 MB file.
+
+
+What this shell is used for
+---------------------------
+
+Unlike the shell it replaced, every control is a separate named mesh
+(`Btn_A`, `Btn_B`, `Btn_C_*`, `Btn_L`, `Btn_R`, `Btn_Start`, `Btn_Z`, `DPad`,
+`Stick`), so the pad's buttons are ANIMATED by binding those meshes rather than
+by authoring primitive stand-ins on top of a static shell.
+Scripts/Objects/controllers/n64_controller.gd does the binding;
+Tools/input/n64_button_probe.tscn checks it.
+
+The shell also models the expansion bay. Tools/input/n64_pak_probe.tscn measures
+that bay out of this file at run time and checks the three paks against it, so
+replacing this asset cannot silently leave them hanging in mid-air.

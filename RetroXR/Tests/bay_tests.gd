@@ -950,17 +950,31 @@ func _group_pak() -> void:
 		await _wait(6)
 		_ok(tpak.get_cart() == gb, "pak/a seated cartridge is the pak's cartridge")
 
-		# Which way UP it seats. A cartridge is authored label toward +Y and edge
-		# connector at -Y, and the mouth is the pak's underside, so a correctly
-		# seated one is inverted relative to the pak: contacts up into the body,
-		# printed face down and out in the room. An unrotated bay reads +1 here
-		# and puts the cartridge in label-first.
-		var pak_up: Vector3 = tpak.global_transform.basis.y
-		_ok(gb.global_transform.basis.y.dot(pak_up) < -0.9,
-			"pak/a seated cartridge goes in contacts-first, not label-first")
+		# WHICH WAY it seats, and this is about the real accessory rather than
+		# about tidiness. A Transfer Pak takes its cartridge FLAT, sliding in
+		# across the back of the unit -- Wikipedia describes the back as holding
+		# "a receptacle slot for a Game Boy game cartridge to slide in parallel
+		# to the back", and the retail copy has you slide the cartridge in
+		# before plugging the Pak into the controller. It does NOT swallow the
+		# cartridge lengthways in line with its own plug.
+		#
+		# A cartridge is authored standing up, label toward +Y and edge
+		# connector at -Y, so seating it flat means a quarter turn: contacts
+		# toward the pak's +Z, broad faces up and down.
+		var pak_basis: Basis = tpak.global_transform.basis
+		var cart_basis: Basis = gb.global_transform.basis
+		# The connector is the cartridge's -Y end.
+		_ok((-cart_basis.y).dot(pak_basis.z) > 0.9,
+			"pak/a seated cartridge goes in contacts-first, from the back")
+		# Its broad face is +Z in its own frame, and must end up facing up or
+		# down. A half turn leaves it facing sideways and fails here, which is
+		# the point: a half turn is its own transpose, so it could never catch a
+		# row/column mix-up in the .tscn either.
+		_ok(absf(cart_basis.z.dot(pak_basis.y)) > 0.9,
+			"pak/and lies flat in the pak rather than standing upright")
 		var label := gb.get_node_or_null("LabelMesh") as Node3D
-		_ok(label != null and tpak.to_local(label.global_position).y < -0.053,
-			"pak/so its printed face clears the mouth instead of hiding inside")
+		_ok(label != null and tpak.to_local(label.global_position).z < -0.031,
+			"pak/so its printed end clears the mouth instead of hiding inside")
 
 	# The decision itself, against both N64 cores' real vocabularies. A pak the
 	# running core cannot serve must leave the port alone rather than fit

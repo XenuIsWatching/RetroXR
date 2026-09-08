@@ -9,7 +9,7 @@
 ## RefCounted both hold.
 ##
 ## Fill the arrays/dicts, then call animate() each frame:
-##   buttons : {node, rest, bit, depth, dir?, mask?}
+##   buttons : {node, rest, depth, bit?, mask?, dir?, stick_dir?, stick?}
 ##   dpad    : {node, rest, pivot, bits?, axis?}   (dpad2 is a second rocker)
 ##   stick_l : {node, rest, pivot}                 (clicks on L3; stick_r on R3)
 class_name ControlAnimator
@@ -22,6 +22,9 @@ var press_dir: Vector3 = Vector3(0, -1, 0)
 var stick_click: float = 0.0016
 var dpad_tilt_deg: float = 7.0
 var stick_tilt_deg: float = 16.0
+## Deflection past which a stick-driven button counts as pressed. Only used by
+## entries carrying a "stick_dir" — see animate().
+var stick_press: float = 0.5
 ## A positive pitch about the mesh parent's X axis lifts whatever lies on -Z, so
 ## a rig whose UP arm points -Z must set this to -1.0 for UP to depress it.
 var dpad_pitch_sign: float = 1.0
@@ -47,8 +50,21 @@ func animate(btn: int, lstick: Vector2, rstick: Vector2, weight: float) -> void:
 		# face buttons as a single piece — the Genesis pad's A, B and C are one
 		# mesh — so there is nothing to press individually. Defaults to this
 		# entry's own bit.
-		var mask: int = int(e.get("mask", 1 << int(e["bit"])))
-		var pressed: float = 1.0 if (btn & mask) != 0 else 0.0
+		var bit: int = int(e.get("bit", -1))
+		var mask: int = int(e.get("mask", (1 << bit) if bit >= 0 else 0))
+		var pressed: float = 1.0 if (mask != 0 and (btn & mask) != 0) else 0.0
+		# "stick_dir" presses a button from an ANALOG stick instead of, or as
+		# well as, a bit. The N64's four C buttons are why: a core reads that
+		# cluster as the right analog stick, and the two bits it also offers for
+		# C-Left and C-Right are the SAME bits as the L and R shoulders — so
+		# animating those two from their bits would depress a C button every
+		# time the player squeezed a grip. The stick is the unambiguous source,
+		# and it is what RetroXR's own default XR binding sends.
+		var push: Vector2 = e.get("stick_dir", Vector2.ZERO)
+		if push != Vector2.ZERO and pressed == 0.0:
+			var src: Vector2 = lstick if e.get("stick", "right") == "left" else rstick
+			if src.dot(push) > stick_press:
+				pressed = 1.0
 		var dir: Vector3 = e.get("dir", press_dir)
 		var target := Transform3D(rest.basis,
 			rest.origin + dir * (float(e["depth"]) * pressed))
