@@ -33,6 +33,8 @@ uniform bool has_albedo_tex = false;
 uniform bool has_normal_tex = false;
 uniform bool has_emission_tex = false;
 uniform float normal_scale : hint_range(0.0, 2.0) = 1.0;
+uniform vec3 uv1_scale = vec3(1.0);
+uniform vec3 uv1_offset = vec3(0.0);
 
 // The room's baked irradiance volume, shared with the shell.
 uniform sampler3D gi_irr : filter_linear, repeat_disable;
@@ -62,8 +64,9 @@ varying vec3 v_world_binormal;
 
 
 void vertex() {
+	UV = UV * uv1_scale.xy + uv1_offset.xy;
 	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	v_world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	v_world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	v_world_tangent = normalize((MODEL_MATRIX * vec4(TANGENT, 0.0)).xyz);
 	v_world_binormal = normalize((MODEL_MATRIX * vec4(BINORMAL, 0.0)).xyz);
 }
@@ -113,5 +116,6 @@ void fragment() {
 	}
 
 	ALBEDO = albedo * light + emission;
-	ALPHA = albedo_color.a;
+	// Opaque props must not write ALPHA: even 1.0 selects the transparent pass
+	// and depth_draw_opaque then stops writing depth.
 }

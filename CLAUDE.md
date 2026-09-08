@@ -237,6 +237,7 @@ debug build, 2026-08-27 — all passing):
 | `time_of_day_tests` | — | — | the day/night cycle |
 | `tv_resize_tests` | — | — | the TV's own geometry |
 | `web_server_tests` | — | — | the built-in file server |
+| `prop_lighting_tests` | 17 | 1 s | which of a room's meshes go on the baked prop shader, late spawns and despawns included |
 
 Counts are what the suite printed, not a target — they drift upward as cases are added,
 so re-measure rather than trusting this table, and treat an unexplained DROP as a signal.

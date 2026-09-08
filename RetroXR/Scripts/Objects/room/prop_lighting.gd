@@ -35,7 +35,14 @@ const PROP_SHADER := "res://Shaders/pbr_prop_unshaded.gdshader"
 @export var shell_lighting_path: NodePath
 
 var _converted: int = 0
-var _materials: Array[ShaderMaterial] = []
+var _room: Node3D
+var _shader: Shader
+var _volume: Dictionary = {}
+# Weak values let despawning release materials and their textures immediately.
+var _materials: Dictionary = {}
+var _converted_meshes: Dictionary = {}
+var _pending: Dictionary = {}
+var _flush_queued := false
 
 
 func _ready() -> void:
@@ -61,45 +68,138 @@ func _ready() -> void:
 	var shader: Shader = load(PROP_SHADER)
 	if shader == null:
 		return
-	var seen: Dictionary = {}
-	for node in room.find_children("*", "GeometryInstance3D", true, false):
-		_convert(node as GeometryInstance3D, shader, volume, seen)
+	_start(room, shader, volume)
 	shell.bake_volume_changed.connect(_on_volume_changed)
 	print("[PropLighting] %d prop material(s) on the bake in %s" % [_converted, room.name])
+
+
+func _start(room: Node3D, shader: Shader, volume: Dictionary) -> void:
+	_room = room
+	_shader = shader
+	_volume = volume
+	get_tree().node_added.connect(_on_node_added)
+	get_tree().node_removed.connect(_on_node_removed)
+	for node in room.find_children("*", "MeshInstance3D", true, false):
+		_convert(node as MeshInstance3D)
+
+
+func _on_node_added(node: Node) -> void:
+	if node is MeshInstance3D and is_instance_valid(_room) and _room.is_ancestor_of(node):
+		_pending[node.get_instance_id()] = weakref(node)
+		if not _flush_queued:
+			_flush_queued = true
+			_flush_pending.call_deferred()
+
+
+# node_added precedes _ready. Wait until model setup has installed its screen,
+# LED and button overrides; async models are covered when their children arrive.
+func _flush_pending() -> void:
+	_flush_queued = false
+	var pending := _pending
+	_pending = {}
+	for ref: WeakRef in pending.values():
+		var mi := ref.get_ref() as MeshInstance3D
+		if is_instance_valid(mi) and mi.is_inside_tree() and _room.is_ancestor_of(mi):
+			_convert(mi)
+
+
+func _on_node_removed(node: Node) -> void:
+	var id := node.get_instance_id()
+	_pending.erase(id)
+	if not _converted_meshes.has(id):
+		return
+	_restore(id)
+	# Removal is an event, not a per-frame scene traversal.
+	for key in _materials.keys():
+		if _materials[key].get_ref() == null:
+			_materials.erase(key)
+
+
+func _restore(id: int) -> void:
+	if not _converted_meshes.has(id):
+		return
+	var record: Dictionary = _converted_meshes[id]
+	var mi := (record["mesh"] as WeakRef).get_ref() as MeshInstance3D
+	if is_instance_valid(mi) and mi.mesh != null:
+		for surface: int in record["surfaces"]:
+			if surface >= mi.mesh.get_surface_count():
+				continue
+			var mat := mi.get_surface_override_material(surface) as ShaderMaterial
+			if mat != null and mat.shader == _shader:
+				mi.set_surface_override_material(surface, null)
+	_converted_meshes.erase(id)
+
+
+func _exit_tree() -> void:
+	if get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.disconnect(_on_node_added)
+	if get_tree().node_removed.is_connected(_on_node_removed):
+		get_tree().node_removed.disconnect(_on_node_removed)
+	for id: int in _converted_meshes.keys():
+		_restore(id)
+	_pending.clear()
+	_materials.clear()
 
 
 ## Follow the wall switch, so the machines darken with the walls.
 func _on_volume_changed(volume: Dictionary) -> void:
 	if volume.is_empty():
 		return
-	for mat in _materials:
-		mat.set_shader_parameter("gi_irr", volume["irr"])
-		mat.set_shader_parameter("gi_dir", volume["dir"])
+	_volume = volume
+	for id in _materials.keys():
+		var mat := _materials[id].get_ref() as ShaderMaterial
+		if mat == null:
+			_materials.erase(id)
+		else:
+			_set_volume(mat, volume)
 
 
-func _convert(gi: GeometryInstance3D, shader: Shader, volume: Dictionary,
-		seen: Dictionary) -> void:
-	if gi.layers & layers == 0:
+func _convert(mi: MeshInstance3D) -> void:
+	if mi.layers & layers == 0:
 		return
-	if _in_controller_art(gi):
+	if _in_controller_art(mi):
 		return
-	var mi := gi as MeshInstance3D
-	if mi == null or mi.mesh == null:
+	if mi.mesh == null or mi.material_override != null:
 		return
+	var surfaces: Array[int] = []
 	for i in mi.mesh.get_surface_count():
-		var src := mi.get_surface_override_material(i) as BaseMaterial3D
-		if src == null:
-			src = mi.mesh.surface_get_material(i) as BaseMaterial3D
-		if src == null:
+		# Overrides belong to the object: its scripts may retain the material or
+		# cast it back to StandardMaterial3D to update LEDs, screens and buttons.
+		# Never replace an authored ShaderMaterial by falling back to its mesh.
+		if mi.get_surface_override_material(i) != null:
 			continue
-		if src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+		var src := mi.mesh.surface_get_material(i) as BaseMaterial3D
+		if not _supported(src):
 			continue
 		var id := src.get_instance_id()
-		if not seen.has(id):
-			seen[id] = _translate(src, shader, volume)
-			_materials.append(seen[id])
-		mi.set_surface_override_material(i, seen[id])
+		var mat: ShaderMaterial = _materials[id].get_ref() if _materials.has(id) else null
+		if mat == null:
+			mat = _translate(src, _shader, _volume)
+			_materials[id] = weakref(mat)
+		mi.set_surface_override_material(i, mat)
+		surfaces.append(i)
 		_converted += 1
+	if not surfaces.is_empty():
+		var mesh_id := mi.get_instance_id()
+		if _converted_meshes.has(mesh_id):
+			_converted_meshes[mesh_id]["surfaces"].append_array(surfaces)
+		else:
+			_converted_meshes[mesh_id] = {"mesh": weakref(mi), "surfaces": surfaces}
+
+
+# Leave features this shader cannot reproduce on their authored material. In
+# particular, changing a pixel-art texture's filter would sacrifice sharpness.
+func _supported(src: BaseMaterial3D) -> bool:
+	return src != null and src.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED \
+		and src.shading_mode == BaseMaterial3D.SHADING_MODE_PER_PIXEL \
+		and src.cull_mode == BaseMaterial3D.CULL_BACK and not src.no_depth_test \
+		and src.depth_draw_mode == BaseMaterial3D.DEPTH_DRAW_OPAQUE_ONLY \
+		and src.texture_filter == BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS \
+		and src.texture_repeat and not src.uv1_triplanar and not src.uv2_triplanar \
+		and not src.vertex_color_use_as_albedo and not src.emission_enabled \
+		and not src.grow and not src.proximity_fade_enabled \
+		and src.distance_fade_mode == BaseMaterial3D.DISTANCE_FADE_DISABLED \
+		and src.billboard_mode == BaseMaterial3D.BILLBOARD_DISABLED and src.next_pass == null
 
 
 ## One StandardMaterial3D, as the unshaded equivalent.
@@ -111,6 +211,8 @@ func _translate(src: BaseMaterial3D, shader: Shader, volume: Dictionary) -> Shad
 	var out := ShaderMaterial.new()
 	out.shader = shader
 	out.render_priority = src.render_priority
+	out.set_shader_parameter("uv1_scale", src.uv1_scale)
+	out.set_shader_parameter("uv1_offset", src.uv1_offset)
 
 	var albedo := src.albedo_texture
 	out.set_shader_parameter("albedo_color", src.albedo_color)
@@ -136,19 +238,21 @@ func _translate(src: BaseMaterial3D, shader: Shader, volume: Dictionary) -> Shad
 	if emission_tex != null:
 		out.set_shader_parameter("emission_tex", emission_tex)
 
-	out.set_shader_parameter("gi_irr", volume["irr"])
-	out.set_shader_parameter("gi_dir", volume["dir"])
-	out.set_shader_parameter("gi_min", volume["min"])
-	out.set_shader_parameter("gi_size", volume["size"])
+	_set_volume(out, volume)
 	return out
+
+
+func _set_volume(mat: ShaderMaterial, volume: Dictionary) -> void:
+	mat.set_shader_parameter("gi_irr", volume["irr"])
+	mat.set_shader_parameter("gi_dir", volume["dir"])
+	mat.set_shader_parameter("gi_min", volume["min"])
+	mat.set_shader_parameter("gi_size", volume["size"])
 
 
 ## The controller art the XR runtime hands over is not a prop, and converting it
 ## does lasting damage rather than costing a frame. ControllerArt duplicates
 ## those materials and writes `albedo_color.a` on them to fade the controller out
-## of a grab; this shader resolves ALPHA from a COPY of albedo_color taken at
-## conversion, so a walk that lands mid-fade freezes the controller translucent
-## for the rest of the session — and leaves a ShaderMaterial behind, which is not
+## of a grab. Conversion would leave a ShaderMaterial behind, which is not
 ## a BaseMaterial3D, so the fade can never write to it again to put it right.
 ##
 ## The room walk reaches it at all because the scene root is the room here, and
