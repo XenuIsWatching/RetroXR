@@ -20,13 +20,13 @@ The project is staged outside the checkout; no game autoloads or preferences run
 ## Prepare and verify
 
 ```powershell
-python Tools/crt_bench/prepare.py C:/path/to/crt-bench --android-source C:/path/to/4.7.stable/android_source.zip
+python Tools/crt_bench/prepare.py C:/path/to/crt-bench --android-source C:/path/to/4.7.2.stable/android_source.zip
 & $godot --headless --path C:/path/to/crt-bench --editor --import --quit
 & $godot --path C:/path/to/crt-bench -- --visual
 & $godot --headless --path C:/path/to/crt-bench --export-debug QuestCRTBench C:/path/to/crt-bench/crt_bench.apk --quit
 ```
 
-Use a Godot 4.7.stable editor with configured Android SDK/JDK and the repository's
+Use a Godot 4.7.2.stable editor with configured Android SDK/JDK and the repository's
 installed `godotopenxrvendors` binaries. The template is extracted only on first
 preparation. `--quit` is needed for unattended exports with the vendor plugin.
 

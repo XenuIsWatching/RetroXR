@@ -124,6 +124,9 @@ def find_godot(explicit: str | None) -> str:
         return env
 
     candidates = [
+        Path("C:/Program Files/Godot/Godot_v4.7.2-stable_win64.exe/"
+             "Godot_v4.7.2-stable_win64_console.exe"),
+        Path.home() / "Godot/Godot_v4.7.2-stable_linux.x86_64",
         Path("C:/Program Files/Godot/Godot_v4.7-stable_win64/"
              "Godot_v4.7-stable_win64_console.exe"),
         Path.home() / "Godot/Godot_v4.7-stable_linux.x86_64",
@@ -140,9 +143,9 @@ def find_godot(explicit: str | None) -> str:
 
     sys.exit(
         "could not find Godot 4.7. Pass --godot <path> or set $GODOT.\n"
-        "  Windows: C:/Program Files/Godot/Godot_v4.7-stable_win64/"
+        "  Windows: C:/Program Files/Godot/Godot_v4.7.2-stable_win64.exe/"
         "Godot_v4.7-stable_win64_console.exe\n"
-        "  Linux:   ~/Godot/Godot_v4.7-stable_linux.x86_64"
+        "  Linux:   ~/Godot/Godot_v4.7.2-stable_linux.x86_64"
     )
 
 

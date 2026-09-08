@@ -19,8 +19,8 @@ on:
         default: false
 
 env:
-  GODOT_VERSION: 4.7-stable
-  GODOT_TEMPLATE_DIR: 4.7.stable
+  GODOT_VERSION: 4.7.2-stable
+  GODOT_TEMPLATE_DIR: 4.7.2.stable
 
 permissions:
   contents: write

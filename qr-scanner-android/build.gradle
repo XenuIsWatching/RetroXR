@@ -35,6 +35,6 @@ dependencies {
     // Both are provided by the app: Godot ships its own lib, and ZXing is added
     // app-side by the retroxr_qr export plugin. Bundling either would duplicate
     // classes in the APK.
-    compileOnly 'org.godotengine:godot:4.7.0.stable'
+    compileOnly 'org.godotengine:godot:4.7.2.stable'
     compileOnly 'com.google.zxing:core:3.5.3'
 }

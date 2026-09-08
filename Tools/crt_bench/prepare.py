@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 parser = argparse.ArgumentParser(__doc__)
 parser.add_argument("output", type=Path)
-parser.add_argument("--android-source", type=Path, help="Godot 4.7.stable android_source.zip; installs the isolated Gradle template")
+parser.add_argument("--android-source", type=Path, help="android_source.zip from an installed export-templates folder, whose name stamps .build_version; installs the isolated Gradle template")
 args = parser.parse_args()
 out = args.output.resolve()
 out.mkdir(parents=True, exist_ok=True)
@@ -27,7 +27,7 @@ if args.android_source:
     if not (build / "build.gradle").exists():
         with zipfile.ZipFile(args.android_source) as archive:
             archive.extractall(build)
-    (android / ".build_version").write_text("4.7.stable")
+    (android / ".build_version").write_text(args.android_source.resolve().parent.name)
     (build / ".gdignore").touch()
 shaders = out / "Shaders"
 shaders.mkdir(exist_ok=True)

@@ -433,14 +433,14 @@ short recording and surface it inline — don't just report that the headless im
 passed. To encode mp4 from probe PNG frames: `imageio` + `imageio-ffmpeg` are pip-installed
 (`imageio.get_writer("out.mp4", fps=15, codec="libx264", pixelformat="yuv420p")`).
 
-Godot binary (Windows) — use **Godot 4.7** (the project targets 4.7):
+Godot binary (Windows) — use **Godot 4.7.2** (the project targets 4.7):
 ```
 C:\Program Files\Godot\Godot_v4.7-stable_win64\Godot_v4.7-stable_win64_console.exe
 ```
 Use the `_console.exe` variant so stdout/stderr is captured. `$proj` below is the
 `RetroXR/` folder inside your checkout.
 
-Godot binary (Linux): `~/Godot/Godot_v4.7-stable_linux.x86_64`
+Godot binary (Linux): `~/Godot/Godot_v4.7.2-stable_linux.x86_64`
 (the project targets Godot 4.7 — see `project.godot config/features`; `Godot_v4.6.3` also
 sits in that dir). `$proj` on Linux is `<checkout>/RetroXR`. Note Godot
 4.7 promoted "Not all code paths return a value" to a hard parse error for `Variant`-returning

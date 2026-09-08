@@ -31,8 +31,8 @@ PROJ="$REPO/RetroXR"
 if [[ -z "${GODOT:-}" ]]; then
   case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
-      GODOT="/c/Program Files/Godot/Godot_v4.7-stable_win64/Godot_v4.7-stable_win64_console.exe" ;;
-    *) GODOT="$HOME/Godot/Godot_v4.7-stable_linux.x86_64" ;;
+      GODOT="/c/Program Files/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" ;;
+    *) GODOT="$HOME/Godot/Godot_v4.7.2-stable_linux.x86_64" ;;
   esac
 fi
 [[ -x "$GODOT" ]] || { echo "godot not found: $GODOT (set GODOT=)" >&2; exit 2; }
