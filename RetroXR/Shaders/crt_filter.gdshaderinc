@@ -215,6 +215,10 @@ vec3 crt_glass_sheen(vec3 picture, vec3 normal, vec3 view, float wear, mat4 inv_
 // we point-sample, so anything left above Nyquist aliases. Hence the guard, which
 // takes each harmonic to zero shortly before its own Nyquist limit.
 float crt_band(float f) {
+	// The Nyquist guard is exactly zero here; avoid evaluating a dead sinc.
+	if (f >= 0.45) {
+		return 0.0;
+	}
 	float a = PI * f;
 	float box = (abs(a) < 1e-4) ? 1.0 : sin(a) / a;
 	return max(box, 0.0) * (1.0 - smoothstep(0.25, 0.45, f));
@@ -371,30 +375,45 @@ vec3 crt_mask(vec2 wuv) {
 
 	float tx = wuv.x * crt_mask_triads;    // horizontal position, in triads
 	float fw = fwidth(tx);                 // triads covered by this pixel
-	float a1 = crt_band(fw);
-	float a2 = crt_band(2.0 * fw);
-
 	float ty = wuv.y * crt_mask_rows;      // vertical position, in phosphor rows
 	float fy = fwidth(ty);
+	// Take BOTH derivatives before footprint-dependent control flow. Horizontal
+	// detail can vanish while slot/shadow row modulation is still visible.
+	float a1 = crt_band(fw);
+	float a2 = crt_band(2.0 * fw);
+	float ay = (crt_mask_mode >= 2) ? crt_band(fy) : 0.0;
+	vec3 m = vec3(1.0);
+	if (a1 > 0.0) {
 
-	// Slot / shadow masks stagger alternate phosphor rows by half a triad. Built
-	// from odd harmonics so it antialiases the same way and flattens to a constant
-	// (a harmless global phase shift) once the rows stop resolving.
-	float stagger = 0.0;
-	if (crt_mask_mode >= 2) {
-		float sq = 0.5 + 0.63662 * (crt_band(fy) * sin(TAU * ty)
-			+ crt_band(3.0 * fy) * sin(3.0 * TAU * ty) / 3.0);
-		stagger = 0.5 * sq;
+		// Slot / shadow masks stagger alternate phosphor rows by half a triad. Built
+		// from odd harmonics so it antialiases the same way and flattens to a constant
+		// (a harmless global phase shift) once the rows stop resolving.
+		float stagger = 0.0;
+		if (crt_mask_mode >= 2) {
+			float row_wave = 0.0;
+			if (ay > 0.0) {
+				row_wave = ay * sin(TAU * ty);
+				float ay3 = crt_band(3.0 * fy);
+				if (ay3 > 0.0) {
+					row_wave += ay3 * sin(3.0 * TAU * ty) / 3.0;
+				}
+			}
+			float sq = 0.5 + 0.63662 * row_wave;
+			stagger = 0.5 * sq;
+		}
+
+		vec3 ph = TAU * (tx - stagger) - vec3(0.0, TAU / 3.0, 2.0 * TAU / 3.0);
+		m += a1 * cos(ph);
+		if (a2 > 0.0) {
+			m += (0.5 * a2) * cos(2.0 * ph);
+		}
 	}
-
-	vec3 ph = TAU * (tx - stagger) - vec3(0.0, TAU / 3.0, 2.0 * TAU / 3.0);
-	vec3 m = vec3(1.0) + a1 * cos(ph) + (0.5 * a2) * cos(2.0 * ph);
 
 	// Dark band between phosphor rows. Zero mean too, and independent of the
 	// horizontal term, so the product still averages exactly 1.0.
-	if (crt_mask_mode >= 2) {
+	if (ay > 0.0) {
 		float depth = (crt_mask_mode == 3) ? 0.8 : 0.45;
-		m *= 1.0 + depth * crt_band(fy) * cos(TAU * ty);
+		m *= 1.0 + depth * ay * cos(TAU * ty);
 	}
 
 	return mix(vec3(1.0), max(m, vec3(0.0)), crt_mask_strength);
@@ -416,11 +435,15 @@ float crt_beam(vec2 wuv, float lum) {
 	if (crt_scanline_strength <= 0.0) {
 		return 1.0;
 	}
-	float sig = mix(crt_beam_min, crt_beam_max, pow(clamp(lum, 0.0, 1.0), 1.0 / 3.0));
-
 	float sl = wuv.y * crt_scanline_count;
-	float d = fract(sl) - 0.5;             // distance from this scanline's centre
 	float ph = max(fwidth(sl), 1e-4);      // pixel footprint, in scanlines
+	// The fade below already returns the flat average at this footprint. Avoid
+	// the cube root and six erf evaluations once no raster detail survives.
+	if (ph >= 0.8) {
+		return 1.0;
+	}
+	float sig = mix(crt_beam_min, crt_beam_max, pow(clamp(lum, 0.0, 1.0), 1.0 / 3.0));
+	float d = fract(sl) - 0.5;             // distance from this scanline's centre
 	float k = 1.0 / (max(sig, 1e-3) * 1.41421356);
 	float hp = 0.5 * ph;
 
