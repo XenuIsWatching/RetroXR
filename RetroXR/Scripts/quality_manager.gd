@@ -364,6 +364,9 @@ func _read_vrs_overrides() -> void:
 		_vrs_mode_override = str(cfg["vrs_mode"])
 	if cfg.has("subsampled"):
 		_subsampled_override = bool(cfg["subsampled"])
+	if cfg.has("no_flat"):
+		PropLighting.flatten_enabled = not bool(cfg["no_flat"])
+		print("[VRSProbe] flat prop shaders %s" % ("off" if bool(cfg["no_flat"]) else "on"))
 	if cfg.has("vrs_radius"):
 		_vrs_radius_override = float(cfg["vrs_radius"])
 	if cfg.has("vrs_strength"):
@@ -480,6 +483,22 @@ func _run_vrs_probe() -> void:
 				ext.call("set_projection_layer_supersampling_mode", int(pair[1]))
 				print("[VRSProbe] filter -> sharpen %d supersample %d" % [int(pair[0]), int(pair[1])])
 				await get_tree().create_timer(float(cfg["filter_sweep"])).timeout
+	if cfg.has("origin_yaw"):
+		# Turn the player's origin in place, so a headset resting on a desk can
+		# be pointed at the part of the room being measured. Degrees, relative.
+		var origin := get_tree().root.find_child("XROrigin3D", true, false) as Node3D
+		if origin != null:
+			origin.rotate_y(deg_to_rad(float(cfg["origin_yaw"])))
+			print("[VRSProbe] origin_yaw -> %.0f" % float(cfg["origin_yaw"]))
+	if cfg.has("yaw_sweep"):
+		# Same thing on a timer: every step turns by the given degrees and logs
+		# it, so screencaps can find the heading that frames the target.
+		var origin := get_tree().root.find_child("XROrigin3D", true, false) as Node3D
+		if origin != null:
+			for i in 8:
+				await get_tree().create_timer(6.0).timeout
+				origin.rotate_y(deg_to_rad(float(cfg["yaw_sweep"])))
+				print("[VRSProbe] yaw step %d" % (i + 1))
 	if cfg.has("max_lights"):
 		_probe_cap_lights(int(cfg["max_lights"]))
 	if cfg.has("vrs_radius"):

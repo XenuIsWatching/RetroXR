@@ -7,9 +7,10 @@
 ## by then more than the shell was still worth.
 ##
 ## WHAT IT CONVERTS, and what it will not touch:
-##   • StandardMaterial3D / ORMMaterial3D only. A ShaderMaterial is somebody's
-##     authored effect — the CRT phosphor, the screen, the outline — and
-##     replacing one would be replacing the thing it was written for.
+##   • StandardMaterial3D / ORMMaterial3D, plus the two ShaderMaterials in
+##     FLAT_SHADERS, which become a flat colour. Any other ShaderMaterial is
+##     somebody's authored effect — the CRT phosphor, the screen, the outline —
+##     and replacing one would be replacing the thing it was written for.
 ##   • Opaque only. A transparent material's blending and sort order are load
 ##     bearing, and this shader does not reproduce them.
 ##   • Nothing on the exterior layer. The volume is fitted to the room's inside,
@@ -25,6 +26,28 @@ extends Node
 
 const PROP_SHADER := "res://Shaders/pbr_prop_unshaded.gdshader"
 
+## Authored ShaderMaterials that DO get replaced on a headset, and with what:
+## a flat colour on the baked prop shader, no texture fetch at all. These are
+## the two Godot-lit fragment shaders left in the arcade once the shell and
+## the StandardMaterial props are baked - the table's wood (pbr_surface with
+## `shell` off, so ShellLighting leaves it) and the television's plastic - and
+## on a Quest 3 a lit, textured, normal-mapped surface is the most expensive
+## thing a fragment can be. The value names the uniform the flat colour comes
+## from; the wood also multiplies in its texture's mean.
+const FLAT_SHADERS := {
+	"res://Shaders/pbr_surface.gdshader": "tint",
+	"res://Shaders/tv_plastic.gdshader": "plastic_color",
+}
+
+## Mean colour of an albedo map the flat stand-in replaces, sRGB, measured
+## from the source image (PIL, 2026-09-09). A lookup rather than a readback:
+## Texture2D.get_image() on a headset is a GPU round trip at spawn time, and a
+## spawn hitch is worth more than exactness on a surface nobody reads closely.
+## An unlisted map falls back to mid grey under the material's tint.
+const FLAT_ALBEDO_MEAN := {
+	"res://imported-assets/shared/materials/Wood066_1K-JPG_Color.jpg": Color(0.350, 0.202, 0.075),
+}
+
 ## Room to convert. Empty means this node's parent.
 @export var room_path: NodePath
 
@@ -33,6 +56,10 @@ const PROP_SHADER := "res://Shaders/pbr_prop_unshaded.gdshader"
 
 ## ShellLighting in the same room, which owns the volume this borrows.
 @export var shell_lighting_path: NodePath
+
+## Probe switch: `vrsprobe.cfg` "no_flat" leaves the FLAT_SHADERS materials
+## on their authored shaders, so one build can measure both arms.
+static var flatten_enabled: bool = true
 
 var _converted: int = 0
 var _room: Node3D
@@ -126,7 +153,8 @@ func _restore(id: int) -> void:
 				continue
 			var mat := mi.get_surface_override_material(surface) as ShaderMaterial
 			if mat != null and mat.shader == _shader:
-				mi.set_surface_override_material(surface, null)
+				var originals: Dictionary = record.get("originals", {})
+				mi.set_surface_override_material(surface, originals.get(surface, null))
 	_converted_meshes.erase(id)
 
 
@@ -165,8 +193,21 @@ func _convert(mi: MeshInstance3D) -> void:
 	for i in mi.mesh.get_surface_count():
 		# Overrides belong to the object: its scripts may retain the material or
 		# cast it back to StandardMaterial3D to update LEDs, screens and buttons.
-		# Never replace an authored ShaderMaterial by falling back to its mesh.
-		if mi.get_surface_override_material(i) != null:
+		# Never replace an authored ShaderMaterial by falling back to its mesh -
+		# except the two in FLAT_SHADERS, which are replaced AS overrides and
+		# put back on restore.
+		var override := mi.get_surface_override_material(i)
+		if override != null:
+			var flat := _flatten(override as ShaderMaterial)
+			if flat == null:
+				continue
+			mi.set_surface_override_material(i, flat)
+			surfaces.append(i)
+			_converted += 1
+			var mid := mi.get_instance_id()
+			if not _converted_meshes.has(mid):
+				_converted_meshes[mid] = {"mesh": weakref(mi), "surfaces": [] as Array[int], "originals": {}}
+			(_converted_meshes[mid]["originals"] as Dictionary)[i] = override
 			continue
 		var src := mi.mesh.surface_get_material(i) as BaseMaterial3D
 		if not _supported(src):
@@ -184,7 +225,7 @@ func _convert(mi: MeshInstance3D) -> void:
 		if _converted_meshes.has(mesh_id):
 			_converted_meshes[mesh_id]["surfaces"].append_array(surfaces)
 		else:
-			_converted_meshes[mesh_id] = {"mesh": weakref(mi), "surfaces": surfaces}
+			_converted_meshes[mesh_id] = {"mesh": weakref(mi), "surfaces": surfaces, "originals": {}}
 
 
 # Leave features this shader cannot reproduce on their authored material. In
@@ -200,6 +241,41 @@ func _supported(src: BaseMaterial3D) -> bool:
 		and not src.grow and not src.proximity_fade_enabled \
 		and src.distance_fade_mode == BaseMaterial3D.DISTANCE_FADE_DISABLED \
 		and src.billboard_mode == BaseMaterial3D.BILLBOARD_DISABLED and src.next_pass == null
+
+
+## One allowlisted ShaderMaterial, as a flat colour on the prop shader. Null
+## for anything else, which is how _convert knows to leave an override alone.
+## Cached by the source's instance id like the StandardMaterial path, so every
+## table leg wearing the apron material shares one stand-in.
+func _flatten(src: ShaderMaterial) -> ShaderMaterial:
+	if not flatten_enabled or src == null or src.shader == null 			or not FLAT_SHADERS.has(src.shader.resource_path):
+		return null
+	var id := src.get_instance_id()
+	var cached: ShaderMaterial = _materials[id].get_ref() if _materials.has(id) else null
+	if cached != null:
+		return cached
+	var colour_param: String = FLAT_SHADERS[src.shader.resource_path]
+	var colour: Color = src.get_shader_parameter(colour_param)
+	if colour_param == "tint":
+		# Tint multiplies the sampled albedo in linear light; do the same to
+		# its mean, then hand the shader an sRGB colour as `source_color`.
+		var tex: Texture2D = src.get_shader_parameter("albedo_tex") as Texture2D
+		var mean: Color = FLAT_ALBEDO_MEAN.get(tex.resource_path if tex != null else "", Color(0.5, 0.5, 0.5))
+		colour = (colour.srgb_to_linear() * mean.srgb_to_linear()).linear_to_srgb()
+	var out := ShaderMaterial.new()
+	out.shader = _shader
+	out.render_priority = src.render_priority
+	out.set_shader_parameter("uv1_scale", Vector3.ONE)
+	out.set_shader_parameter("uv1_offset", Vector3.ZERO)
+	out.set_shader_parameter("albedo_color", colour)
+	out.set_shader_parameter("has_albedo_tex", false)
+	out.set_shader_parameter("has_normal_tex", false)
+	out.set_shader_parameter("has_emission_tex", false)
+	out.set_shader_parameter("emission_color", Vector3.ZERO)
+	out.set_shader_parameter("emission_energy", 0.0)
+	_set_volume(out, _volume)
+	_materials[id] = weakref(out)
+	return out
 
 
 ## One StandardMaterial3D, as the unshaded equivalent.

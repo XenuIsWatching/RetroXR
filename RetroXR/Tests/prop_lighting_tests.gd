@@ -81,6 +81,41 @@ func _ready() -> void:
 	_check(transparent.get_surface_override_material(0) == null, "transparent material preserved")
 	_check(pixel_art.get_surface_override_material(0) == null, "nearest texture filtering preserved")
 
+	# The two authored shaders PropLighting DOES replace, as flat colour.
+	var wood := ShaderMaterial.new()
+	wood.shader = load("res://Shaders/pbr_surface.gdshader")
+	wood.set_shader_parameter("tint", Color(0.82, 0.74, 0.66))
+	wood.set_shader_parameter("albedo_tex",
+		load("res://imported-assets/shared/materials/Wood066_1K-JPG_Color.jpg"))
+	var table := _mesh(src)
+	room.add_child(table)
+	table.set_surface_override_material(0, wood)
+	var plastic := ShaderMaterial.new()
+	plastic.shader = load("res://Shaders/tv_plastic.gdshader")
+	plastic.set_shader_parameter("plastic_color", Color(0.1, 0.1, 0.105, 1))
+	var tv := _mesh(src)
+	room.add_child(tv)
+	tv.set_surface_override_material(0, plastic)
+	await get_tree().process_frame
+	var flat_wood := table.get_surface_override_material(0) as ShaderMaterial
+	_check(flat_wood != null and flat_wood != wood and flat_wood.shader.resource_path == PropLighting.PROP_SHADER,
+		"table wood override replaced by the prop shader")
+	_check(flat_wood != null and flat_wood.get_shader_parameter("has_albedo_tex") == false
+		and flat_wood.get_shader_parameter("has_normal_tex") == false,
+		"flat wood samples no texture")
+	var wood_colour: Color = flat_wood.get_shader_parameter("albedo_color") if flat_wood != null else Color.WHITE
+	_check(wood_colour.r > wood_colour.g and wood_colour.g > wood_colour.b and wood_colour.r < 0.5,
+		"flat wood is the tint over the map's mean, a dark brown")
+	var flat_plastic := tv.get_surface_override_material(0) as ShaderMaterial
+	_check(flat_plastic != null and flat_plastic != plastic
+		and flat_plastic.get_shader_parameter("albedo_color") == Color(0.1, 0.1, 0.105, 1),
+		"tv plastic override replaced by its plastic colour")
+	room.remove_child(table)
+	_check(table.get_surface_override_material(0) == wood, "leaving room puts the authored wood back")
+	room.add_child(table)
+	await get_tree().process_frame
+	_check(table.get_surface_override_material(0) == flat_wood, "re-entering flattens again, sharing one stand-in")
+
 	room.remove_child(spawned)
 	_check(spawned.get_surface_override_material(0) == null, "leaving room restores source material")
 	room.add_child(spawned)
