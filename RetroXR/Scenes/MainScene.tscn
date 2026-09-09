@@ -19,7 +19,8 @@ ground_horizon_color = Color(0.3, 0.28, 0.25, 1)
 sky_material = SubResource("ProcSkyMat")
 
 [sub_resource type="Environment" id="Env_main"]
-background_mode = 2
+background_mode = 1
+background_color = Color(0.02, 0.02, 0.03, 1)
 sky = SubResource("Sky_main")
 ambient_light_source = 2
 ambient_light_color = Color(0.95, 0.92, 0.85, 1)

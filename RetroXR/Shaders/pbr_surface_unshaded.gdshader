@@ -122,7 +122,6 @@ void fragment() {
 	vec2 uv = shell_uv();
 	float contact = shell_contact();
 	vec3 albedo = shell_albedo(uv) * contact;
-	float rough = shell_roughness(uv);
 
 	// Tangent-space normal, by hand: `unshaded` never reads NORMAL_MAP.
 	//
@@ -136,8 +135,6 @@ void fragment() {
 	vec2 nxy = (texture(normal_tex, uv).rg * 2.0 - 1.0) * normal_strength;
 	vec3 tn = vec3(nxy, sqrt(max(1.0 - dot(nxy, nxy), 0.0)));
 	vec3 n = normalize(shell_tbn() * tn);
-
-	vec3 view = normalize((INV_VIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz - v_world_pos);
 
 	// Ambient LIGHTS the surface, it is not painted over it: the term is the
 	// wall's own colour under that light, so a blue night ambient tints beige
@@ -157,6 +154,10 @@ void fragment() {
 		lit = albedo * shell_gi_irradiance(v_world_pos, n) * contact;
 	} else {
 
+	// Only the analytic loop wants these: the GI branch never fetches
+	// roughness or builds a half vector, so neither is paid for under it.
+	float rough = shell_roughness(uv);
+	vec3 view = normalize((INV_VIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz - v_world_pos);
 	float shine = exp2(mix(4.0, 10.0, 1.0 - rough));
 	for (int i = 0; i < light_count; i++) {
 		vec4 lv = light_vec[i];
