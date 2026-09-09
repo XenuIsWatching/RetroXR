@@ -462,8 +462,15 @@ passed. To encode mp4 from probe PNG frames: `imageio` + `imageio-ffmpeg` are pi
 
 Godot binary (Windows) — use **Godot 4.7.2** (the project targets 4.7):
 ```
-C:\Program Files\Godot\Godot_v4.7-stable_win64\Godot_v4.7-stable_win64_console.exe
+C:\Program Files\Godot\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe
 ```
+**The doubled name is real** — the 4.7.2 download unpacked into a FOLDER called
+`Godot_v4.7.2-stable_win64.exe` holding the exe and its `_console.exe`. The old
+`Godot_v4.7-stable_win64\` folder is still installed beside it and is NOT the one to
+use: `android/build` is stamped 4.7.2 (`android/.build_version`), so a 4.7 binary
+fails every Quest export with `Android build version mismatch: Template installed:
+4.7.2.stable / Requested version: 4.7.stable` — and that error names the template,
+not the editor, so it reads as a broken template rather than the wrong exe.
 Use the `_console.exe` variant so stdout/stderr is captured. `$proj` below is the
 `RetroXR/` folder inside your checkout.
 
