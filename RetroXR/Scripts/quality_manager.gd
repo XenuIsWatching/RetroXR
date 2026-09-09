@@ -1060,10 +1060,10 @@ func apply_foveation() -> void:
 		_foveation_live = false
 		apply_msaa()
 		return
-	# Fragment-density VRS and MSAA share the mobile render subpass. On Quest 3
-	# this combination eventually hangs the Adreno Vulkan context even at Low
-	# VRS; the same scene survived beyond that failure window single-sampled.
-	# Keep the preference intact, but render single-sample while VRS is live.
+	# MSAA stays on under foveation. It was forced off here for a hang that was
+	# later traced to a constant fragment shader, and then kept off because the
+	# pair measured 28 ms - which was the density texture going blank on the
+	# MSAA rebuild, not the pair itself. See apply_msaa().
 	apply_msaa()
 	_generate_centered_vrs()
 
@@ -1127,6 +1127,9 @@ func _generate_centered_vrs() -> void:
 		return
 	RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), texture)
 	root.vrs_mode = Viewport.VRS_TEXTURE
+	# Re-arm the one-shot copy: a previous ONCE has left the render target's
+	# update mode DISABLED, and a regenerated texture would never be painted.
+	root.vrs_update_mode = Viewport.VRS_UPDATE_ONCE
 	_vrs_generator = generator
 	_foveation_live = true
 	print(("QualityManager: centered VRS level %d, radius %.1f, strength %.2f, "
@@ -1175,12 +1178,22 @@ func set_msaa(mode: int) -> void:
 
 
 func effective_msaa() -> Viewport.MSAA:
-	return (Viewport.MSAA_DISABLED if foveation_level != Foveation.OFF
-		else msaa_3d) as Viewport.MSAA
+	return msaa_3d as Viewport.MSAA
 
 
+## Changing MSAA rebuilds the render buffers, and the engine's density texture
+## with them. Godot paints that texture from ours ONCE and then disables the
+## update on the render target; nothing re-arms it when the buffers are
+## reconfigured, and a fresh VRS texture is initialised to 255 - full rate
+## everywhere. Measured on a Quest 3 at eye buffer 1.75x, MAX foveation, MSAA
+## 2x: 28.1 ms with the map silently blank, 13.2 ms with the update re-armed.
+## Setting the mode to ONCE again schedules exactly one repaint on the frame
+## after the rebuild, which is where the copy has to land.
 func apply_msaa() -> void:
-	get_tree().root.msaa_3d = effective_msaa()
+	var root := get_tree().root
+	root.msaa_3d = effective_msaa()
+	if foveation_live():
+		root.vrs_update_mode = Viewport.VRS_UPDATE_ONCE
 
 
 func set_post_aa(mode: int) -> void:
