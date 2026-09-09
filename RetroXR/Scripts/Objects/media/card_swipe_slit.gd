@@ -81,7 +81,10 @@ var _face_up: bool = false
 var _entry_sign: float = 0.0
 var _extreme: float = 0.0
 var _snap: float = 0.0
-var _seated_basis: Basis = Basis.IDENTITY
+## The card's seated pose in the SLIT'S frame. Latched per pass, composed with
+## the groove's current basis every frame -- a reader turned in the other hand
+## must carry the card round with it, which a latched world basis did not.
+var _seated_yaw: Basis = Basis.IDENTITY
 ## False while the card is still being lined up — see is_presenting.
 var _armed: bool = false
 ## Where along the groove the card armed, and true once it has moved far enough
@@ -242,8 +245,14 @@ static func stand_half(edge: String, card_size: Vector3) -> float:
 
 ## The pose a card is held at once it is square in the groove.
 static func seated_basis(edge: String, face_up: bool, slit: Transform3D) -> Basis:
+	return slit.basis * seated_yaw(edge, face_up)
+
+
+## seated_basis in the slit's own frame: the part that does not change as the
+## reader moves.
+static func seated_yaw(edge: String, face_up: bool) -> Basis:
 	# Bring the presented edge to the groove (card -Y) and leave the printed face
-	# where the hand is holding it, then express that in the slit's frame.
+	# where the hand is holding it.
 	var yaw := Basis.IDENTITY
 	match edge:
 		EReaderCards.EDGE_TOP:
@@ -260,7 +269,7 @@ static func seated_basis(edge: String, face_up: bool, slit: Transform3D) -> Basi
 	# decision and flipping either alone seats every card backwards.
 	if face_up:
 		yaw = Basis(Vector3.UP, PI) * yaw
-	return slit.basis * yaw
+	return yaw
 
 
 # ── The pass ─────────────────────────────────────────────────────────────────
@@ -330,7 +339,7 @@ func _physics_process(delta: float) -> void:
 	# The card STANDS in the groove: its centre rides half a card above the line,
 	# or it would sit half buried in the case.
 	target.origin = global_transform * Vector3(t, _stand_half, 0.0)
-	target.basis = _seated_basis
+	target.basis = global_transform.basis * _seated_yaw
 	var held := _card.global_transform
 	_card.global_transform = Transform3D(
 		held.basis.slerp(target.basis, _snap),
@@ -381,7 +390,7 @@ func _arm() -> void:
 	var xform := _card.global_transform
 	_edge = presented_edge(xform, _size, global_transform)
 	_face_up = is_face_up(xform, global_transform)
-	_seated_basis = seated_basis(_edge, _face_up, global_transform)
+	_seated_yaw = seated_yaw(_edge, _face_up)
 	_stand_half = stand_half(_edge, _size)
 	_snap = 0.0
 	_arm_travel = travel_of(xform, global_transform)
