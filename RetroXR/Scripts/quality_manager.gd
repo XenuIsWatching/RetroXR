@@ -253,6 +253,11 @@ var foveation_level: Foveation = Foveation.HIGH
 ## Keep the XRVRS object alive: it owns the RID returned by make_vrs_texture().
 var _vrs_generator: Object
 var _vrs_refresh_serial: int = 0
+## How many more times the generator may retry for a real per-eye focus. The
+## per-view projection is a symmetric placeholder until the runtime has run
+## its first frame, and a map centred on a placeholder is centred on the
+## buffer, not the lens.
+var _vrs_focus_tries: int = 5
 ## Whether the requested generated texture and its viewport attachment are live.
 var _foveation_live: bool = false
 ## QA overrides for the VRS knobs, set by `vrsprobe.cfg` and normally unset.
@@ -1118,9 +1123,32 @@ func _generate_centered_vrs() -> void:
 		else tier["strength"]
 	generator.set("vrs_min_radius", radius)
 	generator.set("vrs_strength", strength)
-	# Two layers, one per eye. ZERO maps to the exact middle of each layer.
-	var texture: RID = generator.call("make_vrs_texture", size,
-		PackedVector2Array([Vector2.ZERO, Vector2.ZERO]))
+	# One focus per eye, at the lens centre, not the buffer centre. A Quest
+	# eye frustum is asymmetric - wider toward the temple - so the straight-
+	# ahead ray lands off-centre in the buffer, and a map pinned to (0, 0)
+	# puts its full-rate spot where the player is not looking. This is the
+	# engine's own recipe for its VRS_XR map: project a point straight ahead
+	# through the view's projection and keep the NDC x, y.
+	var foci := PackedVector2Array()
+	var views := int(xr.get_view_count())
+	var symmetric := true
+	for v in views:
+		var proj: Projection = xr.get_projection_for_view(v, size.x / size.y, 0.1, 1000.0)
+		var h: Vector4 = proj * Vector4(0.0, 0.0, 999.9, 1.0)
+		var focus := Vector2.ZERO
+		if absf(h.w) > 0.0001:
+			focus = Vector2(h.x / h.w, h.y / h.w)
+		if focus.length() > 0.0005:
+			symmetric = false
+		foci.push_back(focus)
+	while foci.size() < 2:
+		foci.push_back(Vector2.ZERO)
+	if symmetric and _vrs_focus_tries > 0:
+		# Placeholder projection: generate anyway so something is live, and
+		# come back for the real centre once the runtime has a frame.
+		_vrs_focus_tries -= 1
+		_schedule_vrs_refresh()
+	var texture: RID = generator.call("make_vrs_texture", size, foci)
 	if not texture.is_valid():
 		push_error("QualityManager: failed to generate centered XR VRS texture")
 		_foveation_live = false
@@ -1133,9 +1161,9 @@ func _generate_centered_vrs() -> void:
 	_vrs_generator = generator
 	_foveation_live = true
 	print(("QualityManager: centered VRS level %d, radius %.1f, strength %.2f, "
-		+ "eye texture %dx%d, focus (0,0), msaa %d, post_aa %d") % [
+		+ "eye texture %dx%d, foci %s, msaa %d, post_aa %d") % [
 		int(foveation_level), radius, strength, int(size.x), int(size.y),
-		root.msaa_3d, root.screen_space_aa])
+		foci, root.msaa_3d, root.screen_space_aa])
 
 
 ## OpenXR rebuilds its swapchain asynchronously after an eye-buffer change. Wait
