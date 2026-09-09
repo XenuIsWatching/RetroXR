@@ -79,7 +79,7 @@ static func mount_dir(core_name: String) -> String:
 
 ## The filename this core expects a card in slot `slot` to have. A core with
 ## fixed names gets its own; one that chooses by name gets the card's own id, so
-## the file in its directory is recognisably the card the player is holding.
+## the file in its directory is recognizably the card the player is holding.
 static func scratch_name(row: Dictionary, slot: int, card_id: String) -> String:
 	var names: Array = row.get("names", [])
 	if slot < names.size():

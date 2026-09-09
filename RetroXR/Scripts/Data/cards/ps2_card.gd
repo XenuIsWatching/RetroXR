@@ -591,8 +591,9 @@ static func _read_icon_model(data: PackedByteArray, sb: Dictionary, entry: Dicti
 			continue
 		if String(child["name"]).to_lower() != want:
 			continue
-		return PS2Icon.parse_icn(
+		var model := PS2Icon.parse_icn(
 			_read_file(data, sb, int(child["cluster"]), int(child["length"])))
+		return model
 	return {}
 
 

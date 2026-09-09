@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://ps2_memcard_probe_001"]
+
+[ext_resource type="Script" path="res://Tools/input/ps2_memcard_probe.gd" id="1_ps2memcardprobe"]
+
+[node name="PS2MemcardProbe" type="Node"]
+script = ExtResource("1_ps2memcardprobe")

@@ -29,6 +29,8 @@ var _base: PackedVector3Array
 var _time := 0.0
 var _next_morph := 0.0
 var _animated := false
+var _px := 96
+var _built := false
 
 
 func _init() -> void:
@@ -38,11 +40,29 @@ func _init() -> void:
 
 ## Build the little world. `px` is the square size of the render target; the
 ## container's own size is whatever the row gives it.
+##
+## The build is DEFERRED until this is in the tree. A row builds its widgets and
+## is parented afterwards, so at the moment this is called there may be no tree
+## above it — and aiming a camera or a light needs one. Getting that wrong is
+## silent: look_at prints a line and leaves the node pointing where it started,
+## which reads as a badly framed model rather than an error.
 func show_model(model: Dictionary, px := 96) -> void:
 	_model = model
-	if _model.is_empty():
+	_px = px
+	if _model.is_empty() or _built:
 		return
-	_build(px)
+	if is_inside_tree():
+		_build_now()
+
+
+func _ready() -> void:
+	if not _built and not _model.is_empty():
+		_build_now()
+
+
+func _build_now() -> void:
+	_built = true
+	_build(_px)
 	_apply_pose(0.0)
 
 
@@ -59,26 +79,26 @@ func _build(px: int) -> void:
 		else SubViewport.UPDATE_ALWAYS
 	add_child(_viewport)
 
+	# NO LIGHTS. These icons are already lit: the artist baked the shading into
+	# the vertex colors, which is why Tekken's trophy has a bright top and a dark
+	# base with nothing shining on it. Lighting them again shades them twice, and
+	# every rig tried — a neutral one, and the save's own — came out washed out
+	# and gray against the artwork.
+	#
+	# Measured rather than judged by eye. Unshaded, Tekken 5 renders
+	# (255,253,61), (93,69,50) and (91,56,56); an independent rip of that same
+	# model is (255,253,61), (94,68,48) and (92,55,55).
+	#
+	# icon.sys does carry three directional lights and an ambient, and they are
+	# deliberately not read: several saves ship a placeholder the developer never
+	# set — Indiana Jones has ambient pure RED and three lights that are pure
+	# red, green and blue down X, Y and Z, which renders his hat green.
 	var world := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_CANVAS
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.45, 0.47, 0.55)
-	env.ambient_light_energy = 1.0
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
 	world.environment = env
 	_viewport.add_child(world)
-
-	# icon.sys carries its own three-light rig and RetroXR does not read it: the
-	# saves worth looking at are lit acceptably by a key and a fill, and reading
-	# a per-save rig would make one icon dark for reasons the player cannot see.
-	var key := DirectionalLight3D.new()
-	key.rotation_degrees = Vector3(-35, -40, 0)
-	key.light_energy = 1.6
-	_viewport.add_child(key)
-	var fill := DirectionalLight3D.new()
-	fill.rotation_degrees = Vector3(-10, 150, 0)
-	fill.light_energy = 0.5
-	_viewport.add_child(fill)
 
 	_pivot = Node3D.new()
 	_viewport.add_child(_pivot)
@@ -112,9 +132,9 @@ func _frame_camera(cam: Camera3D) -> void:
 	if lo == Vector3.INF:
 		lo = Vector3.ZERO
 		hi = Vector3.ONE
-	var centre := (lo + hi) * 0.5
+	var center := (lo + hi) * 0.5
 	var radius := maxf((hi - lo).length() * 0.5, 0.001)
-	_pivot.position = -centre
+	_pivot.position = -center
 	cam.position = Vector3(0, radius * 0.35, radius * 3.0)
 	cam.look_at(Vector3(0, 0, 0), Vector3.UP)
 	cam.fov = 40.0
@@ -216,9 +236,15 @@ func _material() -> StandardMaterial3D:
 	# An icon is a closed-ish shell authored without a consistent winding, and a
 	# back-face cull turns several of them into a handful of stray triangles.
 	_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_mat.roughness = 0.55
+	# Unshaded, so what reaches the screen is the artwork and not a second opinion
+	# about it. See the note in _build.
+	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var img: Image = _model.get("texture")
 	if img != null:
+		# NOT converted out of sRGB, unlike the vertex colors: an albedo texture
+		# is already taken for display-referred and converted for us. Doing it
+		# here as well drops a textured icon to near-black, which is how the
+		# difference between the two paths showed up at all.
 		_mat.albedo_texture = ImageTexture.create_from_image(img)
 		_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 	return _mat

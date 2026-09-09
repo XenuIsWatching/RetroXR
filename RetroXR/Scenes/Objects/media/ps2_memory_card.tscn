@@ -10,7 +10,7 @@
 ;
 ; Procedural boxes, like the GameCube's and unlike the PlayStation's, which wears
 ; a real model. A PS2 card GLB would have to be one this project has the right to
-; ship, and the shape and colour are enough to tell them apart meanwhile.
+; ship, and the shape and color are enough to tell them apart meanwhile.
 ;
 ; Same axis convention as both existing cards: the LONG axis is Z, the way the
 ; card goes into the slot. It enters on its 41.5 mm edge and its 55 mm length
@@ -29,7 +29,7 @@ size = Vector3(0.0615, 0.0285, 0.075)
 size = Vector3(0.0415, 0.0085, 0.055)
 
 ; Sony's PS2 cards were a dark slate, cooler and a shade lighter than the
-; GameCube's near-black beside it, and nothing like the PlayStation's light grey.
+; GameCube's near-black beside it, and nothing like the PlayStation's light gray.
 [sub_resource type="StandardMaterial3D" id="Mat_card"]
 albedo_color = Color(0.17, 0.18, 0.21, 1.0)
 roughness = 0.55

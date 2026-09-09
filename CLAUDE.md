@@ -1284,12 +1284,32 @@ appears in a log:
 - The PS2 authors icons with **+Y pointing DOWN**, so a straight read stands every
   one on its head. Caught on Indiana Jones' hat — the medallions and rings in the
   same card could not have shown it. Render something ASYMMETRIC.
-- Vertex colour is **0x80 = full intensity**, not 0xFF; read as 0-255 every icon
-  renders at half brightness.
-- The attribute record's per-vertex normals are the icon's own. Dropping them
-  leaves the mesh unlit and looking like a paper cut-out.
+- **A vertex color's scale depends on whether a texture modulates it.** Textured:
+  the GS shifts the product down by 7, so 0x80 is NEUTRAL and the texture shows
+  through unchanged — every textured icon on the test card reads a flat 127/128,
+  which is what that looks like. Untextured: the color IS the surface, an
+  ordinary 0-255. Divide by the wrong one and half the card is twice as bright as
+  it should be. Indy's hat is `(35, 14, 5)` on the card and `(35, 14, 5)` in an
+  independent rip of the same model.
+- **A vertex color is sRGB and a renderer wants linear.** Handing the byte over
+  as-is both brightens a color and flattens it toward gray — `(35, 14, 5)` is a
+  7:3:1 ratio and comes out 1.6:1.2:1. That desaturation is the signature; look
+  for it rather than for brightness. The TEXTURE is the opposite case: an albedo
+  texture is already taken for display-referred, so converting it here too drops
+  a textured icon to near-black.
+- **Icons are drawn UNSHADED, with no lights at all.** The artist baked the
+  shading into the vertex colors — Tekken's trophy has a bright top and a dark
+  base with nothing shining on it — so lighting them again shades them twice.
+  icon.sys does carry three directional lights and an ambient, and they are
+  deliberately not read: several saves ship a placeholder the developer never set,
+  and Indiana Jones has ambient pure RED with three lights that are pure red,
+  green and blue down X, Y and Z, which renders his hat green.
+- Judge this by MEASURING the output, not by eye. Unshaded, Tekken 5 renders
+  `(255,253,61)`, `(93,69,50)`, `(91,56,56)` against an independent rip's
+  `(255,253,61)`, `(94,68,48)`, `(92,55,55)`, and Indy renders the exact vertex
+  bytes his card holds. Every wrong version above also *looked* plausible.
 
-An `.icn` whose texture encoding or animation header is unrecognised costs the
+An `.icn` whose texture encoding or animation header is unrecognized costs the
 texture or the animation rather than the whole model; five saves on the test card
 showed nothing at all before that.
 

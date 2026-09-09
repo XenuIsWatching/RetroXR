@@ -40,7 +40,7 @@ const TEX_RAW := [6, 7]
 const TEX_RLE := [12, 14, 15]
 
 const VERTEX_SIZE := 8    ## 4 x int16
-const ATTRIB_SIZE := 16   ## normal (4 x int16), uv (2 x int16), colour (u32)
+const ATTRIB_SIZE := 16   ## normal (4 x int16), uv (2 x int16), color (u32)
 
 
 ## The save's name and the three model files it points at, or {}.
@@ -83,7 +83,7 @@ static func _ascii(bytes: PackedByteArray, from: int, length: int) -> String:
 	return bytes.slice(from, end).get_string_from_ascii()
 
 
-## One .icn: the morph targets, the shared UVs and colours, the animation's
+## One .icn: the morph targets, the shared UVs and colors, the animation's
 ## per-frame blend keys, and the texture. {} when the file is not one.
 ##
 ## Vertices are stored interleaved — for each vertex, one position per shape,
@@ -116,8 +116,11 @@ static func parse_icn(bytes: PackedByteArray) -> Dictionary:
 	uvs.resize(vertex_count)
 	var colors := PackedColorArray()
 	colors.resize(vertex_count)
-	# The attribute record carries a normal per vertex. Dropping it and letting
-	# the renderer guess leaves every icon flat-shaded and lit from nowhere.
+	var raw_colors := PackedInt32Array()
+	raw_colors.resize(vertex_count * 3)
+	# The attribute record carries a normal per vertex. Kept so the mesh is
+	# well-formed, though the view draws these unshaded — the shading an artist
+	# meant is already in the vertex colors.
 	var normals := PackedVector3Array()
 	normals.resize(vertex_count)
 
@@ -141,20 +144,14 @@ static func parse_icn(bytes: PackedByteArray) -> Dictionary:
 		uvs[v] = Vector2(
 			bytes.decode_s16(pos + 8) / FIXED_ONE,
 			bytes.decode_s16(pos + 10) / FIXED_ONE)
-		var rgba := bytes.decode_u32(pos + 12)
-		# The PS2's colour convention is 0x80 = full intensity, not 0xFF, so a
-		# channel read straight as 0-255 renders every icon at half brightness.
-		# Doubled and clamped, which is what the hardware does with the headroom
-		# above 0x80. Alpha is forced opaque: an icon whose alpha is never filled
-		# reads as a fully transparent model, which looks like nothing at all.
-		colors[v] = Color(
-			minf((rgba & 0xFF) / 128.0, 1.0),
-			minf(((rgba >> 8) & 0xFF) / 128.0, 1.0),
-			minf(((rgba >> 16) & 0xFF) / 128.0, 1.0),
-			1.0)
+		# Kept RAW here. What a channel means depends on whether this icon has a
+		# texture, and that is not known until the texture has been read.
+		raw_colors[v * 3 + 0] = bytes.decode_u32(pos + 12) & 0xFF
+		raw_colors[v * 3 + 1] = (bytes.decode_u32(pos + 12) >> 8) & 0xFF
+		raw_colors[v * 3 + 2] = (bytes.decode_u32(pos + 12) >> 16) & 0xFF
 		pos += ATTRIB_SIZE
 
-	# The geometry is the icon. An animation header this does not recognise, or a
+	# The geometry is the icon. An animation header this does not recognize, or a
 	# texture encoding it cannot decode, costs the animation or the texture — not
 	# the whole model. Several real saves carry one or the other and would
 	# otherwise show nothing at all where a plain shape would have done.
@@ -162,6 +159,32 @@ static func parse_icn(bytes: PackedByteArray) -> Dictionary:
 	var texture: Image = null
 	if not anim.is_empty():
 		texture = _parse_texture(bytes, int(anim["end"]), texture_type)
+
+	# What a vertex color means depends on whether a texture modulates it, and
+	# the two scales differ by a factor of two:
+	#
+	#   textured   the GS multiplies and shifts down by 7, so 0x80 is NEUTRAL and
+	#              the texture shows through unchanged. Every textured icon on the
+	#              test card reads 127 or 128 flat, which is what that looks like.
+	#   untextured the color IS the surface, an ordinary 0-255. Indiana Jones'
+	#              hat is (35, 14, 5) here and (35, 14, 5) in an independent rip
+	#              of the same model — a very dark brown, and nothing like the
+	#              light tan that dividing by 128 produces.
+	#
+	# Alpha is forced opaque throughout: an icon whose alpha is never filled
+	# reads as a fully transparent model, which looks like nothing rendered.
+	# And converted OUT of sRGB. A console's byte is display-referred, while a
+	# renderer multiplies light in linear space, so handing the byte over as-is
+	# both brightens a color and flattens it toward gray: (35, 14, 5) has a 7:3:1
+	# ratio and comes out 1.6:1.2:1, which is what "washed out" looks like
+	# measured rather than eyeballed.
+	var scale := 128.0 if texture != null else 255.0
+	for v in vertex_count:
+		colors[v] = Color(
+			minf(raw_colors[v * 3 + 0] / scale, 1.0),
+			minf(raw_colors[v * 3 + 1] / scale, 1.0),
+			minf(raw_colors[v * 3 + 2] / scale, 1.0),
+			1.0).srgb_to_linear()
 
 	return {
 		"shape_count": shape_count,
