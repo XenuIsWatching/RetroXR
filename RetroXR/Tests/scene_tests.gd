@@ -598,17 +598,16 @@ func _test_fixture() -> void:
 		"fixture/a room without fixtures writes no section")
 	tv.queue_free()
 
-	# The mechanism above is worth nothing unless the arcade's own television is
-	# actually tagged. Read from the .tscn because the room cannot be loaded here —
-	# its SubViewports would hang a headless run.
+	# The arcade ships with no television: a set is spawned from the menu and
+	# carried by the slot like anything else the player put down, so nothing in
+	# the room is a fixture any more. Read from the .tscn because the room cannot
+	# be loaded here: its SubViewports would hang a headless run.
 	var scene_src := FileAccess.get_file_as_string("res://Scenes/MainScene.tscn")
 	var tv_line := ""
 	for line in scene_src.split("\n"):
 		if line.begins_with("[node name=\"TV\"") and line.contains("instance="):
 			tv_line = line
-	_ok(not tv_line.is_empty(), "fixture/the arcade still authors a TV node")
-	_ok(tv_line.contains("groups=[\"fixture\"]"),
-		"fixture/the arcade's TV is tagged as a fixture")
+	_ok(tv_line.is_empty(), "fixture/the arcade authors no TV of its own")
 
 
 # -- The room's wall switches -------------------------------------------------

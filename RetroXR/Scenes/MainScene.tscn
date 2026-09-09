@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://bh8x3sbal8nds"]
 
 [ext_resource type="Script" uid="uid://btn0gji8qtw2l" path="res://Scripts/XR/xr_init.gd" id="3_xrinit"]
-[ext_resource type="PackedScene" uid="uid://mft7vy78rjrv" path="res://Scenes/Objects/tv.tscn" id="13_tv"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/shell_lighting.gd" id="25_shelllight"]
 [ext_resource type="Script" path="res://Scripts/Objects/room/prop_lighting.gd" id="26_proplight"]
 [ext_resource type="Shader" uid="uid://ctwkb7jcoma01" path="res://Shaders/arcade_carpet.gdshader" id="20_carpet"]
@@ -302,9 +301,6 @@ surface_material_override/0 = SubResource("Mat_door")
 ; binned rather than being welded to the room.
 [node name="Table" parent="." unique_id=2000000040 groups=["spawned"] instance=ExtResource("24_table")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
-
-[node name="TV" parent="." unique_id=-1294967286 groups=["fixture"] instance=ExtResource("13_tv")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.95, -0.5)
 
 [node name="CeilLight_NE" type="OmniLight3D" parent="." unique_id=-1294967096 groups=["ceiling_light"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.7, -2.5)
