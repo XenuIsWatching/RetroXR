@@ -1470,11 +1470,10 @@ func _test_memcard_presence() -> void:
 	_eq(empty.get("pcsx_rearmed_memcard1_inserted", ""),
 		"disabled", "memcard/and reported empty")
 	_eq(empty.get("pcsx_rearmed_memcard2", ""),
-		"none", "memcard/the PlayStation's second slot is always absent")
-	# A PlayStation shows ONE slot, whatever the cabinet has room for. The second
-	# zone exists in the scene for the consoles that take two, and must stay shut
-	# on this one.
-	_eq(psx.card_slot_count(), 1, "memcard/a PlayStation has one slot")
+		"none", "memcard/an empty second slot is typed absent too")
+	_eq(empty.get("pcsx_rearmed_memcard2_inserted", ""),
+		"disabled", "memcard/and reported empty")
+	_eq(psx.card_slot_count(), 2, "memcard/a PlayStation has two slots")
 	_eq(psx.card_family(), "playstation", "memcard/of the PlayStation family")
 
 	# A card seated before the machine starts.
@@ -1485,6 +1484,25 @@ func _test_memcard_presence() -> void:
 		"libretro", "memcard/a seated card types the slot")
 	_eq(seated.get("pcsx_rearmed_memcard1_inserted", ""),
 		"enabled", "memcard/and is reported present")
+	# One card in, one out: the two slots are typed independently. A single flag
+	# for "a card is seated" would have typed both slots from slot 1 alone.
+	_eq(seated.get("pcsx_rearmed_memcard2", ""),
+		"none", "memcard/the empty slot beside it stays absent")
+	_eq(seated.get("pcsx_rearmed_memcard2_inserted", ""),
+		"disabled", "memcard/and reported empty")
+
+	# The second slot alone, which is the arrangement that cannot pass by
+	# accident: slot 1 must go absent while slot 2 goes live.
+	psx._memcards._snapped_memcards[0] = null
+	psx._memcards._snapped_memcards[1] = card
+	var second := psx._removable_media_options("pcsx_rearmed")
+	_eq(second.get("pcsx_rearmed_memcard2", ""),
+		"libretro", "memcard/a card in slot 2 types slot 2")
+	_eq(second.get("pcsx_rearmed_memcard2_inserted", ""),
+		"enabled", "memcard/and is reported present")
+	_eq(second.get("pcsx_rearmed_memcard1", ""),
+		"none", "memcard/while slot 1 is absent")
+	psx._memcards._snapped_memcards[1] = null
 
 	# Only pcsx_rearmed has these keys, and only a machine that takes cards has a
 	# slot. Pinning them anywhere else would write keys into another core's file.

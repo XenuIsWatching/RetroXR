@@ -160,11 +160,10 @@ func get_controller_port_count() -> int:
 	return 2
 
 
-## CD-era hardware: saves live on a removable card, not on the media. One slot
-## -- the shell moulds a second, but nothing in the room fills it and the core is
-## told memcard2 is absent either way.
+## CD-era hardware: saves live on a removable card, not on the media. Two slots,
+## as the console has.
 func card_slot_count() -> int:
-	return 1
+	return 2
 
 
 ## The shell models its own OPEN button and this model mounts a widget on it, so
@@ -623,19 +622,21 @@ func configure_controller_ports(port_zones: Array) -> void:
 ## +Z (MemCard1 sits at z +86 mm, JackSerial on the back panel at -86), so -Z is
 ## already into the console and the card wants leaving alone. Reading the +27.5 mm
 ## insert as the connector is what put a yaw here and seated every card backwards.
+## The two slots are the same mouth mirrored in X: MemCard1 spans x -48.8..-9.9,
+## MemCard2 x +10.0..+48.9, both at y 26.8..33.9 and z 85.8..87.1. Same facing,
+## so slot B differs only in where it sits.
 func configure_memory_card_slot(slot: Node3D, index: int) -> void:
-	# Slot A only: this shell seats one card, and card_slot_count says so, but the
-	# base calls once per slot the machine shows and a stray index must not land a
-	# second card on top of the first.
-	if _glb == null or slot == null or index != 0:
+	if _glb == null or slot == null or index < 0 or index > 1:
 		return
-	var seat := find_child("MemCardSeat", true, false) as Node3D
+	var seat := find_child("MemCardSeat" if index == 0 else "MemCardSeat2",
+		true, false) as Node3D
 	if seat != null:
 		slot.global_transform = seat.global_transform
 		return
-	if _shell_mesh("MemCard1") == null:
+	var mouth := "MemCard%d" % (index + 1)
+	if _shell_mesh(mouth) == null:
 		return
-	slot.position = _mesh_center_local("MemCard1")
+	slot.position = _mesh_center_local(mouth)
 	slot.rotation_degrees = Vector3.ZERO
 
 

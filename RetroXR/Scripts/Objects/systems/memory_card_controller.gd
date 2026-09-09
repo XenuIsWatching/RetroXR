@@ -120,18 +120,16 @@ func on_memcard_removed(slot: int) -> void:
 ## Older cores never registered the key, and the extension skips a key a core
 ## does not have, so this is a no-op against a build from before the option
 ## shipped rather than an error.
-## Only the PlayStation answers this. Its slot 2 is pinned to "none" and has no
-## presence key of its own, so a second slot has nothing to say here — which is
-## fine, because no console with two slots runs on pcsx_rearmed.
+## Only the PlayStation answers this; both of its slots have a presence key.
 func _set_card_presence(slot: int, inserted: bool) -> void:
 	if not _host.is_powered_on or card_family() != "playstation":
 		return
-	if slot != 0 or not _host.resolve_core_name().begins_with("pcsx_rearmed"):
+	if slot < 0 or slot > 1 or not _host.resolve_core_name().begins_with("pcsx_rearmed"):
 		return
 	# Through _host.set_core_option rather than at the Libretro node, so the value the
 	# options panel shows and the value the core is running on cannot drift, and
 	# so a machine that is not running has it written to its .opt instead.
-	_host.set_core_option("pcsx_rearmed_memcard1_inserted",
+	_host.set_core_option("pcsx_rearmed_memcard%d_inserted" % (slot + 1),
 		"enabled" if inserted else "disabled")
 
 
@@ -176,9 +174,14 @@ func on_sram_flushed(path: String, _size: int, final: bool) -> void:
 	# against a card's path. Gating on it left a card only ever backed up by
 	# hand from the menu.
 	if _uses_memory_cards():
-		# Only single-slot hardware reaches here: SAVE_RAM is one buffer, so the
-		# path it flushed is slot A's by construction.
-		_sync_card_saves(CardFormats.for_path(path), 0, path)
+		# Two slots can flush, so the slot is read back from the path rather than
+		# assumed: the per-slot hash table is what tells this game's writes from
+		# saves that were already on that card, and crediting them to the wrong
+		# slot hands one card's saves to the other.
+		var slot := _slot_of_card_path(path)
+		if slot < 0:
+			return
+		_sync_card_saves(CardFormats.for_path(path), slot, path)
 		return
 	if not SaveSync.is_enabled(path):
 		return
@@ -188,6 +191,22 @@ func on_sram_flushed(path: String, _size: int, final: bool) -> void:
 		return
 	SaveSync.on_sram_flushed(path, rom_id, _host.resolve_core_name(), _sram_slot(),
 		_host.content_label(), final)
+
+
+## Which slot a flushed card image came out of, or -1 when no seated card claims
+## it — a card pulled between the write and the signal, which is a real race
+## rather than a fault.
+func _slot_of_card_path(path: String) -> int:
+	var want := path.simplify_path()
+	for slot in card_slot_count():
+		var card := get_snapped_memcard(slot)
+		if card == null or not "card_id" in card:
+			continue
+		var seated := SramPaths.card_save_path(card_family(),
+			str(card.get("card_id")))
+		if seated.simplify_path() == want:
+			return slot
+	return -1
 
 
 ## Back up whichever saves on the seated card changed, each under the game that
@@ -290,8 +309,8 @@ var _scratch_mtimes: Array[int] = [0, 0]
 
 
 func start_card_polling() -> void:
-	if card_slot_count() <= 1:
-		return   # single-slot hardware has sram_flushed and needs none of this
+	if not _core_owns_card_files(_host.resolve_core_name()):
+		return   # a published card raises sram_flushed and needs none of this
 	if _card_poll_timer == null:
 		_card_poll_timer = Timer.new()
 		_card_poll_timer.wait_time = CARD_POLL_SEC
@@ -529,10 +548,28 @@ func sram_path_for_run(resolved_core: String) -> String:
 	var paths: Array[String] = []
 	for slot in card_slot_count():
 		paths.append(_card_path_for_run(resolved_core, slot))
-	if card_slot_count() <= 1:
-		return paths[0] if not paths.is_empty() else ""
-	_mount_core_cards(resolved_core, paths)
-	return ""
+	if _core_owns_card_files(resolved_core):
+		_mount_core_cards(resolved_core, paths)
+		return ""
+	_mount_second_card(resolved_core, paths)
+	return paths[0] if not paths.is_empty() else ""
+
+
+## True when the core keeps its own card files and takes paths, rather than
+## publishing each card as a memory region the frontend reads and writes.
+## Dolphin is the only one. It decides how a card is mounted, whether the flush
+## signal fires at all, and so whether the file poller below is needed.
+func _core_owns_card_files(resolved_core: String) -> bool:
+	return resolved_core.begins_with("dolphin")
+
+
+## Hand a second card to a core that publishes one. pcsx_rearmed puts slot 2
+## under a memory id of its own — SAVE_RAM is slot 1 alone — so the second slot
+## needs its own file and its own id, unlike the first.
+func _mount_second_card(resolved_core: String, paths: Array[String]) -> void:
+	if not resolved_core.begins_with("pcsx_rearmed") or paths.size() < 2:
+		return
+	_host.get_libretro_node().SetSramBPath(paths[1], Libretro.SRAM_B_PCSX_MEMCARD2)
 
 
 ## Hand a multi-slot core its card files.
@@ -668,8 +705,9 @@ func _drain_scratch(slot: int, card_path: String) -> void:
 ## one path a card being seated, pulled or renamed goes through, so the two
 ## families cannot drift apart over what a swap means.
 func _remount_cards() -> void:
-	var path := sram_path_for_run(_host.resolve_core_name())
-	if card_slot_count() <= 1:
+	var core := _host.resolve_core_name()
+	var path := sram_path_for_run(core)
+	if not _core_owns_card_files(core):
 		_host.get_libretro_node().SetSramPath(path)
 
 

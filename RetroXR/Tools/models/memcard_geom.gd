@@ -40,18 +40,33 @@ func _run() -> void:
 	await _wait(50)
 	_hold(sys)
 
-	var card := CARD_SCENE.instantiate() as Node3D
-	card.position = Vector3(0, 1.4, 0)
-	add_child(card)
-	await _wait(20)
-	var zone: XRToolsSnapZone = null
+	# Both slots, in slot order. Taking whichever zone the walk happened to see
+	# last put the card in slot 2 the moment the console grew a second one.
+	var zones: Array[XRToolsSnapZone] = []
 	for n in sys.find_children("*", "Area3D", true, false):
 		var z := n as XRToolsSnapZone
 		if z != null and z.name.contains("MemoryCard"):
-			zone = z
-	zone.pick_up_object(card)
-	await _wait(40)
-	_hold(card)
+			zones.append(z)
+	zones.sort_custom(func(a: XRToolsSnapZone, b: XRToolsSnapZone) -> bool:
+		return a.name < b.name)
+	var seated: Array[Node3D] = []
+	for i in zones.size():
+		var c := CARD_SCENE.instantiate() as Node3D
+		c.position = Vector3(0.0 + i * 0.2, 1.4, 0)
+		add_child(c)
+		await _wait(20)
+		zones[i].pick_up_object(c)
+		await _wait(40)
+		_hold(c)
+		seated.append(c)
+	var zone: XRToolsSnapZone = zones[0]
+	var card: Node3D = seated[0]
+	for i in zones.size():
+		var zp: Vector3 = sys.global_transform.affine_inverse() * zones[i].global_position
+		var cb := _mesh_aabb(sys.global_transform.affine_inverse(), seated[i])
+		print("[mc] zone %d %-20s x %6.1f mm | card x %6.1f..%6.1f mm"
+			% [i, zones[i].name, zp.x * 1000.0,
+				cb.position.x * 1000.0, cb.end.x * 1000.0])
 
 	var inv := sys.global_transform.affine_inverse()
 	var mesh_box := _mesh_aabb(inv, card)
@@ -72,6 +87,13 @@ func _run() -> void:
 		"From above — 33 mm of the card is in, 30 mm stands out")
 	await _shoot(sys.global_position + Vector3(0, 0.02, 0), Vector3(-0.5, 0.5, 1.0), 0.34,
 		"In context on the console's front face")
+	# From above and centred, because what this one has to show is that the two
+	# cards sit level and equally proud in mouths mirrored about the console's
+	# middle. Overhead rather than oblique: the wide oblique framing above comes
+	# back black, which predates the second slot.
+	await _shoot(sys.global_transform * Vector3(0.0, 0.038, 0.115),
+		Vector3(0.0, 1.0, 0.02), 0.22,
+		"%d cards, one per slot" % seated.size())
 
 	# The card by itself, at the three-quarter angle every photo of one is taken
 	# from — the view to hold against a real card when judging its proportions.
@@ -110,7 +132,9 @@ func _shoot(focus: Vector3, dir: Vector3, size: float, caption: String) -> void:
 	_cam.global_position = focus + dir.normalized() * 0.7
 	_cam.look_at(focus, Vector3.UP)
 	_caption.text = caption
-	for i in range(2):
+	# Six, not two: a shot that moves the camera far comes back black on the
+	# first frames after the jump, and only the wide framings were affected.
+	for i in range(6):
 		await get_tree().process_frame
 		await RenderingServer.frame_post_draw
 	_sub.get_texture().get_image().save_png("%s/shot%d.png" % [OUT_DIR, _shot])

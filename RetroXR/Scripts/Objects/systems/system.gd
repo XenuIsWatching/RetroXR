@@ -2819,14 +2819,21 @@ func net_play_reset() -> void:
 ## ForcedCoreOptions directly — the card state is the machine's to report, and
 ## system_tests checks it that way.
 func _removable_media_options(core: String) -> Dictionary:
-	return ForcedCoreOptions.removable_media(core, card_family(),
-		get_snapped_memcard(0) != null)
+	return ForcedCoreOptions.removable_media(core, card_family(), _seated_cards())
 
 
 func _all_forced_options(core: String) -> Dictionary:
 	var out: Dictionary = _model.get_forced_core_options() if _model != null else {}
 	out.merge(ForcedCoreOptions.all(core, systemid, rom_path, expansion_ids(),
-		card_family(), get_snapped_memcard(0) != null, _expansion_launch.host_media_path()), true)
+		card_family(), _seated_cards(), _expansion_launch.host_media_path()), true)
+	return out
+
+
+## Whether a card is in each slot this console shows.
+func _seated_cards() -> Array[bool]:
+	var out: Array[bool] = []
+	for slot in card_slot_count():
+		out.append(get_snapped_memcard(slot) != null)
 	return out
 
 

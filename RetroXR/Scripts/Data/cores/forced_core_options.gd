@@ -21,10 +21,10 @@ extends RefCounted
 
 ## Everything this machine pins for a run, in the order the layers apply.
 static func all(core: String, systemid: String, rom_path: String,
-		expansions: Array, card_family: String, memcard0: bool,
+		expansions: Array, card_family: String, seated_cards: Array[bool],
 		media_path: String) -> Dictionary:
 	var out: Dictionary = {}
-	out.merge(removable_media(core, card_family, memcard0), true)
+	out.merge(removable_media(core, card_family, seated_cards), true)
 	out.merge(disk_drive(core, systemid, expansions, media_path), true)
 	out.merge(expansion_pak(core, expansions), true)
 	out.merge(fm_sound_unit(core, systemid, expansions), true)
@@ -43,26 +43,29 @@ static func all(core: String, systemid: String, rom_path: String,
 ## Read by the core at content load, so it is composed here with the other
 ## start-time options rather than swapped mid-run. Cores built before the option
 ## shipped ignore the key harmlessly, so this is safe on an older build.
-static func removable_media(core: String, card_family: String, memcard0: bool) -> Dictionary:
+## `seated_cards` is one entry per slot: whether a card is in it right now.
+static func removable_media(core: String, card_family: String,
+		seated_cards: Array[bool]) -> Dictionary:
 	# The PlayStation FAMILY, not merely any console with card slots. These keys
 	# are pcsx_rearmed's own and mean nothing to another console's core, so a
 	# GameCube must not write them into a .opt on the strength of having slots.
 	if card_family != "playstation" or not core.begins_with("pcsx_rearmed"):
 		return {}
-	return {
-		"pcsx_rearmed_memcard1": "libretro" if memcard0 else "none",
-		# The PlayStation has one card slot here, so slot 2 is empty. Said out
-		# loud rather than left to the core's default, which is a shared card
-		# every game can see and no object in the room accounts for.
-		"pcsx_rearmed_memcard2": "none",
-		# And whether the card is actually IN it, which is a different question
+	var out: Dictionary = {}
+	for slot in 2:
+		var seated: bool = slot < seated_cards.size() and seated_cards[slot]
+		# "libretro" is what hands the card's bytes to the frontend. Slot 2 goes
+		# through a core-specific memory id; the core's default for it is a shared
+		# card every game can see and no object in the room accounts for.
+		out["pcsx_rearmed_memcard%d" % (slot + 1)] = "libretro" if seated else "none"
+		# Whether the card is actually IN the slot, which is a different question
 		# from what kind of card the slot holds and the only one that can change
 		# while the game runs. Set here too so a machine starts up agreeing with
 		# the room: the key is read at load like the others, and _set_card_presence
 		# keeps it honest from then on.
-		"pcsx_rearmed_memcard1_inserted":
-			"enabled" if memcard0 else "disabled",
-	}
+		out["pcsx_rearmed_memcard%d_inserted" % (slot + 1)] = \
+			"enabled" if seated else "disabled"
+	return out
 
 
 static func disk_drive(core: String, systemid: String, expansions: Array,
