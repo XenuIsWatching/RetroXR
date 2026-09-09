@@ -263,6 +263,10 @@ var _vrs_radius_override: float = -1.0
 var _vrs_strength_override: float = -1.0
 ## "texture" (Godot's generated map) or "xr" (the runtime's own density map).
 var _vrs_mode_override: String = ""
+## vrsprobe.cfg "subsampled": true keeps XR_FB subsampled images on where the
+## foveation paths otherwise force them off. The project setting must be on
+## too: the swapchain is created that way at session start.
+var _subsampled_override: bool = false
 ## Engine glow. The rooms author it; this is the switch that can take it away,
 ## because it is the only full-frame post-process the mobile backend still runs
 ## and it is what reads the eye buffer back.
@@ -353,6 +357,8 @@ func _read_vrs_overrides() -> void:
 	var cfg: Dictionary = parsed
 	if cfg.has("vrs_mode"):
 		_vrs_mode_override = str(cfg["vrs_mode"])
+	if cfg.has("subsampled"):
+		_subsampled_override = bool(cfg["subsampled"])
 	if cfg.has("vrs_radius"):
 		_vrs_radius_override = float(cfg["vrs_radius"])
 	if cfg.has("vrs_strength"):
@@ -1043,7 +1049,7 @@ func apply_foveation() -> void:
 	var xr := XRServer.find_interface("OpenXR")
 	var root := get_tree().root
 	if xr != null and xr.is_initialized():
-		xr.set("foveation_with_subsampled_images", false)
+		xr.set("foveation_with_subsampled_images", _subsampled_override)
 		xr.set("foveation_dynamic", false)
 		xr.set("foveation_level", int(Foveation.OFF))
 	_vrs_refresh_serial += 1
@@ -1080,7 +1086,7 @@ func _generate_centered_vrs() -> void:
 		# this on ("foveation HIGH"), including 72 Hz at 1.75x.
 		root.vrs_mode = Viewport.VRS_DISABLED
 		RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), RID())
-		xr.set("foveation_with_subsampled_images", false)
+		xr.set("foveation_with_subsampled_images", _subsampled_override)
 		xr.set("foveation_dynamic", false)
 		xr.set("foveation_level", int(foveation_level))
 		_vrs_generator = null
@@ -1096,7 +1102,7 @@ func _generate_centered_vrs() -> void:
 		# runtime path is inert too". It was measuring an unset texture.
 		xr.set("foveation_level", int(foveation_level))
 		xr.set("foveation_dynamic", false)
-		xr.set("foveation_with_subsampled_images", false)
+		xr.set("foveation_with_subsampled_images", _subsampled_override)
 		RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), RID())
 		root.vrs_mode = Viewport.VRS_XR
 		_vrs_generator = null
