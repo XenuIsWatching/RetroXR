@@ -219,35 +219,146 @@ static var _cache_dir: String = ""
 ## Strip path -> the card it belongs to, so a card object can find itself from
 ## the one path it carries and nothing extra has to be persisted.
 static var _by_path: Dictionary = {}
+## The worker scan in flight, if any: its task id, the directory it reads, the
+## files it produced (written on the worker, read on the main thread) and who
+## asked to hear when it lands.
+static var _task_id: int = -1
+static var _task_dir: String = ""
+static var _task_files: Array[Dictionary] = []
+static var _task_mutex := Mutex.new()
+static var _task_listeners: Array[Callable] = []
+## Files stat'd so far and files to stat, kept for the page to show progress.
+static var _task_done: int = 0
+static var _task_total: int = 0
+
+
+## Whether `cards()` would answer from the cache rather than scan.
+static func is_warm(dir: String = "") -> bool:
+	var path := dir if not dir.is_empty() else RomLibrary.rom_dir_for_system(SYSTEMID)
+	return path == _cache_dir and not _cache.is_empty()
 
 
 ## Every card in the library, grouped. Scans once per directory.
+##
+## Synchronous: on a full No-Intro set this opens 4000 files and takes seconds,
+## so a caller that can wait should ask `warm_async` first and only come here
+## once `is_warm()`. A scan already running for this directory is joined rather
+## than repeated.
 static func cards(dir: String = "") -> Array[Dictionary]:
 	var path := dir if not dir.is_empty() else RomLibrary.rom_dir_for_system(SYSTEMID)
 	if path == _cache_dir and not _cache.is_empty():
 		return _cache
-	var files: Array[Dictionary] = []
+	if _task_id >= 0 and _task_dir == path:
+		_finish_async()
+		return _cache
+	_store(path, _list_files(path))
+	return _cache
+
+
+## Scan on a worker thread, then call `on_done` on the main thread. Calls it
+## straight away (deferred) when the cache is already warm, and shares one task
+## between every caller that asks while it runs.
+static func warm_async(dir: String = "", on_done: Callable = Callable()) -> void:
+	var path := dir if not dir.is_empty() else RomLibrary.rom_dir_for_system(SYSTEMID)
+	if path == _cache_dir and not _cache.is_empty():
+		if on_done.is_valid():
+			on_done.call_deferred()
+		return
+	if on_done.is_valid():
+		_task_listeners.append(on_done)
+	if _task_id >= 0:
+		if _task_dir == path:
+			return
+		# A scan of some other directory is in flight; let it land first.
+		_finish_async()
+	_task_dir = path
+	_task_id = WorkerThreadPool.add_task(_scan_task.bind(path), false, "EReaderCards scan")
+
+
+static func _scan_task(path: String) -> void:
+	var files := _list_files(path, true)
+	_task_mutex.lock()
+	_task_files = files
+	_task_mutex.unlock()
+	EReaderCards._finish_async.call_deferred()
+
+
+## Adopt the worker scan, blocking until it is finished. Idempotent: the
+## deferred call and a synchronous `cards()` that joined the task can both
+## arrive, and only the first does anything.
+static func _finish_async() -> void:
+	if _task_id < 0:
+		return
+	WorkerThreadPool.wait_for_task_completion(_task_id)
+	_task_mutex.lock()
+	var files := _task_files
+	_task_files = []
+	_task_mutex.unlock()
+	var path := _task_dir
+	_task_id = -1
+	_task_dir = ""
+	_task_done = 0
+	_task_total = 0
+	_store(path, files)
+	var listeners := _task_listeners
+	_task_listeners = []
+	for cb: Callable in listeners:
+		if cb.is_valid():
+			cb.call()
+
+
+## The directory's .raw files with their sizes. Pure file I/O, safe off-thread.
+static func _list_files(path: String, report: bool = false) -> Array[Dictionary]:
+	var names: PackedStringArray = []
 	var d := DirAccess.open(path)
 	if d != null:
 		d.list_dir_begin()
 		var name := d.get_next()
 		while not name.is_empty():
 			if not d.current_is_dir() and name.get_extension().to_lower() == "raw":
-				var full := path.path_join(name)
-				files.append({"path": full, "size": _size_of(full)})
+				names.append(name)
 			name = d.get_next()
 		d.list_dir_end()
+	if report:
+		_task_mutex.lock()
+		_task_done = 0
+		_task_total = names.size()
+		_task_mutex.unlock()
+	var files: Array[Dictionary] = []
+	for i in names.size():
+		var full := path.path_join(names[i])
+		files.append({"path": full, "size": _size_of(full)})
+		if report and (i & 31) == 31:
+			_task_mutex.lock()
+			_task_done = i + 1
+			_task_mutex.unlock()
+	return files
+
+
+## Progress of the worker scan as (files done, files total); (0, 0) when none
+## is running or it has not listed the folder yet.
+static func scan_progress() -> Vector2i:
+	if _task_id < 0:
+		return Vector2i.ZERO
+	_task_mutex.lock()
+	var out := Vector2i(_task_done, _task_total)
+	_task_mutex.unlock()
+	return out
+
+
+static func _store(path: String, files: Array[Dictionary]) -> void:
 	_cache = group(files)
 	_cache_dir = path
 	_by_path = {}
 	for c: Dictionary in _cache:
 		for s: Dictionary in c["strips"]:
 			_by_path[str(s["path"])] = c
-	return _cache
 
 
 ## Forget the scan — call after the library folder is written to.
 static func invalidate() -> void:
+	if _task_id >= 0:
+		_finish_async()
 	_cache = []
 	_cache_dir = ""
 	_by_path = {}

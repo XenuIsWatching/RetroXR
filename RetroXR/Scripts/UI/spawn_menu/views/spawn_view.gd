@@ -959,6 +959,21 @@ func _populate_cartridges_detail(systemid: String, vbox: VBoxContainer) -> void:
 		if pid > 0:
 			romm_catalog.sync_platform(systemid, pid, true)
 
+	# Grouping the dotcode cards opens every strip file to learn its length —
+	# 4000 opens on a full set, seconds on the main thread. Scan off it and
+	# fill the page when the result lands; until then the list says so.
+	if systemid == EReaderCards.SYSTEMID and not EReaderCards.is_warm():
+		EReaderCards.warm_async("", _on_ereader_cards_warm.bind(systemid))
+
+	_rebuild_romm_rows()
+
+
+func _on_ereader_cards_warm(systemid: String) -> void:
+	if _romm_detail_systemid != systemid:
+		return
+	if _romm_list == null or not is_instance_valid(_romm_list):
+		return
+	_invalidate_local_scan(systemid)
 	_rebuild_romm_rows()
 
 
@@ -1103,7 +1118,12 @@ func _romm_update_empty_label() -> void:
 	_romm_empty_label.visible = _romm_rows.is_empty()
 	if not _romm_rows.is_empty():
 		return
-	if not _romm_filter.is_empty():
+	if _romm_detail_systemid == EReaderCards.SYSTEMID and not EReaderCards.is_warm():
+		var p := EReaderCards.scan_progress()
+		_romm_empty_label.text = "Scanning cards…" if p.y == 0 			else "Scanning cards… %d / %d" % [p.x, p.y]
+		# Tick the count until the scan lands; the rebuild it triggers stops this.
+		get_tree().create_timer(0.25).timeout.connect(_romm_update_empty_label)
+	elif not _romm_filter.is_empty():
 		_romm_empty_label.text = "No games match “%s”." % _romm_filter
 	elif not romm_client.is_reachable():
 		# Ahead of the sync check: a sync that is still "running" against a dead
@@ -1146,6 +1166,11 @@ func _prewarm_top_platforms(systems: Array) -> void:
 func _local_by_name(systemid: String) -> Dictionary:
 	if _local_scan_cache.has(systemid):
 		return _local_scan_cache[systemid]
+	# A card scan still running is not waited for here: the page shows nothing
+	# yet and is rebuilt when it lands (_on_ereader_cards_warm). Not cached, so
+	# the next rebuild asks again.
+	if systemid == EReaderCards.SYSTEMID and not EReaderCards.is_warm():
+		return {}
 	# Same-stem collisions are resolved by RomLibrary: a manifest beats its tracks,
 	# and a real game beats a save or savestate that happens to sit beside it.
 	var by_name := RomLibrary.index_by_basename(
