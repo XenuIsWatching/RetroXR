@@ -240,7 +240,7 @@ const SOURCES := {
 	# binary — same arrangement as Dolphin, gambatte and pcsx_rearmed.
 	"mupen64plus_next": {
 		"repo":  "XenuIsWatching/mupen64plus-libretro-nx",
-		"known_tag": "retroxr-mupen64plus-next-libretro-v1",
+		"known_tag": "retroxr-mupen64plus-next-libretro-v2",
 		"label": "Mupen64Plus-Next (retroXR build)",
 		"assets": {
 			"Windows": "mupen64plus_next_libretro.dll.zip",
@@ -257,7 +257,7 @@ const SOURCES := {
 	# CoreRecommendations already names for nintendo_64 on Android.
 	"mupen64plus_next_gles3": {
 		"repo":  "XenuIsWatching/mupen64plus-libretro-nx",
-		"known_tag": "retroxr-mupen64plus-next-libretro-v1",
+		"known_tag": "retroxr-mupen64plus-next-libretro-v2",
 		"label": "Mupen64Plus-Next GLES3 (retroXR build)",
 		"assets": {
 			"Android": "mupen64plus_next_gles3_libretro_android.so.zip",
