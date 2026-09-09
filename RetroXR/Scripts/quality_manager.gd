@@ -469,6 +469,17 @@ func _run_vrs_probe() -> void:
 					(node as Node3D).visible = false
 					hit += 1
 			print("[VRSProbe] hide_scenes '%s' -> %d node(s)" % [want, hit])
+	if cfg.has("filter_sweep"):
+		# Cycle the compositor's layer filters a few seconds apart so screencaps
+		# of ONE head pose can be compared: (sharpen, supersample) as the plugin
+		# enums, 0 off / 1 normal / 2 quality.
+		var ext: Object = Engine.get_singleton("OpenXRFbCompositionLayerSettingsExtension")
+		if ext != null:
+			for pair in [[1, 0], [2, 0], [1, 2], [1, 1], [0, 0], [1, 0]]:
+				ext.call("set_projection_layer_sharpening_mode", int(pair[0]))
+				ext.call("set_projection_layer_supersampling_mode", int(pair[1]))
+				print("[VRSProbe] filter -> sharpen %d supersample %d" % [int(pair[0]), int(pair[1])])
+				await get_tree().create_timer(float(cfg["filter_sweep"])).timeout
 	if cfg.has("max_lights"):
 		_probe_cap_lights(int(cfg["max_lights"]))
 	if cfg.has("vrs_radius"):
