@@ -1341,3 +1341,107 @@ func _run() -> void:
 		await _group_sgb()
 	if _want("sufami"):
 		await _group_sufami()
+	if _want("slot2"):
+		await _group_slot2()
+
+
+# ── slot2/ — the DS's GBA slot, a second slot moulded into the console ─────────
+
+func _group_slot2() -> void:
+	_ok(Slot2Catalog.media_of("nds") == "game_boy_advance",
+		"slot2/ the DS takes a GBA cartridge in its second slot")
+	_ok(Slot2Catalog.media_of("3ds").is_empty() and Slot2Catalog.media_of("game_boy_advance").is_empty(),
+		"slot2/ and no other console has one")
+
+	var ds := await _console("nds")
+	var slot := ds.get_node_or_null("Slot2") as XRToolsSnapZone
+	_ok(slot != null, "slot2/ the console built a second snap zone")
+	var gba := await _console("game_boy_advance")
+	_ok(gba.get_node_or_null("Slot2") == null,
+		"slot2/ which a console with one slot does not get")
+	if slot == null:
+		await _clear()
+		return
+
+	# The pose, printed rather than eyeballed. The GBA cart lies label-DOWN
+	# (its local +Z, the label, pointing world -Y) with its top edge out of the
+	# FRONT face (+Z) -- the mirror of the DS card, which goes in from the back.
+	var b := slot.transform.basis
+	print("[exp] slot2 basis x=%s y=%s z=%s origin=%s" % [b.x, b.y, b.z, slot.position])
+	_ok(b.y.z > 0.9, "slot2/ the cartridge's top edge points out of the front face")
+	_ok(b.z.y < -0.9, "slot2/ with its label facing down")
+	var back := ds.get_node("CartridgeSlot") as Node3D
+	_ok(slot.position.z > 0.0 and back.position.z < 0.0,
+		"slot2/ on the opposite edge from the DS card slot")
+
+	# Nothing in it: a plain DS, on whatever core the player chose.
+	_ok(ds.expansion_boot().is_empty(),
+		"slot2/ an empty second slot leaves the launch recipe empty")
+
+	# Gates. A GBA cartridge goes in the front slot and not the back one; a Game
+	# Boy cartridge fits neither, because the DS never played one.
+	var gba_cart := await _cart("game_boy_advance", "/roms/game_boy_advance/game.gba")
+	gba_cart.save_id = "gbagame"
+	var gb_cart := await _cart("game_boy", "/roms/game_boy/game.gb")
+	var ds_cart := await _cart("nds", "/roms/nds/dsgame.nds")
+	_ok(ds._accepts_slot2_media(gba_cart), "slot2/ takes a GBA cartridge")
+	_ok(not ds._accepts_slot2_media(gb_cart), "slot2/ refuses a Game Boy cartridge")
+	_ok(not ds._accepts_slot2_media(ds_cart), "slot2/ refuses a DS card")
+	_ok(not ds._accepts_media(gba_cart), "slot2/ and the DS card slot refuses the GBA cartridge")
+
+	slot.pick_up_object(gba_cart)
+	await _wait(5)
+	_ok(ds.get_slot2_cartridge() == gba_cart, "slot2/ a seated GBA cartridge is reported")
+	_ok(ds.slot2_media_path() == "/roms/game_boy_advance/game.gba",
+		"slot2/ with its path")
+
+	# The recipe: melonDS DS's `gba` subsystem, in the core's own order -- DS
+	# card, GBA ROM, GBA save PATH -- and the pin on the core that publishes it.
+	ds.restore_cartridge(ds_cart)
+	await _wait(5)
+	var boot := ds.expansion_boot()
+	_ok(str(boot.get("core", "")) == "melondsds",
+		"slot2/ a filled second slot pins melondsds, the core with the subsystem")
+	var sub: Dictionary = boot.get("subsystem", {})
+	_ok(str(sub.get("ident", "")) == "gba", "slot2/ and names the gba pairing")
+	var paths := ds._expansion_launch.expansion_roms(sub, "melondsds")
+	_ok(paths.size() == 3 and paths[0] == "/roms/nds/dsgame.nds",
+		"slot2/ whose first entry is the DS card")
+	_ok(paths.size() == 3 and paths[1] == "/roms/game_boy_advance/game.gba",
+		"slot2/ second the GBA ROM")
+	var save := ds.slot2_save_path("melondsds")
+	_ok(paths.size() == 3 and paths[2] == save and save.ends_with("gbagame.srm"),
+		"slot2/ and third the GBA cartridge's own save, keyed off its save_id")
+	# The two stems differ on purpose, so this can go red: keyed off the DS card
+	# the path would read .../dsgame/gbagame.srm.
+	_ok(save.contains("melondsds") and SramPaths.game_stem(save.get_base_dir()) == "game"
+			and not save.contains("dsgame"),
+		"slot2/ under the core's save dir for the GBA game, not the DS game's")
+	# The core opens that path itself and refuses the load when it is missing,
+	# so resolving the recipe is what brings the file into existence.
+	_ok(FileAccess.file_exists(save), "slot2/ and the save file exists once resolved")
+	_ok(ds._expansion_launch.apply_expansion_launch().has("subsystem")
+			and ds.rom_path == "/roms/nds/dsgame.nds",
+		"slot2/ the machine still boots from the DS card")
+	if FileAccess.file_exists(save):
+		DirAccess.remove_absolute(save)
+		DirAccess.remove_absolute(save.get_base_dir())
+
+	# Pulling the GBA cartridge: the pairing comes up short, the plain load is
+	# taken, and the pin is gone with it.
+	slot.drop_object()
+	await _wait(5)
+	_ok(ds.get_slot2_cartridge() == null, "slot2/ pulling the cartridge empties the slot")
+	_ok(ds._expansion_launch.expansion_roms(sub, "melondsds").size() < 3,
+		"slot2/ and the pairing comes up short, so the plain load is taken")
+	_ok(ds.expansion_boot().is_empty(), "slot2/ with no core pinned any more")
+
+	# Restore path, which a save and a remote peer both use.
+	ds.restore_slot2_cartridge(gba_cart)
+	await _wait(5)
+	_ok(ds.get_slot2_cartridge() == gba_cart, "slot2/ restore_slot2_cartridge seats it again")
+	ds.net_release_slot2_cartridge()
+	await _wait(5)
+	_ok(ds.get_slot2_cartridge() == null, "slot2/ and net_release_slot2_cartridge lets it go")
+
+	await _clear()

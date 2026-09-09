@@ -250,6 +250,11 @@ var _av_stereo: bool = false
 var _av_speaker_l: int = -1
 var _av_speaker_r: int = -1
 var _snapped_cartridge: Node3D = null
+## The console's SECOND native slot and what is in it -- the DS's Slot-2, which
+## takes a Game Boy Advance cartridge. Null on every console with one slot; see
+## Slot2Catalog for which have two.
+var _slot2: XRToolsSnapZone = null
+var _slot2_cartridge: Node3D = null
 
 # --- Disc loader (tray/slot) state ---
 const DISC_SPIN_MAX := 25.0    # rad/s (~240 RPM) — seated disc at full speed
@@ -686,6 +691,7 @@ func _load_system_model() -> void:
 	_build_memcard_slots()
 	_build_disc_loader(is_bespoke)
 	_build_handheld()
+	_build_slot2()
 	# Restore a saved lid pose — a clamshell's hinge (DS/3DS/GBA SP) or a console's
 	# cartridge-bay flap (the NES). Last, and for every model rather than only the
 	# handhelds, because a disc loader and configure_cartridge_slot both re-gate the
@@ -3912,6 +3918,100 @@ func _on_rumble_state_changed(port: int, weak: float, strong: float) -> void:
 	var ctrl = _port_controllers[port]
 	if ctrl and is_instance_valid(ctrl) and ctrl.has_method("set_rumble"):
 		ctrl.set_rumble(weak, strong)
+
+
+# --- The second native slot (the DS's Slot-2) ---
+
+const SNAP_ZONE_SCENE := preload("res://addons/godot-xr-tools/objects/snap_zone.tscn")
+
+
+## Build the console's second slot, for the consoles Slot2Catalog says have one.
+## A snap zone of its own rather than a second bay on the cartridge slot: the two
+## take different media, face opposite edges and are gated separately.
+func _build_slot2() -> void:
+	if Slot2Catalog.media_of(systemid).is_empty():
+		return
+	_slot2 = SNAP_ZONE_SCENE.instantiate() as XRToolsSnapZone
+	_slot2.name = "Slot2"
+	_slot2.snap_require = "cartridge"
+	_slot2.snap_filter = _accepts_slot2_media
+	_slot2.grab_distance = 0.03
+	add_child(_slot2)
+	_slot2.add_to_group(ExpansionPort.GROUP_CART_SLOT)
+	_slot2.has_picked_up.connect(_on_slot2_inserted)
+	_slot2.has_dropped.connect(_on_slot2_removed)
+	_model.configure_slot2(_slot2)
+
+
+## Slot-2 gate: the media the second slot takes, or an unlabelled cartridge,
+## which is whatever machine it is put into. Deliberately NOT _MEDIA_COMPAT --
+## the DS has no Game Boy support, so a Game Boy cartridge does not fit.
+func _accepts_slot2_media(obj: Node3D) -> bool:
+	if obj == null or obj is RetroExpansion or not ("systemid" in obj):
+		return false
+	var mid := str(obj.get("systemid"))
+	return mid.is_empty() or mid == Slot2Catalog.media_of(systemid)
+
+
+func _on_slot2_inserted(cartridge: Node3D) -> void:
+	_slot2_cartridge = cartridge
+	add_collision_exception_with(cartridge)
+	if "systemid" in cartridge and str(cartridge.get("systemid")).is_empty():
+		cartridge.set("systemid", Slot2Catalog.media_of(systemid))
+	_model.play_cartridge_insert(cartridge, _slot2)
+	NetworkManager.report_event(NetEvents.Event.EV_SLOT2_INSERT,
+		{"sys": self, "cart": cartridge})
+
+
+## Pulling the GBA cartridge does not switch a DS off: the game keeps running
+## and simply no longer sees the pak, as it does on the hardware.
+func _on_slot2_removed() -> void:
+	if _slot2_cartridge != null:
+		_model.play_cartridge_eject(_slot2_cartridge, _slot2)
+		remove_collision_exception_with(_slot2_cartridge)
+		_slot2_cartridge = null
+	NetworkManager.report_event(NetEvents.Event.EV_SLOT2_REMOVE, {"sys": self})
+
+
+func get_slot2_cartridge() -> Node3D:
+	return _slot2_cartridge if is_instance_valid(_slot2_cartridge) else null
+
+
+func slot2_media_path() -> String:
+	var m := get_slot2_cartridge()
+	if m == null or not m.has_method("get_rom_path"):
+		return ""
+	return str(m.call("get_rom_path"))
+
+
+## Where the Slot-2 cartridge's battery is kept, or "" with nothing in it.
+## Keyed off THAT cartridge's own path and save_id, as slot_b_save_path keys a
+## Sufami Turbo's second cartridge: the save follows the GBA game between DS
+## games rather than belonging to whichever DS card it was last read beside.
+func slot2_save_path(core: String) -> String:
+	var m := get_slot2_cartridge()
+	if core.is_empty() or m == null or not ("save_id" in m):
+		return ""
+	var save_id := str(m.get("save_id"))
+	var path := slot2_media_path()
+	if save_id.is_empty() or path.is_empty():
+		return ""
+	return SramPaths.cart_save_path(core, path, save_id)
+
+
+## Seat a Slot-2 cartridge after a save restore or from a remote peer.
+func restore_slot2_cartridge(cartridge: Node3D) -> void:
+	if _slot2 == null or cartridge == null:
+		return
+	_restoring_media = true
+	_slot2.pick_up_object(cartridge)
+	_restoring_media = false
+
+
+## The counterpart, for a remote peer taking the cartridge out.
+func net_release_slot2_cartridge() -> void:
+	if _slot2 != null:
+		_slot2.drop_object()
 
 
 # --- Cartridge slot callbacks ---

@@ -380,6 +380,36 @@ func configure_cartridge_slot(slot: Node3D) -> void:
 		slot.global_transform = seat.global_transform
 
 
+## The second slot on the FRONT edge -- the DS's Slot-2, which takes a Game Boy
+## Advance cartridge: lying flat, label down, connector first, the length running
+## into the body along -Z from the front face, and a stub left proud to grab.
+##
+## The mirror of configure_cartridge_slot about the body's centre, so the pose
+## is the same R_x(+90) laid the other way round about Y. An authored "Slot2Seat"
+## marker wins over the computed pose, as "CartSeat" does for the back slot.
+func configure_slot2(slot: Node3D) -> void:
+	var size := MediaDimensions.cart_size(Slot2Catalog.media_of(_systemid_of(slot)))
+	var protrude := clampf(size.y * 0.28, 0.008, 0.02)
+	slot.rotation_degrees = Vector3(90, 0, 0)
+	slot.position = Vector3(0, 0, body_size.z / 2.0 - size.y / 2.0 + protrude)
+	slot.grab_distance = 0.03
+	var grab_col := slot.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if grab_col != null:
+		grab_col.position = Vector3(0, size.y * 0.5 - protrude, 0)
+	var seat := _seat_marker("Slot2Seat")
+	if seat != null:
+		slot.global_transform = seat.global_transform
+
+
+## The systemid of the console a slot belongs to, read off the RetroSystem that
+## parents it. The model is not told its systemid directly.
+func _systemid_of(slot: Node3D) -> String:
+	var sys := slot.get_parent()
+	if sys != null and "systemid" in sys:
+		return str(sys.get("systemid"))
+	return ""
+
+
 ## Cartridges slide in from behind the device.
 func get_cartridge_insert_direction() -> Vector3:
 	return Vector3(0, 0, -1)

@@ -65,4 +65,7 @@ enum Event {
 	EV_PULL_LIGHT,       # {cord, on}    bedside/desk pull-chain lamp
 	EV_BLINDS,           # {blinds, drop} window blind height
 	EV_TIME_OF_DAY,      # {clock, time} bedroom time lever
+	# Appended, not slotted beside EV_CART_*: the ordinal is the wire id.
+	EV_SLOT2_INSERT,     # {sys, cart}   the DS's GBA slot
+	EV_SLOT2_REMOVE,     # {sys}
 }

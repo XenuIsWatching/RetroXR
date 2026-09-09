@@ -32,6 +32,11 @@ func setup(host: RetroSystem) -> void:
 ## has none -- which is the ordinary state of a bare console.
 func expansion_boot() -> Dictionary:
 	var spec := ExpansionCatalog.boot_for(_host.systemid, _host.expansion_ids())
+	# A console's own second slot, for the one console that has one. Only while
+	# something is in it: the recipe pins a core, and an empty Slot-2 is a plain
+	# DS that keeps the player's own choice.
+	if spec.is_empty() and _host.get_slot2_cartridge() != null:
+		spec = Slot2Catalog.boot_for(_host.systemid)
 	if spec.is_empty():
 		return spec
 	# A row that pins its core only while the console's own slot is filled drops
@@ -77,12 +82,20 @@ func host_media_path() -> String:
 ## Public because expansion_tests asserts against it directly - 23 call sites.
 ## An underscore would promise the name may change freely, and a suite that
 ## names it is a caller that cannot.
-func expansion_roms(spec: Dictionary) -> Array[String]:
+func expansion_roms(spec: Dictionary, core := "") -> Array[String]:
 	var out: Array[String] = []
 	for token: String in spec.get("roms", []):
 		var path := ""
 		if token == "host":
 			path = host_media_path()
+		elif token == "slot2":
+			path = _host.slot2_media_path()
+		elif token == "slot2_save":
+			# melonDS DS opens this path itself and refuses the load when it is
+			# not there, so the file is made to exist before the call. Keyed off
+			# the core, which the recipe pins; a caller that knows it says so.
+			path = _ensure_slot2_save(core if not core.is_empty()
+				else str(expansion_boot().get("core", "")))
 		else:
 			# Three ways to name a unit's content, because the BS-X cartridge has
 			# two of them: the shell moulded into the cartridge and the pack in
@@ -221,7 +234,7 @@ func start_subsystem_content(dir: String, core: String, spec: Dictionary) -> boo
 	if not _host.get_libretro_node().has_method("StartSubsystemContent"):
 		return false
 	var wanted: Array = sub.get("roms", [])
-	var paths := expansion_roms(sub)
+	var paths := expansion_roms(sub, core)
 	if paths.size() != wanted.size():
 		return false
 	# One of the pair can be a WRITABLE medium rather than a read-only ROM: a
@@ -242,11 +255,19 @@ func start_subsystem_content(dir: String, core: String, spec: Dictionary) -> boo
 	return true
 
 
-## Where the SECOND cartridge's battery is kept, or "" on every machine that
-## holds one cartridge.
-##
-## Keyed off that cartridge's OWN save_id, exactly as the first one is, so a save
-## follows the cartridge rather than the slot: swap which game is in slot B and
-## it brings its own progress with it, and putting it in slot A later finds the
-## same file. Keying it off the slot instead would give a linked pair one save
-## per POSITION, so lending a cartridge to a different game would overwrite it.
+## The GBA cartridge's save file for this run, created empty when it does not
+## exist yet. "" when no GBA cartridge is seated, so the pairing comes up short
+## and the plain load is taken instead.
+func _ensure_slot2_save(core: String) -> String:
+	var path := _host.slot2_save_path(core)
+	if path.is_empty():
+		return ""
+	if not FileAccess.file_exists(path):
+		DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		if f == null:
+			push_warning("[RetroSystem] cannot create GBA save file %s (%s)"
+				% [path, error_string(FileAccess.get_open_error())])
+			return ""
+		f.close()
+	return path

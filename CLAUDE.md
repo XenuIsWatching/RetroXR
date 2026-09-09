@@ -1187,6 +1187,45 @@ The probe cannot read its own log — `Libretro` publishes no log signal — so 
 branch is asserted by the CALLER grepping the run. `--sram` reports the flushed
 size, which is how the save limit above was measured.
 
+### 2j. The DS's Slot-2 — a second slot on the console, not an expansion
+
+A Nintendo DS has a GBA cartridge slot moulded into its front edge, and some DS
+games read it (the Pokémon dual-slot transfer, Mega Man ZX, Portrait of Ruin).
+It is the one console with a second NATIVE slot, so it is not an
+`ExpansionCatalog` unit: `Slot2Catalog` (one row, `nds` → `game_boy_advance`)
+tells `RetroSystem` to build a `Slot2` snap zone, `handheld_model.configure_slot2`
+poses it on the front edge (an authored `Slot2Seat` marker wins, as `CartSeat`
+does), and `ExpansionLaunch` reads the row as a launch recipe with two new tokens,
+`slot2` and `slot2_save`. The recipe exists only while a GBA cartridge is seated,
+which is what pins `melondsds` — DeSmuME publishes no such subsystem.
+
+**Verified in JesseTG/melonds-ds (`src/libretro/info.cpp`, `core/core.cpp`):**
+
+```
+slot_1_2_roms[] = { "Nintendo DS (Slot 1)" nds, "GBA (Slot 2)" gba, "GBA Save Data" srm|sav (need_fullpath, optional) }
+subsystems[]    = { "gba" (3 roms), "gbanosav" (2 roms) }
+```
+`game[0]` is the DS card, `game[1]` the GBA ROM (the core asserts its data was
+read into memory — the bridge does that for every `need_fullpath=false` entry),
+`game[2]` the GBA save PATH. **The GBA save never goes through
+`retro_get_memory_data`**: the core opens that path itself and **throws on a path
+that does not exist** ("Failed to open GBA save file", load refused), tolerates an
+empty file, and writes the SRAM back to it itself. So the `slot2_save` token
+CREATES the file when it is missing, keyed off the GBA cartridge's own `save_id`
+under the GBA game's stem (the save follows the GBA game between DS games).
+`gbanosav` is not a fallback: it never writes a save.
+
+The bridge needed no change; `WrapperEmuThread.cpp` already handles per-rom
+`need_fullpath` and refuses a missing file up front. Netplay starts every
+machine through the single-ROM path, so a DS with a GBA cartridge boots its
+DS card alone in a session — not extended.
+
+`expansion_tests` `slot2/` (27 cases) pins the gates, the pose (printed basis:
+top edge out of +Z, label down), the recipe order and the save file's existence.
+What no suite covers is the core actually taking the pair: that needs melondsds,
+the DS firmware, a DS ROM and a GBA ROM, and has not been measured yet — the
+log line to look for is `Loading subsystem 'gba' (id=...) with 3 file(s)`.
+
 ### 3. Capturing a real screenshot on Linux (for visual validation)
 `--headless` uses the dummy renderer — it **cannot** produce a screenshot (a probe that awaits
 `RenderingServer.frame_post_draw` just hangs; `get_image()` is blank). To actually render a

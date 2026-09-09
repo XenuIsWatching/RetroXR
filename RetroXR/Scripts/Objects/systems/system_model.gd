@@ -657,6 +657,12 @@ func configure_cartridge_slot(_slot: Node3D) -> void:
 	pass
 
 
+## Reposition the console's SECOND native slot (the DS's Slot-2), when
+## RetroSystem built one. Default: nothing, which is every console but the DS.
+func configure_slot2(_slot: Node3D) -> void:
+	pass
+
+
 ## Reposition the roof-top-centred ExpansionSocket RetroSystem just built (see
 ## _build_expansion_hardware) to wherever this model's real port actually is.
 ## Default: leave it where the generic placement put it -- correct for every

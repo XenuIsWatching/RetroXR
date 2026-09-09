@@ -982,6 +982,8 @@ func _release(net_id: int, pos: Vector3, quat: Quaternion, lin: Vector3, ang: Ve
 const EV_NODE_KEYS := {
 	NetEvents.Event.EV_CART_INSERT:     ["sys", "cart"],
 	NetEvents.Event.EV_CART_REMOVE:     ["sys"],
+	NetEvents.Event.EV_SLOT2_INSERT:    ["sys", "cart"],
+	NetEvents.Event.EV_SLOT2_REMOVE:    ["sys"],
 	NetEvents.Event.EV_TAPE_INSERT:     ["vcr", "tape"],
 	NetEvents.Event.EV_TAPE_REMOVE:     ["vcr"],
 	NetEvents.Event.EV_TV_PLUG:         ["owner", "tv"],
@@ -1123,6 +1125,10 @@ func _dispatch_event(kind: NetEvents.Event, a: Dictionary) -> void:
 			a["sys"].restore_cartridge(a["cart"])
 		NetEvents.Event.EV_CART_REMOVE:
 			a["sys"].net_release_cartridge()
+		NetEvents.Event.EV_SLOT2_INSERT:
+			a["sys"].restore_slot2_cartridge(a["cart"])
+		NetEvents.Event.EV_SLOT2_REMOVE:
+			a["sys"].net_release_slot2_cartridge()
 		NetEvents.Event.EV_TAPE_INSERT:
 			a["vcr"].restore_tape(a["tape"])
 		NetEvents.Event.EV_TAPE_REMOVE:

@@ -1328,6 +1328,9 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 		var cart := _resolve_ref(root, spawned, d.get("cartridge")) as RetroCartridge
 		if cart:
 			sys.restore_cartridge(cart)
+		var cart_b := _resolve_ref(root, spawned, d.get("cartridge_b")) as RetroCartridge
+		if cart_b:
+			sys.restore_slot2_cartridge(cart_b)
 		# Bolt the tower back together. Each unit seats through the same call a
 		# hand's release ends in, so a restored stack is the same object graph as
 		# a built one: the console knows its units, each unit knows its host, and
@@ -1616,6 +1619,9 @@ func _serialize_system(sys: RetroSystem, id: int, n3d: Node3D,
 		"model_id": sys.model_id,
 		"tv": _ref(node_to_id, sys.connected_tv),
 		"cartridge": _ref(node_to_id, sys.get_snapped_cartridge()),
+		# The DS's GBA slot. Its own key, as memcard_b is, so a room saved before
+		# there was a second slot still loads.
+		"cartridge_b": _ref(node_to_id, sys.get_slot2_cartridge()),
 		"memcard": _ref(node_to_id, sys.get_snapped_memcard(0)),
 		"memcard_b": _ref(node_to_id, sys.get_snapped_memcard(1)),
 		# Null once a player has pulled the lid off and put it down — a

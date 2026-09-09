@@ -83,6 +83,12 @@ emission_enabled = true
 emission = Color(1, 0.55, 0.1, 1)
 emission_energy_multiplier = 0.4
 
+[sub_resource type="BoxMesh" id="BoxMesh_slot2mouth"]
+size = Vector3(0.06, 0.008, 0.004)
+
+[sub_resource type="BoxMesh" id="BoxMesh_slot2seat"]
+size = Vector3(0.058, 0.036, 0.007)
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_volumeslider"]
 size = Vector3(0.012, 0.013, 0.02)
 
@@ -165,6 +171,19 @@ surface_material_override/0 = SubResource("StandardMaterial3D_qscha")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0505, 0.002, -0.04)
 mesh = SubResource("BoxMesh_shoulder")
 surface_material_override/0 = SubResource("StandardMaterial3D_qscha")
+
+[node name="Slot2Mouth" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.03695)
+mesh = SubResource("BoxMesh_slot2mouth")
+surface_material_override/0 = SubResource("StandardMaterial3D_rgv3c")
+
+[node name="Slot2Seat" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.029)
+gizmo_extents = 0.03
+
+[node name="SeatPreview" type="MeshInstance3D" parent="Slot2Seat"]
+mesh = SubResource("BoxMesh_slot2seat")
+surface_material_override/0 = SubResource("StandardMaterial3D_seat")
 
 [node name="CartSeat" type="Marker3D" parent="."]
 transform = Transform3D(-1, 0, 0, 0, 0, -1, 0, -1, 0, 0, 0, -0.02925)
