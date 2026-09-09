@@ -164,8 +164,8 @@ func _run() -> void:
 	h_os._registry[88] = h_book
 	c_os._registry[88] = c_book
 	# Client turns a page + resizes → host copy follows.
-	c_os.report_event(NetObjectSync.EV_BOOK_PAGE, {"book": c_book, "state": 1, "leaf": 3})
-	c_os.report_event(NetObjectSync.EV_BOOK_SIZE, {"book": c_book, "scale": 1.5})
+	c_os.report_event(NetEvents.Event.EV_BOOK_PAGE, {"book": c_book, "state": 1, "leaf": 3})
+	c_os.report_event(NetEvents.Event.EV_BOOK_SIZE, {"book": c_book, "scale": 1.5})
 	for _i in range(120):
 		await get_tree().process_frame
 		if not h_book.pages.is_empty() and h_book.size_scale != 1.0:
@@ -174,7 +174,7 @@ func _run() -> void:
 	_fail_if(h_book.pages != [[1, 3]], "client page turn did not reach host")
 	_fail_if(absf(h_book.size_scale - 1.5) > 0.001, "client size change did not reach host")
 	# Host toggles half-page → client copy follows.
-	h_os.report_event(NetObjectSync.EV_BOOK_HALF, {"book": h_book, "on": true})
+	h_os.report_event(NetEvents.Event.EV_BOOK_HALF, {"book": h_book, "on": true})
 	for _i in range(120):
 		await get_tree().process_frame
 		if c_book.half_page_mode:
