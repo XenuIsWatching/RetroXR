@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 291
+const EXPECTED_CASES := 298
 
 var _pass := 0
 var _fail := 0
@@ -878,8 +878,34 @@ func _test_ps2_blank() -> void:
 	_eq(sb.decode_u32(PS2Card.SB_ROOTDIR), 0, "ps2/blank/the root is at relative cluster 0")
 	_eq(sb.decode_u32(PS2Card.SB_IFC_LIST), 8,
 		"ps2/blank/the one indirect FAT cluster is 8")
-	_eq(sb.decode_u32(PS2Card.SB_IFC_LIST + 4), 0xFFFFFFFF,
-		"ps2/blank/and the other 31 are unused")
+
+	# Everything below was MEASURED off a real PCSX2 card backup rather than
+	# taken from the specification, which gets the first of them wrong.
+	#
+	# card_flags 0x2B is CF_USE_ECC | CF_BAD_BLOCK and two undocumented bits. The
+	# spec calls 0x52 the default — a value with CF_USE_ECC CLEAR, on a card
+	# whose every page carries ECC.
+	_eq(sb[PS2Card.SB_CARD_FLAGS], 0x2B, "ps2/blank/card_flags as a real card writes them")
+	_eq(sb.slice(PS2Card.SB_VERSION, PS2Card.SB_VERSION + 12),
+		"1.2.0.0".to_ascii_buffer() + PackedByteArray([0, 0, 0, 0, 0]),
+		"ps2/blank/the version is 1.2.0.0, NUL-padded to twelve")
+	# The two 32-entry lists sit side by side and are filled DIFFERENTLY: an
+	# unused indirect-FAT slot is zero, an unused bad-block slot is 0xFFFFFFFF.
+	_eq(sb.decode_u32(PS2Card.SB_IFC_LIST + 4), 0,
+		"ps2/blank/an unused indirect-FAT slot is zero")
+	_eq(sb.decode_u32(PS2Card.SB_BAD_BLOCKS), 0xFFFFFFFF,
+		"ps2/blank/but an unused bad-block slot is all ones")
+	_eq(sb.decode_u16(0x2E), 0xFF00, "ps2/blank/the unused half at 0x2e")
+	_eq(sb.decode_u32(0x48), 0, "ps2/blank/and the padding word at 0x48 is zero")
+	var tail_clean := true
+	for i in range(0x152, PS2Card.PAGE_SIZE):
+		if sb[i] != 0:
+			tail_clean = false
+			break
+	_ok(tail_clean, "ps2/blank/the rest of the superblock page is zeroed, not erased")
+	# The four bytes after the twelve of ECC are zero, not 0xFF.
+	_eq(img.slice(PS2Card.PAGE_SIZE + 12, PS2Card.PAGE_RAW),
+		PackedByteArray([0, 0, 0, 0]), "ps2/blank/a page's spare area ends in nulls")
 
 	# The root's ".." is the one entry on the card whose mode differs from every
 	# other: it drops MODE_READ and carries 0x2000. A reading of the spec alone

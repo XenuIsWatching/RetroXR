@@ -55,9 +55,21 @@ static func parse_icon_sys(bytes: PackedByteArray) -> Dictionary:
 	var names: Array[String] = []
 	for i in 3:
 		names.append(_ascii(bytes, SYS_ICON_NAMES + i * SYS_NAME_LEN, SYS_NAME_LEN))
+	# A title is written as TWO lines with no separator between them, and the
+	# console breaks it at a byte offset the file carries. Decoding the field as
+	# one run gives "Prince Of PersiaSOT 00"; splitting at the offset first is
+	# what makes it read as a title and a subtitle.
+	var raw := bytes.slice(SYS_TITLE, SYS_TITLE + SYS_TITLE_LEN)
+	var brk := bytes.decode_u16(SYS_LINE_BREAK)
+	var title := Sjis.to_ascii(raw)
+	if brk > 0 and brk < raw.size():
+		var head := Sjis.to_ascii(raw.slice(0, brk))
+		var tail := Sjis.to_ascii(raw.slice(brk))
+		if not head.is_empty() and not tail.is_empty():
+			title = "%s %s" % [head, tail]
 	return {
-		"title": Sjis.to_ascii(bytes.slice(SYS_TITLE, SYS_TITLE + SYS_TITLE_LEN)),
-		"line_break": bytes.decode_u16(SYS_LINE_BREAK),
+		"title": title,
+		"line_break": brk,
 		"icon_normal": names[0],
 		"icon_copying": names[1],
 		"icon_deleting": names[2],
@@ -89,8 +101,6 @@ static func parse_icn(bytes: PackedByteArray) -> Dictionary:
 		return {}
 	if shape_count > 64 or vertex_count > 200000:
 		return {}
-	if not (texture_type in TEX_RAW or texture_type in TEX_RLE):
-		return {}
 
 	var stride := shape_count * VERTEX_SIZE + ATTRIB_SIZE
 	var need := 20 + vertex_count * stride
@@ -106,29 +116,52 @@ static func parse_icn(bytes: PackedByteArray) -> Dictionary:
 	uvs.resize(vertex_count)
 	var colors := PackedColorArray()
 	colors.resize(vertex_count)
+	# The attribute record carries a normal per vertex. Dropping it and letting
+	# the renderer guess leaves every icon flat-shaded and lit from nowhere.
+	var normals := PackedVector3Array()
+	normals.resize(vertex_count)
 
 	var pos := 20
 	for v in vertex_count:
 		for s in shape_count:
+			# Y is NEGATED: the PS2 authors these with +Y pointing DOWN, so a
+			# straight read stands every icon on its head. Checked against a
+			# model that can show it — Indiana Jones' hat, which is unmistakable
+			# upside down and unreadable on anything symmetrical.
 			shapes[s][v] = Vector3(
 				bytes.decode_s16(pos) / FIXED_ONE,
-				bytes.decode_s16(pos + 2) / FIXED_ONE,
+				-bytes.decode_s16(pos + 2) / FIXED_ONE,
 				bytes.decode_s16(pos + 4) / FIXED_ONE)
 			pos += VERTEX_SIZE
+		var n := Vector3(
+			bytes.decode_s16(pos) / FIXED_ONE,
+			-bytes.decode_s16(pos + 2) / FIXED_ONE,
+			bytes.decode_s16(pos + 4) / FIXED_ONE)
+		normals[v] = n.normalized() if n.length_squared() > 0.0 else Vector3.UP
 		uvs[v] = Vector2(
 			bytes.decode_s16(pos + 8) / FIXED_ONE,
 			bytes.decode_s16(pos + 10) / FIXED_ONE)
 		var rgba := bytes.decode_u32(pos + 12)
-		# Vertex colour is 0-255 per channel. Alpha is deliberately forced
-		# opaque: an icon whose alpha is never filled reads as a fully
-		# transparent model, which looks like nothing rendered at all.
-		colors[v] = Color8(rgba & 0xFF, (rgba >> 8) & 0xFF, (rgba >> 16) & 0xFF, 255)
+		# The PS2's colour convention is 0x80 = full intensity, not 0xFF, so a
+		# channel read straight as 0-255 renders every icon at half brightness.
+		# Doubled and clamped, which is what the hardware does with the headroom
+		# above 0x80. Alpha is forced opaque: an icon whose alpha is never filled
+		# reads as a fully transparent model, which looks like nothing at all.
+		colors[v] = Color(
+			minf((rgba & 0xFF) / 128.0, 1.0),
+			minf(((rgba >> 8) & 0xFF) / 128.0, 1.0),
+			minf(((rgba >> 16) & 0xFF) / 128.0, 1.0),
+			1.0)
 		pos += ATTRIB_SIZE
 
+	# The geometry is the icon. An animation header this does not recognise, or a
+	# texture encoding it cannot decode, costs the animation or the texture — not
+	# the whole model. Several real saves carry one or the other and would
+	# otherwise show nothing at all where a plain shape would have done.
 	var anim := _parse_animation(bytes, pos)
-	if anim.is_empty():
-		return {}
-	var texture := _parse_texture(bytes, int(anim["end"]), texture_type)
+	var texture: Image = null
+	if not anim.is_empty():
+		texture = _parse_texture(bytes, int(anim["end"]), texture_type)
 
 	return {
 		"shape_count": shape_count,
@@ -136,9 +169,10 @@ static func parse_icn(bytes: PackedByteArray) -> Dictionary:
 		"shapes": shapes,
 		"uvs": uvs,
 		"colors": colors,
-		"frames": anim["frames"],
-		"frame_length": anim["frame_length"],
-		"anim_speed": anim["anim_speed"],
+		"normals": normals,
+		"frames": anim.get("frames", []),
+		"frame_length": anim.get("frame_length", 0),
+		"anim_speed": anim.get("anim_speed", 1.0),
 		"texture": texture,
 	}
 
@@ -180,6 +214,8 @@ static func _parse_animation(bytes: PackedByteArray, from: int) -> Dictionary:
 
 
 static func _parse_texture(bytes: PackedByteArray, from: int, texture_type: int) -> Image:
+	if not (texture_type in TEX_RAW or texture_type in TEX_RLE):
+		return null
 	var pixels := PackedInt32Array()
 	pixels.resize(TEX_SIZE * TEX_SIZE)
 	pixels.fill(0)

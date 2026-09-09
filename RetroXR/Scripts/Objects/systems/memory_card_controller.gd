@@ -283,6 +283,11 @@ var _card_poll_timer: Timer = null
 var _card_mtimes: Array[int] = [0, 0]
 var _card_poll_until := 0.0
 
+## Where each slot's card was copied for a core that opens files of its own, and
+## when that copy last changed. Empty for every other core, which needs neither.
+var _scratch_paths: Array[String] = ["", ""]
+var _scratch_mtimes: Array[int] = [0, 0]
+
 
 func start_card_polling() -> void:
 	if card_slot_count() <= 1:
@@ -318,6 +323,8 @@ func _poll_cards() -> void:
 		var path := SramPaths.find_card(str(card.get("card_id")), card_family())
 		if path.is_empty():
 			continue
+		# A core that owns its card files wrote to its own copy, not to this one.
+		_drain_scratch(slot, path)
 		var mtime := FileAccess.get_modified_time(path)
 		if mtime == _card_mtimes[slot]:
 			continue
@@ -510,9 +517,10 @@ func _card_path_for_run(resolved_core: String, slot: int) -> String:
 ## path for the caller to hand to SetSramPath, exactly as it always did.
 ##
 ## Multi-slot hardware does not, and this is where the two part company. Dolphin
-## exposes no SAVE_RAM at all — it owns its card files — so every seated card is
-## mounted here through the core's own per-slot option and this returns "", which
-## is already how this function says "nothing goes through SAVE_RAM".
+## and both PlayStation 2 cores expose no SAVE_RAM at all — they own their card
+## files — so every seated card is mounted here, through the core's own per-slot
+## option or by being copied into the directory the core reads, and this returns
+## "", which is already how this function says "nothing goes through SAVE_RAM".
 func sram_path_for_run(resolved_core: String) -> String:
 	var cards := _uses_memory_cards()
 	_host.get_libretro_node().SetRemovableStorage(cards)
@@ -527,17 +535,133 @@ func sram_path_for_run(resolved_core: String) -> String:
 	return ""
 
 
-## Hand a multi-slot core its card files. Only Dolphin has any, and its option
-## takes a verbatim absolute path, or "none" for a slot with no card in it —
-## which must be a genuinely absent card and not a blank one, so a game says
-## "no memory card" rather than offering to format something.
+## Hand a multi-slot core its card files.
+##
+## Two shapes of core end up here. Dolphin's option takes a verbatim absolute
+## path, or "none" for a slot with no card in it — which must be a genuinely
+## absent card and not a blank one, so a game says "no memory card" rather than
+## offering to format something. The PlayStation 2 cores instead open files of
+## their own, in a directory of their own, so their cards are mirrored into it.
 func _mount_core_cards(resolved_core: String, paths: Array[String]) -> void:
+	var row := MemcardMounts.for_core(resolved_core)
+	if not row.is_empty():
+		_mirror_cards_in(resolved_core, row, paths)
+		return
 	if not resolved_core.begins_with("dolphin"):
 		return
 	const KEYS := ["dolphin_memcard_a_path", "dolphin_memcard_b_path"]
 	for slot in KEYS.size():
 		var path := paths[slot] if slot < paths.size() else ""
 		_host.set_core_option(KEYS[slot], path if not path.is_empty() else "none")
+
+
+## Copy every seated card into the directory the core will look in, and point it
+## at them.
+##
+## The ORDER is load-bearing rather than tidy. pcee2 builds the list of cards it
+## will offer by scanning this directory as it registers its options, which is
+## before the core has run any code that would create the directory — so RetroXR
+## creates it, and fills it, and only then does the core load. A mirror that
+## landed later would leave the slot options unregistered, and RetroXR's own
+## option layer drops a key the core never declared without failing, so the card
+## would simply and silently not be selected.
+func _mirror_cards_in(resolved_core: String, row: Dictionary,
+		paths: Array[String]) -> void:
+	var dir := MemcardMounts.mount_dir(resolved_core)
+	if dir.is_empty():
+		return
+	if DirAccess.make_dir_recursive_absolute(dir) != OK \
+			and not DirAccess.dir_exists_absolute(dir):
+		push_warning("[RetroSystem] cannot create the memory card directory %s" % dir)
+		return
+
+	for key: String in row.get("forced", {}):
+		_host.set_core_option(key, str(row["forced"][key]))
+
+	# A core that cannot re-open a card while it runs must not have the file
+	# under it rewritten either: it holds the whole card in memory from the
+	# moment it opened it, and would flush that back over anything written here.
+	var live := bool(row.get("live_swap", false))
+	var running := _host.is_powered_on and not live
+
+	var file_keys: Array = row.get("file_keys", [])
+	var enable_keys: Array = row.get("enable_keys", [])
+	for slot in card_slot_count():
+		var src := paths[slot] if slot < paths.size() else ""
+		var card := get_snapped_memcard(slot)
+		var card_id := str(card.get("card_id")) if card != null else ""
+		var leaf := MemcardMounts.scratch_name(row, slot, card_id)
+		if leaf.is_empty():
+			_scratch_paths[slot] = ""
+			if slot < enable_keys.size():
+				_host.set_core_option(str(enable_keys[slot]), "disabled")
+			continue
+		var dst := dir.path_join(leaf)
+
+		if src.is_empty():
+			# Nothing seated. Where the core can be told a slot is empty, tell
+			# it; where it cannot, take the file away so at least the LAST card
+			# is not still presented as this one. A core with fixed names will
+			# then invent an unformatted card of its own, which is the one part
+			# of this nothing here can prevent.
+			_scratch_paths[slot] = ""
+			if slot < enable_keys.size():
+				_host.set_core_option(str(enable_keys[slot]), "disabled")
+			elif FileAccess.file_exists(dst):
+				DirAccess.remove_absolute(dst)
+			continue
+
+		_scratch_paths[slot] = dst
+		if slot < enable_keys.size():
+			_host.set_core_option(str(enable_keys[slot]), "enabled")
+		if slot < file_keys.size():
+			_host.set_core_option(str(file_keys[slot]), leaf)
+		if running:
+			continue
+		if not _copy_card(src, dst):
+			push_warning("[RetroSystem] could not stage memory card %s for %s"
+				% [card_id, resolved_core])
+			continue
+		_scratch_mtimes[slot] = FileAccess.get_modified_time(dst)
+
+
+static func _copy_card(from: String, to: String) -> bool:
+	var data := FileAccess.get_file_as_bytes(from)
+	if data.is_empty():
+		return false
+	var f := FileAccess.open(to, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_buffer(data)
+	f.close()
+	return true
+
+
+## Take back what the core wrote to a mirrored card, if anything.
+##
+## The same torn-read guard the poll below applies for Dolphin, and for the same
+## reason: these cores rewrite a card in place with no atomic rename, so a tick
+## can land mid-write. An image whose superblock does not parse is a half-written
+## file, not a changed card.
+func _drain_scratch(slot: int, card_path: String) -> void:
+	if slot >= _scratch_paths.size():
+		return
+	var scratch := _scratch_paths[slot]
+	if scratch.is_empty() or not FileAccess.file_exists(scratch):
+		return
+	var mtime := FileAccess.get_modified_time(scratch)
+	if mtime == _scratch_mtimes[slot]:
+		return
+	var data := FileAccess.get_file_as_bytes(scratch)
+	var fmt := CardFormats.for_path(card_path)
+	if fmt == null or not fmt.is_card_image(data):
+		return
+	var f := FileAccess.open(card_path, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_buffer(data)
+	f.close()
+	_scratch_mtimes[slot] = mtime
 
 
 ## Re-resolve every card slot and re-point the running core at the result. The

@@ -39,6 +39,9 @@ const COLOR_DIM := Color(0.45, 0.45, 0.58)
 ## The PS1 cycled icon frames at about 6 Hz.
 const ICON_FPS := 6.0
 const ICON_PX := 48
+## A 3-D icon needs more room than a 16x16 sprite: at 48 px a lit model reads as
+## a smudge, where a PlayStation's pixel art is already larger than life there.
+const MODEL_ICON_PX := 76
 
 ## Show the rename field and the ✕. The spawn menu reuses this as a read-only
 ## save list inside its own page, where both would be wrong: it has its own back
@@ -333,27 +336,41 @@ func _make_row(s: Dictionary) -> Control:
 	h.add_theme_constant_override("separation", 12)
 	row.add_child(h)
 
-	var icon := TextureRect.new()
-	icon.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
-	# The art is 16x16 on a PlayStation and 32x32 on a GameCube; keep it crisp
-	# rather than smearing it up to 48.
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	# KEEP_ASPECT, not SCALE, and shrunk to its own height rather than filling
-	# the row. A row is as tall as its title, and a GameCube title runs to two or
-	# three lines where a PlayStation one fits on one -- under SCALE that stretched
-	# every GameCube icon into a tall smear, while the PlayStation's short rows
-	# had hidden the same bug for as long as it has been there.
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(icon)
+	# A PlayStation 2 save's icon is a 3-D MODEL rather than a picture, so its row
+	# gets a small rendered view where every other family gets a TextureRect.
+	# Nothing else about the row differs.
+	var model: Dictionary = s.get("icon_model", {})
+	if not model.is_empty():
+		var view := PS2IconView.new()
+		view.custom_minimum_size = Vector2(MODEL_ICON_PX, MODEL_ICON_PX)
+		view.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(view)
+		# Rendered at twice the displayed size: these are small, and a lit model
+		# rasterised 1:1 at this size reads as a smudge.
+		view.show_model(model, MODEL_ICON_PX * 2)
+	else:
+		var icon := TextureRect.new()
+		icon.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
+		# The art is 16x16 on a PlayStation and 32x32 on a GameCube; keep it
+		# crisp rather than smearing it up to 48.
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# KEEP_ASPECT, not SCALE, and shrunk to its own height rather than
+		# filling the row. A row is as tall as its title, and a GameCube title
+		# runs to two or three lines where a PlayStation one fits on one -- under
+		# SCALE that stretched every GameCube icon into a tall smear, while the
+		# PlayStation's short rows had hidden the same bug for as long as it has
+		# been there.
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(icon)
 
-	var frames: Array = []
-	for img: Image in s.get("icons", []):
-		frames.append(ImageTexture.create_from_image(img))
-	if not frames.is_empty():
-		icon.texture = frames[0]
-		if frames.size() > 1:
-			_animated.append({"rect": icon, "frames": frames})
+		var frames: Array = []
+		for img: Image in s.get("icons", []):
+			frames.append(ImageTexture.create_from_image(img))
+		if not frames.is_empty():
+			icon.texture = frames[0]
+			if frames.size() > 1:
+				_animated.append({"rect": icon, "frames": frames})
 
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 1)

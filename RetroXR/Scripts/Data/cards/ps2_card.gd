@@ -62,9 +62,14 @@ const BACKUP_BLOCK2     := CLUSTERS_PER_CARD / 8 - 2        # 1022
 const MAGIC := "Sony PS2 Memory Card Format "   ## 28 bytes, trailing space, no NUL
 const VERSION := "1.2.0.0"                      ## 1.2 = full bad_block_list support
 const CARD_TYPE := 2                            ## must be 2 (a PS2 card)
-## Physical characteristics. 0x52 is the documented default; the bits that are
-## defined are CF_USE_ECC 0x01, CF_BAD_BLOCK 0x08 and CF_ERASE_ZEROES 0x10.
-const CARD_FLAGS := 0x52
+## Physical characteristics: CF_USE_ECC 0x01 and CF_BAD_BLOCK 0x08, plus two bits
+## nothing documents.
+##
+## MEASURED off a real PCSX2 card backup, not taken from the specification, which
+## calls 0x52 the default — a value with CF_USE_ECC CLEAR, on a card whose every
+## page carries ECC. Note CF_ERASE_ZEROES (0x10) is clear here too, which is why
+## the unwritten body of a card is 0xFF rather than zero.
+const CARD_FLAGS := 0x2B
 
 const SB_MAGIC          := 0x00
 const SB_VERSION        := 0x1C
@@ -253,8 +258,11 @@ static func _write_page_ecc(data: PackedByteArray, page_off: int) -> void:
 		data[page_off + PAGE_SIZE + j * 3 + 0] = ecc[0]
 		data[page_off + PAGE_SIZE + j * 3 + 1] = ecc[1]
 		data[page_off + PAGE_SIZE + j * 3 + 2] = ecc[2]
+	# The four bytes after the ECC are ZERO on a real card. PCSX2's folder path
+	# leaves them 0xFF because it never stores a spare area at all; the converter
+	# that does write one writes nulls, and so does the hardware.
 	for k in range(chunks * 3, SPARE_SIZE):
-		data[page_off + PAGE_SIZE + k] = 0xFF
+		data[page_off + PAGE_SIZE + k] = 0
 
 
 # --- Superblock ---------------------------------------------------------------
@@ -322,7 +330,9 @@ static func _fat_cluster_list(data: PackedByteArray, sb: Dictionary) -> Array[in
 			if out.size() >= want:
 				return out
 			var fat_cluster := indirect.decode_u32(j * 4)
-			if fat_cluster == 0xFFFFFFFF:
+			# Unused slots read 0xFFFFFFFF in PCSX2 and 0 on a real card, and
+			# cluster 0 is the superblock either way.
+			if fat_cluster == 0xFFFFFFFF or fat_cluster == 0:
 				return out
 			out.append(fat_cluster)
 	return out
@@ -1002,9 +1012,12 @@ static func blank_image() -> PackedByteArray:
 	data.resize(CARD_SIZE)
 	data.fill(0xFF)
 
+	# The superblock PAGE is zeroed, not erased: measured off a real card, whose
+	# every byte past card_flags is zero and whose two padding words are zero
+	# too. Only the fields that really are 0xFF-filled say so below.
 	var sb := PackedByteArray()
 	sb.resize(PAGE_SIZE)
-	sb.fill(0xFF)
+	sb.fill(0)
 	var magic := MAGIC.to_ascii_buffer()
 	for i in magic.size():
 		sb[SB_MAGIC + i] = magic[i]
@@ -1023,8 +1036,11 @@ static func blank_image() -> PackedByteArray:
 	sb.encode_u32(SB_ROOTDIR, ROOTDIR_CLUSTER)
 	sb.encode_u32(SB_BACKUP1, BACKUP_BLOCK1)
 	sb.encode_u32(SB_BACKUP2, BACKUP_BLOCK2)
+	# An unused indirect-FAT slot is ZERO on a real card, while an unused
+	# bad-block slot is 0xFFFFFFFF. The two lists sit side by side and are filled
+	# differently; both were measured rather than assumed.
 	for i in 32:
-		sb.encode_u32(SB_IFC_LIST + i * 4, IFC_CLUSTER if i == 0 else 0xFFFFFFFF)
+		sb.encode_u32(SB_IFC_LIST + i * 4, IFC_CLUSTER if i == 0 else 0)
 		sb.encode_u32(SB_BAD_BLOCKS + i * 4, 0xFFFFFFFF)
 	sb[SB_CARD_TYPE] = CARD_TYPE
 	sb[SB_CARD_FLAGS] = CARD_FLAGS
