@@ -447,6 +447,17 @@ func _run_vrs_probe() -> void:
 					(node as Node3D).visible = false
 					hit += 1
 			print("[VRSProbe] hide group '%s' -> %d node(s)" % [g, hit])
+	if cfg.has("hide_scenes"):
+		# Spawned duplicates carry generated names, so a kind can only be
+		# addressed by the scene it was instanced from - the same key the
+		# bisect below buckets by.
+		for want in cfg["hide_scenes"]:
+			var hit := 0
+			for node in get_tree().get_nodes_in_group("spawned"):
+				if node is Node3D and node.scene_file_path == String(want):
+					(node as Node3D).visible = false
+					hit += 1
+			print("[VRSProbe] hide_scenes '%s' -> %d node(s)" % [want, hit])
 	if cfg.has("max_lights"):
 		_probe_cap_lights(int(cfg["max_lights"]))
 	if cfg.has("vrs_radius"):
