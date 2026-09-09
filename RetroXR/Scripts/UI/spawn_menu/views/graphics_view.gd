@@ -234,8 +234,9 @@ func _build(vr_mode: bool) -> void:
 			[["Off", QualityManager.Foveation.OFF],
 			 ["Low", QualityManager.Foveation.LOW],
 			 ["Medium", QualityManager.Foveation.MEDIUM],
-			 ["High", QualityManager.Foveation.HIGH]],
-			int(QualityManager.foveation_level), 4, Vector2(110, 52), 20)
+			 ["High", QualityManager.Foveation.HIGH],
+			 ["Max", QualityManager.Foveation.MAX]],
+			int(QualityManager.foveation_level), 5, Vector2(110, 52), 20)
 		fov_opt.item_selected.connect(func(id: Variant) -> void:
 			QualityManager.set_foveation_level(int(id)))
 		vbox.add_child(fov_opt)

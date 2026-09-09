@@ -48,7 +48,7 @@ enum PerfLevel { POWER_SAVINGS, SUSTAINED_LOW, SUSTAINED_HIGH, BOOST }
 ## this Godot 4.7 / Quest 3 Vulkan stack both it and the subsampled-image variant
 ## cause Adreno GPU hangs. Instead we attach Godot's generated, ordinary VRS
 ## texture. Each eye gets an explicit (0, 0) NDC focus, i.e. its optical centre.
-enum Foveation { OFF, LOW, MEDIUM, HIGH }
+enum Foveation { OFF, LOW, MEDIUM, HIGH, MAX }
 
 ## Physics steps one rendered frame may owe. Physics ticks at 90 Hz against a
 ## 72 Hz display, so a frame that overruns owes several steps, paying them makes
@@ -63,6 +63,14 @@ const FOVEATION_TIERS := {
 	Foveation.LOW: {"min_radius": 45.0, "strength": 0.5},
 	Foveation.MEDIUM: {"min_radius": 30.0, "strength": 1.0},
 	Foveation.HIGH: {"min_radius": 20.0, "strength": 2.0},
+	# The generator's limits: strength 10 puts everything past the centre at the
+	# coarsest texel the density map allows, and radius 5 keeps only the middle
+	# 5% of the eye at full rate. Measured 2026-09-08 in the arcade at eye buffer
+	# 1.75x on a Quest 3, same slot, cold launch per row, MSAA off under VRS:
+	#   OFF 24.8 ms / 34 fps, HIGH 16.5 / 50, r15 s5 13.9 / 59, r8 s8 12.5 / 65,
+	#   MAX 11.9 / 69. The periphery is visibly blocky at this tier; the centre
+	#   is pixel-identical to OFF in every row.
+	Foveation.MAX: {"min_radius": 5.0, "strength": 10.0},
 }
 
 ## Render scale and the eye buffer are deliberately absent: both are a taste call
@@ -197,10 +205,14 @@ const DISPLAY_RATE_HEADSET := 72.0
 ## at that point is the shell and the machines being rasterised at 18.1 Mpixel a
 ## frame, and the only thing that reduces that is foveation.
 ##
-## And the other half of the old ladder does not reproduce either: "foveation
-## HIGH" bought its top rungs, and foveation now returns nothing on any of the
-## five paths tried — see apply_foveation(). Both halves of this table are
-## waiting on that.
+## Foveation DOES reproduce, and the 2026-09-01 claim that it returned nothing
+## on any path was wrong: measured 2026-09-08 with cold launches, MSAA off on
+## both arms and the Adreno profiler layer off, the arcade at x1.75 goes 24.8 ms
+## OFF to 16.5 ms HIGH, and to 11.9 ms / 69 fps at the MAX tier. (The 09-01
+## sweep ran with `ovrgpuprofiler -e` left armed by a RenderDoc launch, and its
+## OFF arm kept MSAA while its ON arm did not.) What is left at MAX is a ~1 ms
+## shortfall against a locked 72 once the compositor's 2.2 ms timewarp is
+## counted on the same GPU.
 const EYE_BUFFER_PANEL := 1.229
 
 ## Which headset is running this, resolved once by detect_device(). Every measured
@@ -305,13 +317,9 @@ func _ready() -> void:
 	apply_forced_quality()
 	apply_shadow_quality()
 	apply_ao_quality()
-	# apply_foveation() is deliberately NOT called here, and that is worth a note
-	# because it looks like an omission. It is one - a saved foveation level does
-	# nothing until the player opens the graphics menu and changes it, and every
-	# launch logs "foveation 0" whatever the preference says. Calling it was
-	# measured, and it makes the app SLOWER: foveation returns nothing on this
-	# stack while attaching it costs 1-2.4 ms, so honouring the preference at
-	# boot is a straight regression until that is fixed. See apply_foveation().
+	# apply_foveation() is not called here: xr_init.gd calls it once the OpenXR
+	# instance exists, after the eye buffer is applied, so the swapchain and the
+	# VRS texture are built once at the right size. It IS honoured at boot.
 	# Lights and each room's WorldEnvironment arrive with every scene load, and
 	# lights also with every spawned TV or handheld, so both are configured as
 	# they enter the tree rather than swept for.
@@ -356,7 +364,7 @@ func _read_vrs_overrides() -> void:
 		_probe_boot_scene(String(cfg["boot_scene"]))
 	if cfg.has("boot_foveation"):
 		foveation_level = clampi(int(cfg["boot_foveation"]),
-			Foveation.OFF, Foveation.HIGH) as Foveation
+			Foveation.OFF, Foveation.MAX) as Foveation
 	print("[VRSProbe] boot overrides: mode '%s', foveation %d"
 		% [_vrs_mode_override, int(foveation_level)])
 
@@ -449,7 +457,7 @@ func _run_vrs_probe() -> void:
 		_vrs_mode_override = str(cfg["vrs_mode"])
 	if cfg.has("foveation"):
 		print("[VRSProbe] foveation -> %d" % int(cfg["foveation"]))
-		foveation_level = clampi(int(cfg["foveation"]), Foveation.OFF, Foveation.HIGH) as Foveation \
+		foveation_level = clampi(int(cfg["foveation"]), Foveation.OFF, Foveation.MAX) as Foveation \
 			if supports_foveation() else Foveation.OFF
 		apply_foveation()
 	print("[VRSProbe] applied, foveation_live=%s" % foveation_live())
@@ -1011,7 +1019,7 @@ func stencil_safe() -> bool:
 
 ## Takes effect on the current root viewport without changing the XR swapchain.
 func set_foveation_level(level: int) -> void:
-	foveation_level = clampi(level, Foveation.OFF, Foveation.HIGH) as Foveation \
+	foveation_level = clampi(level, Foveation.OFF, Foveation.MAX) as Foveation \
 		if supports_foveation() else Foveation.OFF
 	apply_foveation()
 	save_prefs()
@@ -1380,7 +1388,7 @@ func _load_prefs() -> void:
 	gpu_level = clampi(JsonStore.get_int(data, "gpu_level", gpu_level),
 		PerfLevel.POWER_SAVINGS, PerfLevel.BOOST) as PerfLevel
 	foveation_level = clampi(JsonStore.get_int(data, "foveation_level", foveation_level),
-		Foveation.OFF, Foveation.HIGH) as Foveation
+		Foveation.OFF, Foveation.MAX) as Foveation
 	var glow: Variant = data.get("glow_enabled")
 	if typeof(glow) == TYPE_BOOL:
 		glow_enabled = glow
