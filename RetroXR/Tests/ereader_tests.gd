@@ -401,10 +401,14 @@ func _group_catalog() -> void:
 	_ok("raw" not in entry_exts,
 		"catalog/ and its core's own entry does not carry it")
 	# Readers and nothing else on the tile -- whichever revisions are installed.
+	# ONE check however many that is: a check per installed dump made the case
+	# count a property of the machine, three here and none on a runner.
 	var readers := ["expansion:ereader", "expansion:ereader_plus", "expansion:ereader_usa"]
+	var strangers: Array[String] = []
 	for item: Dictionary in SpawnCatalog.items_for(ID):
-		_ok(str(item.get("spawn", "")) in readers,
-			"catalog/ its tile offers only readers, not %s" % str(item.get("label", "")))
+		if str(item.get("spawn", "")) not in readers:
+			strangers.append(str(item.get("label", "")))
+	_ok(strangers.is_empty(), "catalog/ its tile offers only readers, not %s" % ", ".join(strangers))
 
 	# One unit per reader revision, because a reader IS its dump and the dumps are
 	# not interchangeable: cards are region-locked.

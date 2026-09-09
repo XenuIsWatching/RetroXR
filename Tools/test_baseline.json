@@ -11,7 +11,7 @@
     "card_tests": 128,
     "cores_data_tests": 42,
     "deck_tests": 89,
-    "ereader_tests": 205,
+    "ereader_tests": 203,
     "expansion_tests": 223,
     "firmware_digest_tests": 15,
     "hdhomerun_tests": 38,

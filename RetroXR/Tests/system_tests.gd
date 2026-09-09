@@ -902,8 +902,9 @@ func _test_core_resolution() -> void:
 		DirAccess.remove_absolute(path)
 	_eq(FileAccess.file_exists(path),
 		had, "resolve/the player's own defaults are put back")
-	if had:
-		_ok(FileAccess.get_file_as_bytes(path) == before, "resolve/byte for byte")
+	# One check whether or not the player had a file: a case that only exists
+	# on a used machine is a case count that lies to the baseline guard.
+	_ok(FileAccess.get_file_as_bytes(path) == before, "resolve/byte for byte")
 
 	sys.core_directory = "C:/somewhere/libretro"
 	_eq(sys._resolve_dir(), "C:/somewhere/libretro", "resolve/a named directory wins")
