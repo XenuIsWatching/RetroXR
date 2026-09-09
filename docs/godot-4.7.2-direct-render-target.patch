@@ -1,0 +1,680 @@
+From 90acfa525403caa66588e6a9490783810efa01ff Mon Sep 17 00:00:00 2001
+From: Ryan McClelland <rymcclel@gmail.com>
+Date: Wed, 9 Sep 2026 16:51:06 -0700
+Subject: [PATCH] Forward Mobile: draw straight into the render target when the
+ tonemap subpass would only be a copy
+
+An LDR target with no adjustments, debanding or sky pass is drawn in one subpass
+with the render target (or, under MSAA, its resolve) as the colour attachment:
+no 10-bit scene buffer, no tonemap subpass, one attachment less in tile memory.
+The scene shader applies the environment's tonemapper in its epilogue, with the
+parameters carried in the scene UBO, and dithers itself when the viewport asked
+for debanding. Off by default: rendering/renderer/mobile/render_directly_to_target.
+
+The target is drawn through an sRGB view of its texture so the hardware encodes
+and blending stays linear (rendering/renderer/mobile/direct_target_srgb_view);
+without one the shader encodes. That view needed RenderingDevice to record the
+override format on a shared texture: a framebuffer built on it declared the
+owner's UNORM format and stored raw linear values on a Quest 3.
+
+Measured on a Quest 3 arcade, MAX foveation, 545 MHz: MSAA 2x full view at
+1.5x 5.6 -> 4.3 ms, empty frame at 1.75x 3.4 -> 3.1, non-MSAA full view at
+1.5x 3.3 -> 3.7 (the per-fragment tonemap costs more than the subpass there).
+---
+ .../forward_mobile/render_forward_mobile.cpp  | 156 ++++++++++++++++--
+ .../forward_mobile/render_forward_mobile.h    |   7 +
+ .../scene_shader_forward_mobile.h             |   2 +-
+ .../forward_mobile/scene_forward_mobile.glsl  |  21 ++-
+ .../scene_forward_mobile_inc.glsl             |   4 +
+ .../renderer_rd/shaders/scene_data_inc.glsl   |   7 +
+ .../shaders/tonemap_curves_inc.glsl           | 108 ++++++++++++
+ .../storage_rd/render_scene_buffers_rd.cpp    |   2 +-
+ .../storage_rd/render_scene_buffers_rd.h      |   3 +
+ .../storage_rd/render_scene_data_rd.cpp       |  17 ++
+ .../storage_rd/render_scene_data_rd.h         |   8 +
+ servers/rendering/rendering_device.cpp        |  10 ++
+ 12 files changed, 326 insertions(+), 19 deletions(-)
+ create mode 100644 servers/rendering/renderer_rd/shaders/tonemap_curves_inc.glsl
+
+diff --git a/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp b/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp
+index 0403433aa3..ba11cbf472 100644
+--- a/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp
++++ b/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp
+@@ -176,6 +176,55 @@ void RenderForwardMobile::RenderBufferDataForwardMobile::free_data() {
+ 	if (render_buffers) {
+ 		render_buffers->clear_context(RB_SCOPE_MOBILE);
+ 	}
++	for (const KeyValue<RID, RID> &E : direct_target_views) {
++		if (RD::get_singleton()->texture_is_valid(E.value)) {
++			RD::get_singleton()->free_rid(E.value);
++		}
++	}
++	direct_target_views.clear();
++}
++
++RID RenderForwardMobile::RenderBufferDataForwardMobile::get_direct_target(RID p_render_target, bool p_srgb_view) {
++	// The render target's colour texture is a UNORM view of an sRGB image (the OpenXR
++	// swapchain, see OpenXRVulkanExtension::get_swapchain_image_data) because the
++	// tonemap shader encodes to sRGB itself. Scene shaders write linear light, so the
++	// direct pass prefers an sRGB view of the same image: the hardware encodes on
++	// store and blending stays linear. Without one the scene shader encodes.
++	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
++	RID target = texture_storage->render_target_get_rd_texture(p_render_target);
++	direct_target_is_srgb = false;
++	if (!p_srgb_view || target.is_null()) {
++		return target;
++	}
++	RID *cached = direct_target_views.getptr(target);
++	if (cached && RD::get_singleton()->texture_is_valid(*cached)) {
++		direct_target_is_srgb = true;
++		return *cached;
++	}
++	RD::TextureFormat tf = RD::get_singleton()->texture_get_format(target);
++	RD::DataFormat srgb_format;
++	switch (tf.format) {
++		case RD::DATA_FORMAT_R8G8B8A8_UNORM:
++			srgb_format = RD::DATA_FORMAT_R8G8B8A8_SRGB;
++			break;
++		case RD::DATA_FORMAT_B8G8R8A8_UNORM:
++			srgb_format = RD::DATA_FORMAT_B8G8R8A8_SRGB;
++			break;
++		default:
++			return target;
++	}
++	if (!tf.shareable_formats.has(srgb_format)) {
++		return target;
++	}
++	RD::TextureView view;
++	view.format_override = srgb_format;
++	RID rid = RD::get_singleton()->texture_create_shared(view, target);
++	if (rid.is_null()) {
++		return target;
++	}
++	direct_target_views[target] = rid;
++	direct_target_is_srgb = true;
++	return rid;
+ }
+ 
+ void RenderForwardMobile::RenderBufferDataForwardMobile::configure(RenderSceneBuffersRD *p_render_buffers) {
+@@ -248,19 +297,29 @@ RID RenderForwardMobile::RenderBufferDataForwardMobile::get_color_fbs(Framebuffe
+ 	Vector<RID> textures;
+ 	int color_buffer_id = 0;
+ 	int depth_buffer_id = 1;
+-	if (p_config_type == FB_CONFIG_RENDER_AND_POST_PASS && vrs_texture.is_valid() && texture_storage->render_target_is_subsampled_enabled(render_buffers->get_render_target())) {
++	if ((p_config_type == FB_CONFIG_RENDER_AND_POST_PASS || p_config_type == FB_CONFIG_DIRECT_PASS) && vrs_texture.is_valid() && texture_storage->render_target_is_subsampled_enabled(render_buffers->get_render_target())) {
+ 		textures.push_back(use_msaa ? render_buffers->get_color_msaa_subsampled() : render_buffers->get_color_subsampled()); // 0 - color buffer.
+ 		textures.push_back(use_msaa ? render_buffers->get_depth_msaa_subsampled() : render_buffers->get_depth_subsampled()); // 1 - depth buffer.
+ 	} else {
+ 		textures.push_back(use_msaa ? render_buffers->get_color_msaa() : render_buffers->get_internal_texture()); // 0 - color buffer.
+ 		textures.push_back(use_msaa ? render_buffers->get_depth_msaa() : render_buffers->get_depth_texture()); // 1 - depth buffer.
+ 	}
++	RID direct_view;
++	if (p_config_type == FB_CONFIG_DIRECT_PASS) {
++		RID render_target = render_buffers->get_render_target();
++		ERR_FAIL_COND_V(render_target.is_null(), RID());
++		direct_view = get_direct_target(render_target, RenderForwardMobile::get_singleton()->direct_target_srgb_view);
++		ERR_FAIL_COND_V(direct_view.is_null(), RID());
++		if (!use_msaa) {
++			textures.write[0] = direct_view; // Draw straight into the target.
++		}
++	}
+ 	if (vrs_texture.is_valid()) {
+ 		textures.push_back(vrs_texture); // 2 - vrs texture.
+ 	}
+ 	if (use_msaa) {
+ 		color_buffer_id = textures.size();
+-		textures.push_back(render_buffers->get_internal_texture()); // Color buffer for resolve.
++		textures.push_back(direct_view.is_valid() ? direct_view : render_buffers->get_internal_texture()); // Color buffer for resolve.
+ 	}
+ 	if (use_msaa && p_resolve_depth) {
+ 		depth_buffer_id = textures.size();
+@@ -271,6 +330,7 @@ RID RenderForwardMobile::RenderBufferDataForwardMobile::get_color_fbs(Framebuffe
+ 	Vector<RD::FramebufferPass> passes;
+ 
+ 	switch (p_config_type) {
++		case FB_CONFIG_DIRECT_PASS:
+ 		case FB_CONFIG_RENDER_PASS: {
+ 			RD::FramebufferPass pass;
+ 			pass.color_attachments.push_back(0);
+@@ -877,6 +937,7 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 	bool reverse_cull = p_render_data->scene_data->cam_transform.basis.determinant() < 0;
+ 	bool merge_transparent_pass = true; // If true: we can do our transparent pass in the same pass as our opaque pass.
+ 	bool using_subpass_post_process = true; // If true: we can do our post processing in a subpass
++	bool using_direct_pass = false; // If true: the scene is drawn straight into the render target, no post processing at all.
+ 	RendererRD::MaterialStorage::Samplers samplers;
+ 	bool hdr_render_target = false;
+ 
+@@ -999,7 +1060,28 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 			resolve_depth_buffer = true;
+ 		}
+ 
+-		if (using_subpass_post_process) {
++		// Draw straight into the render target when the tonemap subpass would only be
++		// a copy: an LDR target this pass can resolve into, no colour adjustments, and
++		// no sky pass (its shader does not carry the tonemap epilogue yet). Debanding
++		// is kept by dithering in the scene shader instead. Saves a GMEM attachment
++		// and a subpass per bin on a tiler.
++		if (using_subpass_post_process && render_directly_to_target && render_target.is_valid() && !texture_storage->render_target_is_using_hdr(render_target) && (p_render_data->scene_data->view_count > 1 || texture_storage->render_target_get_msaa(render_target) == RSE::VIEWPORT_MSAA_DISABLED)) {
++			bool env_draws_sky = false;
++			bool env_adjusts = false;
++			if (is_environment(p_render_data->environment)) {
++				RSE::EnvironmentBG env_bg = environment_get_background(p_render_data->environment);
++				env_draws_sky = !p_render_data->transparent_bg && (env_bg == RSE::ENV_BG_SKY || ((env_bg == RSE::ENV_BG_CLEAR_COLOR || env_bg == RSE::ENV_BG_COLOR) && environment_get_fog_enabled(p_render_data->environment)));
++				env_adjusts = environment_get_adjustments_enabled(p_render_data->environment);
++			}
++			using_direct_pass = !env_draws_sky && !env_adjusts && texture_storage->render_target_get_rd_texture(render_target).is_valid();
++		}
++		rb->set_direct_output(using_direct_pass);
++
++		if (using_direct_pass) {
++			framebuffer = rb_data->get_color_fbs(RenderBufferDataForwardMobile::FB_CONFIG_DIRECT_PASS, resolve_depth_buffer && supports_depth_resolve);
++			global_pipeline_data_required.use_direct_pass = true;
++			p_render_data->scene_data->direct_encode_srgb = !rb_data->direct_target_is_srgb;
++		} else if (using_subpass_post_process) {
+ 			// We can do all in one go.
+ 			framebuffer = rb_data->get_color_fbs(RenderBufferDataForwardMobile::FB_CONFIG_RENDER_AND_POST_PASS, resolve_depth_buffer && supports_depth_resolve);
+ 			global_pipeline_data_required.use_subpass_post_pass = true;
+@@ -1180,6 +1262,11 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 		base_specialization.scene_use_reflection_cubemap = use_reflection_cubemap;
+ 		base_specialization.scene_roughness_limiter_enabled = p_render_data->render_buffers.is_valid() && screen_space_roughness_limiter_is_active();
+ 		base_specialization.luminance_multiplier = p_render_data->render_buffers.is_valid() ? p_render_data->render_buffers->get_luminance_multiplier() : 1.0;
++		base_specialization.direct_output = using_direct_pass;
++		if (using_direct_pass && rb->get_use_debanding()) {
++			// The viewport's debanding lived in the tonemap subpass; dither in the scene shader instead.
++			base_specialization.use_material_debanding = true;
++		}
+ 	}
+ 
+ 	{
+@@ -1221,7 +1308,9 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 
+ 		_setup_environment(p_render_data, is_reflection_probe, screen_size, screen_size, p_default_bg_color, p_render_data->render_buffers.is_valid());
+ 
+-		if (merge_transparent_pass && using_subpass_post_process) {
++		if (merge_transparent_pass && using_direct_pass) {
++			RENDER_TIMESTAMP("Render Opaque + Transparent (direct)");
++		} else if (merge_transparent_pass && using_subpass_post_process) {
+ 			RENDER_TIMESTAMP("Render Opaque + Transparent + Tonemap");
+ 		} else if (merge_transparent_pass) {
+ 			RENDER_TIMESTAMP("Render Opaque + Transparent");
+@@ -1234,7 +1323,11 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 		// Set clear colors.
+ 		Vector<Color> c;
+ 		if (!load_color) {
+-			Color cc = clear_color.srgb_to_linear() * inverse_luminance_multiplier;
++			// The direct pass writes encoded values, so its clear is the sRGB colour itself.
++			// On the direct pass the clear must match what the shader writes: encoded values
++			// into a UNORM view, linear into an sRGB view.
++			const bool clear_encoded = using_direct_pass && !rb_data->direct_target_is_srgb;
++			Color cc = clear_encoded ? clear_color : clear_color.srgb_to_linear() * inverse_luminance_multiplier;
+ 			if (rb_data.is_valid()) {
+ 				cc.a = 0; // For transparent viewport backgrounds.
+ 			}
+@@ -1242,9 +1335,9 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 			c.push_back(cc); // Our render buffer.
+ 			if (rb_data.is_valid()) {
+ 				if (use_msaa) {
+-					c.push_back(clear_color.srgb_to_linear() * inverse_luminance_multiplier); // Our resolve buffer.
++					c.push_back(clear_encoded ? clear_color : clear_color.srgb_to_linear() * inverse_luminance_multiplier); // Our resolve buffer.
+ 				}
+-				if (using_subpass_post_process) {
++				if (using_subpass_post_process && !using_direct_pass) {
+ 					c.push_back(Color()); // Our 2D buffer we're copying into.
+ 				}
+ 			}
+@@ -1314,7 +1407,7 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 			}
+ 
+ 			// blit to tonemap
+-			if (rb_data.is_valid() && using_subpass_post_process) {
++			if (rb_data.is_valid() && using_subpass_post_process && !using_direct_pass) {
+ 				_post_process_subpass(p_render_data->render_buffers->get_internal_texture(), framebuffer, p_render_data);
+ 			}
+ 
+@@ -3228,8 +3321,11 @@ void RenderForwardMobile::_geometry_instance_update(RenderGeometryInstance *p_ge
+ 	ginstance->dirty_list_element.remove_from_list();
+ }
+ 
+-static RD::FramebufferFormatID _get_color_framebuffer_format_for_pipeline(RD::DataFormat p_color_format, bool p_can_be_storage, RD::TextureSamples p_samples, RD::TextureSamples p_target_samples, bool p_vrs, bool p_post_pass, bool p_hdr, uint32_t p_view_count) {
++static RD::FramebufferFormatID _get_color_framebuffer_format_for_pipeline(RD::DataFormat p_color_format, bool p_can_be_storage, RD::TextureSamples p_samples, RD::TextureSamples p_target_samples, bool p_vrs, bool p_post_pass, bool p_hdr, uint32_t p_view_count, bool p_direct = false, bool p_direct_srgb = false) {
+ 	const bool multisampling = p_samples > RD::TEXTURE_SAMPLES_1;
++	// The direct pass draws (or resolves) into the render target's own texture.
++	const RD::DataFormat target_format = RendererRD::TextureStorage::render_target_get_color_format(false, p_direct_srgb);
++	const uint32_t target_usage = RendererRD::TextureStorage::render_target_get_color_usage_bits(false);
+ 	RD::AttachmentFormat attachment;
+ 
+ 	RD::AttachmentFormat unused_attachment;
+@@ -3240,8 +3336,13 @@ static RD::FramebufferFormatID _get_color_framebuffer_format_for_pipeline(RD::Da
+ 
+ 	// Color attachment.
+ 	attachment.samples = p_samples;
+-	attachment.format = p_color_format;
+-	attachment.usage_flags = RenderSceneBuffersRD::get_color_usage_bits(false, multisampling, p_can_be_storage);
++	if (p_direct && !multisampling) {
++		attachment.format = target_format;
++		attachment.usage_flags = target_usage;
++	} else {
++		attachment.format = p_color_format;
++		attachment.usage_flags = RenderSceneBuffersRD::get_color_usage_bits(false, multisampling, p_can_be_storage);
++	}
+ 	attachments.push_back(attachment);
+ 
+ 	// Depth attachment.
+@@ -3261,8 +3362,13 @@ static RD::FramebufferFormatID _get_color_framebuffer_format_for_pipeline(RD::Da
+ 	if (multisampling) {
+ 		// Resolve attachment.
+ 		attachment.samples = RD::TEXTURE_SAMPLES_1;
+-		attachment.format = p_color_format;
+-		attachment.usage_flags = RenderSceneBuffersRD::get_color_usage_bits(true, false, p_can_be_storage);
++		if (p_direct) {
++			attachment.format = target_format;
++			attachment.usage_flags = target_usage;
++		} else {
++			attachment.format = p_color_format;
++			attachment.usage_flags = RenderSceneBuffersRD::get_color_usage_bits(true, false, p_can_be_storage);
++		}
+ 		attachments.push_back(attachment);
+ 	}
+ 
+@@ -3379,6 +3485,28 @@ void RenderForwardMobile::_mesh_compile_pipelines_for_surface(const SurfacePipel
+ 	const uint32_t hdr_start = p_global.use_ldr_render_target ? 0 : 1;
+ 	const uint32_t hdr_target_iterations = p_global.use_hdr_render_target ? 2 : 1;
+ 
++	if (p_global.use_direct_pass) {
++		for (uint32_t use_vrs = 0; use_vrs < vrs_iterations; use_vrs++) {
++			const RD::DataFormat buffers_color_format = _render_buffers_get_preferred_color_format();
++			pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_COLOR_PASS;
++			pipeline_key.framebuffer_format_id = _get_color_framebuffer_format_for_pipeline(buffers_color_format, buffers_can_be_storage, RD::TextureSamples(p_global.texture_samples), RD::TextureSamples(p_global.target_samples), use_vrs, false, false, 1, true, direct_target_srgb_view);
++			_mesh_compile_pipeline_for_surface(p_surface.shader, p_surface.mesh_surface, p_surface.instanced, p_source, pipeline_key, r_pipeline_pairs);
++			if (p_global.use_lightmaps && p_surface.can_use_lightmap) {
++				pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_LIGHTMAP_COLOR_PASS;
++				_mesh_compile_pipeline_for_surface(p_surface.shader, p_surface.mesh_surface, p_surface.instanced, p_source, pipeline_key, r_pipeline_pairs);
++			}
++			if (multiview_enabled) {
++				pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_COLOR_PASS_MULTIVIEW;
++				pipeline_key.framebuffer_format_id = _get_color_framebuffer_format_for_pipeline(buffers_color_format, buffers_can_be_storage, RD::TextureSamples(p_global.texture_samples), RD::TextureSamples(p_global.target_samples), use_vrs, false, false, 2, true, direct_target_srgb_view);
++				_mesh_compile_pipeline_for_surface(p_surface.shader, p_surface.mesh_surface, p_surface.instanced, p_source, pipeline_key, r_pipeline_pairs);
++				if (p_global.use_lightmaps && p_surface.can_use_lightmap) {
++					pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_LIGHTMAP_COLOR_PASS_MULTIVIEW;
++					_mesh_compile_pipeline_for_surface(p_surface.shader, p_surface.mesh_surface, p_surface.instanced, p_source, pipeline_key, r_pipeline_pairs);
++				}
++			}
++		}
++	}
++
+ 	for (uint32_t use_vrs = 0; use_vrs < vrs_iterations; use_vrs++) {
+ 		for (uint32_t use_post_pass = post_pass_start; use_post_pass < post_pass_iterations; use_post_pass++) {
+ 			const uint32_t hdr_iterations = use_post_pass ? hdr_target_iterations : (hdr_start + 1);
+@@ -3570,6 +3698,8 @@ RenderForwardMobile::RenderForwardMobile() {
+ 	singleton = this;
+ 
+ 	disable_ubershaders = RD::get_singleton()->get_driver_workarounds().disable_ubershaders;
++	render_directly_to_target = GLOBAL_DEF_RST("rendering/renderer/mobile/render_directly_to_target", false);
++	direct_target_srgb_view = GLOBAL_DEF_RST("rendering/renderer/mobile/direct_target_srgb_view", true);
+ 	if (disable_ubershaders) {
+ 		print_verbose("Ubershaders: Disabled");
+ 	} else {
+diff --git a/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.h b/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.h
+index 0b156b05f1..7605151eed 100644
+--- a/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.h
++++ b/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.h
+@@ -74,6 +74,8 @@ private:
+ 
+ 	SceneShaderForwardMobile scene_shader;
+ 	bool disable_ubershaders = false;
++	bool render_directly_to_target = false;
++	bool direct_target_srgb_view = true;
+ 
+ 	/* Render Buffer */
+ 
+@@ -84,10 +86,13 @@ private:
+ 		enum FramebufferConfigType {
+ 			FB_CONFIG_RENDER_PASS, // Single pass framebuffer for normal rendering.
+ 			FB_CONFIG_RENDER_AND_POST_PASS, // Two subpasses, one for normal rendering, one for post processing.
++			FB_CONFIG_DIRECT_PASS, // One subpass straight into the render target: no scene colour buffer, no tonemap subpass.
+ 			FB_CONFIG_MAX
+ 		};
+ 
+ 		RID get_color_fbs(FramebufferConfigType p_config_type, bool p_resolve_depth = false);
++		RID get_direct_target(RID p_render_target, bool p_srgb_view);
++		bool direct_target_is_srgb = false;
+ 		virtual void free_data() override;
+ 		virtual void configure(RenderSceneBuffersRD *p_render_buffers) override;
+ 
+@@ -95,6 +100,7 @@ private:
+ 
+ 	private:
+ 		RenderSceneBuffersRD *render_buffers = nullptr;
++		HashMap<RID, RID> direct_target_views; // sRGB views of render target textures, keyed by the UNORM texture.
+ 	};
+ 
+ 	virtual void setup_render_buffer_data(Ref<RenderSceneBuffersRD> p_render_buffers) override;
+@@ -689,6 +695,7 @@ public:
+ 				uint32_t use_separate_post_pass : 1;
+ 				uint32_t use_hdr_render_target : 1;
+ 				uint32_t use_ldr_render_target : 1;
++				uint32_t use_direct_pass : 1;
+ 			};
+ 		};
+ 	};
+diff --git a/servers/rendering/renderer_rd/forward_mobile/scene_shader_forward_mobile.h b/servers/rendering/renderer_rd/forward_mobile/scene_shader_forward_mobile.h
+index 78d7c94dfb..c5650f6d43 100644
+--- a/servers/rendering/renderer_rd/forward_mobile/scene_shader_forward_mobile.h
++++ b/servers/rendering/renderer_rd/forward_mobile/scene_shader_forward_mobile.h
+@@ -109,7 +109,7 @@ public:
+ 				uint32_t scene_use_ambient_cubemap : 1;
+ 				uint32_t scene_use_reflection_cubemap : 1;
+ 				uint32_t scene_roughness_limiter_enabled : 1;
+-				uint32_t padding_0 : 1;
++				uint32_t direct_output : 1; // Tonemap and encode in the scene shader: no tonemap pass follows.
+ 
+ 				uint32_t soft_shadow_samples : 6;
+ 				uint32_t penumbra_shadow_samples : 6;
+diff --git a/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile.glsl b/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile.glsl
+index 7845f5df46..2aacf94324 100644
+--- a/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile.glsl
++++ b/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile.glsl
+@@ -1027,6 +1027,7 @@ layout(location = 0) out vec4 frag_color;
+ #endif // RENDER DEPTH
+ 
+ #include "../scene_forward_aa_inc.glsl"
++#include "../tonemap_curves_inc.glsl"
+ 
+ #if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) // && !defined(USE_VERTEX_LIGHTING)
+ 
+@@ -2351,9 +2352,21 @@ void main() {
+ 	out_color.rgb = mix(out_color.rgb, fog.rgb, fog.a);
+ #endif // !FOG_DISABLED
+ 
+-	// On mobile we use a UNORM buffer with 10bpp which results in a range from 0.0 - 1.0 resulting in HDR breaking
+-	// We divide by sc_luminance_multiplier to support a range from 0.0 - 2.0 both increasing precision on bright and darker images
+-	out_color.rgb = out_color.rgb / sc_luminance_multiplier();
++	if (sc_direct_output()) {
++		// Drawing straight into the 8-bit render target: no tonemap pass follows, so
++		// tonemap here, and encode too when the target is a UNORM view (blending then
++		// happens on encoded values, as it did on the GLES renderers).
++		vec3 mapped = tmc_apply(vec3(out_color.rgb) * scene_data.tonemap_exposure, scene_data.tonemap_mode, scene_data.tonemapper_params, scene_data.tonemap_output_max);
++		mapped = clamp(mapped, vec3(0.0), vec3(1.0));
++		if (scene_data.tonemap_encode_srgb != 0u) {
++			mapped = tmc_linear_to_srgb(mapped);
++		}
++		out_color.rgb = hvec3(mapped);
++	} else {
++		// On mobile we use a UNORM buffer with 10bpp which results in a range from 0.0 - 1.0 resulting in HDR breaking
++		// We divide by sc_luminance_multiplier to support a range from 0.0 - 2.0 both increasing precision on bright and darker images
++		out_color.rgb = out_color.rgb / sc_luminance_multiplier();
++	}
+ #ifdef PREMUL_ALPHA_USED
+ 	out_color.rgb *= premul_alpha;
+ #endif
+@@ -2379,7 +2392,7 @@ void main() {
+ 		// Use a dither strength of 100% rather than the 37.5% suggested by the original source.
+ 		// Assume that this shader always writes to a 10-bit buffer, so divide by 1023 to align
+ 		// to 10-bit quantization.
+-		frag_color.rgb += (dither.rgb - 0.5) / 1023.0;
++		frag_color.rgb += (dither.rgb - 0.5) / (sc_direct_output() ? 255.0 : 1023.0);
+ 	}
+ 
+ #endif //MODE_MULTIPLE_RENDER_TARGETS
+diff --git a/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile_inc.glsl b/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile_inc.glsl
+index 99ecf3a385..6e69f90b21 100644
+--- a/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile_inc.glsl
++++ b/servers/rendering/renderer_rd/shaders/forward_mobile/scene_forward_mobile_inc.glsl
+@@ -121,6 +121,10 @@ bool sc_use_material_debanding() {
+ 	return ((sc_packed_0() >> 11) & 1U) != 0;
+ }
+ 
++bool sc_direct_output() {
++	return ((sc_packed_0() >> 19) & 1U) != 0;
++}
++
+ bool sc_multimesh() {
+ 	return ((sc_packed_0() >> 12) & 1U) != 0;
+ }
+diff --git a/servers/rendering/renderer_rd/shaders/scene_data_inc.glsl b/servers/rendering/renderer_rd/shaders/scene_data_inc.glsl
+index 0561cfa765..6455204913 100644
+--- a/servers/rendering/renderer_rd/shaders/scene_data_inc.glsl
++++ b/servers/rendering/renderer_rd/shaders/scene_data_inc.glsl
+@@ -81,4 +81,11 @@ struct SceneData {
+ 	float IBL_exposure_normalization;
+ 	uint camera_visible_layers;
+ 	float pass_alpha_multiplier;
++
++	// Tonemapping applied in the scene shader when it draws straight into the render target.
++	vec4 tonemapper_params;
++	float tonemap_exposure;
++	float tonemap_output_max;
++	uint tonemap_mode;
++	uint tonemap_encode_srgb;
+ };
+diff --git a/servers/rendering/renderer_rd/shaders/tonemap_curves_inc.glsl b/servers/rendering/renderer_rd/shaders/tonemap_curves_inc.glsl
+new file mode 100644
+index 0000000000..28a4a824af
+--- /dev/null
++++ b/servers/rendering/renderer_rd/shaders/tonemap_curves_inc.glsl
+@@ -0,0 +1,108 @@
++// Tonemapping curves with the parameters passed in, so a scene shader can apply
++// them when it draws straight into the LDR render target and the tonemap pass is
++// skipped. Bodies match tonemap.glsl / tonemap_mobile.glsl; p_params is what
++// RendererEnvironmentStorage::environment_get_tonemap_parameters computed for
++// the tonemapper in use, p_output_max is the target's maximum value (1.0 for SDR).
++
++vec3 tmc_reinhard(vec3 color, vec4 p_params, float p_output_max) {
++	float white_squared = p_params.x;
++	return color * (1.0f + color / white_squared) / (1.0f + color / p_output_max);
++}
++
++vec3 tmc_filmic(vec3 color, vec4 p_params) {
++	const float exposure_bias = 2.0f;
++	const float A = 0.22f * exposure_bias * exposure_bias;
++	const float B = 0.30f * exposure_bias;
++	const float C = 0.10f;
++	const float D = 0.20f;
++	const float E = 0.01f;
++	const float F = 0.30f;
++
++	vec3 color_tonemapped = ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
++
++	return color_tonemapped / p_params.x;
++}
++
++vec3 tmc_aces(vec3 color, vec4 p_params) {
++	const float exposure_bias = 1.8f;
++	const float A = 0.0245786f;
++	const float B = 0.000090537f;
++	const float C = 0.983729f;
++	const float D = 0.432951f;
++	const float E = 0.238081f;
++
++	const mat3 rgb_to_rrt = mat3(
++			vec3(0.59719f * exposure_bias, 0.35458f * exposure_bias, 0.04823f * exposure_bias),
++			vec3(0.07600f * exposure_bias, 0.90834f * exposure_bias, 0.01566f * exposure_bias),
++			vec3(0.02840f * exposure_bias, 0.13383f * exposure_bias, 0.83777f * exposure_bias));
++
++	const mat3 odt_to_rgb = mat3(
++			vec3(1.60475f, -0.53108f, -0.07367f),
++			vec3(-0.10208f, 1.10813f, -0.00605f),
++			vec3(-0.00327f, -0.07276f, 1.07602f));
++
++	color *= rgb_to_rrt;
++	vec3 color_tonemapped = (color * (color + A) - B) / (color * (C * color + D) + E);
++	color_tonemapped *= odt_to_rgb;
++
++	return color_tonemapped / p_params.x;
++}
++
++vec3 tmc_allenwp_curve(vec3 x, vec4 p_params, float p_output_max) {
++	const float awp_crossover_point = 0.18;
++	const float awp_shoulder_max = p_output_max - awp_crossover_point;
++
++	float awp_contrast = p_params.x;
++	float awp_toe_a = p_params.y;
++	float awp_slope = p_params.z;
++	float awp_w = p_params.w;
++
++	vec3 s = x - awp_crossover_point;
++	vec3 slope_s = awp_slope * s;
++	s = slope_s * (1.0 + s / awp_w) / (1.0 + (slope_s / awp_shoulder_max));
++	s += awp_crossover_point;
++
++	vec3 t = pow(x, vec3(awp_contrast));
++	t = t / (t + awp_toe_a);
++
++	return mix(s, t, lessThan(x, vec3(awp_crossover_point)));
++}
++
++vec3 tmc_agx(vec3 color, vec4 p_params, float p_output_max) {
++	const mat3 rec709_to_rec2020_agx_inset_matrix = mat3(
++			0.544814746488245, 0.140416948464053, 0.0888104196149096,
++			0.373787398372697, 0.754137554567394, 0.178871756420858,
++			0.0813978551390581, 0.105445496968552, 0.732317823964232);
++
++	const mat3 agx_outset_rec2020_to_rec709_matrix = mat3(
++			1.96488741169489, -0.299313364904742, -0.164352742528393,
++			-0.855988495690215, 1.32639796461980, -0.238183969428088,
++			-0.108898916004672, -0.0270845997150571, 1.40253671195648);
++
++	color = rec709_to_rec2020_agx_inset_matrix * color;
++	color = tmc_allenwp_curve(color, p_params, p_output_max);
++	color = min(vec3(p_output_max), color);
++	color = agx_outset_rec2020_to_rec709_matrix * color;
++	return color;
++}
++
++vec3 tmc_linear_to_srgb(vec3 color) {
++	const vec3 a = vec3(0.055f);
++	return mix((vec3(1.0f) + a) * pow(color.rgb, vec3(1.0f / 2.4f)) - a, 12.92f * color.rgb, lessThan(color.rgb, vec3(0.0031308f)));
++}
++
++// p_mode is RenderingServer::EnvironmentToneMapper: 0 linear, 1 reinhard, 2 filmic, 3 aces, 4 agx.
++vec3 tmc_apply(vec3 color, uint p_mode, vec4 p_params, float p_output_max) {
++	if (p_mode == 0u) {
++		return color;
++	}
++	color = max(vec3(0.0), color);
++	if (p_mode == 1u) {
++		return tmc_reinhard(color, p_params, p_output_max);
++	} else if (p_mode == 2u) {
++		return tmc_filmic(color, p_params);
++	} else if (p_mode == 3u) {
++		return tmc_aces(color, p_params);
++	}
++	return tmc_agx(color, p_params, p_output_max);
++}
+diff --git a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
+index 993ef162c0..c84286f722 100644
+--- a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
++++ b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
+@@ -872,5 +872,5 @@ uint32_t RenderSceneBuffersRD::get_vrs_usage_bits() {
+ float RenderSceneBuffersRD::get_luminance_multiplier() const {
+ 	// On mobile renderer when not using HDR2D we need to scale HDR values by two
+ 	// to fit 0-2 range color values into a UNORM buffer.
+-	return (force_hdr || can_be_storage) ? 1.0 : 2.0;
++	return (force_hdr || can_be_storage || direct_output) ? 1.0 : 2.0;
+ }
+diff --git a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h
+index cae09e190c..1983a8acdd 100644
+--- a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h
++++ b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h
+@@ -68,6 +68,7 @@ class RenderSceneBuffersRD : public RenderSceneBuffers {
+ 
+ private:
+ 	bool can_be_storage = true;
++	bool direct_output = false; // Scene drawn straight into an LDR target: no luminance scaling.
+ 	bool force_hdr = false;
+ 	uint32_t max_cluster_elements = 512;
+ 	RD::DataFormat preferred_data_format = RD::DATA_FORMAT_MAX;
+@@ -194,6 +195,8 @@ public:
+ 	RD::DataFormat get_preferred_data_format() const { return preferred_data_format; }
+ 	RD::DataFormat get_base_data_format() const { return force_hdr ? RD::DATA_FORMAT_R16G16B16A16_SFLOAT : preferred_data_format; }
+ 	float get_luminance_multiplier() const;
++	void set_direct_output(bool p_direct) { direct_output = p_direct; }
++	bool get_direct_output() const { return direct_output; }
+ 	void set_vrs(RendererRD::VRS *p_vrs) { vrs = p_vrs; }
+ 	RSE::ViewportVRSMode get_vrs_mode() { return vrs_mode; }
+ 
+diff --git a/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.cpp b/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.cpp
+index 7120d536fa..fd5b79a810 100644
+--- a/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.cpp
++++ b/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.cpp
+@@ -129,6 +129,23 @@ void RenderSceneDataRD::update_ubo(RID p_uniform_buffer, RSE::ViewportDebugDraw
+ 	ubo.camera_visible_layers = camera_visible_layers;
+ 	ubo.pass_alpha_multiplier = p_opaque_render_buffers && p_apply_alpha_multiplier ? 0.0f : 1.0f;
+ 
++	// Same parameters the mobile tonemap subpass uses for an SDR target (AgX white limited, max 1.0).
++	ubo.tonemap_mode = RSE::ENV_TONE_MAPPER_LINEAR;
++	ubo.tonemap_exposure = 1.0f;
++	ubo.tonemap_output_max = 1.0f;
++	ubo.tonemap_encode_srgb = direct_encode_srgb ? 1 : 0;
++	for (int i = 0; i < 4; i++) {
++		ubo.tonemapper_params[i] = 0.0f;
++	}
++	if (p_env.is_valid()) {
++		ubo.tonemap_mode = render_scene_render->environment_get_tone_mapper(p_env);
++		ubo.tonemap_exposure = render_scene_render->environment_get_exposure(p_env);
++		RendererEnvironmentStorage::TonemapParameters tp = render_scene_render->environment_get_tonemap_parameters(p_env, true, 1.0f);
++		for (int i = 0; i < 4; i++) {
++			ubo.tonemapper_params[i] = tp.tonemapper_params[i];
++		}
++	}
++
+ 	ubo.viewport_size[0] = p_viewport_size.x;
+ 	ubo.viewport_size[1] = p_viewport_size.y;
+ 
+diff --git a/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.h b/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.h
+index 85a9a1e9be..c8b2f99021 100644
+--- a/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.h
++++ b/servers/rendering/renderer_rd/storage_rd/render_scene_data_rd.h
+@@ -74,6 +74,7 @@ public:
+ 	float opaque_prepass_threshold = 0.0;
+ 	bool material_uv2_mode = false;
+ 	float emissive_exposure_normalization = 0.0;
++	bool direct_encode_srgb = true; // When drawing straight into the render target: the target view is UNORM, encode in the shader.
+ 	bool shadow_pass = false;
+ 
+ 	Size2 shadow_atlas_pixel_size;
+@@ -181,6 +182,13 @@ private:
+ 		float IBL_exposure_normalization; // Adjusts for baked exposure.
+ 		uint32_t camera_visible_layers;
+ 		float pass_alpha_multiplier;
++
++		// Tonemapping applied in the scene shader when it draws straight into the render target.
++		float tonemapper_params[4];
++		float tonemap_exposure;
++		float tonemap_output_max;
++		uint32_t tonemap_mode;
++		uint32_t tonemap_encode_srgb;
+ 	};
+ 
+ 	struct UBODATA {
+diff --git a/servers/rendering/rendering_device.cpp b/servers/rendering/rendering_device.cpp
+index 7574038788..baa60f6ef1 100644
+--- a/servers/rendering/rendering_device.cpp
++++ b/servers/rendering/rendering_device.cpp
+@@ -1793,6 +1793,11 @@ RID RenderingDevice::texture_create_shared(const TextureView &p_view, RID p_with
+ 				"Format override is not in the list of allowed shareable formats for original texture.");
+ 		tv.format = p_view.format_override;
+ 		create_shared = driver->texture_can_make_shared_with_format(texture.driver_id, p_view.format_override, raw_reintepretation);
++		if (create_shared) {
++			// The view IS this format: a framebuffer built on it must declare it, or an sRGB
++			// view of a UNORM image is rendered through a UNORM render pass and stores raw.
++			texture.format = tv.format;
++		}
+ 	}
+ 	tv.swizzle_r = p_view.swizzle_r;
+ 	tv.swizzle_g = p_view.swizzle_g;
+@@ -1958,6 +1963,11 @@ RID RenderingDevice::texture_create_shared_from_slice(const TextureView &p_view,
+ 				"Format override is not in the list of allowed shareable formats for original texture.");
+ 		tv.format = p_view.format_override;
+ 		create_shared = driver->texture_can_make_shared_with_format(texture.driver_id, p_view.format_override, raw_reintepretation);
++		if (create_shared) {
++			// The view IS this format: a framebuffer built on it must declare it, or an sRGB
++			// view of a UNORM image is rendered through a UNORM render pass and stores raw.
++			texture.format = tv.format;
++		}
+ 	}
+ 
+ 	tv.swizzle_r = p_view.swizzle_r;
+-- 
+2.53.0.windows.1
+

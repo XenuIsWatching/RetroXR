@@ -1185,8 +1185,6 @@ func _generate_centered_vrs() -> void:
 		return
 	RenderingServer.viewport_set_vrs_texture(root.get_viewport_rid(), texture)
 	root.vrs_mode = Viewport.VRS_TEXTURE
-	# Re-arm the one-shot copy: a previous ONCE has left the render target's
-	# update mode DISABLED, and a regenerated texture would never be painted.
 	root.vrs_update_mode = Viewport.VRS_UPDATE_ONCE
 	_vrs_generator = generator
 	_foveation_live = true
@@ -1239,19 +1237,12 @@ func effective_msaa() -> Viewport.MSAA:
 	return msaa_3d as Viewport.MSAA
 
 
-## Changing MSAA rebuilds the render buffers, and the engine's density texture
-## with them. Godot paints that texture from ours ONCE and then disables the
-## update on the render target; nothing re-arms it when the buffers are
-## reconfigured, and a fresh VRS texture is initialised to 255 - full rate
-## everywhere. Measured on a Quest 3 at eye buffer 1.75x, MAX foveation, MSAA
-## 2x: 28.1 ms with the map silently blank, 13.2 ms with the update re-armed.
-## Setting the mode to ONCE again schedules exactly one repaint on the frame
-## after the rebuild, which is where the copy has to land.
+## The patched engine repaints the density map itself after a render-buffer
+## rebuild (see Tools/engine and docs/godot-4.7.2-vrs-update-rearm.patch); the
+## stock 4.7.2 left it blank after an MSAA change, 28.1 ms instead of 13.2.
 func apply_msaa() -> void:
 	var root := get_tree().root
 	root.msaa_3d = effective_msaa()
-	if foveation_live():
-		root.vrs_update_mode = Viewport.VRS_UPDATE_ONCE
 
 
 func set_post_aa(mode: int) -> void:

@@ -1,0 +1,130 @@
+From 660bd3da3ebe77bd8441ca97ec22769bedbbd8b0 Mon Sep 17 00:00:00 2001
+From: Ryan McClelland <rymcclel@gmail.com>
+Date: Wed, 9 Sep 2026 16:50:46 -0700
+Subject: [PATCH] VRS: repaint the density map whenever it has to be refilled
+
+ONCE demoted the render target's update mode to DISABLED after the first copy,
+and nothing re-armed it. RenderSceneBuffersRD::configure recreates the density
+texture with a full-rate initial fill on every MSAA or size change, so after an
+MSAA toggle the map was silently blank while the fragment-density machinery kept
+its cost: 27.9 ms against 13.2 on a Quest 3 arcade at 1.75x.
+
+The mode now stays what the caller set; a per-target flag records that the map
+needs a copy, raised by the texture, mode and update-mode setters and by the
+render buffers when they recreate the texture, cleared by the copy.
+---
+ servers/rendering/renderer_rd/effects/vrs.cpp   | 12 ++++++++----
+ .../storage_rd/render_scene_buffers_rd.cpp      |  2 ++
+ .../renderer_rd/storage_rd/texture_storage.cpp  | 17 +++++++++++++++++
+ .../renderer_rd/storage_rd/texture_storage.h    |  3 +++
+ 4 files changed, 30 insertions(+), 4 deletions(-)
+
+diff --git a/servers/rendering/renderer_rd/effects/vrs.cpp b/servers/rendering/renderer_rd/effects/vrs.cpp
+index 573199a58c..0f9a084dcb 100644
+--- a/servers/rendering/renderer_rd/effects/vrs.cpp
++++ b/servers/rendering/renderer_rd/effects/vrs.cpp
+@@ -118,7 +118,13 @@ void VRS::update_vrs_texture(RID p_vrs_fb, RID p_render_target) {
+ 	RSE::ViewportVRSMode vrs_mode = texture_storage->render_target_get_vrs_mode(p_render_target);
+ 	RSE::ViewportVRSUpdateMode vrs_update_mode = texture_storage->render_target_get_vrs_update_mode(p_render_target);
+ 
+-	if (vrs_mode != RSE::VIEWPORT_VRS_DISABLED && vrs_update_mode != RSE::VIEWPORT_VRS_UPDATE_DISABLED) {
++	// ONCE copies the map whenever it has to be refilled - when the texture, mode or
++	// update mode was set, and when the render buffers were rebuilt (MSAA or size
++	// change), which recreates the density texture with a full-rate initial fill.
++	// Demoting the mode to DISABLED after the first copy left that blank map in
++	// place, silently, with the density-map machinery still running at full cost.
++	bool update_now = vrs_update_mode == RSE::VIEWPORT_VRS_UPDATE_ALWAYS || (vrs_update_mode == RSE::VIEWPORT_VRS_UPDATE_ONCE && texture_storage->render_target_get_vrs_needs_update(p_render_target));
++	if (vrs_mode != RSE::VIEWPORT_VRS_DISABLED && update_now) {
+ 		RD::get_singleton()->draw_command_begin_label("VRS Setup");
+ 
+ 		if (vrs_mode == RSE::VIEWPORT_VRS_TEXTURE) {
+@@ -149,9 +155,7 @@ void VRS::update_vrs_texture(RID p_vrs_fb, RID p_render_target) {
+ #endif // XR_DISABLED
+ 		}
+ 
+-		if (vrs_update_mode == RSE::VIEWPORT_VRS_UPDATE_ONCE) {
+-			texture_storage->render_target_set_vrs_update_mode(p_render_target, RSE::VIEWPORT_VRS_UPDATE_DISABLED);
+-		}
++		texture_storage->render_target_set_vrs_needs_update(p_render_target, false);
+ 
+ 		RD::get_singleton()->draw_command_end_label();
+ 	}
+diff --git a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
+index 01cd1bf5cf..49ffedd5cc 100644
+--- a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
++++ b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
+@@ -211,6 +211,8 @@ void RenderSceneBuffersRD::configure(const RenderSceneBuffersConfiguration *p_co
+ 	RID vrs_texture;
+ 	if (vrs && vrs_mode != RSE::VIEWPORT_VRS_DISABLED) {
+ 		vrs_texture = create_texture(RB_SCOPE_VRS, RB_TEXTURE, get_vrs_format(), get_vrs_usage_bits(), RD::TEXTURE_SAMPLES_1, vrs->get_vrs_texture_size(internal_size));
++		// A fresh density texture is full rate everywhere until copied into.
++		texture_storage->render_target_set_vrs_needs_update(render_target, true);
+ 	}
+ 
+ 	// (re-)configure any named buffers
+diff --git a/servers/rendering/renderer_rd/storage_rd/texture_storage.cpp b/servers/rendering/renderer_rd/storage_rd/texture_storage.cpp
+index c22f96eaca..427371936a 100644
+--- a/servers/rendering/renderer_rd/storage_rd/texture_storage.cpp
++++ b/servers/rendering/renderer_rd/storage_rd/texture_storage.cpp
+@@ -5245,6 +5245,7 @@ void TextureStorage::render_target_set_vrs_mode(RID p_render_target, RSE::Viewpo
+ 	ERR_FAIL_NULL(rt);
+ 
+ 	rt->vrs_mode = p_mode;
++	rt->vrs_needs_update = true;
+ }
+ 
+ RSE::ViewportVRSMode TextureStorage::render_target_get_vrs_mode(RID p_render_target) const {
+@@ -5259,6 +5260,7 @@ void TextureStorage::render_target_set_vrs_update_mode(RID p_render_target, RSE:
+ 	ERR_FAIL_NULL(rt);
+ 
+ 	rt->vrs_update_mode = p_mode;
++	rt->vrs_needs_update = true;
+ }
+ 
+ RSE::ViewportVRSUpdateMode TextureStorage::render_target_get_vrs_update_mode(RID p_render_target) const {
+@@ -5273,6 +5275,21 @@ void TextureStorage::render_target_set_vrs_texture(RID p_render_target, RID p_te
+ 	ERR_FAIL_NULL(rt);
+ 
+ 	rt->vrs_texture = p_texture;
++	rt->vrs_needs_update = true;
++}
++
++void TextureStorage::render_target_set_vrs_needs_update(RID p_render_target, bool p_needs_update) {
++	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
++	ERR_FAIL_NULL(rt);
++
++	rt->vrs_needs_update = p_needs_update;
++}
++
++bool TextureStorage::render_target_get_vrs_needs_update(RID p_render_target) const {
++	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
++	ERR_FAIL_NULL_V(rt, false);
++
++	return rt->vrs_needs_update;
+ }
+ 
+ RID TextureStorage::render_target_get_vrs_texture(RID p_render_target) const {
+diff --git a/servers/rendering/renderer_rd/storage_rd/texture_storage.h b/servers/rendering/renderer_rd/storage_rd/texture_storage.h
+index d9e577de21..5b95d3e2d4 100644
+--- a/servers/rendering/renderer_rd/storage_rd/texture_storage.h
++++ b/servers/rendering/renderer_rd/storage_rd/texture_storage.h
+@@ -441,6 +441,7 @@ private:
+ 		RSE::ViewportVRSMode vrs_mode = RSE::VIEWPORT_VRS_DISABLED;
+ 		RSE::ViewportVRSUpdateMode vrs_update_mode = RSE::VIEWPORT_VRS_UPDATE_ONCE;
+ 		RID vrs_texture;
++		bool vrs_needs_update = true; // The density texture must be (re)filled before the next render.
+ 
+ 		Rect2i render_region;
+ 		bool subsampled_enabled = false;
+@@ -894,6 +895,8 @@ public:
+ 	virtual void render_target_set_vrs_update_mode(RID p_render_target, RSE::ViewportVRSUpdateMode p_mode) override;
+ 	virtual RSE::ViewportVRSUpdateMode render_target_get_vrs_update_mode(RID p_render_target) const override;
+ 	virtual void render_target_set_vrs_texture(RID p_render_target, RID p_texture) override;
++	void render_target_set_vrs_needs_update(RID p_render_target, bool p_needs_update);
++	bool render_target_get_vrs_needs_update(RID p_render_target) const;
+ 	virtual RID render_target_get_vrs_texture(RID p_render_target) const override;
+ 
+ 	virtual void render_target_set_override(RID p_render_target, RID p_color_texture, RID p_depth_texture, RID p_velocity_texture, RID p_velocity_depth_texture) override;
+-- 
+2.53.0.windows.1
+

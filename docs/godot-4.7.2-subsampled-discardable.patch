@@ -1,0 +1,35 @@
+From 60fa694f74e1e7f4c7e3098f225c593a73bcba3a Mon Sep 17 00:00:00 2001
+From: Ryan McClelland <rymcclel@gmail.com>
+Date: Wed, 9 Sep 2026 16:51:06 -0700
+Subject: [PATCH] Mobile: subsampled colour and depth twins discardable like
+ the plain ones
+
+The subsampled variants used under XR_FB subsampled images were still stored
+every frame, though the same tonemap subpass reads them in tile memory.
+---
+ .../renderer_rd/storage_rd/render_scene_buffers_rd.cpp          | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
+index 49ffedd5cc..993ef162c0 100644
+--- a/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
++++ b/servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.cpp
+@@ -665,6 +665,7 @@ RID RenderSceneBuffersRD::get_color_subsampled() {
+ 	tf.array_layers = view_count;
+ 	tf.usage_bits = get_color_usage_bits(use_msaa, false, can_be_storage);
+ 	tf.is_subsampled = true;
++	tf.is_discardable = !can_be_storage;
+ 
+ 	return create_texture_from_format(RB_SCOPE_BUFFERS, RB_TEX_COLOR_SUBSAMPLED, tf);
+ }
+@@ -701,6 +702,7 @@ RID RenderSceneBuffersRD::get_depth_subsampled() {
+ 	tf.array_layers = view_count;
+ 	tf.usage_bits = get_depth_usage_bits(use_msaa, false, can_be_storage);
+ 	tf.is_subsampled = true;
++	tf.is_discardable = !can_be_storage;
+ 
+ 	return create_texture_from_format(RB_SCOPE_BUFFERS, RB_TEX_DEPTH_SUBSAMPLED, tf);
+ }
+-- 
+2.53.0.windows.1
+
