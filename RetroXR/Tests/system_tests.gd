@@ -1544,6 +1544,50 @@ func _test_memcard_presence() -> void:
 	_ok(SramPaths.cards_dir("gamecube") != SramPaths.cards_dir("playstation"),
 		"memcard/which is not the PlayStation's")
 
+	# The PlayStation 2, asked of the descriptor for the same reason the Wii is.
+	var ps2_info := SystemInfo.for_system("playstation2")
+	_eq(ps2_info.card_slots, 2, "memcard/a PlayStation 2 has two slots")
+	_eq(ps2_info.card_family, "playstation2", "memcard/of its own family")
+	_ok(CardFormats.for_system("playstation2") != null,
+		"memcard/which resolves to a format")
+	_ok(SramPaths.cards_dir("playstation2") != SramPaths.cards_dir("playstation"),
+		"memcard/and a folder the PlayStation's cards are not in")
+
+	var ps2_card := preload("res://Scenes/Objects/media/ps2_memory_card.tscn") \
+		.instantiate() as MemoryCard
+	_eq(ps2_card.family, "playstation2", "memcard/a PS2 card knows its family")
+	_ok(not psx._accepts_card(ps2_card), "memcard/a PlayStation refuses a PS2 card")
+	_ok(not gc._accepts_card(ps2_card), "memcard/and so does a GameCube")
+
+	# Neither PS2 core takes a card through SAVE_RAM: both open files of their
+	# own, in a directory of their own, so both need mirroring.
+	_ok(MemcardMounts.has("pcsx2"), "memcard/pcsx2 mounts its cards as files")
+	_ok(MemcardMounts.has("pcee2"), "memcard/and so does pcee2")
+	_ok(not MemcardMounts.has("dolphin"),
+		"memcard/while Dolphin takes a path and is not mirrored")
+	_ok(not MemcardMounts.has("pcsx_rearmed"),
+		"memcard/nor is a core that has SAVE_RAM")
+	# Fixed names against free ones. pcsx2 cannot be told which file to open, so
+	# a card must arrive under the name it already looks for; pcee2 chooses by
+	# name and gets the card's own.
+	var lrps2 := MemcardMounts.for_core("pcsx2")
+	var pcee2 := MemcardMounts.for_core("pcee2")
+	_eq(MemcardMounts.scratch_name(lrps2, 0, "MEMORY CARD 1"), "Mcd001.ps2",
+		"memcard/pcsx2 slot 1 is Mcd001.ps2 whatever the card is called")
+	_eq(MemcardMounts.scratch_name(lrps2, 1, "MEMORY CARD 1"), "Mcd002.ps2",
+		"memcard/and slot 2 is Mcd002.ps2")
+	_eq(MemcardMounts.scratch_name(pcee2, 0, "MEMORY CARD 1"), "MEMORY CARD 1.ps2",
+		"memcard/pcee2 takes the card's own name")
+	_ok(not MemcardMounts.live_swap("pcsx2"),
+		"memcard/a card swap on pcsx2 waits for a power cycle")
+	_ok(MemcardMounts.live_swap("pcee2"), "memcard/where pcee2 re-opens live")
+	_ok(MemcardMounts.mount_dir("pcsx2").ends_with("pcsx2/memcards"),
+		"memcard/both look under their own system dir")
+	_ok(MemcardMounts.mount_dir("pcee2") != MemcardMounts.mount_dir("pcsx2"),
+		"memcard/but not in the SAME directory as each other")
+
+	ps2_card.free()
+
 	gc_card.free()
 	ps_card.free()
 	card.free()

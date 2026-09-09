@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 298
+const EXPECTED_CASES := 299
 
 var _pass := 0
 var _fail := 0
@@ -906,6 +906,25 @@ func _test_ps2_blank() -> void:
 	# The four bytes after the twelve of ECC are zero, not 0xFF.
 	_eq(img.slice(PS2Card.PAGE_SIZE + 12, PS2Card.PAGE_RAW),
 		PackedByteArray([0, 0, 0, 0]), "ps2/blank/a page's spare area ends in nulls")
+
+	# THE ONE CASE THAT SETTLES THE FORMAT.
+	#
+	# A formatted card's superblock does not change as saves come and go, so a
+	# blank card's first raw page — 512 bytes of superblock plus the 16 of ECC
+	# over them — must equal the same page of ANY console-formatted card. It
+	# does: this digest was taken from a real 44-save PCSX2 card backup and
+	# matches what blank_image() produces byte for byte.
+	#
+	# Which makes this one assertion cover magic, version, card_type,
+	# card_flags, every geometry field, both fill conventions AND the ECC
+	# algorithm at once. A card image cannot be committed here — 8 MB of someone
+	# else's saves — so the digest stands in for it.
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(img.slice(0, PS2Card.PAGE_RAW))
+	_eq(ctx.finish().hex_encode(),
+		"5cf227261ccb146f8fef2990b57f12cce083e06c02c6eccdb18f546791a0be37",
+		"ps2/blank/page 0 matches a console-formatted card byte for byte")
 
 	# The root's ".." is the one entry on the card whose mode differs from every
 	# other: it drops MODE_READ and carries 0x2000. A reading of the spec alone
