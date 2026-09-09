@@ -684,10 +684,14 @@ static func extract_save(data: PackedByteArray, slot: int) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.append_array(_psu_header(int(entry["mode"]), files.size() + FIRST_SAVE_SLOT,
 		String(entry["name"]), entry["created"], entry["modified"]))
-	out.append_array(_psu_header(PSU_DIR_FLAGS, 0, ".",
-		entry["created"], entry["modified"]))
-	out.append_array(_psu_header(PSU_DIR_FLAGS, 0, "..",
-		entry["created"], entry["modified"]))
+	# "." and ".." carry timestamps of their OWN, which are not the directory
+	# entry's. Copying the parent's instead is invisible in a round trip here and
+	# shows up the moment another tool reads the container.
+	for i in FIRST_SAVE_SLOT:
+		var dot := children[i] if i < children.size() else {}
+		out.append_array(_psu_header(PSU_DIR_FLAGS, 0, "." if i == 0 else "..",
+			dot.get("created", entry["created"]),
+			dot.get("modified", entry["modified"])))
 
 	for f in files:
 		var size := int(f["length"])
@@ -721,6 +725,7 @@ static func parse_psu(bytes: PackedByteArray) -> Dictionary:
 		return {}
 
 	var files: Array[Dictionary] = []
+	var dots: Array[Dictionary] = []
 	var pos := PSU_ENTRY_SIZE
 	var seen := 0
 	# `slots` counts the entries INSIDE the directory — "." and ".." and one per
@@ -733,7 +738,13 @@ static func parse_psu(bytes: PackedByteArray) -> Dictionary:
 		var flags := e.decode_u32(P_FLAGS)
 		var name := _name_of(e, P_NAME, PSU_NAME_LEN)
 		if flags & MODE_DIRECTORY != 0:
-			# "." and ".." carry no payload and are rebuilt on insertion.
+			# "." and ".." carry no payload, but they do carry timestamps of
+			# their own, which are kept so a container survives a round trip
+			# through a card unchanged.
+			dots.append({
+				"created": e.slice(P_CREATED, P_CREATED + 8),
+				"modified": e.slice(P_MODIFIED, P_MODIFIED + 8),
+			})
 			continue
 		if flags & MODE_FILE == 0:
 			return {}
@@ -756,6 +767,7 @@ static func parse_psu(bytes: PackedByteArray) -> Dictionary:
 		"created": head.slice(P_CREATED, P_CREATED + 8),
 		"modified": head.slice(P_MODIFIED, P_MODIFIED + 8),
 		"files": files,
+		"dots": dots,
 	}
 
 
@@ -853,32 +865,10 @@ static func insert_save(data: PackedByteArray, save: PackedByteArray) -> PackedB
 	for chain in file_chains:
 		_commit_chain(sb, chain as Array[int])
 
-	# The save's own directory: "." and ".." first, then one slot per file.
-	var created: PackedByteArray = psu["created"]
-	var modified: PackedByteArray = psu["modified"]
-	var blank := PackedByteArray()
-	blank.resize(CLUSTER_SIZE)
-	blank.fill(0)
-	for c in dir_chain:
-		_write_cluster(out, c + int(sb["alloc_offset"]), sb["page_raw"], blank)
-
-	_put_slot(out, sb, dir_chain, 0,
-		_new_entry(DEFAULT_DIR_MODE, slots, 0, ".", created, modified))
-	_put_slot(out, sb, dir_chain, 1,
-		_new_entry(DEFAULT_DIR_MODE, 0, 0, "..", created, modified))
-	for i in files.size():
-		var f: Dictionary = files[i]
-		var chain: Array = file_chains[i]
-		var bytes: PackedByteArray = f["data"]
-		var first: int = chain[0] if not chain.is_empty() else EMPTY_FILE_CLUSTER
-		_put_slot(out, sb, dir_chain, i + FIRST_SAVE_SLOT, _new_entry(
-			int(f["mode"]), bytes.size(), first, String(f["name"]),
-			f["created"], f["modified"]))
-		_write_file(out, sb, chain, bytes)
-
-	# The save's slot in the root. A dead slot is reused where one exists,
-	# because the root's `length` is a capacity and growing it needlessly is how
-	# a card fills up with nothing in it.
+	# The save's slot in the root, decided BEFORE its directory is written
+	# because the directory's own "." has to name it. A dead slot is reused
+	# where one exists, since the root's `length` is a capacity and growing it
+	# needlessly is how a card fills up with nothing in it.
 	var slot := -1
 	for entry in root_slots:
 		if int(entry["slot"]) >= FIRST_SAVE_SLOT and not entry["used"]:
@@ -893,6 +883,38 @@ static func insert_save(data: PackedByteArray, save: PackedByteArray) -> PackedB
 		var head := _entry_at(out, sb, int(sb["rootdir"]), 0)
 		head.encode_u32(E_LENGTH, root_len)
 		_put_entry(out, sb, int(sb["rootdir"]), 0, head)
+
+	# The save's own directory: "." and ".." first, then one slot per file.
+	var created: PackedByteArray = psu["created"]
+	var modified: PackedByteArray = psu["modified"]
+	var blank := PackedByteArray()
+	blank.resize(CLUSTER_SIZE)
+	blank.fill(0)
+	for c in dir_chain:
+		_write_cluster(out, c + int(sb["alloc_offset"]), sb["page_raw"], blank)
+
+	# Both dot entries have length ZERO. Only the ROOT's "." carries a slot
+	# count — that is the one directory with no parent to describe it, which is
+	# also why _root_slots bootstraps from it. Measured on a real card, where a
+	# save's own "." reads len=0 while the root's reads the number of saves.
+	var dots: Array = psu.get("dots", [])
+	for i in FIRST_SAVE_SLOT:
+		var dot: Dictionary = dots[i] if i < dots.size() else {}
+		var dot_entry := _new_entry(DEFAULT_DIR_MODE, 0, 0, "." if i == 0 else "..",
+			dot.get("created", created), dot.get("modified", modified))
+		# "." also names this directory's own slot in its parent.
+		if i == 0:
+			dot_entry.encode_u32(E_DIR_ENTRY, slot)
+		_put_slot(out, sb, dir_chain, i, dot_entry)
+	for i in files.size():
+		var f: Dictionary = files[i]
+		var chain: Array = file_chains[i]
+		var bytes: PackedByteArray = f["data"]
+		var first: int = chain[0] if not chain.is_empty() else EMPTY_FILE_CLUSTER
+		_put_slot(out, sb, dir_chain, i + FIRST_SAVE_SLOT, _new_entry(
+			int(f["mode"]), bytes.size(), first, String(f["name"]),
+			f["created"], f["modified"]))
+		_write_file(out, sb, chain, bytes)
 
 	var root_chain := _chain(sb, int(sb["rootdir"]))
 	_put_slot(out, sb, root_chain, slot, _new_entry(

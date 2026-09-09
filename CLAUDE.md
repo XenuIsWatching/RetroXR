@@ -1226,6 +1226,114 @@ What no suite covers is the core actually taking the pair: that needs melondsds,
 the DS firmware, a DS ROM and a GBA ROM, and has not been measured yet — the
 log line to look for is `Loading subsystem 'gba' (id=...) with 3 file(s)`.
 
+### 2k. PlayStation 2 memory cards — a filesystem, and two cores that own it
+
+The `playstation2` card family, added 2026-09-09. Every other family here is a
+flat table; the PS2's card is a real filesystem — a superblock, a doubly-indirect
+FAT, and 512-byte directory entries two to a 1024-byte cluster, with 16 bytes of
+ECC in every page's spare area (528 raw, 512 to the filesystem). Each save is a
+DIRECTORY at the root, so a save's name is a folder name and its size is what its
+whole subtree occupies. `PS2Card` is correspondingly larger than its siblings.
+
+**Where the format came from, since none of it can be trusted on paper.** Upstream
+PCSX2's `pcsx2/SIO/Memcard/MemoryCardFolder.cpp` synthesises a card image from a
+host directory, which makes it a WRITING reference and not only a reading one —
+geometry, FAT construction, directory layout and the ECC table are transliterated
+from it. **PCSX2 has no formatter**: it creates a card as 8,650,752 bytes of 0xFF
+and leaves the BIOS to format it, so `blank_image()` had to be written from the
+Ross Ridge specification PCSX2 vendors alongside the code.
+
+**The specification is wrong about `card_flags`**, and four fills with it. Measured
+against a real 44-save PCSX2 card backup: `card_flags` is **0x2B**
+(`CF_USE_ECC | CF_BAD_BLOCK`), not the 0x52 the spec calls the default — a value
+with `CF_USE_ECC` clear, on a card whose every page carries ECC. Also measured:
+an unused indirect-FAT slot is **0** while an unused bad-block slot is
+**0xFFFFFFFF** (the two 32-entry lists are adjacent and filled differently), the
+superblock page is zeroed past `card_flags` rather than 0xFF-filled, and a page's
+spare area ends in four NULs rather than 0xFF.
+
+**The check that settles all of it is one assertion.** A formatted card's
+superblock never changes as saves come and go, so a blank card's first raw page
+must equal the same page of ANY console-formatted card. It does, byte for byte,
+and `card_tests` pins the SHA-256 (`5cf22726…`). That one case covers magic,
+version, card_type, card_flags, every geometry field, both fill conventions and
+the ECC algorithm together. The card itself is not committed — 8 MB of somebody
+else's saves — so the digest stands in for it.
+
+Four things a reading of the spec alone gets wrong, all with cases:
+
+- A directory's `length` is a **SLOT count**, including `.`, `..` and every DEAD
+  slot. It is a capacity, never a file count, and the append path decides where
+  the next entry goes from `length % 2`.
+- The root's `..` is **0xA426** — it drops `MODE_READ` and carries 0x2000, unlike
+  every subdirectory's. Confirmed on the real card, not just in PCSX2.
+- "Deleted" and "erased" are different tests: `mode != 0xFFFFFFFF` is valid,
+  `mode & 0x8000` is used. A deleted file is valid-but-unused.
+- Usable clusters are truncated to `(alloc_end/1000)*1000 - 1` = **7999**, not
+  the 8135 the superblock allows, to match what the console reports. `total_blocks`
+  is 7998 of those, because the root directory always holds one and a save can
+  never have it — the same reason the PlayStation's card excludes its directory
+  block.
+
+**Icons are 3-D models**, not sprites: `icon.sys` names the save and three `.icn`
+files (normal, copying, deleting — note Play!'s own accessor enum lists them in a
+different order, so the file is the authority). `PS2Icon` parses them as data and
+`PS2IconView` renders one per row in a SubViewport. Three traps, none of which
+appears in a log:
+
+- The PS2 authors icons with **+Y pointing DOWN**, so a straight read stands every
+  one on its head. Caught on Indiana Jones' hat — the medallions and rings in the
+  same card could not have shown it. Render something ASYMMETRIC.
+- Vertex colour is **0x80 = full intensity**, not 0xFF; read as 0-255 every icon
+  renders at half brightness.
+- The attribute record's per-vertex normals are the icon's own. Dropping them
+  leaves the mesh unlit and looking like a paper cut-out.
+
+An `.icn` whose texture encoding or animation header is unrecognised costs the
+texture or the animation rather than the whole model; five saves on the test card
+showed nothing at all before that.
+
+**Neither core takes a card through SAVE_RAM.** Both open files of their own, so
+`MemcardMounts` describes where, and `memory_card_controller` copies a seated card
+in before the core loads and drains it back on the poll that already exists for
+Dolphin.
+
+| | `pcsx2` (LRPS2) | `pcee2` (upstream port) |
+|---|---|---|
+| directory | `<system>/pcsx2/pcsx2/memcards` | `<system>/pcee2/pcsx2/memcards` |
+| slot names | fixed `Mcd001.ps2` / `Mcd002.ps2` | the card's own id |
+| empty slot | **phantom card** — unavoidable | `slot{1,2}_enable = disabled` |
+| swap while running | next power cycle | re-opens live |
+
+LRPS2's libretro build defaults to shared cards, which is the only mode with two
+slots at all — its per-game branch names slot 1 after the ROM and DISABLES slot 2.
+It keeps settings in memory and reads no ini, so those names cannot be redirected,
+and it creates a card for any enabled slot whose file is missing.
+
+**The mirror must land before the core loads, and this is load-bearing rather than
+tidy.** pcee2 builds the list of cards it will offer by scanning that directory as
+it registers its options — which is before the core has run any code that would
+create the directory. So RetroXR creates it and fills it. A late mirror leaves the
+two slot options unregistered, and `OptionsHandler::SetVariable` drops a key the
+core never declared without failing, so the card would silently not be selected.
+
+```bash
+"$godot" --headless --path RetroXR res://Tests/card_tests.tscn -- --only=ps2
+"$godot" --path RetroXR --resolution 900x760 --position 20,20 \
+  res://Tools/input/ps2_card_probe.tscn -- --card=/path/to/card.ps2
+```
+
+The probe is **windowed, never `--headless`** — the icons are SubViewports, and
+the dummy renderer returns a blank image while the size oracle happily reports the
+right one. Without `--card` it generates its own saves, which proves the pipeline
+and nothing about any real game's artwork.
+
+**Still owed:** no live core run has been made, so the FAT and directory writing
+are proven against this suite and a real card's superblock but not against a
+console actually reading a card RetroXR wrote. And netplay does not carry a PS2
+card: `net_sram_file_bytes` is slot-A-and-SAVE_RAM only, which is the same gap
+Dolphin has.
+
 ### 3. Capturing a real screenshot on Linux (for visual validation)
 `--headless` uses the dummy renderer — it **cannot** produce a screenshot (a probe that awaits
 `RenderingServer.frame_post_draw` just hangs; `get_image()` is blank). To actually render a
