@@ -1,0 +1,43 @@
+From c8237e90997499adeefc835a4ca2888a8b8f474a Mon Sep 17 00:00:00 2001
+From: Ryan McClelland <rymcclel@gmail.com>
+Date: Wed, 9 Sep 2026 01:36:23 -0700
+Subject: [PATCH] Forward Mobile: clear every colour attachment a clear value
+ is pushed for
+
+_render_scene pushed clear colours for the resolve target and the 2D target
+of the tonemap subpass but flagged only DRAW_CLEAR_COLOR_0, leaving the
+others on LOAD. On a tiler that reads the previous swapchain contents into
+tile memory for every bin, then overwrites all of it: two LoadColor stages
+per bin, about 0.9 ms at 2520x2640 stereo on a Quest 3.
+---
+ .../forward_mobile/render_forward_mobile.cpp       | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp b/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp
+index b30e19ca76..0403433aa3 100644
+--- a/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp
++++ b/servers/rendering/renderer_rd/forward_mobile/render_forward_mobile.cpp
+@@ -1250,7 +1250,19 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
+ 			}
+ 		}
+ 
+-		RD::DrawListID draw_list = RD::get_singleton()->draw_list_begin(framebuffer, load_color ? RD::DRAW_CLEAR_DEPTH : (RD::DRAW_CLEAR_COLOR_0 | RD::DRAW_CLEAR_DEPTH), c, 0.0f, 0, p_render_data->render_region, breadcrumb);
++		// Every colour attachment a clear value was pushed for is flagged CLEAR,
++		// not only colour 0. The resolve target and the 2D target the tonemap
++		// subpass writes into were left on the default LOAD, which on a tiler
++		// reads the previous frame of the swapchain into tile memory for every
++		// bin (two LoadColor stages per bin in a Quest 3 render-stage trace,
++		// ~0.9 ms at 2520x2640) only for the pass to overwrite all of it.
++		BitField<RD::DrawFlags> draw_flags = RD::DRAW_CLEAR_DEPTH;
++		if (!load_color) {
++			for (int ci = 0; ci < c.size(); ci++) {
++				draw_flags.set_flag(RD::DrawFlags(RD::DRAW_CLEAR_COLOR_0 << ci));
++			}
++		}
++		RD::DrawListID draw_list = RD::get_singleton()->draw_list_begin(framebuffer, draw_flags, c, 0.0f, 0, p_render_data->render_region, breadcrumb);
+ 		RD::FramebufferFormatID fb_format = RD::get_singleton()->framebuffer_get_format(framebuffer);
+ 
+ 		if (copy_canvas) {
+-- 
+2.53.0.windows.1
+

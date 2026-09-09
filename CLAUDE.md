@@ -119,6 +119,31 @@ A hardened Mac export will need library validation disabled for downloaded unsig
 and unsigned executable memory for callback trampolines; dynarec cores may also need the
 JIT entitlement.
 
+### The Quest ships a PATCHED engine
+
+The stock 4.7.2 Android template has three defects on a Quest 3 that each have
+a small fix: a boot deadlock in the Forward Mobile shader lock scope, colour and
+depth buffers stored every frame though nothing reads them, and the swapchain
+loaded into tile memory every bin though the pass overwrites it. The fixes are
+`docs/godot-4.7.2-*.patch`, applied on the engine branch
+`retroxr/discardable-4.7.2` (4.7.2-stable + all three) in `~/godot`. The
+prebuilt arm64 library from that branch lives under `Tools/engine/` (Git LFS)
+and `Tools/place_engine.py` swaps it into the Android build template's AAR:
+
+```bash
+python Tools/place_engine.py --target release   # what release.yml runs before the export
+python Tools/place_engine.py --target debug     # for a local Quest export
+python Tools/place_engine.py --target debug --restore
+```
+
+Rebuild the library when a patch changes:
+`cd ~/godot && ANDROID_HOME=C:/android scons platform=android arch=arm64
+target=template_release generate_apk=no -j14`, then copy
+`platform/android/java/lib/libs/release/arm64-v8a/libgodot_android.so` over
+`Tools/engine/android/arm64-v8a/libgodot_android.template_release.so`. Measured
+2026-09-09 on the heavy arcade slot at 1.5x: App 13.1 -> 11.5 ms for the two
+render patches; the deadlock fix booted 10/10 where stock hung on launch 2.
+
 ### Sibling GDExtensions (archive-godot, verlet-rope, vlc-godot, godot-pdfium, metaxr-audio)
 
 Five other C++ GDExtensions live beside libretro-godot, each with the same layout (repo-root

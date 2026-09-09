@@ -262,6 +262,13 @@ jobs:
             "org.gradle.console=plain"
           )
 
+      - name: Put the patched engine into the Android build template
+        # The stock template ships an engine with three Quest defects (a boot
+        # deadlock, two wasted attachment stores, a swapchain load per bin);
+        # docs/godot-4.7.2-*.patch fix them and Tools/engine holds the
+        # library built from them. Without this step the APK runs stock.
+        run: python Tools/place_engine.py --target release
+
       - name: Fail on any script or shader error
         shell: bash
         run: |
