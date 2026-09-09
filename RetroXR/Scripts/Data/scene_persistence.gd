@@ -147,6 +147,7 @@ const DISC_SCENE             := preload("res://Scenes/Objects/media/disc.tscn")
 const UMD_DISC_SCENE         := preload("res://Scenes/Objects/media/umd_disc.tscn")
 const MEMCARD_SCENE          := preload("res://Scenes/Objects/media/memory_card.tscn")
 const GC_MEMCARD_SCENE       := preload("res://Scenes/Objects/media/gc_memory_card.tscn")
+const PS2_MEMCARD_SCENE      := preload("res://Scenes/Objects/media/ps2_memory_card.tscn")
 const BOOK_SCENE             := preload("res://Scenes/Objects/media/pdf_book.tscn")
 const POSTER_SCENE           := preload("res://Scenes/Objects/media/poster.tscn")
 const RETRO_CONTROLLER_SCENE := preload("res://Scenes/Objects/controllers/retro_controller.tscn")
@@ -2169,8 +2170,11 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 				# A room saved before there were two families holds no family at
 				# all, and every card in one is a PlayStation card.
 				var family := str(data.get("family", "playstation"))
-				var scene := GC_MEMCARD_SCENE if family == "gamecube" \
-					else MEMCARD_SCENE
+				var scene := MEMCARD_SCENE
+				if family == "gamecube":
+					scene = GC_MEMCARD_SCENE
+				elif family == "playstation2":
+					scene = PS2_MEMCARD_SCENE
 				var card := scene.instantiate() as MemoryCard
 				card.family = family
 				card.card_id = data.get("card_id", "")

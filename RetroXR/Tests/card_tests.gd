@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 205
+const EXPECTED_CASES := 291
 
 var _pass := 0
 var _fail := 0
@@ -44,6 +44,13 @@ func _ready() -> void:
 	_test_gc_pictures()
 	_test_ps1_contract()
 	_test_n64_contract()
+	_test_ps2_blank()
+	_test_ps2_ecc()
+	_test_ps2_geometry()
+	_test_ps2_roundtrip()
+	_test_ps2_delete()
+	_test_ps2_reject()
+	_test_ps2_fat()
 	_test_shared_contract()
 	_test_ops()
 	_test_format_registry()
@@ -595,6 +602,9 @@ func _smallest_save_size(fmt: CardFormat) -> int:
 		"gamecube":       return GCCard.DENTRY_SIZE + GCCard.BLOCK_SIZE
 		"playstation":    return PS1Card.FRAME_SIZE + PS1Card.BLOCK_SIZE
 		"controller_pak": return N64Card.NOTE_SIZE + N64Card.PAGE_SIZE
+		# The PS2 counts a container's bytes straight into clusters rather than
+		# adding a header, so its smallest one-unit save is exactly one cluster.
+		"playstation2":   return PS2Card.CLUSTER_SIZE
 	return 0
 
 
@@ -815,3 +825,316 @@ func _test_ps1_disc() -> void:
 	for leaf in ["game.bin", "game.cue", "blank.bin"]:
 		DirAccess.remove_absolute(dir.path_join(leaf))
 	DirAccess.remove_absolute(dir)
+
+
+# --- ps2/ ---------------------------------------------------------------------
+#
+# The PlayStation 2's card is the only real FILESYSTEM here — a superblock, a
+# doubly-indirect FAT and 512-byte directory entries two to a cluster — so the
+# cases below are mostly about the parts of that a specification gets wrong.
+#
+# Nothing loads a fixture. The .psu and the .icn are BUILT as the inverse of the
+# parsers and read back, which proves the decoders do the right thing rather
+# than that they still do what they did.
+#
+# The four bytes this suite CANNOT judge are magic, version, card_type and
+# card_flags: PCSX2 never writes a superblock, so those come from the vendored
+# specification and only a console's own BIOS can confirm them. The cases here
+# check that blank_image() writes what it meant to, not that what it meant to
+# write is what Sony wrote.
+
+func _test_ps2_blank() -> void:
+	var img := PS2Card.blank_image()
+	_eq(img.size(), 8650752, "ps2/blank/an 8 MB card is 8,650,752 bytes with ECC")
+	_ok(PS2Card.is_card_image(img), "ps2/blank/it parses as a card")
+	_eq(PS2Card.list_saves(img, false).size(), 0, "ps2/blank/holding nothing")
+	# One cluster short of the usable count: the root directory occupies one and
+	# a save can never have it, which is why total_blocks excludes it too.
+	_eq(PS2Card.free_blocks(img), PS2Card.USABLE_CLUSTERS - 1,
+		"ps2/blank/with everything but the root directory free")
+	_eq(PS2Card.total_blocks(img), PS2Card.free_blocks(img),
+		"ps2/blank/so a fresh card reads as wholly empty")
+
+	# The truncated figure, not the 8135 the superblock allows. Both the console
+	# and PCSX2 report this, and a card offering the extra 136 clusters would
+	# disagree with every number the player is shown.
+	_eq(PS2Card.USABLE_CLUSTERS, 7999, "ps2/blank/free space is the BIOS figure")
+
+	# The derived geometry. PCSX2 computes each of these rather than storing
+	# them, so they are arithmetic and can be checked as such.
+	_eq(PS2Card.ALLOC_OFFSET, 41, "ps2/blank/the first allocatable cluster is 41")
+	_eq(PS2Card.ALLOC_END, 8135, "ps2/blank/8135 allocatable clusters")
+	_eq(PS2Card.BACKUP_BLOCK1, 1023, "ps2/blank/backup block 1 is the last")
+	_eq(PS2Card.BACKUP_BLOCK2, 1022, "ps2/blank/backup block 2 the one before")
+
+	# The superblock as written, read straight back out of page 0.
+	var sb := img.slice(0, PS2Card.PAGE_SIZE)
+	_eq(sb.slice(0, 28).get_string_from_ascii(), "Sony PS2 Memory Card Format ",
+		"ps2/blank/the magic carries its trailing space")
+	_eq(sb[PS2Card.SB_CARD_TYPE], 2, "ps2/blank/card_type says PS2")
+	_eq(sb.decode_u16(PS2Card.SB_PAGE_LEN), 512, "ps2/blank/a page is 512 bytes of data")
+	_eq(sb.decode_u16(PS2Card.SB_PAGES_PER_CLUS), 2, "ps2/blank/two pages to a cluster")
+	_eq(sb.decode_u32(PS2Card.SB_CLUSTERS), 8192, "ps2/blank/8192 clusters on the card")
+	_eq(sb.decode_u32(PS2Card.SB_ROOTDIR), 0, "ps2/blank/the root is at relative cluster 0")
+	_eq(sb.decode_u32(PS2Card.SB_IFC_LIST), 8,
+		"ps2/blank/the one indirect FAT cluster is 8")
+	_eq(sb.decode_u32(PS2Card.SB_IFC_LIST + 4), 0xFFFFFFFF,
+		"ps2/blank/and the other 31 are unused")
+
+	# The root's ".." is the one entry on the card whose mode differs from every
+	# other: it drops MODE_READ and carries 0x2000. A reading of the spec alone
+	# gets this wrong, and it is invisible until a console reads the card.
+	var root_off := (PS2Card.ALLOC_OFFSET * PS2Card.PAGES_PER_CLUSTER) * PS2Card.PAGE_RAW
+	var dot := img.slice(root_off, root_off + PS2Card.ENTRY_SIZE)
+	var dotdot_off := root_off + PS2Card.PAGE_RAW
+	var dotdot := img.slice(dotdot_off, dotdot_off + PS2Card.ENTRY_SIZE)
+	_eq(dot.decode_u32(PS2Card.E_MODE), 0x8427,
+		"ps2/blank/the root's dot is an ordinary directory")
+	_eq(dot.decode_u32(PS2Card.E_LENGTH), 2, "ps2/blank/holding two slots")
+	_eq(dotdot.decode_u32(PS2Card.E_MODE), 0xA426,
+		"ps2/blank/the root's dotdot is the odd one")
+
+
+func _test_ps2_ecc() -> void:
+	# The spare area is derived, so a page of known bytes has a known answer and
+	# a transposed table or a truncated loop shows up here rather than as a card
+	# a console quietly refuses.
+	var zeros := PackedByteArray()
+	zeros.resize(0x80)
+	zeros.fill(0)
+	var e0 := PS2Card.calculate_ecc(zeros, 0)
+	_eq(e0.size(), 3, "ps2/ecc/three bytes per 128-byte chunk")
+	_eq("%02x%02x%02x" % [e0[0], e0[1], e0[2]], "777f7f",
+		"ps2/ecc/an all-zero chunk is the identity")
+
+	# An all-0xFF chunk has the SAME code as an all-zero one, because the table
+	# maps both 0x00 and 0xFF to zero. That is the algorithm, not a bug, and
+	# worth pinning so it is not "fixed" later.
+	var ones := PackedByteArray()
+	ones.resize(0x80)
+	ones.fill(0xFF)
+	_ok(PS2Card.calculate_ecc(ones, 0) == e0,
+		"ps2/ecc/an erased chunk codes the same as a zeroed one")
+
+	# A known vector rather than "it differs": one 0x01 in an otherwise empty
+	# chunk has exactly one answer, so a table read at the wrong offset or a
+	# mask applied to the wrong byte cannot pass this.
+	var single := PackedByteArray()
+	single.resize(0x80)
+	single.fill(0)
+	single[0] = 0x01
+	var e2 := PS2Card.calculate_ecc(single, 0)
+	_eq("%02x%02x%02x" % [e2[0], e2[1], e2[2]], "70007f",
+		"ps2/ecc/a single set byte has one known code")
+
+	# Flipping ONE bit must change the code, or the ECC is not protecting the
+	# page at all — which is what a green "it computed something" would hide.
+	var one_bit := zeros.duplicate()
+	one_bit[7] = 0x01
+	_ok(PS2Card.calculate_ecc(one_bit, 0) != e0, "ps2/ecc/one flipped bit changes it")
+
+	# Every page the formatter writes must carry the code its own data implies.
+	var img := PS2Card.blank_image()
+	var bad := 0
+	for page in [0, PS2Card.IFC_CLUSTER * 2, PS2Card.FIRST_FAT_CLUSTER * 2,
+			PS2Card.ALLOC_OFFSET * 2]:
+		var off: int = int(page) * PS2Card.PAGE_RAW
+		for j in 4:
+			var want := PS2Card.calculate_ecc(img, off + j * 0x80)
+			for k in 3:
+				if img[off + PS2Card.PAGE_SIZE + j * 3 + k] != want[k]:
+					bad += 1
+	_eq(bad, 0, "ps2/ecc/every written page's spare area matches its data")
+
+
+func _test_ps2_geometry() -> void:
+	# One reader serves an ECC image and a no-ECC one, and the stride is measured
+	# rather than assumed — get this wrong and every offset past page 0 is off.
+	var ecc := PackedByteArray()
+	ecc.resize(PS2Card.CARD_SIZE)
+	_eq(PS2Card.spare_size(ecc), 16, "ps2/geometry/a .ps2 has a 16-byte spare area")
+	var no_ecc := PackedByteArray()
+	no_ecc.resize(PS2Card.CARD_SIZE_NO_ECC)
+	_eq(PS2Card.spare_size(no_ecc), 0, "ps2/geometry/a no-ECC image has none")
+	_eq(PS2Card.spare_size(PackedByteArray()), -1, "ps2/geometry/an empty file is neither")
+	var junk := PackedByteArray()
+	junk.resize(1024)
+	_eq(PS2Card.spare_size(junk), -1, "ps2/geometry/nor is something far too small")
+
+
+## A .psu built by hand: the directory header, "." and "..", then one header and
+## its padded payload per file. The inverse of PS2Card.parse_psu.
+func _ps2_psu(dir_name: String, files: Array) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.append_array(_ps2_psu_entry(0x8427, files.size() + 2, dir_name))
+	out.append_array(_ps2_psu_entry(0x8427, 0, "."))
+	out.append_array(_ps2_psu_entry(0x8427, 0, ".."))
+	for f: Dictionary in files:
+		var body: PackedByteArray = f["data"]
+		out.append_array(_ps2_psu_entry(0x8497, body.size(), str(f["name"])))
+		out.append_array(body)
+		var pad := (1024 - (body.size() % 1024)) % 1024
+		if pad > 0:
+			var filler := PackedByteArray()
+			filler.resize(pad)
+			filler.fill(0)
+			out.append_array(filler)
+	return out
+
+
+func _ps2_psu_entry(flags: int, size: int, entry_name: String) -> PackedByteArray:
+	var e := PackedByteArray()
+	e.resize(512)
+	e.fill(0)
+	e.encode_u32(0x00, flags)
+	e.encode_u32(0x04, size)
+	var raw := entry_name.to_ascii_buffer()
+	for i in raw.size():
+		e[0x40 + i] = raw[i]
+	return e
+
+
+func _ps2_body(byte: int, size: int) -> PackedByteArray:
+	var b := PackedByteArray()
+	b.resize(size)
+	b.fill(byte)
+	return b
+
+
+func _test_ps2_roundtrip() -> void:
+	var blank := PS2Card.blank_image()
+	var psu := _ps2_psu("BASLUS-20488SAVE", [
+		{"name": "icon.sys", "data": _ps2_body(0x11, 964)},
+		{"name": "game.dat", "data": _ps2_body(0x22, 3000)},
+	])
+	_ok(PS2Card.is_psu(psu), "ps2/roundtrip/the built container is a psu")
+	_ok(not PS2Card.is_psu(PackedByteArray()), "ps2/roundtrip/an empty file is not")
+
+	var card := PS2Card.insert_save(blank, psu)
+	_ok(not card.is_empty(), "ps2/roundtrip/it goes onto a blank card")
+	_ok(PS2Card.is_card_image(card), "ps2/roundtrip/which still parses afterwards")
+
+	var saves := PS2Card.list_saves(card, false)
+	_eq(saves.size(), 1, "ps2/roundtrip/and lists one save")
+	if saves.size() != 1:
+		return
+	_eq(str(saves[0]["name"]), "BASLUS-20488SAVE", "ps2/roundtrip/under its own name")
+	# A PS2 save directory is the game's serial behind a two-letter region tag,
+	# so the code is found by SHAPE and the tag is not mistaken for part of it.
+	_eq(str(saves[0]["serial"]), "SLUS-20488", "ps2/roundtrip/with a serial read by shape")
+
+	# Two files of 964 and 3000 bytes are one and three clusters, and the save's
+	# own directory of four slots is two more.
+	_eq(int(saves[0]["blocks"]), 6, "ps2/roundtrip/sized as its subtree")
+
+	# The card spends SEVEN, not six: the root directory had room for two slots
+	# and had to grow a cluster to hold the new entry. Directory overhead is real
+	# and a save's own size is not the whole cost of putting it on a card.
+	_eq(PS2Card.free_blocks(blank) - PS2Card.free_blocks(card), 7,
+		"ps2/roundtrip/costing its six clusters plus the root's growth")
+
+	var handle := PS2Card.block_of(card, "BASLUS-20488SAVE")
+	_ok(handle >= 0, "ps2/roundtrip/and has a handle")
+	var back := PS2Card.extract_save(card, handle)
+	_ok(not back.is_empty(), "ps2/roundtrip/which extracts")
+	_eq(back.size(), psu.size(), "ps2/roundtrip/to the same size it went in")
+	_ok(back == psu, "ps2/roundtrip/and byte for byte the same container")
+
+	# A save's digest must be a fact about the SAVE, not about where on the card
+	# it happened to sit. Putting another save in first moves this one's
+	# clusters; what comes back out must not change.
+	var other := PS2Card.insert_save(blank, _ps2_psu("BASLUS-99999OTHER", [
+		{"name": "x.dat", "data": _ps2_body(0x33, 700)}]))
+	var both := PS2Card.insert_save(other, psu)
+	_ok(not both.is_empty(), "ps2/roundtrip/a second save fits too")
+	var moved := PS2Card.extract_save(both, PS2Card.block_of(both, "BASLUS-20488SAVE"))
+	_ok(moved == psu, "ps2/roundtrip/and the first extracts identically from elsewhere")
+
+	# Refusals.
+	_ok(PS2Card.insert_save(card, psu).is_empty(),
+		"ps2/roundtrip/the same name twice is refused")
+	_ok(PS2Card.insert_save(blank, PackedByteArray()).is_empty(),
+		"ps2/roundtrip/so is an empty container")
+	_ok(PS2Card.insert_save(blank, _ps2_psu("HUGE", [
+		{"name": "big.dat", "data": _ps2_body(0x44, 9000000)}])).is_empty(),
+		"ps2/roundtrip/and one that cannot fit")
+
+
+func _test_ps2_delete() -> void:
+	var blank := PS2Card.blank_image()
+	var psu := _ps2_psu("BASLUS-20488SAVE", [
+		{"name": "game.dat", "data": _ps2_body(0x22, 2048)}])
+	var card := PS2Card.insert_save(blank, psu)
+	var handle := PS2Card.block_of(card, "BASLUS-20488SAVE")
+	var after := PS2Card.delete_save(card, handle)
+	_ok(not after.is_empty(), "ps2/delete/a save can be removed")
+	_ok(PS2Card.is_card_image(after), "ps2/delete/and the card still parses")
+	_eq(PS2Card.list_saves(after, false).size(), 0, "ps2/delete/and stops being listed")
+
+	# Every cluster the save held comes back. The one the root grew by does not,
+	# and should not: the root keeps the slot so the next save can reuse it.
+	_eq(PS2Card.free_blocks(after), PS2Card.free_blocks(blank) - 1,
+		"ps2/delete/with every cluster of the save back")
+
+	# The slot itself stays, with MODE_USED cleared. That is what a deleted entry
+	# looks like on a real card, and the root's length still counts it — which is
+	# why a directory's length is a capacity and never a file count.
+	var root_off := (PS2Card.ALLOC_OFFSET * PS2Card.PAGES_PER_CLUSTER) * PS2Card.PAGE_RAW
+	var head := after.slice(root_off, root_off + PS2Card.ENTRY_SIZE)
+	_eq(head.decode_u32(PS2Card.E_LENGTH), 3,
+		"ps2/delete/the root still has three slots")
+
+	# And the room is genuinely reusable, not merely counted as free.
+	var again := PS2Card.insert_save(after, psu)
+	_ok(not again.is_empty(), "ps2/delete/the freed room takes a save again")
+	_eq(PS2Card.list_saves(again, false).size(), 1, "ps2/delete/which lists")
+	var head2 := again.slice(root_off, root_off + PS2Card.ENTRY_SIZE)
+	_eq(head2.decode_u32(PS2Card.E_LENGTH), 3,
+		"ps2/delete/reusing the dead slot rather than growing the root")
+
+	_ok(PS2Card.delete_save(card, 99).is_empty(), "ps2/delete/an absent slot is refused")
+	_ok(PS2Card.delete_save(card, 0).is_empty(),
+		"ps2/delete/and so is the root's own dot entry")
+
+
+func _test_ps2_reject() -> void:
+	# Cross-family, both ways. A save is just bytes with a name, and splicing a
+	# foreign one into a card corrupts the card.
+	var ps2 := PS2Card.blank_image()
+	var ps1 := PS1Card.blank_image()
+	var gc := GCCard.blank_image()
+	_ok(not PS2Card.is_card_image(ps1), "ps2/reject/a PlayStation card is not a PS2 card")
+	_ok(not PS2Card.is_card_image(gc), "ps2/reject/nor is a GameCube one")
+	_ok(not PS1Card.is_card_image(ps2), "ps2/reject/and a PS2 card is not a PlayStation one")
+	_ok(not GCCard.is_card_image(ps2), "ps2/reject/nor a GameCube one")
+
+	var psu := _ps2_psu("BASLUS-20488SAVE", [
+		{"name": "game.dat", "data": _ps2_body(0x22, 1024)}])
+	_ok(not PS1Card.is_mcs(psu), "ps2/reject/a psu is not an mcs")
+	_ok(not PS2Card.is_psu(ps1), "ps2/reject/and a card image is not a psu")
+
+	# A card whose magic is right but whose type is not must still be refused.
+	var wrong := ps2.duplicate()
+	wrong[PS2Card.SB_CARD_TYPE] = 1
+	_ok(not PS2Card.is_card_image(wrong), "ps2/reject/a card_type that is not 2")
+	var no_magic := ps2.duplicate()
+	no_magic[0] = 0x58
+	_ok(not PS2Card.is_card_image(no_magic), "ps2/reject/and a broken magic")
+
+
+func _test_ps2_fat() -> void:
+	# The FAT is doubly indirect and its entries sit 256 to a cluster, so a save
+	# long enough to cross that boundary walks a different FAT cluster than the
+	# one it began in. PCSX2's own code indexes straight through the boundary by
+	# exploiting contiguity, which is exactly what a literal transliteration gets
+	# wrong — so a save past entry 255 is the case that catches it.
+	var blank := PS2Card.blank_image()
+	var big := _ps2_psu("BASLUS-30000BIG", [
+		{"name": "big.dat", "data": _ps2_body(0x55, 300 * 1024)}])
+	var card := PS2Card.insert_save(blank, big)
+	_ok(not card.is_empty(), "ps2/fat/a 300-cluster save fits")
+	# 300 clusters of payload, two for its own directory, one for the root's.
+	_eq(PS2Card.free_blocks(blank) - PS2Card.free_blocks(card), 303,
+		"ps2/fat/and costs its 300 clusters plus both directories")
+	var back := PS2Card.extract_save(card, PS2Card.block_of(card, "BASLUS-30000BIG"))
+	_ok(back == big, "ps2/fat/a chain across the FAT boundary reads back whole")

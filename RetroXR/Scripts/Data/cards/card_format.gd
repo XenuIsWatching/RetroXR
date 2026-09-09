@@ -49,6 +49,13 @@ func unit_noun() -> String:
 	return "block"
 
 
+## The same unit in the plural. Almost always the singular plus an s, which is
+## why the usage line used to just append one — but the PlayStation 2 counts in
+## KB, and "7999 KBs" is not a thing anyone has written.
+func unit_plural() -> String:
+	return unit_noun() + "s"
+
+
 ## What the OBJECT is called, for the heading over its save list. Distinct from
 ## label(), which names the console family — a panel headed "PlayStation" would
 ## be naming the machine rather than the thing in your hand. Only the N64's

@@ -131,7 +131,8 @@ static func restore_blocker(fmt: CardFormat, s: Dictionary,
 		return "already on this card"
 	var blocks := blocks_of(fmt, s)
 	if blocks > free:
-		return "needs %d %ss, %d free" % [blocks, fmt.unit_noun(), free]
+		var unit := fmt.unit_noun() if blocks == 1 else fmt.unit_plural()
+		return "needs %d %s, %d free" % [blocks, unit, free]
 	return ""
 
 

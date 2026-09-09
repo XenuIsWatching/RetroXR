@@ -39,6 +39,7 @@ const N64_PAD_SCENE         := preload("res://Scenes/Objects/controllers/n64/n64
 const CONTROLLER_PAK_SCENE  := preload("res://Scenes/Objects/controllers/n64/controller_pak.tscn")
 const MEMCARD_SCENE         := preload("res://Scenes/Objects/media/memory_card.tscn")
 const GC_MEMCARD_SCENE      := preload("res://Scenes/Objects/media/gc_memory_card.tscn")
+const PS2_MEMCARD_SCENE     := preload("res://Scenes/Objects/media/ps2_memory_card.tscn")
 const TAPE_SCENE            := preload("res://Scenes/Objects/media/vcr_tape.tscn")
 const DVD_DISC_SCENE        := preload("res://Scenes/Objects/media/dvd_disc.tscn")
 const AUDIO_DISC_SCENE      := preload("res://Scenes/Objects/media/audio_disc.tscn")
@@ -894,6 +895,7 @@ func _give_to_grabber(grabber: Node, obj: XRToolsPickable) -> void:
 func _card_scene_for(family: String) -> PackedScene:
 	match family:
 		"gamecube": return GC_MEMCARD_SCENE
+		"playstation2": return PS2_MEMCARD_SCENE
 		# Shelved like a memory card, and deliberately not one: a Controller Pak
 		# plugs into a CONTROLLER, so it is an N64Pak rather than a MemoryCard and
 		# every caller here reaches it by property name instead of by class.

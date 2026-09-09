@@ -98,6 +98,13 @@ func _unit() -> String:
 	return _fmt.unit_noun() if _fmt != null else "block"
 
 
+## The unit named for a count, so a family whose plural is not "+s" reads right.
+func _units(n: int) -> String:
+	if _fmt == null:
+		return "block" if n == 1 else "blocks"
+	return _fmt.unit_noun() if n == 1 else _fmt.unit_plural()
+
+
 func _process(delta: float) -> void:
 	if _animated.is_empty():
 		return
@@ -193,8 +200,8 @@ func populate(card_name: String, saves: Array, free: int, total: int,
 	if _title != null and fmt != null and not fmt.device_noun().is_empty():
 		_title.text = fmt.device_noun()
 
-	_usage.text = "%d of %d %ss used   ·   %d save%s" \
-		% [maxi(total - free, 0), total, fmt.unit_noun(),
+	_usage.text = "%d of %d %s used   ·   %d save%s" \
+		% [maxi(total - free, 0), total, fmt.unit_plural(),
 			saves.size(), "" if saves.size() == 1 else "s"]
 	# A card being played must not be edited, and restoring into it is an edit.
 	_restore_btn.visible = show_restore_action and sync_available \
@@ -291,7 +298,7 @@ func _restore_row(s: Dictionary) -> Control:
 
 	var blocks: int = int(s.get("blocks", 1))
 	var sub := Label.new()
-	sub.text = "%d %s%s%s" % [blocks, _unit(), "" if blocks == 1 else "s",
+	sub.text = "%d %s%s" % [blocks, _units(blocks),
 		"" if reason.is_empty() else "   ·   " + reason]
 	sub.add_theme_font_size_override("font_size", 15)
 	sub.add_theme_color_override("font_color", COLOR_DIM)
@@ -366,9 +373,8 @@ func _make_row(s: Dictionary) -> Control:
 
 	var sub := Label.new()
 	var blocks: int = int(s.get("blocks", 1))
-	sub.text = "%s   ·   %d %s%s" \
-		% [str(s.get("serial", "")), blocks, _unit(),
-			"" if blocks == 1 else "s"]
+	sub.text = "%s   ·   %d %s" \
+		% [str(s.get("serial", "")), blocks, _units(blocks)]
 	sub.add_theme_font_size_override("font_size", 15)
 	sub.add_theme_color_override("font_color", COLOR_DIM)
 	col.add_child(sub)

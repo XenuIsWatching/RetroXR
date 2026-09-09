@@ -124,10 +124,11 @@ func _card_row(card: Dictionary) -> Control:
 	var saves := int(card["saves"])
 	var free := int(card["free"])
 	var spawn_btn := MenuStyle.row_button("")
-	var unit := _fmt().unit_noun()
-	spawn_btn.text = "  +  %s      %d save%s · %d %s%s free%s" \
+	var fmt := _fmt()
+	var unit := fmt.unit_noun() if free == 1 else fmt.unit_plural()
+	spawn_btn.text = "  +  %s      %d save%s · %d %s free%s" \
 		% [card["label"], saves, "" if saves == 1 else "s",
-		   free, unit, "" if free == 1 else "s", _where(card, saves)]
+		   free, unit, _where(card, saves)]
 	spawn_btn.pressed.connect(func() -> void:
 		spawn_requested.emit("memcard:%s:%s" % [family, card["card_id"]]))
 	row.add_child(spawn_btn)

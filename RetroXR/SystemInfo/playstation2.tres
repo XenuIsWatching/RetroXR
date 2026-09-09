@@ -8,5 +8,7 @@ systemid = "playstation2"
 display_name = "Sony PlayStation 2"
 native_ports = 2
 media_type = 1
+card_slots = 2
+card_family = "playstation2"
 supports_multitap = true
 multitap_ports = 8

@@ -1,0 +1,107 @@
+[gd_scene load_steps=11 format=3 uid="uid://ps2_memory_card_001"]
+
+[ext_resource type="Script" path="res://Scripts/Objects/media/memory_card.gd" id="1_memcardscript"]
+[ext_resource type="Script" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+
+; 41.5 x 8.5 x 55 mm — a Sony PS2 8 MB Memory Card (SCPH-10020). Against the two
+; cards already in the room: wider and appreciably THICKER than the PlayStation's
+; 38.2 x 7.4 x 56.0, and thicker and longer than the GameCube's 43 x 6 x 51. The
+; thickness is the tell — a PS2 card is the chunky one of the three.
+;
+; Procedural boxes, like the GameCube's and unlike the PlayStation's, which wears
+; a real model. A PS2 card GLB would have to be one this project has the right to
+; ship, and the shape and colour are enough to tell them apart meanwhile.
+;
+; Same axis convention as both existing cards: the LONG axis is Z, the way the
+; card goes into the slot. It enters on its 41.5 mm edge and its 55 mm length
+; points out of the machine at you.
+[sub_resource type="BoxShape3D" id="BoxShape3D_card"]
+size = Vector3(0.0415, 0.0085, 0.055)
+
+; The LOOSE pointer target: the card plus 10 mm on every face, so a small flat
+; object is still findable on a shelf. memory_card.gd swaps this for a box the
+; size of the card itself while a console is holding it, reading both sizes off
+; the shapes here.
+[sub_resource type="BoxShape3D" id="BoxShape3D_pointer"]
+size = Vector3(0.0615, 0.0285, 0.075)
+
+[sub_resource type="BoxMesh" id="BoxMesh_card"]
+size = Vector3(0.0415, 0.0085, 0.055)
+
+; Sony's PS2 cards were a dark slate, cooler and a shade lighter than the
+; GameCube's near-black beside it, and nothing like the PlayStation's light grey.
+[sub_resource type="StandardMaterial3D" id="Mat_card"]
+albedo_color = Color(0.17, 0.18, 0.21, 1.0)
+roughness = 0.55
+
+; The recessed label plate on the top face, where the printed sticker sits.
+[sub_resource type="BoxMesh" id="BoxMesh_plate"]
+size = Vector3(0.032, 0.0008, 0.024)
+
+[sub_resource type="StandardMaterial3D" id="Mat_plate"]
+albedo_color = Color(0.30, 0.31, 0.34, 1.0)
+roughness = 0.7
+
+; The dark band across the connector end. Sized to sit inside the 41.5 mm width.
+[sub_resource type="BoxMesh" id="BoxMesh_stripe"]
+size = Vector3(0.030, 0.0015, 0.007)
+
+[sub_resource type="StandardMaterial3D" id="Mat_stripe"]
+albedo_color = Color(0.07, 0.07, 0.08, 1.0)
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_card"]
+bounce = 0.0
+friction = 0.8
+
+[node name="MemoryCard" type="RigidBody3D" groups=["memory_card"]]
+collision_layer = 4
+collision_mask = 196613
+physics_material_override = SubResource("PhysMat_card")
+linear_damp = 5.0
+angular_damp = 8.0
+freeze_mode = 1
+script = ExtResource("1_memcardscript")
+family = "playstation2"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_card")
+
+[node name="CardMesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_card")
+surface_material_override/0 = SubResource("Mat_card")
+
+[node name="PlateMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.00425, 0.008)
+mesh = SubResource("BoxMesh_plate")
+surface_material_override/0 = SubResource("Mat_plate")
+
+[node name="StripeMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.00475, -0.0235)
+mesh = SubResource("BoxMesh_stripe")
+surface_material_override/0 = SubResource("Mat_stripe")
+
+; Toward the OUTER end, on the label plate, so a seated card's name is still
+; readable with part of its length inside the console. 113 px at this pixel_size
+; is 34 mm, which sits inside the 41.5 mm face.
+[node name="CardLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.0049, 0.008)
+modulate = Color(0.88, 0.88, 0.88, 1)
+text = "MEMORY CARD"
+pixel_size = 0.0003
+font_size = 16
+outline_size = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+max_lines_visible = 2
+width = 113.0
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("BoxShape3D_pointer")
