@@ -20,6 +20,9 @@ const OUT_DIR := "res://probe_out"
 const PANEL := preload("res://Scenes/UI/memory_card_2d.tscn")
 
 var _card_path := ""
+## How many frames the icon gallery captures. A full turn at IDLE_SPIN_DEG needs
+## a few hundred; the default is enough to see that it moves.
+var _anim_frames := 48
 
 
 func _ready() -> void:
@@ -27,7 +30,9 @@ func _ready() -> void:
 		var s := str(a)
 		if s.begins_with("--card="):
 			_card_path = s.substr("--card=".length())
-	get_tree().create_timer(60.0).timeout.connect(func() -> void:
+		elif s.begins_with("--anim-frames="):
+			_anim_frames = maxi(1, int(s.substr("--anim-frames=".length())))
+	get_tree().create_timer(600.0).timeout.connect(func() -> void:
 		print("[probe] TIMEOUT")
 		get_tree().quit(1))
 	_run.call_deferred()
@@ -97,6 +102,11 @@ func _gallery(saves: Array) -> void:
 	for s: Dictionary in saves:
 		if not (s.get("icon_model", {}) as Dictionary).is_empty():
 			with_icons.append(s)
+	# Icons that MORPH first. Most saves carry a single shape and only turn, so a
+	# grid filled in card order shows nothing of the animation path at all.
+	with_icons.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int((a["icon_model"] as Dictionary)["shape_count"]) \
+			> int((b["icon_model"] as Dictionary)["shape_count"]))
 	if with_icons.is_empty():
 		return
 	const CELL := 190
@@ -132,8 +142,7 @@ func _gallery(saves: Array) -> void:
 		col.add_child(lab)
 
 	# A sequence, because several of these morph and a still cannot show it.
-	const FRAMES := 48
-	for f in FRAMES:
+	for f in _anim_frames:
 		for i in 2:
 			await get_tree().process_frame
 		await RenderingServer.frame_post_draw
@@ -141,7 +150,7 @@ func _gallery(saves: Array) -> void:
 		img.convert(Image.FORMAT_RGB8)
 		img.save_png("%s/ps2_icons_%03d.png" % [OUT_DIR, f])
 	print("[probe] wrote %d gallery frames  %dx%d"
-		% [FRAMES, sv.size.x, sv.size.y])
+		% [_anim_frames, sv.size.x, sv.size.y])
 
 
 func _card() -> PackedByteArray:
