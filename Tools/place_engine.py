@@ -4,7 +4,7 @@ The release workflow installs Godot's stock 4.7.2 Android build template and
 exports with it, so an engine patch only ships if its libgodot_android.so
 replaces the stock one inside godot-lib.template_<target>.aar first. The
 prebuilt library lives under Tools/engine/ (Git LFS) and is built from the
-`retroxr/discardable-4.7.2` branch of the engine: 4.7.2-stable plus the three
+`retroxr-4.7.2` branch of the engine: 4.7.2-stable plus the three
 patches in docs/godot-4.7.2-*.patch. Rebuild it whenever those change.
 
     python Tools/place_engine.py --target release      # CI, before --export-release

@@ -126,7 +126,8 @@ a small fix: a boot deadlock in the Forward Mobile shader lock scope, colour and
 depth buffers stored every frame though nothing reads them, and the swapchain
 loaded into tile memory every bin though the pass overwrites it. The fixes are
 `docs/godot-4.7.2-*.patch`, applied on the engine branch
-`retroxr/discardable-4.7.2` (4.7.2-stable + all three) in `~/godot`. The
+`retroxr-4.7.2` (4.7.2-stable + all three) in `~/godot`, pushed to
+https://github.com/XenuIsWatching/godot/tree/retroxr-4.7.2. The
 prebuilt arm64 library from that branch lives under `Tools/engine/` (Git LFS)
 and `Tools/place_engine.py` swaps it into the Android build template's AAR:
 
