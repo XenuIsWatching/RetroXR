@@ -4,8 +4,8 @@
 ## the GL/Vulkan readback rather than to anything in the room.
 ##
 ## Written to settle a suspected GLES2-vs-GLES3 black screen on Quest, where the
-## only way in is adb: NetworkManager boots this scene when user://glprobe.cfg
-## exists (one --glprobe-* per line), the same hook shape as netplay_spike. It
+## only way in is adb: the args are read from user://glprobe.cfg when it exists
+## (one --glprobe-* per line), the same shape as netplay_spike's. It
 ## found the context type was innocent — mupen64plus_next_gles2 draws nothing
 ## while parallel_n64, also GLES2, renders fine in the same context.
 ##
@@ -28,7 +28,12 @@ var out_prefix := ""
 var hwapi := ""
 
 ## retro_hw_context_type values, for SetPreferredHwRender.
-const HW_API := {"opengl": 1, "glcore": 3, "vulkan": 6, "d3d11": 7, "d3d12": 9}
+## "gles3" (4) is the one Android actually uses — AppPrefs maps its "opengl"
+## choice to it there. Without it, asking for "opengl" (1) on Android is REFUSED
+## by the bridge and the core falls back to OPENGLES_VERSION 3.2, a context the
+## room never creates; Dolphin then died with SIGILL on the Quest. Probe the
+## context the player gets, not one nearby.
+const HW_API := {"opengl": 1, "glcore": 3, "gles3": 4, "vulkan": 6, "d3d11": 7, "d3d12": 9}
 
 ## Sample points (seconds since StartContent). A N64 core spends the first
 ## seconds in the boot/IPL sequence, which is legitimately black — one late
@@ -38,7 +43,9 @@ const HW_API := {"opengl": 1, "glcore": 3, "vulkan": 6, "d3d11": 7, "d3d12": 9}
 ## reported, and the same game renders fine in the room within ~90 s of the core
 ## starting. A window that ends before first paint reports FAIL for a core that
 ## works.
-const SAMPLE_AT := [4.0, 8.0, 14.0, 22.0, 35.0, 50.0, 70.0, 95.0]
+## Overridable with --glprobe-at=12,60,140 — a title screen is not always inside
+## the default window. Mario Party 6 is still in its intro storybook at 95 s.
+var SAMPLE_AT := [4.0, 8.0, 14.0, 22.0, 35.0, 50.0, 70.0, 95.0]
 
 var _lib: Node = null
 var _screen: MeshInstance3D = null
@@ -51,7 +58,7 @@ func _ready() -> void:
 	# `adb run-as` cannot write user://, and release is the only build that runs
 	# properly on the Quest. Deleted on sight either way, so a crash mid-run
 	# cannot wedge the app into the probe.
-	for cfg_path: String in ["user://glprobe.cfg", NetworkManager.GLPROBE_EXTERNAL_CFG]:
+	for cfg_path: String in ["user://glprobe.cfg", "/sdcard/Android/data/com.xenu.retroxr/files/glprobe.cfg"]:
 		if not FileAccess.file_exists(cfg_path):
 			continue
 		var f := FileAccess.open(cfg_path, FileAccess.READ)
@@ -72,6 +79,13 @@ func _ready() -> void:
 			out_prefix = arg.trim_prefix("--glprobe-out=")
 		elif arg.begins_with("--glprobe-hwapi="):
 			hwapi = arg.trim_prefix("--glprobe-hwapi=").to_lower()
+		elif arg.begins_with("--glprobe-at="):
+			var at: Array = []
+			for s: String in arg.trim_prefix("--glprobe-at=").split(",", false):
+				at.append(float(s.strip_edges()))
+			at.sort()
+			if not at.is_empty():
+				SAMPLE_AT = at
 	if root_dir.is_empty():
 		root_dir = CoreDownloadManager.default_core_root()
 	if out_prefix.is_empty():
@@ -138,13 +152,11 @@ func _run() -> void:
 
 func _sample(at: float, elapsed: float) -> void:
 	var frames: int = int(_lib.GetFrameCount()) if _lib.has_method("GetFrameCount") else -1
-	var mat := _screen.get_surface_override_material(0)
-	if mat == null or not (mat is StandardMaterial3D):
-		print("[glprobe] t=%.1f (%.1f) frames=%d — no core material on the mesh yet" % [at, elapsed, frames])
-		return
-	var tex: Texture2D = (mat as StandardMaterial3D).get_texture(BaseMaterial3D.TEXTURE_EMISSION)
+	# The extension no longer installs an emissive material on a mesh handed to
+	# it — a display asks for the picture each frame instead. Ask the same way.
+	var tex: Texture2D = _lib.GetVideoTexture() as Texture2D
 	if tex == null:
-		print("[glprobe] t=%.1f (%.1f) frames=%d — material has no emission texture yet" % [at, elapsed, frames])
+		print("[glprobe] t=%.1f (%.1f) frames=%d — core has no picture yet" % [at, elapsed, frames])
 		return
 	var img := tex.get_image()
 	if img == null or img.is_empty():

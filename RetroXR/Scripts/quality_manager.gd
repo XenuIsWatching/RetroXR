@@ -391,7 +391,7 @@ func _probe_boot_scene(path: String) -> void:
 	get_tree().change_scene_to_file.call_deferred(path)
 
 
-## On-device QA hook, in the shape of spike.cfg and glprobe.cfg: a
+## On-device QA hook: a
 ## `vrsprobe.cfg` applies a Foveation level and/or Eye Buffer scale part way
 ## into a session, so the mid-session path can be exercised over adb with
 ## nobody in the headset to work the graphics menu.

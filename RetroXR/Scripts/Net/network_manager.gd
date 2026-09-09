@@ -17,9 +17,6 @@ const MAX_PLAYERS := 8
 ## Where the GL/Vulkan video probe's config is accepted from on device, beside
 ## user://. Spelled out rather than derived, the same way rom_library.gd spells
 ## out each of its roots.
-const GLPROBE_EXTERNAL_CFG := "/sdcard/Android/data/com.xenu.retroxr/files/glprobe.cfg"
-const MARIOPROBE_EXTERNAL_CFG := "/sdcard/Android/data/com.xenu.retroxr/files/marioprobe.cfg"
-const RBCOST_EXTERNAL_CFG := "/sdcard/Android/data/com.xenu.retroxr/files/rbcost.cfg"
 ## 2: systems are replicated by model_id rather than by a (systemid, variant)
 ## pair. 3 added netplay. 4 made linked sessions carry a specification per
 ## machine. 5 added per-machine aux/keyboard blocks and machine-addressed disc
@@ -160,72 +157,7 @@ func _ready() -> void:
 	call_deferred("_parse_cmdline")
 
 
-## Swap the room out for a probe scene, once the room is actually up.
-##
-## `_parse_cmdline` runs from a `call_deferred` in `_ready`, which is early
-## enough that MainScene is still assembling itself — and tearing a half-built
-## XR scene down took the render thread with it (SIGSEGV on VkThread, preceded
-## by a bare "data.tree is null" from a node being freed mid-setup). Letting the
-## room finish first costs a second and makes the teardown an ordinary one.
-func _swap_in_probe(path: String) -> void:
-	for _i in range(120):
-		await get_tree().process_frame
-	get_tree().change_scene_to_file(path)
-
-
 func _parse_cmdline() -> void:
-	# On-device QA hook: a user://spike.cfg boots straight into the netplay
-	# determinism spike (used to vet cores over adb on Quest, where there are
-	# no command-line args). The spike deletes the cfg so the next launch is
-	# normal even if the run crashes mid-way. NB: ResourceLoader.exists, not
-	# FileAccess — .tscn paths are remapped inside exported pcks.
-	if FileAccess.file_exists("user://spike.cfg") \
-			and ResourceLoader.exists("res://Tools/netplay/netplay_spike.tscn"):
-		print("[NetworkManager] spike.cfg found — launching netplay spike")
-		_swap_in_probe("res://Tools/netplay/netplay_spike.tscn")
-		return
-	# Same hook for the hardware-render video probe (GLES2/GLES3 black-screen
-	# hunt). The probe deletes the cfg itself, like the spike.
-	# Accepted from the EXTERNAL files dir as well as user://. A release build is
-	# not debuggable, so `adb run-as` cannot reach user:// at all — and a release
-	# build is the only one that runs properly on the Quest. Taking the cfg from
-	# /sdcard, which adb can write unaided, is what makes this probe usable on the
-	# build that actually ships.
-	if (FileAccess.file_exists("user://glprobe.cfg") \
-			or FileAccess.file_exists(GLPROBE_EXTERNAL_CFG)) \
-			and ResourceLoader.exists("res://Tools/cores/gl_video_probe.tscn"):
-		print("[NetworkManager] glprobe.cfg found — launching GL video probe")
-		get_tree().change_scene_to_file("res://Tools/cores/gl_video_probe.tscn")
-		return
-	# Same hook for the rollback cost probe. Whether rollback is affordable is a
-	# property of the machine, so the answer only counts when taken here rather
-	# than on a desktop. Read from /sdcard too, like the GL probe: a release
-	# build is the only one that runs properly on a Quest and `run-as` cannot
-	# reach its user:// at all.
-	if (FileAccess.file_exists("user://rbcost.cfg") \
-			or FileAccess.file_exists(RBCOST_EXTERNAL_CFG)) \
-			and ResourceLoader.exists("res://Tools/netplay/rollback_cost_probe.tscn"):
-		print("[NetworkManager] rbcost.cfg found — launching rollback cost probe")
-		_swap_in_probe("res://Tools/netplay/rollback_cost_probe.tscn")
-		return
-	# Same hook for the GBA link probe, which is how the multiplayer grain is
-	# vetted on the machine that actually struggles with it: four cabled cores is
-	# a Quest problem before it is a desktop one. Read from /sdcard too, like the
-	# GL and rollback probes, and the probe deletes the cfg itself.
-	if (FileAccess.file_exists("user://marioprobe.cfg") \
-			or FileAccess.file_exists(MARIOPROBE_EXTERNAL_CFG)) \
-			and ResourceLoader.exists("res://Tools/link/mario_link_probe.tscn"):
-		print("[NetworkManager] marioprobe.cfg found — launching GBA link probe")
-		_swap_in_probe("res://Tools/link/mario_link_probe.tscn")
-		return
-	# Same hook for menu timings. Deleted on sight, so a crash mid-run cannot
-	# wedge the app into the probe.
-	if FileAccess.file_exists("user://perfprobe.cfg") \
-			and ResourceLoader.exists("res://Tools/perf/menu_perf_probe.tscn"):
-		print("[NetworkManager] perfprobe.cfg found — launching menu perf probe")
-		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://perfprobe.cfg"))
-		get_tree().change_scene_to_file("res://Tools/perf/menu_perf_probe.tscn")
-		return
 	var args := OS.get_cmdline_user_args()
 	var do_host := false
 	var do_host_online := false

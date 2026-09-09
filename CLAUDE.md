@@ -1248,14 +1248,20 @@ adb shell monkey -p com.xenu.retroxr 1                           # GodotApp isn'
   `buildbot.libretro.com/nightly/android/latest/arm64-v8a/<core>_libretro_android.so.zip`.
 
 ### Running the netplay determinism spike on-device
-NetworkManager boots `Tools/netplay/netplay_spike.tscn` at startup when `user://spike.cfg`
-exists (the spike deletes the cfg immediately, so a crash can't wedge the app):
+`Tools/netplay/netplay_spike.tscn` reads its `--spike-*` args from `user://spike.cfg`
+(one per line) when there are no command-line args, and deletes the cfg immediately so
+a crash can't wedge the app. Nothing boots the probe automatically any more — the cfg-file
+hooks in NetworkManager and the `run/main_scene.<feature>` probe presets were removed
+2026-09-09 — so the scene has to be the one launched (a probe-only export, or a desktop run).
 ```bash
-printf -- '--spike-core=fceumm\n--spike-rom=/sdcard/Android/data/com.xenu.retroxr/files/roms/nes/ROM.nes\n--spike-root=/data/user/0/com.xenu.retroxr/files/libretro\n' > spike.cfg
+printf -- '--spike-core=fceumm
+--spike-rom=/sdcard/Android/data/com.xenu.retroxr/files/roms/nes/ROM.nes
+--spike-root=/data/user/0/com.xenu.retroxr/files/libretro
+' > spike.cfg
 adb push spike.cfg /data/local/tmp/
 adb shell "cat /data/local/tmp/spike.cfg | run-as com.xenu.retroxr sh -c 'cat > files/spike.cfg'"
 ```
-Then launch (above) and compare the `[crc]` lines against a Windows spike run.
+Then compare the `[crc]` lines against a Windows spike run.
 
 ### Log capture
 The logcat ring buffer rotates away in **under a minute** (VrApi spam) — poll-grepping
