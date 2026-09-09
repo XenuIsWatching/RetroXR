@@ -49,7 +49,9 @@ if is_android:
     # from the LibVLC Android AAR org.videolan.android:libvlc-all) lives in the
     # shipped output dir and is bundled into the APK via the .gdextension
     # [dependencies]; link the extension against that same copy (no duplicate).
-    env.Append(LIBPATH=[output_dir.lstrip('#') + '/'])
+    # Keep the '#': it anchors the path to the SConstruct dir. Stripped, it
+    # resolves from the Temp variant dir and lands on vlc-godot/RetroXR/...
+    env.Append(LIBPATH=[output_dir])
     env.Append(LIBS=['vlc'])
 
 sources = Glob('src/*.cpp')
