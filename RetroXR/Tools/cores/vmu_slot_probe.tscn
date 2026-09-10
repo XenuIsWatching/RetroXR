@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://vmu_slot_probe_001"]
+
+[ext_resource type="Script" path="res://Tools/cores/vmu_slot_probe.gd" id="1_vmuslotprobe"]
+
+[node name="VmuSlotProbe" type="Node"]
+script = ExtResource("1_vmuslotprobe")
