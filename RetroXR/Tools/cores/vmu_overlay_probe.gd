@@ -22,6 +22,32 @@
 ## frame with nothing drawn into it, so a probe that only checks the size passes
 ## on a blank image. That trap cost the Super Game Boy probe a round trip.
 ##
+## MEASURED 2026-09-09, Flycast 5aa091f, 640x480 output, across Upper Left 1x,
+## Upper Left 4x and Lower Right 2x. The rule is exact:
+##
+##     w = 48 * mult          h = 32 * mult
+##     x = 8                  when the position is *Left
+##       = frame_w - 8 - w    when it is *Right
+##     y = 8                  when the position is Upper*
+##       = frame_h - 8 - h    when it is Lower*
+##
+## The inset is a constant 8 px from the chosen corner in both axes, at every
+## position and every multiplier, and the panel is a whole multiple of the LCD to
+## the pixel (24576 = 192x128, 1536 = 48x32, 6144 = 96x64). So a source_rect can
+## be derived from the live texture size alone — which it must be, since the
+## frame's size follows the core's resolution.
+##
+## Two gates have to be open before any of this appears, and neither is obvious:
+##
+##   1. A CONTROLLER must be announced at load. A VMU is in the controller's
+##      expansion socket, so no pad means no socket. RetroXR skipped announcing a
+##      plain joypad until this probe found it.
+##   2. flycast reads the per-slot device options ONLY when `!first_startup`, so
+##      the load pass leaves MapleExpansionDevices at its static default and
+##      creates no VMU. A SECOND update_variables() does read them, and the
+##      frontend triggers one by marking a variable updated — SetCoreOption is
+##      enough. Without that nudge there is a controller and still no card.
+##
 ## Writes the player's real flycast.opt, and restores it on the way out.
 extends Node
 
@@ -155,6 +181,16 @@ func _measure() -> void:
 	print("[ovl] port 0 device=%d set BEFORE load" % device)
 	_lib.StartContent(_root, core, rom)
 
+	# flycast reads the per-slot device options ONLY when `!first_startup`, so the
+	# load pass never populates MapleExpansionDevices at all — the slots stay at
+	# their static default and no VMU is created. A second update_variables() does
+	# read them, and the frontend triggers one by marking a variable updated.
+	# SetCoreOption does exactly that, so re-asserting the value we already pinned
+	# is what actually fits the card.
+	await get_tree().create_timer(2.0).timeout
+	_lib.SetCoreOption(KEY_SLOT1, "VMU")
+	print("[ovl] nudged %s to force a second update_variables()" % KEY_SLOT1)
+
 	var t0 := Time.get_ticks_msec()
 	for at: float in sample_at:
 		while (Time.get_ticks_msec() - t0) < int(at * 1000.0):
@@ -178,10 +214,26 @@ func _measure() -> void:
 	get_tree().quit(0 if _found else 1)
 
 
-## Is this pixel the magenta the LCD's off dots were pinned to? Generous, because
-## the core blends the panel at the requested opacity and the frame is XRGB8888.
+## Is this pixel part of the LCD panel — either its OFF dots or its ON dots?
+##
+## The two colours are MEASURED, not guessed, and the first attempt here failed
+## on exactly that. flycast's "MAGENTA" renders (255, 0, 127) and its "GREEN"
+## (0, 127, 0), both flat. A hand-written test for magenta that required blue
+## above 0.55 missed it by 0.05 and reported the panel absent while a saved frame
+## showed it plainly.
+##
+## Both dot states are matched, because either alone leaves holes wherever the
+## LCD happens to be lit — and the bounding box wants the whole panel.
+const OFF_DOT := Color8(255, 0, 127)
+const ON_DOT := Color8(0, 127, 0)
+
+
 func _is_marker(c: Color) -> bool:
-	return c.r > 0.55 and c.b > 0.55 and c.g < 0.40
+	const TOL := 0.06
+	return (absf(c.r - OFF_DOT.r) < TOL and absf(c.g - OFF_DOT.g) < TOL
+			and absf(c.b - OFF_DOT.b) < TOL) \
+		or (absf(c.r - ON_DOT.r) < TOL and absf(c.g - ON_DOT.g) < TOL
+			and absf(c.b - ON_DOT.b) < TOL)
 
 
 func _sample(at: float) -> void:
