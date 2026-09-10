@@ -189,6 +189,7 @@ const NUNCHUK_SCENE          := preload("res://Scenes/Objects/controllers/wii/nu
 const MOTION_PLUS_SCENE      := preload("res://Scenes/Objects/controllers/wii/motion_plus.tscn")
 const RUMBLE_PAK_SCENE       := preload("res://Scenes/Objects/controllers/n64/rumble_pak.tscn")
 const CONTROLLER_PAK_SCENE   := preload("res://Scenes/Objects/controllers/n64/controller_pak.tscn")
+const VMU_SCENE              := preload("res://Scenes/Objects/controllers/dreamcast/vmu_card.tscn")
 const TRANSFER_PAK_SCENE     := preload("res://Scenes/Objects/controllers/n64/transfer_pak.tscn")
 const SENSOR_BAR_SCENE       := preload("res://Scenes/Objects/system_models/wii/sensor_bar.tscn")
 const RF_SWITCH_SCENE        := preload("res://Scenes/Objects/appliances/rf_switch.tscn")
@@ -264,6 +265,10 @@ const PLAIN_SCENES := {
 	"rumble_pak": RUMBLE_PAK_SCENE,
 	"controller_pak": CONTROLLER_PAK_SCENE,
 	"transfer_pak": TRANSFER_PAK_SCENE,
+	# The Dreamcast's VMU is the same shape of thing as the Controller Pak — a
+	# card that seats in a controller — so it carries card fields on top of the
+	# pose and has a serialize branch of its own too.
+	"vmu": VMU_SCENE,
 	# The bar's own entry is a pose; which console it is plugged into is applied
 	# afterwards by _apply_references, like the remote's pairing.
 	"sensor_bar": SENSOR_BAR_SCENE,
@@ -1738,6 +1743,16 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 			"card_id": cpak.card_id,
 			"card_label": cpak.card_label,
 		})
+	elif node is VmuCard:
+		# Card fields as well as a pose, for the Controller Pak's reason: the VMU
+		# IS its image on disk, and one that came back without its card_id would
+		# mint a blank and read as a wiped card. Which controller holds it, and
+		# which of that pad's two slots, is saved on the CONTROLLER.
+		var vmu := node as VmuCard
+		return _base(id, "vmu", n3d).merged({
+			"card_id": vmu.card_id,
+			"card_label": vmu.card_label,
+		})
 	elif node is TransferPak:
 		# The cartridge in its roof is a reference rather than a pose, so a pak put
 		# away with a game still in it comes back holding that same game.
@@ -2129,6 +2144,11 @@ func _deserialize_object(data: Dictionary) -> Node3D:
 		if cpak != null:
 			cpak.card_id = str(data.get("card_id", ""))
 			cpak.card_label = str(data.get("card_label", "CONTROLLER PAK"))
+		# Same again for a VMU, and for the same reason: identity before the tree.
+		var vmu := obj as VmuCard
+		if vmu != null:
+			vmu.card_id = str(data.get("card_id", ""))
+			vmu.card_label = str(data.get("card_label", "VMU"))
 	else:
 		match obj_type:
 			"system":

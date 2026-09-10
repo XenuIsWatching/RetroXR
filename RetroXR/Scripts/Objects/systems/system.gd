@@ -420,6 +420,10 @@ func _init() -> void:
 	_memcards.name = "MemoryCardController"
 	add_child(_memcards)
 	_memcards.setup(self)
+	_vmu = VmuStorage.new()
+	_vmu.name = "VmuStorage"
+	add_child(_vmu)
+	_vmu.setup(self)
 	_audio = SystemAudio.new()
 	_audio.name = "SystemAudio"
 	add_child(_audio)
@@ -2047,6 +2051,7 @@ func power_on() -> void:
 			BiosBoot.pinned_options(resolved_core, systemid, still_empty))
 	_apply_forced_core_options(resolved_dir, resolved_core)
 	_persist_pak_options(resolved_dir, resolved_core)
+	_vmu.stage_before_start(resolved_dir, resolved_core)
 	AppPrefs.apply_hw_render_for(resolved_core)
 	_libretro.SetSramPath(sram_path_for_run(resolved_core))
 	# Before StartContent: identification happens as the core comes up, so the
@@ -2307,6 +2312,7 @@ func _stop_core() -> void:
 	# StopContent returned but the core has not finished: a card the core owns is
 	# written during the teardown that follows. Keep watching for a while.
 	stop_card_polling_soon()
+	_vmu.drain(_resolve_dir(), _resolve_core())
 	_has_disk_control = false
 	_disc_index = 0
 	_disc_ejected = false
@@ -3501,6 +3507,24 @@ func _bind_pak_storage(lib_port: int, ctrl: Node) -> void:
 			rom = str(pak.call("cart_rom_path"))
 			ram = str(pak.call("cart_save_path", _resolve_core()))
 		_libretro.SetTransferPak(lib_port, rom, ram)
+
+
+## The controllers on this machine's ports, one per port, null where empty.
+## Read by VmuStorage, which has to walk them to find the seated VMUs.
+func get_port_controllers() -> Array:
+	return _port_controllers
+
+
+## Re-announce the VMU slots on one controller. Called when a card is pushed into
+## or pulled out of a slot, which the system cannot see for itself — the slot
+## belongs to the controller, two objects away.
+##
+## Unlike reapply_pak this cannot reach a RUNNING core: flycast does not
+## re-create its maple devices for a changed slot option (measured, see
+## Tools/cores/vmu_slot_probe). The seating is recorded and applied at the next
+## content start.
+func reapply_vmu(ctrl: Node) -> void:
+	_vmu.reapply(ctrl)
 
 
 ## Re-announce the pak on one controller's port. Called when a pak is pushed into
@@ -4767,6 +4791,9 @@ func memcard_slots() -> Array[XRToolsSnapZone]:
 
 
 var _memcards: MemoryCardController = null
+
+## The Dreamcast's VMUs. Inert on every other console -- see VmuStorage.
+var _vmu: VmuStorage = null
 ## What a stacked expansion hands the core at boot - see ExpansionLaunch.
 var _expansion_launch: ExpansionLaunch = null
 

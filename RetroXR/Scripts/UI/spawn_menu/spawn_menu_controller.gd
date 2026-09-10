@@ -40,6 +40,7 @@ const CONTROLLER_PAK_SCENE  := preload("res://Scenes/Objects/controllers/n64/con
 const MEMCARD_SCENE         := preload("res://Scenes/Objects/media/memory_card.tscn")
 const GC_MEMCARD_SCENE      := preload("res://Scenes/Objects/media/gc_memory_card.tscn")
 const PS2_MEMCARD_SCENE     := preload("res://Scenes/Objects/media/ps2_memory_card.tscn")
+const VMU_SCENE             := preload("res://Scenes/Objects/controllers/dreamcast/vmu_card.tscn")
 const TAPE_SCENE            := preload("res://Scenes/Objects/media/vcr_tape.tscn")
 const DVD_DISC_SCENE        := preload("res://Scenes/Objects/media/dvd_disc.tscn")
 const AUDIO_DISC_SCENE      := preload("res://Scenes/Objects/media/audio_disc.tscn")
@@ -900,6 +901,9 @@ func _card_scene_for(family: String) -> PackedScene:
 		# plugs into a CONTROLLER, so it is an N64Pak rather than a MemoryCard and
 		# every caller here reaches it by property name instead of by class.
 		"controller_pak": return CONTROLLER_PAK_SCENE
+		# Same again for the Dreamcast: a VMU seats in a CONTROLLER, so it is a
+		# VmuCard rather than a MemoryCard and is reached by property name.
+		"vmu":      return VMU_SCENE
 		_:          return MEMCARD_SCENE
 
 

@@ -150,6 +150,11 @@ var _rumble := PadInputShared.Rumble.new(self)
 # N64PakPort for why it is not a method on this class.
 var _pak_port := N64PakPort.new()
 
+# The Dreamcast's two VMU slots. Inert until this pad is plugged into a
+# Dreamcast, because that console has no controller scene to author sockets on —
+# it wears the primitive box, as its console does. See VmuPort.
+var _vmu_port := VmuPort.new()
+
 @onready var _cable_attach_point: Node3D = $CableAttachPoint
 
 
@@ -180,6 +185,7 @@ func _ready() -> void:
 ## adds one needs no script of its own — the same arrangement pad_type_pref has.
 func _wire_expansion_port() -> void:
 	_pak_port.attach(self, _on_pak_changed)
+	_vmu_port.attach(self)
 
 
 ## Called after every seat and removal.
@@ -206,6 +212,31 @@ func restore_pak(pak: N64Pak) -> void:
 ## has no expansion port at all — see N64PakPort.pak_option_value.
 func pak_option_value() -> String:
 	return _pak_port.pak_option_value()
+
+
+# ── The Dreamcast's two VMU slots ─────────────────────────────────────────────
+#
+# Reached by RetroSystem through duck typing, the same way the N64's pak is: it
+# asks a port controller for these and does not care what class answers.
+
+## How many VMU slots this pad has. 0 unless it is on a Dreamcast.
+func vmu_slot_count() -> int:
+	return _vmu_port.slot_count()
+
+
+## The VMU in one slot, or null.
+func get_vmu(slot: int) -> VmuCard:
+	return _vmu_port.get_card(slot)
+
+
+## What flycast's per-slot device option should take — see VmuPort.
+func vmu_slot_option_value(slot: int) -> String:
+	return _vmu_port.slot_option_value(slot)
+
+
+## Put a VMU back into a slot after a load.
+func restore_vmu(card: VmuCard, slot: int) -> void:
+	_vmu_port.restore_card(card, slot)
 
 
 func _find_vr_nodes() -> void:
@@ -510,11 +541,16 @@ func on_plugged_in(system: RetroSystem, port_index: int) -> void:
 	_connected_system = system
 	_port_index = port_index
 	_load_bindings()
+	# A Dreamcast pad grows its two VMU slots here, because there is no authored
+	# shell to hang them off. Doing it on connect also means a pad moved between
+	# machines never carries another console's sockets around.
+	_vmu_port.sync_to_system(system)
 	print("[RetroController] plugged into system port %d" % port_index)
 
 
 func on_unplugged() -> void:
 	print("[RetroController] unplugged from port %d" % _port_index)
+	_vmu_port.sync_to_system(null)
 	_connected_system = null
 	_port_index = -1
 	# Back to the global map. Keeping the last console's profile would mean a pad

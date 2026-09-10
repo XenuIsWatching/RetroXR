@@ -52,6 +52,13 @@ const _PERIPHERALS: Dictionary = {
 	"gamecube": [
 		{"kind": "peripheral", "label": "Memory Card", "spawn": "memory_card"},
 	],
+	# Listed here rather than left to the console's own card row, for the same
+	# reason the N64's paks are: a VMU goes into a CONTROLLER, and none of the
+	# console-slot machinery that offers a memory card reaches it. A Dreamcast pad
+	# takes two, and only the one in the front slot has its screen showing.
+	"dreamcast": [
+		{"kind": "peripheral", "label": "Visual Memory Unit", "spawn": "vmu"},
+	],
 	# The pad is named here because it is the only one with an expansion port, and
 	# all three paks are useless without it. The paks themselves are listed rather
 	# than left to the console's own card row: they go into a CONTROLLER, so none

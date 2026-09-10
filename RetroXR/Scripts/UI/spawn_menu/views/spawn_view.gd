@@ -581,7 +581,11 @@ func _populate_systems_detail(systemid: String, vbox: VBoxContainer) -> void:
 		# cartridge save. Resolved by family instead.
 		if token == "controller_pak":
 			card_fmt = CardFormats.for_family(ControllerPak.FAMILY)
-		if (token.ends_with("memory_card") or token == "controller_pak") and card_fmt != null:
+		# And the Dreamcast's VMU, for exactly the same reason.
+		elif token == "vmu":
+			card_fmt = CardFormats.for_family(VmuCard.FAMILY)
+		if (token.ends_with("memory_card") or token == "controller_pak"
+				or token == "vmu") and card_fmt != null:
 			# This row does one of two different things, so it says which. With
 			# cards saved it opens the shelf and drops the +, because every other
 			# + on this page puts something in the room on the first press.
