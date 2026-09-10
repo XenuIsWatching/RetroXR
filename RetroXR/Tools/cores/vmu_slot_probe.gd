@@ -9,11 +9,25 @@
 ##     "$godot" --headless --path RetroXR res://Tools/cores/vmu_slot_probe.tscn -- \
 ##         --rom="$HOME/retroxr/roms/dreamcast/Crazy Taxi 2 (USA).chd" [--seconds=8]
 ##
-## MEASURED 2026-09-09 against Flycast 5aa091f and Crazy Taxi 2: **it does not.**
-## The frontend's half is provably fine — the run logs the key being found, the
-## value written and the update flag raised — and the core still never re-opens
-## the file. So a VMU seated or pulled mid-game cannot reach the core, and the
-## binding belongs at content start.
+## **THIS PROBE'S RESULT IS CURRENTLY CONFOUNDED. Do not cite it.**
+##
+## The first run said "no", and that reading does not stand: it attaches no
+## CONTROLLER, and a VMU lives in a controller's expansion socket. With no
+## controller there is no socket and no VMU device, so the file was never going
+## to be re-created whatever the option did. Deleting it measured nothing.
+##
+## It cannot be fixed by attaching one here either, which is the real finding:
+## `WrapperEmuThread.cpp` applies pre-start port devices but deliberately SKIPS
+## `RETRO_DEVICE_JOYPAD` ("plain joypad is what cores assume"). flycast is the
+## exception — it takes its main maple device from
+## `retro_set_controller_port_device`, so a port the frontend never announces
+## stays empty. Crazy Taxi 2's memory-card screen says so directly: "The
+## controller has been removed", and an empty socket 1 and 2 under port A.
+## Attaching a pad AFTER load gets a controller drawn and still no sockets,
+## because flycast builds its maple devices at load.
+##
+## So until the frontend announces a joypad at load, a Dreamcast in RetroXR has
+## no controller and no VMU at all, and this question cannot be answered.
 ##
 ## **The first version of this probe could not have found that.** It swapped the
 ## file underneath the core and read it back, which reads as the swapped card

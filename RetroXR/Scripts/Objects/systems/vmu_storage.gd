@@ -14,12 +14,19 @@
 ## immediately, which is what makes draining safe at any moment rather than a
 ## race — the file on disk is always current.
 ##
-## **The binding is load-time only, and that is measured rather than assumed.**
-## Toggling `reicast_device_port<N>_slot<S>` while the core runs does not
-## re-create the maple device, so a card seated or pulled mid-game cannot reach
-## it. See Tools/cores/vmu_slot_probe, which also records why the obvious probe
-## for this proves nothing. A change made while the machine is on is recorded and
-## takes effect at the next power-on.
+## **The binding is load-time.** flycast builds its maple devices during
+## retro_load_game, so what is staged and pinned before the core starts is what
+## the game sees; a card moved while the machine is on is recorded and applies at
+## the next power-on.
+##
+## **Known blocker, and it is above this class rather than in it.** RetroXR never
+## calls retro_set_controller_port_device for a plain joypad — WrapperEmuThread
+## skips JOYPAD when applying pre-start devices — and flycast takes its main
+## maple device from exactly that call. So a Dreamcast currently runs with no
+## controller, hence no expansion socket, hence no VMU, whatever is staged here.
+## Everything below is correct and inert until that is fixed. See
+## Tools/cores/vmu_slot_probe for the measurement and the retraction that came
+## with it.
 class_name VmuStorage
 extends Node
 
@@ -192,9 +199,9 @@ func drain(dir: String, core: String) -> void:
 ## pulled out of a slot, which the system cannot see for itself — the slot
 ## belongs to the controller, two objects away.
 ##
-## It deliberately does NOT touch the running core: flycast will not re-create a
-## maple device for a changed slot option, measured. The seating is recorded and
-## the next content start applies it.
+## It deliberately does NOT touch the running core: flycast builds its maple
+## devices at load and a card is bound by staging a file before that. The seating
+## is recorded and the next content start applies it.
 func reapply(ctrl: Node) -> void:
 	if not _uses_vmus() or not is_instance_valid(ctrl):
 		return
