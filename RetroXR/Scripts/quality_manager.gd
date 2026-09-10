@@ -1417,11 +1417,6 @@ func configure_environment(world_env: WorldEnvironment) -> void:
 	# rather than a remembered per-room value. The one Environment that authors
 	# it off, Resources/env_quest.tres, is referenced by no scene.
 	env.glow_enabled = glow_enabled
-	if not _is_forward_plus():
-		# On the mobile renderer the patched engine tonemaps in the scene shader,
-		# per shaded fragment, and Filmic there cost 0.4 ms more than the subpass
-		# it replaced (Quest 3, 1.5x); a linear curve keeps the whole saving.
-		env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	env.ssao_enabled = ao_quality != AOQuality.OFF and supports_post_effects()
 	if not env.ssao_enabled:
 		return
