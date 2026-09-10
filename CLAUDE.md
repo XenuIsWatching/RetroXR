@@ -145,9 +145,9 @@ python Tools/place_engine.py --target debug --restore
 `rendering/renderer/mobile/render_directly_to_target` (on in `project.godot`;
 the engine default is off). With it the scene is drawn in one subpass straight
 into the swapchain, or resolved into it under MSAA, and the scene shader
-applies the environment's tonemapper in its epilogue. It only engages when the
-tonemap subpass would be a copy: no glow, adjustments or sky pass (a room with
-`ENV_BG_SKY`, or fog on a colour background, falls back to the subpass path).
+applies the environment's tonemapper in its epilogue, and so does the sky
+pass. It only engages when the tonemap subpass would be a copy: no glow and no
+colour adjustments (a sky room measured 3.70 -> 3.59 ms, same picture).
 `rendering/renderer/mobile/direct_target_srgb_view` (default on) draws through
 an sRGB view so the hardware encodes and blending stays linear; off, the shader
 encodes and transparent surfaces blend on encoded values. Measured 2026-09-09,
