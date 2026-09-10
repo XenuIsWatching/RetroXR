@@ -1,0 +1,152 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/Objects/peripherals/vmu_card.gd" id="1_vmuscript"]
+[ext_resource type="Script" uid="uid://myg1jnlsxhnm" path="res://Scripts/Objects/highlights/pickable_highlight.gd" id="2_pickhigh"]
+[ext_resource type="Script" uid="uid://b8uwrf51jd5xm" path="res://addons/godot-xr-tools/objects/grab_points/grab_point.gd" id="3_grabpoint"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_right.tscn" id="4_rhand"]
+[ext_resource type="PackedScene" path="res://Scenes/Objects/hand_poses/hand_grip_left.tscn" id="5_lhand"]
+
+[sub_resource type="PhysicsMaterial" id="PhysMat_vmu"]
+friction = 0.8
+
+; 47 x 80 x 16 mm and 45 g, the real unit's figures rather than guessed ones
+; (consoledatabase, cross-confirmed on weight against Wikipedia). The LCD is
+; 48 x 32 dots measuring 37 x 26 mm, which is why the screen quad below is that
+; size and not a fraction of the face.
+;
+; Axes: X is the 47 mm width, Y the 80 mm length — the direction it slides into
+; a controller slot — and Z the 16 mm thickness. The screen and the controls are
+; both on the +Z face, screen in the upper half, d-pad and buttons below it, so
+; +Z is what faces a player holding it.
+;
+; The origin is the body's centre. A snap zone seats an object by composing its
+; GRAB POINT, so the slot's own transform is what decides how deep it sits; there
+; is no baked-in insertion offset here, unlike the N64 pak, because the Dreamcast
+; pad has no authored shell to measure a mating face against yet.
+[sub_resource type="BoxShape3D" id="Box_body"]
+size = Vector3(0.047, 0.08, 0.016)
+
+[sub_resource type="BoxMesh" id="Mesh_body"]
+size = Vector3(0.047, 0.08, 0.016)
+
+[sub_resource type="StandardMaterial3D" id="Mat_shell"]
+albedo_color = Color(0.898039, 0.894118, 0.878431, 1)
+roughness = 0.55
+
+; The LCD when nothing is driving it: a dark blue-grey panel, unshaded so it
+; reads as a screen rather than as a painted rectangle. The live picture replaces
+; this material rather than tinting it.
+[sub_resource type="StandardMaterial3D" id="Mat_lcd_off"]
+albedo_color = Color(0.243137, 0.278431, 0.278431, 1)
+roughness = 0.35
+shading_mode = 0
+
+[sub_resource type="BoxMesh" id="Mesh_lcd"]
+size = Vector3(0.037, 0.026, 0.001)
+
+; Clearly darker than the shell, not a shade of it. At 0.83 against the shell's
+; 0.90 the d-pad and buttons did not read at all in a render — an 8% difference
+; that any reasonable exposure flattens away.
+[sub_resource type="StandardMaterial3D" id="Mat_control"]
+albedo_color = Color(0.42, 0.42, 0.44, 1)
+roughness = 0.65
+
+[sub_resource type="BoxMesh" id="Mesh_dpad_h"]
+size = Vector3(0.018, 0.006, 0.003)
+
+[sub_resource type="BoxMesh" id="Mesh_dpad_v"]
+size = Vector3(0.006, 0.018, 0.003)
+
+[sub_resource type="CylinderMesh" id="Mesh_button"]
+top_radius = 0.0035
+bottom_radius = 0.0035
+height = 0.003
+radial_segments = 12
+rings = 1
+
+[sub_resource type="BoxShape3D" id="Box_pointer"]
+size = Vector3(0.057, 0.09, 0.028)
+
+[node name="VmuCard" type="RigidBody3D" groups=["hand_held_device"]]
+collision_layer = 4
+collision_mask = 196613
+mass = 0.045
+physics_material_override = SubResource("PhysMat_vmu")
+freeze_mode = 1
+linear_damp = 5.0
+angular_damp = 8.0
+script = ExtResource("1_vmuscript")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Box_body")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("Mesh_body")
+surface_material_override/0 = SubResource("Mat_shell")
+
+; The screen, sitting a hair proud of the +Z face so it never z-fights the shell.
+; vmu_card.gd finds this node by name to hand it a live picture; until something
+; does, it wears the dark panel above.
+[node name="Lcd" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.019, 0.0083)
+mesh = SubResource("Mesh_lcd")
+surface_material_override/0 = SubResource("Mat_lcd_off")
+
+; A d-pad and two buttons below the screen, drawn only so the thing reads as the
+; handheld it is rather than as a blank slab. They are not interactive here: a
+; seated VMU's controls are inside the pad, and a loose one is driven through the
+; ordinary bindings path when it runs standalone.
+[node name="DpadH" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0125, -0.0175, 0.0085)
+mesh = SubResource("Mesh_dpad_h")
+surface_material_override/0 = SubResource("Mat_control")
+
+[node name="DpadV" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0125, -0.0175, 0.0085)
+mesh = SubResource("Mesh_dpad_v")
+surface_material_override/0 = SubResource("Mat_control")
+
+[node name="ButtonA" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.0105, -0.0135, 0.0085)
+mesh = SubResource("Mesh_button")
+surface_material_override/0 = SubResource("Mat_control")
+
+[node name="ButtonB" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.0175, -0.0215, 0.0085)
+mesh = SubResource("Mesh_button")
+surface_material_override/0 = SubResource("Mat_control")
+
+; Every VMU is the same white slab and each holds a different set of saves, so
+; the name goes on the BACK — the front is the screen. vmu_card.gd finds this
+; node by name.
+[node name="CardLabel" type="Label3D" parent="."]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.012, -0.0085)
+pixel_size = 0.00016
+alpha_cut = 1
+text = "VMU"
+font_size = 28
+width = 220
+autowrap_mode = 3
+
+; IDENTITY. A snap zone seats an object by composing its grab point, so this
+; being the origin is what makes the slot's own transform the whole of the
+; seating geometry.
+[node name="GrabPoint" type="Marker3D" parent="."]
+visible = false
+script = ExtResource("3_grabpoint")
+
+[node name="PickableHighlight" type="Node3D" parent="."]
+script = ExtResource("2_pickhigh")
+
+[node name="PointerArea" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PointerArea"]
+shape = SubResource("Box_pointer")
+
+[node name="HandRight" parent="." instance=ExtResource("4_rhand")]
+visible = false
+
+[node name="HandLeft" parent="." instance=ExtResource("5_lhand")]
+visible = false
