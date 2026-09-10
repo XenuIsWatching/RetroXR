@@ -86,6 +86,59 @@ var _lcd_mat: ShaderMaterial = null
 var _last_tex: Texture2D = null
 var _last_frame := Vector2i.ZERO
 
+# --- The controls -------------------------------------------------------------
+#
+# ControlAnimator, the same engine every pad and handheld face in the project
+# runs on. A VMU has four buttons and a d-pad, and the d-pad rocks as one piece
+# because on the real unit it is a disc with a cross moulded into it.
+#
+# The buttons map onto the RetroPad the way vemulator reads them: A and B are A
+# and B, and MODE and SLEEP take START and SELECT — the VMU has no other pair to
+# put them on.
+
+## How far a cap sinks. The caps stand ~2 mm proud of a 16 mm body, and a cap
+## driven flush reads as a hole rather than a press.
+const PRESS_DEPTH := 0.0011
+
+## Per-frame lerp weight toward the pressed pose.
+const ANIM_WEIGHT := 0.4
+
+## [node name, RetroPad bit]. Every one of these sits on the +Z face.
+const _CONTROLS: Array = [
+	["ButtonA", ControllerBindings.JOYPAD_A],
+	["ButtonB", ControllerBindings.JOYPAD_B],
+	["ModeButton", ControllerBindings.JOYPAD_START],
+	["SleepButton", ControllerBindings.JOYPAD_SELECT],
+]
+
+var _anim: ControlAnimator = null
+## The button mask last pushed in, which is what the controls animate from.
+var _btn := 0
+## Frames since anything needed driving. A released control lerps back to rest
+## over a few frames, so the drive cannot stop the moment the mask clears — and a
+## card doing nothing should not tick forever either, with eight of them in a
+## room.
+var _idle_frames := 0
+
+## How long to keep driving after the last input, in frames. ANIM_WEIGHT 0.4
+## settles well inside this.
+const IDLE_FRAMES_TO_STOP := 24
+
+# --- Standalone ---------------------------------------------------------------
+#
+# A VMU is a handheld in its own right: its own CPU, its own screen, its own
+# buttons and two coin cells. Out of a controller it can run a downloaded
+# minigame on the `vemulator` core, which is a whole machine in a 282 KB core.
+#
+# Deliberately NOT a RetroSystem. HandheldInput and the rest of that machinery
+# hang off one, and a VMU is a card first — it has to keep being a card while it
+# is seated. What it grows instead is a Libretro node of its own.
+
+const STANDALONE_CORE := "vemulator"
+
+var _lib: Node = null
+var _running := false
+
 
 func _ready() -> void:
 	super._ready()
@@ -114,17 +167,73 @@ func _ready() -> void:
 		# is kept rather than rebuilt so an unseated card looks the same as it
 		# does on a shelf.
 		_lcd_off_mat = _lcd.get_surface_override_material(0)
+	_bind_controls()
 	set_process(false)
+
+
+# --- The controls -------------------------------------------------------------
+
+func _bind_controls() -> void:
+	_anim = ControlAnimator.new()
+	# The pad's UP is its -Z arm in the pivot's frame, and a positive pitch about
+	# X LIFTS what lies on -Z — so the sign flips for UP to depress it. Same
+	# reason handheld_model's stand-in pass sets it.
+	_anim.dpad_pitch_sign = -1.0
+	_anim.dpad_tilt_deg = 6.0
+	for spec: Array in _CONTROLS:
+		var m := get_node_or_null(NodePath(str(spec[0]))) as MeshInstance3D
+		if m == null:
+			continue
+		# `dir` is in the mesh PARENT's frame — the card's — where into the face
+		# is -Z. The caps carry their own rotation to stand a cylinder up, and
+		# that has no bearing on which way they travel.
+		_anim.buttons.append({
+			"node": m, "rest": m.transform, "bit": int(spec[1]),
+			"depth": PRESS_DEPTH, "dir": Vector3(0, 0, -1),
+		})
+	# The animated node is the PIVOT, which is identity; the turn that puts the
+	# face normal on +Y lives on the MOUNT above it, because the animator rotates
+	# in the animated node's parent space. See the scene's own note.
+	var pivot := get_node_or_null("DpadMount/DpadPivot") as Node3D
+	if pivot != null:
+		_anim.dpad = {"node": pivot, "rest": pivot.transform, "pivot": Vector3.ZERO}
+
+
+## Push the button state this card's controls should show, and — while it is
+## running standalone — what its core should read.
+##
+## One entry point for both, so a press can never animate without reaching the
+## core or vice versa.
+func set_input(btn: int) -> void:
+	_btn = btn
+	if _running and _lib != null:
+		_lib.SetJoypadState(0, btn, 0, 0, 0, 0)
+	# Wake the per-frame drive. The controls have to move whether or not this card
+	# has a screen to fill — the animation gate and the picture gate are separate
+	# questions, and conflating them left every button frozen while the animator
+	# sat there correctly configured and never ticked.
+	if btn != 0:
+		_idle_frames = 0
+		set_process(true)
+
+
+## The mask currently held down. Read by the probes.
+func input_mask() -> int:
+	return _btn
 
 
 # --- Seating ------------------------------------------------------------------
 
 ## Told by VmuPort which slot took this card, and on which pad.
 func seated_in(pad: Node, slot: int) -> void:
+	# A card in a controller is a memory card, not a handheld: its own buttons are
+	# inside the pad and unreachable. Pushing it into a slot ends a standalone
+	# game, which is what putting one in a Dreamcast does.
+	power_off()
 	_pad = pad
 	_slot = slot
 	# Slot 2 has no window in the shell and no screen in the core, so it never
-	# needs driving. Neither does a loose card.
+	# needs driving. Neither does a loose, unpowered card.
 	set_process(_slot == 0)
 	if _slot != 0:
 		_show_off()
@@ -133,8 +242,9 @@ func seated_in(pad: Node, slot: int) -> void:
 func unseated() -> void:
 	_pad = null
 	_slot = -1
-	set_process(false)
-	_show_off()
+	if not _running:
+		set_process(false)
+		_show_off()
 
 
 ## The machine this card is plugged into, through the pad holding it, or null.
@@ -154,17 +264,114 @@ func _show_off() -> void:
 	_last_frame = Vector2i.ZERO
 
 
-func _process(_delta: float) -> void:
-	if _lcd == null:
+# --- Standalone ---------------------------------------------------------------
+
+## Power the card up as its own machine, running one minigame.
+##
+## `vms_path` is a .vms, .dci or .bin — the file a Dreamcast game downloaded into
+## the card, or one out of a library. Returns false when the core is not
+## installed or the file is missing, which is the difference between "nothing
+## happened" and "it silently played nothing".
+func power_on(vms_path: String) -> bool:
+	if _running:
+		return true
+	if vms_path.is_empty() or not FileAccess.file_exists(vms_path):
+		push_warning("[VmuCard] no such minigame: %s" % vms_path)
+		return false
+	var root := CoreDownloadManager.default_core_root()
+	if CoreDownloadManager.installed_core_lib(STANDALONE_CORE).is_empty():
+		push_warning("[VmuCard] the %s core is not installed" % STANDALONE_CORE)
+		return false
+
+	# Made once and KEPT. Freeing a Libretro node whose emulation thread is still
+	# unwinding is how a clean run ends in an access violation on the way out —
+	# the same hazard as a GDExtension audio playback that outlives its
+	# extension. Powering off stops the content and leaves the node in place for
+	# the next game.
+	if _lib == null:
+		var lib: Object = ClassDB.instantiate("Libretro")
+		_lib = lib as Node
+		if _lib == null:
+			push_warning("[VmuCard] could not instantiate a Libretro node")
+			return false
+		_lib.name = "VmuLibretro"
+		add_child(_lib)
+	_lib.StartContent(root, STANDALONE_CORE, vms_path)
+	_running = true
+	# Its own screen now, not a window into a Dreamcast's frame.
+	_last_tex = null
+	_last_frame = Vector2i.ZERO
+	set_process(true)
+	print("[VmuCard] %s running %s" % [card_label, vms_path.get_file()])
+	return true
+
+
+func power_off() -> void:
+	if not _running:
 		return
+	_running = false
+	# StopContent, and the node is KEPT rather than freed.
+	#
+	# Measured, both ways round. Freeing it here crashes the process with an
+	# access violation before the caller's next print — StopContent is
+	# non-blocking, so the emulation thread is still unwinding through a node
+	# that has just been queued for deletion. Keeping it costs one idle node per
+	# card and is reused by the next power_on.
+	#
+	# That is a DIFFERENT crash from the audio-teardown race, which fires on
+	# QUIT rather than on free and is fixed with frames on the caller's side.
+	if _lib != null and _lib.has_method("StopContent"):
+		_lib.StopContent()
+	_btn = 0
+	set_process(_slot == 0)
+	_show_off()
+
+
+func is_running_standalone() -> bool:
+	return _running
+
+
+## Whichever picture belongs on this card's face, and the window into it.
+##
+## Two sources, and they crop differently. Standalone, the core IS a VMU and its
+## frame is the whole 48 x 32 screen, so the window is everything. Seated, the
+## picture is a Dreamcast's frame with the LCD burned into one corner, so the
+## window is that corner — see VmuStorage.screen_rect.
+func _picture() -> Dictionary:
+	if _running and _lib != null:
+		var own: Texture2D = _lib.GetVideoTexture()
+		if own != null:
+			return {"tex": own, "whole": true}
+		return {}
 	var sys := host_system()
 	if sys == null or not sys.has_method("get_video_texture"):
-		_show_off()
-		return
+		return {}
 	var tex: Texture2D = sys.call("get_video_texture")
-	if tex == null:
+	return {"tex": tex, "whole": false} if tex != null else {}
+
+
+func _process(_delta: float) -> void:
+	if _anim != null and not _anim.is_empty():
+		_anim.animate(_btn, Vector2.ZERO, Vector2.ZERO, ANIM_WEIGHT)
+
+	# Stop ticking once there is nothing left to do: no screen to fill, nothing
+	# held, and the controls given long enough to settle back.
+	var wants_screen := _running or _slot == 0
+	if not wants_screen and _btn == 0:
+		_idle_frames += 1
+		if _idle_frames > IDLE_FRAMES_TO_STOP:
+			set_process(false)
+	else:
+		_idle_frames = 0
+
+	if _lcd == null:
+		return
+	var pic := _picture()
+	if pic.is_empty():
 		_show_off()
 		return
+	var tex: Texture2D = pic["tex"]
+	var whole: bool = pic["whole"]
 
 	if _lcd_mat == null:
 		_lcd_mat = ShaderMaterial.new()
@@ -181,7 +388,7 @@ func _process(_delta: float) -> void:
 	var frame_i := Vector2i(int(frame.x), int(frame.y))
 	if frame_i != _last_frame:
 		_last_frame = frame_i
-		var r := VmuStorage.screen_rect(frame_i)
+		var r := Rect2(0, 0, 1, 1) if whole else VmuStorage.screen_rect(frame_i)
 		_lcd_mat.set_shader_parameter("source_rect",
 			Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
 

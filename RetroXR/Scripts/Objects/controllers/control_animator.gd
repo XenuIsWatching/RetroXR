@@ -44,7 +44,11 @@ func is_empty() -> bool:
 ## `weight` is the per-frame lerp weight (0..1) toward the pressed/rest pose.
 func animate(btn: int, lstick: Vector2, rstick: Vector2, weight: float) -> void:
 	for e: Dictionary in buttons:
-		var node: MeshInstance3D = e["node"]
+		# Node3D rather than MeshInstance3D: a control is usually one mesh, but a
+		# VMU's d-pad is a disc with a cross moulded into it and moves as one
+		# piece, so what travels is an empty parent with three meshes under it.
+		# Every existing caller passes a MeshInstance3D, which is a Node3D.
+		var node: Node3D = e["node"]
 		var rest: Transform3D = e["rest"]
 		# "mask" lets one mesh answer to several buttons. Some pads mould their
 		# face buttons as a single piece — the Genesis pad's A, B and C are one
@@ -110,7 +114,9 @@ func _stick_basis(stick: Vector2) -> Basis:
 ## Rotate a mesh about a pivot in its parent's space, plus an optional click push
 ## along press_dir, lerping from its current transform toward the target.
 func apply_pivot(entry: Dictionary, r: Basis, click: float, weight: float) -> void:
-	var node: MeshInstance3D = entry["node"]
+	# Node3D, for the reason given in animate(): a rocker may be an empty parent
+	# carrying several meshes that move together.
+	var node: Node3D = entry["node"]
 	var rest: Transform3D = entry["rest"]
 	var pivot: Vector3 = entry["pivot"]
 	var about := Transform3D(r, pivot - r * pivot + press_dir * (stick_click * click))

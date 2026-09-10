@@ -103,11 +103,14 @@ height = 0.0022
 radial_segments = 20
 rings = 1
 
+; Authored in the PIVOT's frame, not the card's. The pivot is turned so its local
+; +Y is the face normal (see DpadPivot), which swaps the meaning of Y and Z here:
+; an arm is long in X or Z, and THIN in Y.
 [sub_resource type="BoxMesh" id="Mesh_dpad_arm_h"]
-size = Vector3(0.0116, 0.0036, 0.0014)
+size = Vector3(0.0116, 0.0014, 0.0036)
 
 [sub_resource type="BoxMesh" id="Mesh_dpad_arm_v"]
-size = Vector3(0.0036, 0.0116, 0.0014)
+size = Vector3(0.0036, 0.0014, 0.0116)
 
 ; A and B: 7 mm.
 [sub_resource type="CylinderMesh" id="Mesh_btn_big"]
@@ -163,20 +166,49 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0105, 0.0089)
 mesh = SubResource("Mesh_lcd")
 surface_material_override/0 = SubResource("Mat_lcd_off")
 
-; The d-pad, below-left. Cylinders are authored +Y, so R_x(-90) turns the disc to
-; face +Z -- the row-major form CLAUDE.md records, not the column constructor.
-[node name="Dpad" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -0.0141, -0.0176, 0.0085)
+; The d-pad, below-left. A real VMU's is a disc with a cross moulded into it, so
+; it ROCKS AS ONE PIECE -- hence an unrotated empty carrying all three meshes,
+; which is the node ControlAnimator tilts. Rocking the disc alone and leaving the
+; cross behind would read as two loose parts.
+;
+; TWO nodes, and which one carries the rotation is the whole trick.
+;
+; ControlAnimator rocks a control with `about * rest` -- it PRE-multiplies, so
+; its pitch and roll are applied in the animated node's PARENT space, not in the
+; node's own. Every pad it was written for has a control surface facing +Y there,
+; so pitch about X and roll about Z both tip the pad out of its face.
+;
+; A VMU's face normal is the card's +Z. Rotating the animated node itself does
+; NOT help: the rotation still happens in the card's frame, so pitch about X
+; tips UP/DOWN correctly by luck and roll about Z merely spins the face in its
+; own plane -- LEFT and RIGHT move nothing at all, measurably 0.0000.
+;
+; So the turn goes on a MOUNT above the animated node:
+;
+;   DpadMount   R_x(+90), so ITS local +Y is the card's +Z
+;   DpadPivot   identity, and the node the animator actually moves
+;
+; In the mount's frame: +Y is out of the face (press_dir's default -Y goes in),
+; +X is the card's +X, and +Z is the card's -Y -- which is why UP is the -Z arm
+; and dpad_pitch_sign is -1, the same reason handheld_model's stand-in pass sets
+; it. Everything below is authored in that frame: a cylinder is already +Y so the
+; disc needs no rotation, and the arms are thin in Y.
+[node name="DpadMount" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, -0.0141, -0.0176, 0.0085)
+
+[node name="DpadPivot" type="Node3D" parent="DpadMount"]
+
+[node name="Dpad" type="MeshInstance3D" parent="DpadMount/DpadPivot"]
 mesh = SubResource("Mesh_dpad_disc")
 surface_material_override/0 = SubResource("Mat_dpad")
 
-[node name="DpadArmH" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0141, -0.0176, 0.0094)
+[node name="DpadArmH" type="MeshInstance3D" parent="DpadMount/DpadPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0009, 0)
 mesh = SubResource("Mesh_dpad_arm_h")
 surface_material_override/0 = SubResource("Mat_button")
 
-[node name="DpadArmV" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0141, -0.0176, 0.0094)
+[node name="DpadArmV" type="MeshInstance3D" parent="DpadMount/DpadPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0009, 0)
 mesh = SubResource("Mesh_dpad_arm_v")
 surface_material_override/0 = SubResource("Mat_button")
 

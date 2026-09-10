@@ -97,11 +97,9 @@ var bedroom_time_of_day: float = 0.75
 ## ever interesting per core, and pushing this back is what stops the core that
 ## follows an overridden one from inheriting its API.
 const DEFAULT_HW_RENDER := "vulkan"
-## core_name -> a value from hw_render_choices(), for cores that need a
-## different answer from the rest. Dolphin is the case that earns this: its
-## Vulkan path hangs the Adreno GPU on Quest while GLES3 runs, and a single
-## global would drag every other multi-API core off Vulkan to work around it.
-## Set from CORES > Manager > (core) > FRONTEND; absent means the default above.
+## core_name -> a value from hw_render_choices(), for a core that needs a
+## different answer from the rest. Set from CORES > Manager > (core) > FRONTEND;
+## absent means the default above.
 var hw_render_overrides: Dictionary = {}
 
 
