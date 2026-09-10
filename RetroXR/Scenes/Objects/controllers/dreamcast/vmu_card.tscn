@@ -41,8 +41,16 @@ albedo_color = Color(0.243137, 0.278431, 0.278431, 1)
 roughness = 0.35
 shading_mode = 0
 
-[sub_resource type="BoxMesh" id="Mesh_lcd"]
-size = Vector3(0.037, 0.026, 0.001)
+; A QUAD, not a box, and that distinction is load-bearing. Godot lays a BoxMesh's
+; six faces out as an atlas, so each face carries only a sub-rectangle of the
+; 0..1 UV range — a screen_window material on one showed a corner of the crop
+; rather than the whole LCD. A QuadMesh maps 0..1 across its single face, which
+; is what the shader's source_rect assumes.
+;
+; 37 x 26 mm for 48 x 32 dots, which is the real unit's figures: the VMU's pixels
+; genuinely are not square, so the slight horizontal squeeze is the hardware.
+[sub_resource type="QuadMesh" id="Mesh_lcd"]
+size = Vector2(0.037, 0.026)
 
 ; Clearly darker than the shell, not a shade of it. At 0.83 against the shell's
 ; 0.90 the d-pad and buttons did not read at all in a render — an 8% difference
