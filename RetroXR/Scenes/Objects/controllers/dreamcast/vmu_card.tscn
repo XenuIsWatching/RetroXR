@@ -9,20 +9,34 @@
 [sub_resource type="PhysicsMaterial" id="PhysMat_vmu"]
 friction = 0.8
 
-; 47 x 80 x 16 mm and 45 g, the real unit's figures rather than guessed ones
-; (consoledatabase, cross-confirmed on weight against Wikipedia). The LCD is
-; 48 x 32 dots measuring 37 x 26 mm, which is why the screen quad below is that
-; size and not a fraction of the face.
+; 47 x 80 x 16 mm and 45 g, the real unit's figures (consoledatabase, weight
+; cross-confirmed against Wikipedia). The LCD is 48 x 32 dots measuring
+; 37 x 26 mm, which is why the screen quad is that size rather than a fraction
+; of the face -- and why its pixels are not square. The slight horizontal
+; squeeze is the hardware.
 ;
-; Axes: X is the 47 mm width, Y the 80 mm length — the direction it slides into
-; a controller slot — and Z the 16 mm thickness. The screen and the controls are
-; both on the +Z face, screen in the upper half, d-pad and buttons below it, so
-; +Z is what faces a player holding it.
+; Axes: X is the 47 mm width, Y the 80 mm length -- the direction it slides into
+; a controller slot -- and Z the 16 mm thickness. The screen and every control
+; are on the +Z face, so +Z faces a player holding it.
+;
+; THE FACE LAYOUT IS TAKEN FROM A PHOTOGRAPH, not from memory, and read off as
+; fractions of the body before being converted here (the reference is the front
+; view on Wikipedia's Visual Memory Unit article):
+;
+;   connector   dark, protruding from the TOP edge, ~65% of the width
+;   LCD         upper middle, in a recessed bezel, spanning ~21%..53% down
+;   d-pad       round, ~14 mm, below-LEFT at (20%, 72%)
+;   SLEEP MODE  two SMALL buttons at (45%, 68%) and (61%, 68%), labels ABOVE
+;   A     B     two LARGER buttons at (50%, 78%) and (73%, 78%), labels BELOW
+;
+; What is deliberately ABSENT is the Sega "Dreamcast" wordmark and swirl that
+; sit above the screen on the real unit. This repo does not ship borrowed marks
+; (see Textures/Controllers/ATTRIBUTIONS.txt and the NES pad, whose wordmark was
+; deleted); the card's own name goes on the back instead.
 ;
 ; The origin is the body's centre. A snap zone seats an object by composing its
-; GRAB POINT, so the slot's own transform is what decides how deep it sits; there
-; is no baked-in insertion offset here, unlike the N64 pak, because the Dreamcast
-; pad has no authored shell to measure a mating face against yet.
+; GRAB POINT, so the slot's own transform decides how deep the card sits and
+; there is no baked-in insertion offset here.
 [sub_resource type="BoxShape3D" id="Box_body"]
 size = Vector3(0.047, 0.08, 0.016)
 
@@ -30,12 +44,21 @@ size = Vector3(0.047, 0.08, 0.016)
 size = Vector3(0.047, 0.08, 0.016)
 
 [sub_resource type="StandardMaterial3D" id="Mat_shell"]
-albedo_color = Color(0.898039, 0.894118, 0.878431, 1)
+albedo_color = Color(0.898039, 0.890196, 0.870588, 1)
 roughness = 0.55
 
+; The bezel the LCD sits in: a shallow dark frame a little larger than the glass,
+; so the screen reads as inset rather than printed on.
+[sub_resource type="BoxMesh" id="Mesh_bezel"]
+size = Vector3(0.0416, 0.0306, 0.0016)
+
+[sub_resource type="StandardMaterial3D" id="Mat_bezel"]
+albedo_color = Color(0.317647, 0.32549, 0.333333, 1)
+roughness = 0.45
+
 ; The LCD when nothing is driving it: a dark blue-grey panel, unshaded so it
-; reads as a screen rather than as a painted rectangle. The live picture replaces
-; this material rather than tinting it.
+; reads as a screen rather than a painted rectangle. A live picture replaces this
+; material outright rather than tinting it.
 [sub_resource type="StandardMaterial3D" id="Mat_lcd_off"]
 albedo_color = Color(0.243137, 0.278431, 0.278431, 1)
 roughness = 0.35
@@ -43,32 +66,62 @@ shading_mode = 0
 
 ; A QUAD, not a box, and that distinction is load-bearing. Godot lays a BoxMesh's
 ; six faces out as an atlas, so each face carries only a sub-rectangle of the
-; 0..1 UV range — a screen_window material on one showed a corner of the crop
+; 0..1 UV range -- a screen_window material on one showed a corner of the crop
 ; rather than the whole LCD. A QuadMesh maps 0..1 across its single face, which
 ; is what the shader's source_rect assumes.
-;
-; 37 x 26 mm for 48 x 32 dots, which is the real unit's figures: the VMU's pixels
-; genuinely are not square, so the slight horizontal squeeze is the hardware.
 [sub_resource type="QuadMesh" id="Mesh_lcd"]
 size = Vector2(0.037, 0.026)
 
-; Clearly darker than the shell, not a shade of it. At 0.83 against the shell's
-; 0.90 the d-pad and buttons did not read at all in a render — an 8% difference
-; that any reasonable exposure flattens away.
-[sub_resource type="StandardMaterial3D" id="Mat_control"]
-albedo_color = Color(0.42, 0.42, 0.44, 1)
+; The edge connector that slides into the controller's slot. Dark, and proud of
+; the top edge by 6 mm.
+[sub_resource type="BoxMesh" id="Mesh_connector"]
+size = Vector3(0.0305, 0.007, 0.011)
+
+[sub_resource type="StandardMaterial3D" id="Mat_connector"]
+albedo_color = Color(0.223529, 0.227451, 0.235294, 1)
+roughness = 0.6
+metallic = 0.15
+
+; Controls. On the real unit these are barely darker than the shell -- and that
+; is exactly what made the first version's d-pad and buttons invisible in a
+; render, at 0.83 against the shell's 0.90. Real shading carries that contrast;
+; a procedural stand-in under flat light does not, so these are pushed to a
+; readable mid grey. The d-pad is a shade darker again, as it is on the photo.
+[sub_resource type="StandardMaterial3D" id="Mat_button"]
+albedo_color = Color(0.615686, 0.611765, 0.6, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_dpad"]
+albedo_color = Color(0.517647, 0.513726, 0.505882, 1)
 roughness = 0.65
 
-[sub_resource type="BoxMesh" id="Mesh_dpad_h"]
-size = Vector3(0.018, 0.006, 0.003)
+; The d-pad: a 14 mm disc with a raised cross on it.
+[sub_resource type="CylinderMesh" id="Mesh_dpad_disc"]
+top_radius = 0.007
+bottom_radius = 0.007
+height = 0.0022
+radial_segments = 20
+rings = 1
 
-[sub_resource type="BoxMesh" id="Mesh_dpad_v"]
-size = Vector3(0.006, 0.018, 0.003)
+[sub_resource type="BoxMesh" id="Mesh_dpad_arm_h"]
+size = Vector3(0.0116, 0.0036, 0.0014)
 
-[sub_resource type="CylinderMesh" id="Mesh_button"]
+[sub_resource type="BoxMesh" id="Mesh_dpad_arm_v"]
+size = Vector3(0.0036, 0.0116, 0.0014)
+
+; A and B: 7 mm.
+[sub_resource type="CylinderMesh" id="Mesh_btn_big"]
 top_radius = 0.0035
 bottom_radius = 0.0035
-height = 0.003
+height = 0.0022
+radial_segments = 16
+rings = 1
+
+; SLEEP and MODE: 4 mm.
+[sub_resource type="CylinderMesh" id="Mesh_btn_small"]
+top_radius = 0.002
+bottom_radius = 0.002
+height = 0.0018
 radial_segments = 12
 rings = 1
 
@@ -92,41 +145,84 @@ shape = SubResource("Box_body")
 mesh = SubResource("Mesh_body")
 surface_material_override/0 = SubResource("Mat_shell")
 
-; The screen, sitting a hair proud of the +Z face so it never z-fights the shell.
-; vmu_card.gd finds this node by name to hand it a live picture; until something
-; does, it wears the dark panel above.
+[node name="Connector" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0425, 0)
+mesh = SubResource("Mesh_connector")
+surface_material_override/0 = SubResource("Mat_connector")
+
+[node name="Bezel" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0105, 0.008)
+mesh = SubResource("Mesh_bezel")
+surface_material_override/0 = SubResource("Mat_bezel")
+
+; The screen, a hair proud of the bezel so it never z-fights it. vmu_card.gd
+; finds this node by name to hand it a live picture; until something does, it
+; wears the dark panel above.
 [node name="Lcd" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.019, 0.0083)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0105, 0.0089)
 mesh = SubResource("Mesh_lcd")
 surface_material_override/0 = SubResource("Mat_lcd_off")
 
-; A d-pad and two buttons below the screen, drawn only so the thing reads as the
-; handheld it is rather than as a blank slab. They are not interactive here: a
-; seated VMU's controls are inside the pad, and a loose one is driven through the
-; ordinary bindings path when it runs standalone.
-[node name="DpadH" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0125, -0.0175, 0.0085)
-mesh = SubResource("Mesh_dpad_h")
-surface_material_override/0 = SubResource("Mat_control")
+; The d-pad, below-left. Cylinders are authored +Y, so R_x(-90) turns the disc to
+; face +Z -- the row-major form CLAUDE.md records, not the column constructor.
+[node name="Dpad" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -0.0141, -0.0176, 0.0085)
+mesh = SubResource("Mesh_dpad_disc")
+surface_material_override/0 = SubResource("Mat_dpad")
 
-[node name="DpadV" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0125, -0.0175, 0.0085)
-mesh = SubResource("Mesh_dpad_v")
-surface_material_override/0 = SubResource("Mat_control")
+[node name="DpadArmH" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0141, -0.0176, 0.0094)
+mesh = SubResource("Mesh_dpad_arm_h")
+surface_material_override/0 = SubResource("Mat_button")
+
+[node name="DpadArmV" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0141, -0.0176, 0.0094)
+mesh = SubResource("Mesh_dpad_arm_v")
+surface_material_override/0 = SubResource("Mat_button")
+
+[node name="SleepButton" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -0.0024, -0.0144, 0.0083)
+mesh = SubResource("Mesh_btn_small")
+surface_material_override/0 = SubResource("Mat_button")
+
+[node name="ModeButton" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.0054, -0.0144, 0.0083)
+mesh = SubResource("Mesh_btn_small")
+surface_material_override/0 = SubResource("Mat_button")
 
 [node name="ButtonA" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.0105, -0.0135, 0.0085)
-mesh = SubResource("Mesh_button")
-surface_material_override/0 = SubResource("Mat_control")
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, -0.0221, 0.0085)
+mesh = SubResource("Mesh_btn_big")
+surface_material_override/0 = SubResource("Mat_button")
 
 [node name="ButtonB" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.0175, -0.0215, 0.0085)
-mesh = SubResource("Mesh_button")
-surface_material_override/0 = SubResource("Mat_control")
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.0106, -0.0221, 0.0085)
+mesh = SubResource("Mesh_btn_big")
+surface_material_override/0 = SubResource("Mat_button")
+
+; The legends, as they are printed on the real unit: SLEEP and MODE above their
+; buttons, A and B below theirs. Two Label3Ds rather than four, because a card is
+; a small object and there can be eight of them in a room -- see the standing
+; note on draw calls. Spacing is tuned so each word lands over its own button.
+[node name="TopLegend" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0015, -0.0102, 0.0082)
+pixel_size = 0.000075
+alpha_cut = 1
+modulate = Color(0.25, 0.25, 0.27, 1)
+text = "SLEEP  MODE"
+font_size = 40
+
+[node name="BottomLegend" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.005, -0.0281, 0.0082)
+pixel_size = 0.000075
+alpha_cut = 1
+modulate = Color(0.25, 0.25, 0.27, 1)
+text = "A        B"
+font_size = 40
 
 ; Every VMU is the same white slab and each holds a different set of saves, so
-; the name goes on the BACK — the front is the screen. vmu_card.gd finds this
-; node by name.
+; the name goes on the BACK -- the front is the screen and the controls.
+; vmu_card.gd finds this node by name.
 [node name="CardLabel" type="Label3D" parent="."]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.012, -0.0085)
 pixel_size = 0.00016
