@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 299
+const EXPECTED_CASES := 370
 
 var _pass := 0
 var _fail := 0
@@ -51,6 +51,11 @@ func _ready() -> void:
 	_test_ps2_delete()
 	_test_ps2_reject()
 	_test_ps2_fat()
+	_test_vmu_blank()
+	_test_vmu_header_offset()
+	_test_vmu_dci()
+	_test_vmu_roundtrip()
+	_test_vmu_icons()
 	_test_shared_contract()
 	_test_ops()
 	_test_format_registry()
@@ -605,6 +610,9 @@ func _smallest_save_size(fmt: CardFormat) -> int:
 		# The PS2 counts a container's bytes straight into clusters rather than
 		# adding a header, so its smallest one-unit save is exactly one cluster.
 		"playstation2":   return PS2Card.CLUSTER_SIZE
+		# A .dci is one directory entry followed by whole blocks, so the smallest
+		# is that entry plus a single block.
+		"vmu":            return VMUCard.DCI_HEADER + VMUCard.BLOCK_SIZE
 	return 0
 
 
@@ -1183,3 +1191,288 @@ func _test_ps2_fat() -> void:
 		"ps2/fat/and costs its 300 clusters plus both directories")
 	var back := PS2Card.extract_save(card, PS2Card.block_of(card, "BASLUS-30000BIG"))
 	_ok(back == big, "ps2/fat/a chain across the FAT boundary reads back whole")
+
+
+# --- vmu/ ---------------------------------------------------------------------
+#
+# The Dreamcast's Visual Memory Unit. It is a memory card that plugs into a
+# CONTROLLER, so the console declares no card_family and RetroSystem's own slot
+# machinery stays out of it, exactly as the N64's Controller Pak does.
+#
+# Three things about this format are traps rather than details, and each has a
+# case here:
+#
+#   * The FAT's sentinels are the reverse of most published tables — 0xFFFC is
+#     unallocated and 0xFFFA ends a chain. Measured against a card flycast
+#     formatted; the descending directory chain is only self-consistent this way.
+#   * A GAME's header sits one block into the file, not at its start. Reading it
+#     at 0x00 yields plausible garbage rather than an error, so a decoder that
+#     ignores the directory's header-offset field fails silently on exactly the
+#     files this format exists for.
+#   * The layout runs downward: root 255, FAT 254, directory 253 down to 241,
+#     and only blocks 0-199 are the player's.
+#
+# The fixtures are built here rather than loaded, per this file's standing rule.
+# The word swap a .dci carries is implemented independently below so that a bug
+# in VMUCard's own swap cannot hide behind a test that shares it.
+
+
+## Reverse every 32-bit word. Deliberately a second implementation.
+func _vmu_swap(b: PackedByteArray) -> PackedByteArray:
+	var out := b.duplicate()
+	var i := 0
+	while i + 3 < out.size():
+		var t0 := out[i]
+		var t1 := out[i + 1]
+		out[i] = out[i + 3]
+		out[i + 1] = out[i + 2]
+		out[i + 2] = t1
+		out[i + 3] = t0
+		i += 4
+	return out
+
+
+func _vmu_put_ascii(b: PackedByteArray, at: int, s: String) -> void:
+	for i in s.length():
+		b[at + i] = s.unicode_at(i)
+
+
+## One save as a .dci: a 32-byte directory entry, then the body word-swapped.
+## `hdroff` is where the VMS header goes, in blocks — 1 for a game, 0 for data.
+func _vmu_dci(type_byte: int, hdroff: int, blocks: int, name: String,
+		desc: String, icons: int) -> PackedByteArray:
+	var body := PackedByteArray()
+	body.resize(blocks * VMUCard.BLOCK_SIZE)
+	body.fill(0)
+
+	var h := hdroff * VMUCard.BLOCK_SIZE
+	_vmu_put_ascii(body, h + VMUCard.V_DESC, desc)
+	_vmu_put_ascii(body, h + VMUCard.V_DC_DESC, "MENU LINE FOR " + desc)
+	_vmu_put_ascii(body, h + VMUCard.V_APP, "RETROXR")
+	body[h + VMUCard.V_ICONS] = icons
+	body[h + VMUCard.V_ICON_SPEED] = 6
+
+	# Palette entry 1 is opaque red, ARGB4444; everything else transparent.
+	body[h + VMUCard.V_PALETTE + 2] = 0x00     # low byte:  G and B nibbles
+	body[h + VMUCard.V_PALETTE + 3] = 0xFF     # high byte: A and R nibbles
+	# Every pixel of every frame is palette index 1.
+	for f in range(icons):
+		var at := h + VMUCard.V_ICON_DATA + f * VMUCard.ICON_BYTES
+		for i in range(VMUCard.ICON_BYTES):
+			body[at + i] = 0x11
+
+	var entry := PackedByteArray()
+	entry.resize(VMUCard.DIR_ENTRY_SIZE)
+	entry.fill(0)
+	entry[VMUCard.E_TYPE] = type_byte
+	entry[VMUCard.E_COPY] = VMUCard.COPY_OK
+	_vmu_put_ascii(entry, VMUCard.E_NAME, name)
+	entry[VMUCard.E_BLOCKS] = blocks & 0xFF
+	entry[VMUCard.E_BLOCKS + 1] = (blocks >> 8) & 0xFF
+	entry[VMUCard.E_HDROFF] = hdroff
+
+	var out := entry.duplicate()
+	out.append_array(_vmu_swap(body))
+	return out
+
+
+func _vmu_u16(d: PackedByteArray, at: int) -> int:
+	return d[at] | (d[at + 1] << 8)
+
+
+func _test_vmu_blank() -> void:
+	var blank := VMUCard.blank_image()
+	_eq(blank.size(), VMUCard.CARD_SIZE, "vmu/blank/is 128 KB")
+	_ok(VMUCard.is_card_image(blank), "vmu/blank/and parses as a card")
+	_eq(VMUCard.free_blocks(blank), VMUCard.USER_BLOCKS, "vmu/blank/with 200 blocks free")
+	_eq(VMUCard.list_saves(blank, false).size(), 0, "vmu/blank/and nothing on it")
+
+	# The sixteen 0x55 bytes are the whole of "this card is formatted".
+	var r := VMUCard.ROOT_BLOCK * VMUCard.BLOCK_SIZE
+	var sig := true
+	for i in range(16):
+		if blank[r + i] != 0x55:
+			sig = false
+	_ok(sig, "vmu/blank/carries the 0x55 format signature")
+
+	var unsigned_card := blank.duplicate()
+	unsigned_card[r] = 0x00
+	_ok(not VMUCard.is_card_image(unsigned_card),
+		"vmu/blank/an image of the right size without it is not a card")
+
+	# Geometry, read back out of the root block the same way a console would.
+	#
+	# LITERALS on the right, deliberately. Comparing the image against the very
+	# constants it was written from is a check that cannot fail: swapping two of
+	# those consts and re-running left this whole group green, because the blank
+	# and the assertion moved together. These numbers came off a card flycast
+	# formatted, and that is what they are pinned to.
+	_eq(_vmu_u16(blank, r + 0x46), 254, "vmu/blank/root names the FAT at 254")
+	_eq(_vmu_u16(blank, r + 0x4A), 253, "vmu/blank/and the directory at 253")
+	_eq(_vmu_u16(blank, r + 0x4C), 13, "vmu/blank/thirteen blocks of it")
+	_eq(_vmu_u16(blank, r + 0x50), 200, "vmu/blank/and 200 for the player")
+
+	# Every user block unallocated — under the MEASURED sentinel, not the
+	# published one. This is the case that fails if the two are swapped back.
+	var f := 254 * VMUCard.BLOCK_SIZE
+	var all_free := true
+	for b in range(200):
+		if _vmu_u16(blank, f + b * 2) != 0xFFFC:
+			all_free = false
+	_ok(all_free, "vmu/blank/every user block reads 0xFFFC, not 0xFFFA")
+
+	# The directory is a descending chain, 253 down to 241, ending in 0xFFFA.
+	var walked := 0
+	var b_at := 253
+	while walked < 64:
+		walked += 1
+		var nxt := _vmu_u16(blank, f + b_at * 2)
+		if nxt == 0xFFFA:
+			break
+		b_at = nxt
+	_eq(walked, 13, "vmu/blank/the directory chain is thirteen blocks long")
+	_eq(b_at, 241, "vmu/blank/running downward to 241")
+
+	# And the two sentinels are not interchangeable: the value that ends a chain
+	# must not be the value that marks a block free, or a full card reads empty.
+	_ok(VMUCard.FAT_UNALLOCATED == 0xFFFC and VMUCard.FAT_LAST == 0xFFFA,
+		"vmu/blank/the FAT sentinels are the measured way round")
+
+
+func _test_vmu_header_offset() -> void:
+	# The trap: a game's header is one block in. A decoder reading 0x00 sees a
+	# string, just not this one, so the wrong answer looks like an answer.
+	var game := _vmu_dci(VMUCard.TYPE_GAME, 1, 4, "AGAME__1", "REAL GAME NAME", 1)
+	var card := VMUCard.insert_save(VMUCard.blank_image(), game)
+	_ok(not card.is_empty(), "vmu/header/a game inserts")
+	var saves := VMUCard.list_saves(card, false)
+	_eq(saves.size(), 1, "vmu/header/and lists")
+	_eq(str(saves[0]["title"]), "REAL GAME NAME",
+		"vmu/header/its title comes from the header one block in")
+	_ok(bool(saves[0]["is_game"]), "vmu/header/and it reads as a game")
+
+	# A data file puts the header at the very start, and must ALSO work.
+	var data := _vmu_dci(VMUCard.TYPE_DATA, 0, 3, "ADATA__1", "REAL DATA NAME", 1)
+	var card2 := VMUCard.insert_save(VMUCard.blank_image(), data)
+	var saves2 := VMUCard.list_saves(card2, false)
+	_eq(saves2.size(), 1, "vmu/header/a data file lists too")
+	_eq(str(saves2[0]["title"]), "REAL DATA NAME",
+		"vmu/header/its title comes from the start of the file")
+	_ok(not bool(saves2[0]["is_game"]), "vmu/header/and it does not read as a game")
+
+	# Both put their description at the same offset WITHIN their own header, so
+	# a decoder ignoring hdroff would get exactly one of these two right.
+	_ok(str(saves[0]["title"]) != str(saves2[0]["title"]),
+		"vmu/header/the two are told apart by their header offset alone")
+
+
+func _test_vmu_dci() -> void:
+	var dci := _vmu_dci(VMUCard.TYPE_GAME, 1, 4, "AGAME__1", "A GAME", 1)
+	_ok(VMUCard.is_dci(dci), "vmu/dci/a well-formed .dci is accepted")
+	_eq(dci.size(), VMUCard.DCI_HEADER + 4 * VMUCard.BLOCK_SIZE,
+		"vmu/dci/32 bytes then the body")
+
+	# The swap is its own inverse, and VMUCard's must agree with an independent
+	# implementation rather than only with itself.
+	var body := dci.slice(VMUCard.DCI_HEADER)
+	_ok(VMUCard._word_swap(body) == _vmu_swap(body),
+		"vmu/dci/the word swap matches an independent implementation")
+	_ok(VMUCard._word_swap(VMUCard._word_swap(body)) == body,
+		"vmu/dci/and is its own inverse")
+
+	var short_file := dci.slice(0, VMUCard.DCI_HEADER)
+	_ok(not VMUCard.is_dci(short_file), "vmu/dci/a header with no body is refused")
+
+	var ragged := dci.duplicate()
+	ragged.resize(dci.size() - 1)
+	_ok(not VMUCard.is_dci(ragged), "vmu/dci/a body that is not whole blocks is refused")
+
+	var bad_type := dci.duplicate()
+	bad_type[VMUCard.E_TYPE] = 0x77
+	_ok(not VMUCard.is_dci(bad_type), "vmu/dci/an unknown type byte is refused")
+
+	var lying := dci.duplicate()
+	lying[VMUCard.E_BLOCKS] = 9
+	_ok(not VMUCard.is_dci(lying),
+		"vmu/dci/a block count that contradicts the length is refused")
+
+	var far_header := dci.duplicate()
+	far_header[VMUCard.E_HDROFF] = 9
+	_ok(not VMUCard.is_dci(far_header), "vmu/dci/a header outside the file is refused")
+
+	# And another console's save must not be taken for one of these.
+	_ok(not VMUCard.is_dci(PS1Card.blank_image()),
+		"vmu/dci/another console's bytes are not a VMU save")
+
+
+func _test_vmu_roundtrip() -> void:
+	var blank := VMUCard.blank_image()
+	var dci := _vmu_dci(VMUCard.TYPE_GAME, 1, 6, "SONICADV__VM", "CHAO GARDEN", 3)
+
+	var card := VMUCard.insert_save(blank, dci)
+	_ok(not card.is_empty(), "vmu/trip/a save inserts")
+	_eq(VMUCard.free_blocks(card), VMUCard.USER_BLOCKS - 6,
+		"vmu/trip/costing its six blocks")
+
+	var saves := VMUCard.list_saves(card, false)
+	_eq(saves.size(), 1, "vmu/trip/and appears once")
+	_eq(str(saves[0]["name"]), "SONICADV__VM", "vmu/trip/under its on-card name")
+	_eq(int(saves[0]["blocks"]), 6, "vmu/trip/with its own block count")
+	_eq(VMUCard.block_of(card, "SONICADV__VM"), int(saves[0]["block"]),
+		"vmu/trip/and is found by name")
+	_eq(VMUCard.block_of(card, "NOTHERE"), -1, "vmu/trip/an absent name has no handle")
+
+	# The whole point of lifting a save as a .dci: it comes back identical.
+	var back := VMUCard.extract_save(card, int(saves[0]["block"]))
+	_ok(back == dci, "vmu/trip/and lifts off byte for byte")
+
+	# A second copy of the same name is a collision, not a second save.
+	_ok(VMUCard.insert_save(card, dci).is_empty(),
+		"vmu/trip/the same name twice is refused")
+
+	# A different name is fine, and must land on different blocks.
+	var other := _vmu_dci(VMUCard.TYPE_DATA, 0, 2, "OTHER__1", "OTHER", 1)
+	var two := VMUCard.insert_save(card, other)
+	_eq(VMUCard.list_saves(two, false).size(), 2, "vmu/trip/a second save fits beside it")
+	_eq(VMUCard.free_blocks(two), VMUCard.USER_BLOCKS - 8,
+		"vmu/trip/costing two more blocks")
+	_ok(VMUCard.extract_save(two, VMUCard.block_of(two, "SONICADV__VM")) == dci,
+		"vmu/trip/and the first still reads back whole")
+
+	var gone := VMUCard.delete_save(two, VMUCard.block_of(two, "SONICADV__VM"))
+	_eq(VMUCard.list_saves(gone, false).size(), 1, "vmu/trip/deleting one leaves the other")
+	_eq(VMUCard.free_blocks(gone), VMUCard.USER_BLOCKS - 2, "vmu/trip/and frees its blocks")
+	_ok(VMUCard.extract_save(gone, VMUCard.block_of(gone, "OTHER__1")) == other,
+		"vmu/trip/which still reads back whole")
+
+	# A save larger than the card cannot go on it.
+	var huge := _vmu_dci(VMUCard.TYPE_DATA, 0, VMUCard.USER_BLOCKS + 1,
+		"HUGE__1", "HUGE", 1)
+	_ok(VMUCard.insert_save(blank, huge).is_empty(),
+		"vmu/trip/a save bigger than the card is refused")
+
+
+func _test_vmu_icons() -> void:
+	var dci := _vmu_dci(VMUCard.TYPE_GAME, 1, 6, "ICONS__1", "THREE FRAMES", 3)
+	var card := VMUCard.insert_save(VMUCard.blank_image(), dci)
+	var saves := VMUCard.list_saves(card, true)
+	_eq(saves.size(), 1, "vmu/icons/the save lists")
+
+	var icons: Array = saves[0]["icons"]
+	_eq(icons.size(), 3, "vmu/icons/with all three frames")
+	var img := icons[0] as Image
+	_ok(img != null, "vmu/icons/each frame is an image")
+	if img != null:
+		_eq(img.get_width(), VMUCard.ICON_W, "vmu/icons/32 pixels across")
+		_eq(img.get_height(), VMUCard.ICON_H, "vmu/icons/and 32 down")
+		# Palette entry 1 was opaque red in ARGB4444, and every pixel used it, so
+		# a nibble read the wrong way round or a channel swap shows up here.
+		var c := img.get_pixel(5, 7)
+		_ok(c.is_equal_approx(Color8(255, 0, 0, 255)),
+			"vmu/icons/ARGB4444 decodes to the colour it named", str(c))
+
+	# Asked for no pictures it must decode none — that is the expensive half,
+	# and the save list turns it off.
+	var cheap := VMUCard.list_saves(card, false)
+	_eq((cheap[0]["icons"] as Array).size(), 0,
+		"vmu/icons/and are skipped when not wanted")

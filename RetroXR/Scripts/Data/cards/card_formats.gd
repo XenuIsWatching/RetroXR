@@ -17,7 +17,7 @@ static func _build() -> void:
 	if not _by_family.is_empty():
 		return
 	for fmt: CardFormat in [PS1CardFormat.new(), PS2CardFormat.new(),
-			GCCardFormat.new(), N64CardFormat.new()]:
+			GCCardFormat.new(), N64CardFormat.new(), VMUCardFormat.new()]:
 		_by_family[fmt.id()] = fmt
 
 
