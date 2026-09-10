@@ -47,6 +47,78 @@ const PER_CONTENT_KEY := "reicast_per_content_vmus"
 ## memory card — the same distinction pcsx_rearmed's `_inserted` option draws.
 const SLOT_EMPTY := "None"
 
+
+# --- The VMU's own screen -----------------------------------------------------
+#
+# flycast has no second video output: it burns each VMU's 48 x 32 LCD into the
+# main framebuffer at a chosen corner, size and opacity. RetroXR crops it back
+# out onto the card's own face with screen_window.gdshader, the same way the 3DS
+# bottom screen is cut out of a composite frame.
+#
+# The screen options are indexed per PORT, not per slot, and flycast gates them
+# on MapleExpansionDevices[i][0] — so only the card in SLOT 1 has a screen. That
+# is the hardware, not a shortcut: only the front slot has a window in the
+# controller's shell, and a VMU in the back one is buried.
+
+const SCREEN_DISPLAY_KEY  := "reicast_vmu%d_screen_display"
+const SCREEN_POSITION_KEY := "reicast_vmu%d_screen_position"
+const SCREEN_SIZE_KEY     := "reicast_vmu%d_screen_size_mult"
+const SCREEN_OPACITY_KEY  := "reicast_vmu%d_screen_opacity"
+
+## Gates every option above, defaults to disabled, and is NOT merely a
+## menu-visibility toggle: with it off the screen options do nothing at all.
+const SHOW_SCREEN_KEY := "reicast_show_vmu_screen_settings"
+
+## The LCD's true resolution.
+const LCD_SIZE := Vector2i(48, 32)
+
+## Where flycast puts the panel, MEASURED rather than assumed: a constant 8 px in
+## from the chosen corner, on both axes, at every position and multiplier. See
+## Tools/cores/vmu_overlay_probe, which pins the whole rule.
+const SCREEN_INSET := 8
+
+## 1x, so the crop is the LCD's own 48 x 32 pixels — the card's face is about
+## 37 x 26 mm and wants no more than that. It is also the least the overlay can
+## intrude on the picture the television is showing, which it shares until the
+## core stops burning it in.
+const SCREEN_MULT := 1
+
+## Upper left. Any corner works; this one is picked so the rect is simply
+## (8, 8) and does not move when the core changes resolution.
+const SCREEN_POSITION := "Upper Left"
+
+
+## The options that put one port's VMU screen where screen_rect expects it.
+static func screen_options(port: int, enabled: bool) -> Dictionary:
+	var n := port + 1
+	return {
+		SHOW_SCREEN_KEY: "enabled",
+		SCREEN_DISPLAY_KEY % n: "enabled" if enabled else "disabled",
+		SCREEN_POSITION_KEY % n: SCREEN_POSITION,
+		SCREEN_SIZE_KEY % n: "%dx" % SCREEN_MULT,
+		SCREEN_OPACITY_KEY % n: "100%",
+	}
+
+
+## The window into the core's frame that holds one VMU's LCD, in UV.
+##
+## Derived from the LIVE texture size every time, because flycast places the
+## panel relative to the output resolution and that follows the core rather than
+## anything here. An empty rect when the size is not known yet.
+static func screen_rect(frame: Vector2i) -> Rect2:
+	if frame.x <= 0 or frame.y <= 0:
+		return Rect2()
+	var w := LCD_SIZE.x * SCREEN_MULT
+	var h := LCD_SIZE.y * SCREEN_MULT
+	var x := SCREEN_INSET
+	var y := SCREEN_INSET
+	if SCREEN_POSITION.ends_with("Right"):
+		x = frame.x - SCREEN_INSET - w
+	if SCREEN_POSITION.begins_with("Lower"):
+		y = frame.y - SCREEN_INSET - h
+	return Rect2(float(x) / frame.x, float(y) / frame.y,
+		float(w) / frame.x, float(h) / frame.y)
+
 var _host: RetroSystem = null
 ## Which card id was staged into which "<Port><Slot>" name this run, so a drain
 ## knows where to put the bytes back even if the card has since been pulled.
@@ -128,6 +200,9 @@ func stage_before_start(dir: String, core: String) -> void:
 		var port: int = entry["port"]
 		var slot: int = entry["slot"]
 		opts[SLOT_KEY % [port + 1, slot + 1]] = str(entry["value"])
+		# Only slot 1 has a screen, in the hardware and in the core.
+		if slot == 0:
+			opts.merge(screen_options(port, is_instance_valid(entry["card"])), true)
 
 		var path := core_vmu_path(dir, core, port, slot)
 		var card: Node = entry["card"]
@@ -146,6 +221,28 @@ func stage_before_start(dir: String, core: String) -> void:
 
 	if not opts.is_empty() and CoreOptionsStore.merge_values(dir, core, opts):
 		print("[VmuStorage] slots pinned before boot: %s" % str(opts))
+
+
+## Make flycast read the per-slot device options, which the load pass does not.
+##
+## Measured, and not something the option file can do on its own: flycast guards
+## that whole block with `!first_startup`, so the load pass leaves
+## MapleExpansionDevices at its static default and creates no VMU at all — a
+## controller with two empty sockets. A SECOND update_variables() does read them,
+## and the frontend triggers one by marking any variable updated. Re-asserting
+## the value already pinned is enough, and is a no-op on every other core.
+##
+## Called after the core is up, from the content-start path.
+func nudge_slots_after_start() -> void:
+	if not _uses_vmus():
+		return
+	var lib: Node = _host.get_libretro_node()
+	if lib == null or not lib.has_method("SetCoreOption"):
+		return
+	for entry: Dictionary in _seated():
+		var key := SLOT_KEY % [int(entry["port"]) + 1, int(entry["slot"]) + 1]
+		lib.SetCoreOption(key, str(entry["value"]))
+	print("[VmuStorage] re-asserted the slot options so the core reads them")
 
 
 ## One card's image, creating it only for a card this session invented.

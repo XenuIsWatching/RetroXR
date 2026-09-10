@@ -59,8 +59,32 @@ var systemid: String = PLUG_SYSTEMID
 ## saves were wiped.
 var minted := false
 
+const SCREEN_WINDOW_SHADER := preload("res://Shaders/screen_window.gdshader")
+
 var _options_panel: MemoryCardPanel = null
 var _hint: HeldHint = null
+
+# --- The screen ---------------------------------------------------------------
+#
+# flycast burns the VMU's 48 x 32 LCD into a corner of the main framebuffer, so
+# the card's face shows that corner cropped back out with screen_window — the
+# same mechanism the 3DS bottom screen uses on a composite frame. The rect and
+# the options that put it there live on VmuStorage.
+#
+# Only SLOT 1 lights up. That is the hardware (only the front slot has a window
+# in the controller's shell) and the core agrees: its screen options are indexed
+# per port and gate on the slot-1 device alone.
+
+## Which slot this card is seated in, or -1 when it is loose. Set by VmuPort.
+var _slot := -1
+## The pad it is seated in, for reaching the machine on the other end.
+var _pad: Node = null
+
+var _lcd: MeshInstance3D = null
+var _lcd_off_mat: Material = null
+var _lcd_mat: ShaderMaterial = null
+var _last_tex: Texture2D = null
+var _last_frame := Vector2i.ZERO
 
 
 func _ready() -> void:
@@ -83,6 +107,86 @@ func _ready() -> void:
 		minted = true
 	_update_label()
 	_hint = HeldHint.attach(self, true, HINT_HEIGHT)
+
+	_lcd = get_node_or_null("Lcd") as MeshInstance3D
+	if _lcd != null:
+		# The authored dark panel is what a VMU shows with nothing driving it, and
+		# is kept rather than rebuilt so an unseated card looks the same as it
+		# does on a shelf.
+		_lcd_off_mat = _lcd.get_surface_override_material(0)
+	set_process(false)
+
+
+# --- Seating ------------------------------------------------------------------
+
+## Told by VmuPort which slot took this card, and on which pad.
+func seated_in(pad: Node, slot: int) -> void:
+	_pad = pad
+	_slot = slot
+	# Slot 2 has no window in the shell and no screen in the core, so it never
+	# needs driving. Neither does a loose card.
+	set_process(_slot == 0)
+	if _slot != 0:
+		_show_off()
+
+
+func unseated() -> void:
+	_pad = null
+	_slot = -1
+	set_process(false)
+	_show_off()
+
+
+## The machine this card is plugged into, through the pad holding it, or null.
+func host_system() -> Node:
+	if not is_instance_valid(_pad) or not _pad.has_method("get_connected_system"):
+		return null
+	var sys: Node = _pad.call("get_connected_system")
+	return sys if is_instance_valid(sys) else null
+
+
+# --- The screen ---------------------------------------------------------------
+
+func _show_off() -> void:
+	if _lcd != null and _lcd.get_surface_override_material(0) != _lcd_off_mat:
+		_lcd.set_surface_override_material(0, _lcd_off_mat)
+	_last_tex = null
+	_last_frame = Vector2i.ZERO
+
+
+func _process(_delta: float) -> void:
+	if _lcd == null:
+		return
+	var sys := host_system()
+	if sys == null or not sys.has_method("get_video_texture"):
+		_show_off()
+		return
+	var tex: Texture2D = sys.call("get_video_texture")
+	if tex == null:
+		_show_off()
+		return
+
+	if _lcd_mat == null:
+		_lcd_mat = ShaderMaterial.new()
+		_lcd_mat.shader = SCREEN_WINDOW_SHADER
+
+	# The texture is a NEW object whenever the core changes resolution, so it is
+	# read every frame and only pushed when it differs. The rect has to be
+	# recomputed with it: flycast places the panel relative to the output size,
+	# so a rect worked out once goes wrong the moment the core resizes.
+	if tex != _last_tex:
+		_last_tex = tex
+		_lcd_mat.set_shader_parameter("source_tex", tex)
+	var frame := tex.get_size()
+	var frame_i := Vector2i(int(frame.x), int(frame.y))
+	if frame_i != _last_frame:
+		_last_frame = frame_i
+		var r := VmuStorage.screen_rect(frame_i)
+		_lcd_mat.set_shader_parameter("source_rect",
+			Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
+
+	if _lcd.get_surface_override_material(0) != _lcd_mat:
+		_lcd.set_surface_override_material(0, _lcd_mat)
 
 
 ## What flycast's per-slot device option should be set to while this is seated.

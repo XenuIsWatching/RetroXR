@@ -109,6 +109,12 @@ func _build() -> void:
 
 
 func _teardown() -> void:
+	# Unseat explicitly rather than trusting drop_object's signal to arrive: the
+	# zone is freed on the same pass, and a card left thinking it is still seated
+	# would keep driving a screen for a machine it is no longer plugged into.
+	for card in _cards:
+		if is_instance_valid(card):
+			card.unseated()
 	for zone in _zones:
 		if is_instance_valid(zone):
 			if zone.has_snapped_object():
@@ -128,8 +134,12 @@ func _on_seated(obj: Node3D, slot: int) -> void:
 	if slot < 0 or slot >= _cards.size():
 		return
 	_cards[slot] = obj as VmuCard
-	if _cards[slot] != null and _owner is CollisionObject3D:
-		(_owner as CollisionObject3D).add_collision_exception_with(_cards[slot])
+	if _cards[slot] != null:
+		if _owner is CollisionObject3D:
+			(_owner as CollisionObject3D).add_collision_exception_with(_cards[slot])
+		# The card cannot work out which slot took it, or reach the machine on
+		# the far side of this pad, so it is told. Only slot 1 drives a screen.
+		_cards[slot].seated_in(_owner, slot)
 	announce()
 
 
@@ -138,8 +148,11 @@ func _on_seated(obj: Node3D, slot: int) -> void:
 func _on_removed(slot: int) -> void:
 	if slot < 0 or slot >= _cards.size():
 		return
-	if is_instance_valid(_cards[slot]) and _owner is CollisionObject3D:
-		(_owner as CollisionObject3D).remove_collision_exception_with(_cards[slot])
+	if is_instance_valid(_cards[slot]):
+		if _owner is CollisionObject3D:
+			(_owner as CollisionObject3D).remove_collision_exception_with(_cards[slot])
+		# Back to a dark panel: a card in a hand shows nothing.
+		_cards[slot].unseated()
 	_cards[slot] = null
 	announce()
 

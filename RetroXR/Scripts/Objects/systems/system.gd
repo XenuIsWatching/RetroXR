@@ -3616,6 +3616,12 @@ func _ensure_port_devices_bound() -> void:
 		return
 	_port_devices_settled = true
 	_reannounce_port_devices()
+	# And the Dreamcast's VMU slots, which need the core to have run a frame for
+	# the same reason this function does: flycast reads its per-slot device
+	# options only once `first_startup` is false, which it clears at the end of
+	# its first retro_run. Nudged earlier the re-read is consumed while that flag
+	# is still set, and the card never appears. See VmuStorage.
+	_vmu.nudge_slots_after_start()
 
 
 ## Re-apply every plugged pad's preferred pad type. Called when the option set
