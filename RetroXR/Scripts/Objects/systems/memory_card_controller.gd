@@ -104,7 +104,9 @@ func on_memcard_removed(slot: int) -> void:
 	# Read through is_instance_valid rather than the array: a card can be freed
 	# before its slot hears, and binding a freed instance to a typed local is an
 	# error where testing it is not.
-	var pulled: Node3D = _snapped_memcards[slot] 		if is_instance_valid(_snapped_memcards[slot]) else null
+	var pulled: Node3D = null
+	if is_instance_valid(_snapped_memcards[slot]):
+		pulled = _snapped_memcards[slot]
 	_log("slot %d -> pulled card %s%s" % [slot,
 		str(pulled.get("card_id")) if pulled != null else "(none)",
 		" while running" if _host.is_powered_on else ""])
