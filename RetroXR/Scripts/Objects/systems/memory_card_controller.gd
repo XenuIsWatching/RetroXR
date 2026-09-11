@@ -556,11 +556,23 @@ func sram_path_for_run(resolved_core: String) -> String:
 
 
 ## True when the core keeps its own card files and takes paths, rather than
-## publishing each card as a memory region the frontend reads and writes.
-## Dolphin is the only one. It decides how a card is mounted, whether the flush
-## signal fires at all, and so whether the file poller below is needed.
+## publishing each card as a memory region the frontend reads and writes. It
+## decides how a card is mounted, whether the flush signal fires at all, and so
+## whether the file poller below is needed.
+##
+## THREE cores, not one. Dolphin takes a verbatim absolute path per slot, so it
+## needs no staging and is named here directly. Both PlayStation 2 cores instead
+## open files under names of their own choosing, so `MemcardMounts` describes
+## where — and that table is the authority on which those are, rather than a
+## second list kept in step by hand.
+##
+## Answering only "dolphin" here is not a small miss: it silently takes the PS2
+## down the published-card path, where nothing stages a card into the directory
+## the core reads AND nothing starts the poller that carries writes back. The
+## core then invents a card of its own, the player saves into it, and the save
+## exists — in a file RetroXR never looks at.
 func _core_owns_card_files(resolved_core: String) -> bool:
-	return resolved_core.begins_with("dolphin")
+	return resolved_core.begins_with("dolphin") or MemcardMounts.has(resolved_core)
 
 
 ## Hand a second card to a core that publishes one. pcsx_rearmed puts slot 2

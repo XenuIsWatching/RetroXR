@@ -1599,6 +1599,26 @@ func _test_memcard_presence() -> void:
 	_ok(not MemcardMounts.live_swap("pcsx2"),
 		"memcard/a card swap on pcsx2 waits for a power cycle")
 	_ok(MemcardMounts.live_swap("pcee2"), "memcard/where pcee2 re-opens live")
+
+	# The gate that decides whether a card is STAGED for the core and whether the
+	# poller that carries its writes back is started at all. Both hang off this
+	# one predicate, so a core missing from it loses the mirror AND the drain:
+	# the core invents a card of its own, the player saves into it, and the save
+	# lands in a file RetroXR never reads. That shipped once, when the predicate
+	# named Dolphin alone and the two PlayStation 2 cores had been added since.
+	#
+	# Asserted against the TABLE rather than a second list, since the table is
+	# what every other decision here already reads.
+	var ctl: Node = gc.get_node_or_null("MemoryCardController")
+	_ok(ctl != null, "memcard/the machine owns a card controller")
+	if ctl != null:
+		for core: String in ["pcsx2", "pcee2"]:
+			_ok(bool(ctl.call("_core_owns_card_files", core)),
+				"memcard/%s takes the owns-its-files path" % core)
+		_ok(bool(ctl.call("_core_owns_card_files", "dolphin")),
+			"memcard/so does Dolphin, which takes a path instead")
+		_ok(not bool(ctl.call("_core_owns_card_files", "pcsx_rearmed")),
+			"memcard/while a published-card core does not")
 	_ok(MemcardMounts.mount_dir("pcsx2").ends_with("pcsx2/memcards"),
 		"memcard/both look under their own system dir")
 	_ok(MemcardMounts.mount_dir("pcee2") != MemcardMounts.mount_dir("pcsx2"),
