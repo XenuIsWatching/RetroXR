@@ -906,7 +906,7 @@ func _card_scene_for(family: String) -> PackedScene:
 ## Add obj to the scene, place it 0.5 m in front of the menu, then hand it to
 ## whichever hand clicked the spawn button. A full hand
 ## blocks the spawn ("Drop Item From Hand First" in the menu's status bar).
-func _place_spawned(obj: Node3D, _type: String) -> void:
+func _place_spawned(obj: Node3D, type: String) -> void:
 	var grabber := _spawn_grabber()
 	if grabber != null and _grabber_busy(grabber):
 		obj.queue_free()
@@ -916,6 +916,7 @@ func _place_spawned(obj: Node3D, _type: String) -> void:
 		return
 	get_tree().current_scene.add_child(obj)
 	obj.add_to_group("spawned")
+	print("[Spawn] spawned %s (%s)" % [obj.name, type])
 	var fwd := -global_transform.basis.z
 	fwd.y = 0.0
 	if fwd.length_squared() < 0.001:

@@ -936,13 +936,6 @@ func _end_ray_grab() -> void:
 		# Apply throw velocity so the object can be tossed
 		released.linear_velocity = _velocity_averager.linear_velocity() * impulse_factor
 		released.angular_velocity = _velocity_averager.angular_velocity()
-		# LOCAL PATCH (RetroXR): let the object say why it landed nowhere. A ray
-		# grab never emits `dropped`, so anything listening for that hears nothing
-		# on this path, and a socket that declines an object is silent by design.
-		# Between the two, a plug that will not go in looks exactly like a plug
-		# that was never quite aimed.
-		if released.has_method("report_missed_socket"):
-			released.report_missed_socket()
 
 	if _locomotion_manager:
 		_locomotion_manager.set_block(_ray_grab_block_owner, LocomotionManager.CHANNEL_ALL, false)
