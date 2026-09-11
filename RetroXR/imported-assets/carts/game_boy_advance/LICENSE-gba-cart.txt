@@ -1,0 +1,12 @@
+Game Boy Advance cartridge (gba_cart.glb)
+
+Own work. Photogrammetry reconstruction from Ryan McClelland's photographs
+of a cartridge, rebuilt as clean geometry and decimated to 2,595 triangles
+with a 1K baked atlas (base color, tangent normal, packed ORM). No label
+artwork is included: the Label mesh carries a plain white placeholder that
+the cartridge script covers with the scraped label art.
+
+Licensed with the rest of RetroXR (see the repository LICENSE).
+
+The front "Game Boy Advance" molding and the rear "Nintendo" wordmark are
+left off the atlas; the model number and country/patent markings remain.

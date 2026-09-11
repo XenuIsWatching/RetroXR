@@ -42,12 +42,13 @@ const _CART_MODELS := {
 	"nes": "res://imported-assets/carts/nes/nes_cart.glb",
 	"atari_2600": "res://imported-assets/carts/atari_2600/atari_2600_cart.glb",
 	"nintendo_64dd": Nintendo64DD.DISK_MODEL,
+	"game_boy_advance": "res://imported-assets/carts/game_boy_advance/gba_cart.glb",
 }
 
-## Name of the model's swappable label face, which _apply_label_art covers with
-## the scraped art. Kept as a constant so a model that names it something else
-## can be special-cased without touching the lookup.
-const _LABEL_MESH := "media_label"
+## Names of the model's swappable label face, which _apply_label_art covers with
+## the scraped art. The Sketchfab carts call it media_label; our own GBA scan
+## calls it Label. First match wins.
+const _LABEL_MESHES := ["media_label", "Label"]
 
 ## Where the scraped art goes on a model whose label face is not the flat
 ## quad the art should cover, as a rect on the +Z face in cart space. The
@@ -183,7 +184,10 @@ func _apply_cart_model() -> void:
 	ModelMaterialFix.demetal(glb)
 	if systemid == "nintendo_64dd" and Nintendo64DD.is_dev_disk(rom_path):
 		ModelMaterialFix.retexture(glb, "shell", Nintendo64DD.DISK_DEV_ALBEDO)
-	_model_label = glb.find_child(_LABEL_MESH, true, false) as MeshInstance3D
+	for nm: String in _LABEL_MESHES:
+		_model_label = glb.find_child(nm, true, false) as MeshInstance3D
+		if _model_label != null:
+			break
 	# The procedural stand-ins are replaced by the real shell.
 	for nm in ["CartridgeMesh", "LabelMesh", "GameLabel"]:
 		var n := get_node_or_null(nm) as Node3D
