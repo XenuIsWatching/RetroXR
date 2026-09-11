@@ -1395,6 +1395,26 @@ when a refactor lifted the old slot-count test into a named predicate that said
 Dolphin alone. It asks `MemcardMounts` now, and `system_tests` pins it against
 that table rather than a second list.
 
+**Every card event prints a line**, `[MemoryCard] <machine>: …` — a card seated
+or pulled, the route a mount took and what each slot resolved to, bytes staged
+into a core's directory, bytes drained back out, and an image seen to change.
+Events only; a poll tick that found nothing is silent. That is a direct answer to
+the bug above: a drain that was never running and a drain that ran and found
+nothing looked identical from outside, so every line names a slot, a file and a
+byte count, which is what tells those two apart.
+
+**LRPS2 runs on VULKAN here, and blanks fields through a null image.** Its
+renderer option defaults to `Auto`, which asks the frontend what it prefers, and
+RetroXR answers Vulkan (`g_preferred_hw_render`) — so the D3D11/OpenGL line in the
+vendored `.info` describes neither what the core can do nor what it does here. The
+overlay `pcsx2_libretro.info` says so. What follows from it: when the PS2's PCRTC
+has nothing to merge, `GSDeviceVK::PresentRect` calls `set_image(nullptr)` and
+then refreshes anyway, expecting the frontend to paint black. That is ordinary
+traffic around every video-mode change — Ace Combat 04 does it on about 7% of
+frames — and `ReadbackToPixels` used to log an error on each one. It now
+distinguishes a RETRACTED image from one the core never published: the first is
+silent and keeps the last frame, the second is a protocol error worth one line.
+
 **Still owed:** netplay does not carry a PS2 card — `net_sram_file_bytes` is
 slot-A-and-SAVE_RAM only, which is the same gap Dolphin has.
 

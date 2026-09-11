@@ -31,6 +31,21 @@ extends Node
 var _host: RetroSystem = null
 
 
+## One line per card EVENT -- a card seated or pulled, a slot mounted, bytes
+## staged into a core's directory or drained back out, an image seen to change.
+##
+## Not decoration. A card's whole journey used to be silent, so a save that the
+## game's own LOAD screen listed but the panel did not showed nothing anywhere,
+## and the drain that was never running looked exactly like a drain that ran and
+## found nothing. Every line below names a slot, a path and a byte count for
+## that reason: those three are what tell the two apart.
+##
+## Events only. Nothing here fires on a poll tick that found no change, so a
+## quiet run is quiet.
+func _log(what: String) -> void:
+	print("[MemoryCard] %s: %s" % [_host.name if _host != null else "?", what])
+
+
 func setup(host: RetroSystem) -> void:
 	_host = host
 
@@ -71,6 +86,8 @@ func get_snapped_memcard(slot := 0) -> Node3D:
 func on_memcard_inserted(card: Node3D, slot: int) -> void:
 	_snapped_memcards[slot] = card
 	_host.add_collision_exception_with(card)
+	_log("slot %d <- card %s (%s)%s" % [slot, str(card.get("card_id")),
+		card_family(), " while running" if _host.is_powered_on else ""])
 	if _host.is_powered_on:
 		# Hot-swap: the C++ side flushes the old card and loads this one —
 		# except mid-netplay, where SRAM is part of the deterministic state.
@@ -84,6 +101,13 @@ func on_memcard_inserted(card: Node3D, slot: int) -> void:
 
 
 func on_memcard_removed(slot: int) -> void:
+	# Read through is_instance_valid rather than the array: a card can be freed
+	# before its slot hears, and binding a freed instance to a typed local is an
+	# error where testing it is not.
+	var pulled: Node3D = _snapped_memcards[slot] 		if is_instance_valid(_snapped_memcards[slot]) else null
+	_log("slot %d -> pulled card %s%s" % [slot,
+		str(pulled.get("card_id")) if pulled != null else "(none)",
+		" while running" if _host.is_powered_on else ""])
 	if _snapped_memcards[slot]:
 		_host.remove_collision_exception_with(_snapped_memcards[slot])
 		_snapped_memcards[slot] = null
@@ -319,6 +343,8 @@ func start_card_polling() -> void:
 	_card_mtimes = [0, 0]
 	_card_poll_until = 0.0
 	_card_poll_timer.start()
+	_log("watching %s's card files every %.0fs"
+		% [_host.resolve_core_name(), CARD_POLL_SEC])
 
 
 ## Keep polling for a while after the machine goes off, then stop. The last write
@@ -357,6 +383,8 @@ func _poll_cards() -> void:
 		if fmt == null or not fmt.is_card_image(data):
 			continue
 		_card_mtimes[slot] = mtime
+		_log("slot %d: %s changed (%d bytes, %d saves)"
+			% [slot, path.get_file(), data.size(), fmt.list_saves(data, false).size()])
 		_sync_card_saves(fmt, slot, path)
 
 
@@ -549,10 +577,31 @@ func sram_path_for_run(resolved_core: String) -> String:
 	for slot in card_slot_count():
 		paths.append(_card_path_for_run(resolved_core, slot))
 	if _core_owns_card_files(resolved_core):
+		_log("mount %s: the core owns its card files; slots %s"
+			% [resolved_core, _slot_summary(paths)])
 		_mount_core_cards(resolved_core, paths)
 		return ""
+	_log("mount %s: through SAVE_RAM; slots %s"
+		% [resolved_core, _slot_summary(paths)])
 	_mount_second_card(resolved_core, paths)
 	return paths[0] if not paths.is_empty() else ""
+
+
+## What each slot resolved to, for one mount line. The FILE, not the card id:
+## which image a slot is pointed at is the thing that goes wrong, and a slot
+## holding nothing has to read differently from one whose path failed to
+## resolve.
+func _slot_summary(paths: Array[String]) -> String:
+	var out: Array[String] = []
+	for slot in card_slot_count():
+		var card := get_snapped_memcard(slot)
+		if card == null:
+			out.append("%d=empty" % slot)
+			continue
+		var path := paths[slot] if slot < paths.size() else ""
+		out.append("%d=%s" % [slot,
+			path.get_file() if not path.is_empty() else "UNRESOLVED"])
+	return ", ".join(out)
 
 
 ## True when the core keeps its own card files and takes paths, rather than
@@ -656,8 +705,13 @@ func _mirror_cards_in(resolved_core: String, row: Dictionary,
 			_scratch_paths[slot] = ""
 			if slot < enable_keys.size():
 				_host.set_core_option(str(enable_keys[slot]), "disabled")
+				_log("slot %d empty: told %s the slot is disabled"
+					% [slot, resolved_core])
 			elif FileAccess.file_exists(dst):
 				DirAccess.remove_absolute(dst)
+				_log("slot %d empty: removed the stale %s; %s has fixed card "
+					% [slot, dst.get_file(), resolved_core]
+					+ "names and will invent an unformatted card of its own")
 			continue
 
 		_scratch_paths[slot] = dst
@@ -672,6 +726,8 @@ func _mirror_cards_in(resolved_core: String, row: Dictionary,
 				% [card_id, resolved_core])
 			continue
 		_scratch_mtimes[slot] = FileAccess.get_modified_time(dst)
+		_log("staged slot %d: card %s -> %s (%d bytes)"
+			% [slot, card_id, dst, FileAccess.get_file_as_bytes(dst).size()])
 
 
 static func _copy_card(from: String, to: String) -> bool:
@@ -707,10 +763,14 @@ func _drain_scratch(slot: int, card_path: String) -> void:
 		return
 	var f := FileAccess.open(card_path, FileAccess.WRITE)
 	if f == null:
+		push_warning("[RetroSystem] cannot write back to the card %s" % card_path)
 		return
 	f.store_buffer(data)
 	f.close()
 	_scratch_mtimes[slot] = mtime
+	_log("drained slot %d: %s -> card %s (%d bytes, %d saves)"
+		% [slot, scratch.get_file(), card_path.get_file(), data.size(),
+			fmt.list_saves(data, false).size()])
 
 
 ## Re-resolve every card slot and re-point the running core at the result. The
