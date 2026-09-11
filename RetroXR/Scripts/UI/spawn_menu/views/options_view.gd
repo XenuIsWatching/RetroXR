@@ -82,6 +82,7 @@ var _pages: Array[ScrollContainer] = []
 var _romm_scheme_note: Label = null
 var _romm_url_edit: LineEdit = null
 var _romm_token_edit: LineEdit = null
+var _romm_pass_edit: LineEdit = null
 var _qr_overlay: QrScanOverlay = null
 var _last_scan_frame: int = -1
 
@@ -1489,6 +1490,23 @@ func _build_romm_options(vbox: VBoxContainer) -> void:
 			romm_config.set_scopes(PackedStringArray())
 			_save_romm_config()
 	, true)
+	_romm_pass_edit = pass_edit
+
+	# The way off the password, without anyone reading a 68-character token off
+	# one screen and typing it into another. RomM mints it, this stores it, and
+	# the password is dropped on the way past -- see _on_romm_convert_pressed.
+	var convert_row := HBoxContainer.new()
+	convert_row.custom_minimum_size = Vector2(0, 56)
+	vbox.add_child(convert_row)
+	var convert_btn := Button.new()
+	convert_btn.text = "  Convert to a token  "
+	convert_btn.custom_minimum_size = Vector2(0, 56)
+	convert_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	convert_btn.add_theme_font_size_override("font_size", 18)
+	convert_btn.tooltip_text = ("Swap this password for a scoped token RomM can "
+		+ "revoke. The password is not kept on this device once it works.")
+	convert_btn.pressed.connect(_on_romm_convert_pressed)
+	convert_row.add_child(convert_btn)
 
 	# Device pairing: type a short code instead of a 68-character token in VR.
 	# The code is alphanumeric and dashed (RomM issues e.g. MXWT-SDZE), so it is
@@ -1506,7 +1524,7 @@ func _build_romm_options(vbox: VBoxContainer) -> void:
 
 	# Pairing yields a token, so it belongs with the token method.
 	_romm_token_rows = [_romm_token_edit.get_parent(), pair_edit.get_parent()]
-	_romm_basic_rows = [user_edit.get_parent(), pass_edit.get_parent()]
+	_romm_basic_rows = [user_edit.get_parent(), pass_edit.get_parent(), convert_row]
 	_apply_romm_auth_rows()
 
 	_add_options_text_field(vbox, "Cache budget (GB)", str(romm_config.cache_budget_gb),
@@ -1592,24 +1610,67 @@ func _apply_pair_code(code: String) -> void:
 		if not ok:
 			notify("romm:conn", "❌", err, -1.0, MenuToasts.DWELL_FAIL)
 			return
-		romm_config.auth_mode = RommConfig.AUTH_TOKEN
-		romm_config.token = token
-		romm_config.enabled = true
-		romm_config.set_scopes(PackedStringArray())
-		romm_config.save_config()
-		romm_client.fetch_scopes()
-		if _romm_token_edit != null:
-			_romm_token_edit.text = token
-		# Pairing switches the method, so the dropdown and rows follow it.
-		if is_instance_valid(_romm_mode_drop):
-			_romm_mode_drop.select_id(RommConfig.AUTH_TOKEN)
-		_apply_romm_auth_rows()
 		var where := romm_config.base_url.trim_prefix("http://").trim_prefix("https://")
-		notify("romm:conn", "✅",
-			"Paired with RomM" if where.is_empty() else "Paired with RomM at %s" % where,
-			-1.0, MenuToasts.DWELL_OK)
-		romm_platforms_requested.emit()
+		_adopt_romm_token(token,
+			"Paired with RomM" if where.is_empty() else "Paired with RomM at %s" % where)
 	)
+
+
+## Swap the configured username and password for a scoped token RomM can revoke,
+## and stop keeping the password on the device.
+##
+## The button exists because the alternative is reading a 68-character token off
+## a browser and typing it into a headset. Nobody does that twice. Here the
+## token is never shown to be copied: the server mints it and it goes straight
+## into the config.
+func _on_romm_convert_pressed() -> void:
+	if romm_config.username.is_empty() or romm_config.password.is_empty():
+		notify("romm:conn", "❌", "Fill in the username and password first",
+			-1.0, MenuToasts.DWELL_FAIL)
+		return
+	notify("romm:conn", "⏳", "Asking RomM for a token…", -1.0)
+	romm_client.mint_token_from_basic(func(ok: bool, token: String, err: String) -> void:
+		if not ok:
+			notify("romm:conn", "❌", err, -1.0, MenuToasts.DWELL_FAIL)
+			return
+		if token.is_empty():
+			notify("romm:conn", "❌", "RomM returned no token", -1.0, MenuToasts.DWELL_FAIL)
+			return
+		# Only now, and only on success: a cleared password with no working token
+		# would lock the player out of their own server with nothing to retry
+		# from. The field is blanked too, or the next focus_exited writes it back.
+		romm_config.password = ""
+		if is_instance_valid(_romm_pass_edit):
+			_romm_pass_edit.text = ""
+		_adopt_romm_token(token, "Using a token now — password not kept on this device")
+	)
+
+
+## Adopt a freshly issued token as the credential: store it, switch the sign-in
+## method to match, and tell the rest of the app.
+##
+## Shared by pairing and by the convert button so they cannot drift, and it must
+## go through _save_romm_config rather than config.save_config. SaveSync and
+## StateSync each hold their OWN RommConfig, read at boot — writing the file
+## alone leaves both consulting a config with no token in it, so the save-backup
+## buttons stay hidden until the app is restarted. That was live on the pairing
+## path before this was factored out.
+func _adopt_romm_token(token: String, ok_message: String) -> void:
+	romm_config.auth_mode = RommConfig.AUTH_TOKEN
+	romm_config.token = token
+	romm_config.enabled = true
+	# A different credential carries a different grant, so the old answer is void.
+	romm_config.set_scopes(PackedStringArray())
+	_save_romm_config()
+	romm_client.fetch_scopes()
+	if _romm_token_edit != null:
+		_romm_token_edit.text = token
+	# Adopting a token switches the method, so the dropdown and rows follow it.
+	if is_instance_valid(_romm_mode_drop):
+		_romm_mode_drop.select_id(RommConfig.AUTH_TOKEN)
+	_apply_romm_auth_rows()
+	notify("romm:conn", "✅", ok_message, -1.0, MenuToasts.DWELL_OK)
+	romm_platforms_requested.emit()
 
 
 func _on_scan_qr_pressed() -> void:
