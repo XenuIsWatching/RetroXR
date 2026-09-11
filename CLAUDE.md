@@ -1385,11 +1385,18 @@ the dummy renderer returns a blank image while the size oracle happily reports t
 right one. Without `--card` it generates its own saves, which proves the pipeline
 and nothing about any real game's artwork.
 
-**Still owed:** no live core run has been made, so the FAT and directory writing
-are proven against this suite and a real card's superblock but not against a
-console actually reading a card RetroXR wrote. And netplay does not carry a PS2
-card: `net_sram_file_bytes` is slot-A-and-SAVE_RAM only, which is the same gap
-Dolphin has.
+**Both halves of the mount hang off one predicate.** `_core_owns_card_files`
+decides whether a card is staged into the directory the core reads AND whether
+the poller that drains the core's writes back is started. A core missing from it
+loses both: the core invents a card of its own, the player saves into it, and the
+save lives in a file RetroXR never reads — with the game's own LOAD screen
+listing it perfectly, which is what makes the report confusing. That shipped once,
+when a refactor lifted the old slot-count test into a named predicate that said
+Dolphin alone. It asks `MemcardMounts` now, and `system_tests` pins it against
+that table rather than a second list.
+
+**Still owed:** netplay does not carry a PS2 card — `net_sram_file_bytes` is
+slot-A-and-SAVE_RAM only, which is the same gap Dolphin has.
 
 ### 3. Capturing a real screenshot on Linux (for visual validation)
 `--headless` uses the dummy renderer — it **cannot** produce a screenshot (a probe that awaits
