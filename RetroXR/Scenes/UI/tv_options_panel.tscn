@@ -10,3 +10,4 @@ script = ExtResource("1_panelscript")
 screen_size = Vector2(0.55, 0.5)
 viewport_size = Vector2(550, 500)
 transparent = 1
+unshaded = true

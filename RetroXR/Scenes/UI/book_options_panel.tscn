@@ -12,3 +12,4 @@ screen_size = Vector2(0.5, 0.24)
 scene = ExtResource("3_bookopts2d")
 viewport_size = Vector2(500, 240)
 transparent = 1
+unshaded = true

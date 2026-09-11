@@ -15,3 +15,4 @@ screen_size = Vector2(0.28, 0.32)
 scene = ExtResource("3_memcard2d")
 viewport_size = Vector2(420, 480)
 transparent = 1
+unshaded = true

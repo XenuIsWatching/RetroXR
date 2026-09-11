@@ -12,3 +12,4 @@ screen_size = Vector2(0.42, 0.24)
 scene = ExtResource("3_posteropts2d")
 viewport_size = Vector2(420, 240)
 transparent = 1
+unshaded = true

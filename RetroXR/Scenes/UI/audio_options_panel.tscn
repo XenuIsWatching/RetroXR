@@ -12,3 +12,4 @@ screen_size = Vector2(0.4, 0.14)
 scene = ExtResource("3_audioopts2d")
 viewport_size = Vector2(400, 140)
 transparent = 1
+unshaded = true
