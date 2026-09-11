@@ -2938,7 +2938,8 @@ func _build_expansion_hardware() -> void:
 			and get_node_or_null("ExpansionFoot") == null:
 		# Registered by hand: XRToolsPickable collects grab points in its own
 		# _ready, which ran long before the model was measured.
-		_grab_points.push_back(ExpansionPort.build_foot(self, aabb.position.y, span))
+		_grab_points.push_back(ExpansionPort.build_foot(self, aabb.position.y, span,
+			not _model.brings_own_body()))
 
 
 ## Seats the console's default-occupant expansion (a Jumper Pak) the moment a
@@ -4082,6 +4083,18 @@ func get_snapped_cartridge() -> Node3D:
 	return _snapped_cartridge
 
 
+## The spin the seated disc is at, relative to the authored seat, in radians.
+## Zero for a cartridge bay, an empty bay, or a disc seated as authored. Saved
+## with the room and sent with the insert event so restore_cartridge can seat
+## it the way it went in.
+func cartridge_seat_yaw() -> float:
+	if _slot != null:
+		return _slot.seat_yaw()
+	if _tray != null:
+		return _tray.seat_yaw()
+	return 0.0
+
+
 ## The media whose saves and achievements this machine's Game tab should show.
 ##
 ## The console's OWN slot first. With F-Zero X in the N64 and its Expansion Kit
@@ -4143,12 +4156,14 @@ func _snap_cable_to_tv(tv: RetroTV, channel: int = 0, tv_input: int = 0) -> void
 var _restoring_media: bool = false
 
 
-func restore_cartridge(cartridge: Node3D) -> void:
+## `yaw` is the spin a disc was seated at (cartridge_seat_yaw), from the save
+## or from the peer whose hand put it in. A cartridge bay ignores it.
+func restore_cartridge(cartridge: Node3D, yaw: float = 0.0) -> void:
 	_restoring_media = true
 	if _slot != null:
-		_slot.restore(cartridge)
+		_slot.restore(cartridge, yaw)
 	elif _tray != null:
-		_tray.restore(cartridge)
+		_tray.restore(cartridge, yaw)
 	else:
 		_cartridge_slot.pick_up_object(cartridge)
 		# A saved cart is one the machine could READ, so the tray it came out of was
@@ -4369,7 +4384,7 @@ func _on_cartridge_inserted(cartridge: Node3D) -> void:
 		_request_disk_op(1, rom_path)
 		_protect_active_rom()
 	NetworkManager.report_event(NetEvents.Event.EV_CART_INSERT,
-		{"sys": self, "cart": cartridge})
+		{"sys": self, "cart": cartridge, "yaw": cartridge_seat_yaw()})
 
 
 func _on_cartridge_removed() -> void:

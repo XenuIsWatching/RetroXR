@@ -91,13 +91,18 @@ static func build_socket(host: Node3D, top_y: float, span: Vector2,
 ## list; XRToolsPickable only collects the children present when IT runs _ready,
 ## and a console's body is not measured until its model has loaded, which is
 ## after that. See RetroSystem._build_expansion_hardware.
-static func build_foot(host: Node3D, bottom_y: float, span: Vector2) -> XRToolsGrabPointSnap:
+## `plate` is false for a shell that brings its own body: its underside already
+## carries the real port (the NES's bottom expansion connector), and the generic
+## plate drawn under it read as a second one.
+static func build_foot(host: Node3D, bottom_y: float, span: Vector2,
+		plate: bool = true) -> XRToolsGrabPointSnap:
 	var point := XRToolsGrabPointSnap.new()
 	point.name = "ExpansionFoot"
 	point.require_group = GROUP
 	host.add_child(point)
 	point.position = Vector3(0.0, bottom_y, 0.0)
-	_add_plate(point, span, true)
+	if plate:
+		_add_plate(point, span, true)
 	return point
 
 
