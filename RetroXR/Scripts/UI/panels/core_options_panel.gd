@@ -106,6 +106,11 @@ func _populate() -> void:
 		_system._resolve_core())
 	ui.populate_system(_system.video_out_enabled, _system.supports_video_out_toggle(),
 		_system.ignore_gravity, _system.pad_guid, _system.pad_ordinal)
+	# Re-evaluated on every open so a file dropped into the system dir by hand
+	# shows up next time; the digest is cached by size and mtime.
+	var core := _system._resolve_core()
+	ui.populate_firmware(core,
+		FirmwareState.shared().evaluate(core, FirmwareRequirements.for_core(core)))
 	_populate_cartridge_tab(ui)
 
 

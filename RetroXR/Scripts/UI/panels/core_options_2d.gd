@@ -58,6 +58,11 @@ var _tabs: TabContainer = null
 var _cart_ui: CartridgeOptions2D = null
 var _cart_tab_idx: int = -1
 var _system_tab_idx := -1
+## The resolved core's declared firmware and whether each file is on disk.
+## Hidden when the core declares none (see populate_firmware).
+var _bios_scroll: ScrollContainer = null
+var _bios_rows: VBoxContainer = null
+var _bios_tab_idx := -1
 var _active_scroll: ScrollContainer = null
 # Guard so populate_system() doesn't re-emit when it sets control values.
 var _suppress_signal := false
@@ -170,6 +175,25 @@ func _build_ui() -> void:
 	tabs.add_child(sys_outer)
 	_system_tab_idx = tabs.get_tab_count() - 1
 
+	# BIOS tab — which of the core's declared firmware files are installed.
+	# Read-only; the spawn menu's Cores > BIOS page is where files are fetched.
+	var bios_outer := VBoxContainer.new()
+	bios_outer.name = "BIOS"
+	tabs.add_child(bios_outer)
+	_bios_tab_idx = tabs.get_tab_count() - 1
+
+	_bios_scroll = ScrollContainer.new()
+	_bios_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_bios_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_bios_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	MenuStyle.fat_vscroll_bar(_bios_scroll)
+	bios_outer.add_child(_bios_scroll)
+
+	_bios_rows = VBoxContainer.new()
+	_bios_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bios_rows.add_theme_constant_override("separation", 4)
+	_bios_scroll.add_child(_bios_rows)
+
 	# Cartridge tab — the slotted cartridge's own saves and achievements, so they
 	# are reachable without fishing the cartridge back out of the machine. The
 	# whole tab is hidden when the slot is empty (see set_cartridge_tab_visible).
@@ -236,16 +260,21 @@ func _build_ui() -> void:
 	# Track which scroll container is active for stick-driven scrolling
 	_active_scroll = _options_scroll
 	tabs.tab_changed.connect(func(idx: int):
-		match idx:
-			0: _active_scroll = _options_scroll
-			1: _active_scroll = _controllers_scroll
-			2: _active_scroll = _system_scroll
+		if idx == 0:
+			_active_scroll = _options_scroll
+		elif idx == 1:
+			_active_scroll = _controllers_scroll
+		elif idx == _system_tab_idx:
+			_active_scroll = _system_scroll
+		elif idx == _bios_tab_idx:
+			_active_scroll = _bios_scroll
+		else:
 			# The Cartridge tab hosts a whole CartridgeOptions2D with ribbons of
 			# its own, so it knows which of them is showing and this does not.
 			# Clearing the reference is what makes scroll_active hand over.
 			# Without this the stick scrolled the System tab while you were
 			# looking at the cartridge page.
-			_: _active_scroll = null
+			_active_scroll = null
 	)
 
 	_show_options_placeholder()
@@ -284,6 +313,50 @@ func set_cartridge_tab_visible(shown: bool) -> void:
 	if _tabs == null or _cart_tab_idx < 0:
 		return
 	_tabs.set_tab_hidden(_cart_tab_idx, not shown)
+
+
+## Fill the BIOS tab from FirmwareState.evaluate() rows for `core_name`. A core
+## that declares no firmware gets no tab at all — an empty list would read as
+## "nothing installed" when it means "nothing needed".
+func populate_firmware(core_name: String, rows: Array[Dictionary]) -> void:
+	if _tabs == null or _bios_tab_idx < 0:
+		return
+	for c in _bios_rows.get_children():
+		_bios_rows.remove_child(c)
+		c.queue_free()
+	_tabs.set_tab_hidden(_bios_tab_idx, rows.is_empty())
+	if rows.is_empty():
+		return
+
+	var summary := FirmwareState.summarise(rows)
+	var badge := Label.new()
+	badge.text = str(summary["badge"]).capitalize()
+	badge.add_theme_font_size_override("font_size", 20)
+	if int(summary["missing_required"]) > 0:
+		badge.add_theme_color_override("font_color", MenuIcons.TINT_DELETE)
+	elif int(summary["mismatched"]) > 0:
+		badge.add_theme_color_override("font_color", MenuIcons.TINT_WARN)
+	else:
+		badge.add_theme_color_override("font_color", MenuIcons.TINT_OK)
+	_bios_rows.add_child(badge)
+
+	var path_lbl := Label.new()
+	path_lbl.text = "Files go in:  %s" % CoreDownloadManager.default_system_dir(core_name)
+	path_lbl.add_theme_font_size_override("font_size", 14)
+	path_lbl.add_theme_color_override("font_color", MenuStyle.COLOR_DESC)
+	path_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	path_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bios_rows.add_child(path_lbl)
+	_bios_rows.add_child(HSeparator.new())
+
+	for r: Dictionary in rows:
+		var row := FirmwareRow.build(r, str(r.get("desc", "")))
+		# The scrollbar is drawn over the content; keep the tag clear of it.
+		var gutter := Control.new()
+		gutter.custom_minimum_size = Vector2(44, 0)
+		gutter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(gutter)
+		_bios_rows.add_child(row)
 
 
 ## The pad picker rides `show_video_out`: both are "this machine is a handheld".
