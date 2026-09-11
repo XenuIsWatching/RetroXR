@@ -1471,15 +1471,17 @@ func _bind_rom_row(row: Control, index: int) -> void:
 		state.pressed.connect(_on_rom_delete_pressed.bind(index, state))
 
 	# ── Cover ───────────────────────────────────────────────────────────────
+	# A scraped label beats RomM's cover, which is a screenshot on most servers;
+	# the cover fills in until the label is scraped or while it is decoding.
 	cover.texture = null
-	if rom_id > 0:
-		cover.texture = romm_art.get_or_request(rom_id, str(entry.get("cover_small", "")), systemid)
-	if cover.texture == null and not model["path"].is_empty():
+	if not local_path.is_empty():
 		# Mipmapped: these are photographic scans read at a glancing angle in VR.
 		# Was MediaDimensions.load_label_texture, which decoded and generated mips
 		# inline with no cache at all — 4.1 ms per row on every scroll step.
 		cover.texture = scraped_art.get_or_request(
-			systemid, str(model["path"]), "label", Vector2i.ZERO, true)
+			systemid, local_path, "label", Vector2i.ZERO, true)
+	if cover.texture == null and rom_id > 0:
+		cover.texture = romm_art.get_or_request(rom_id, str(entry.get("cover_small", "")), systemid)
 	cover.visible = cover.texture != null
 
 	# ── Launch ──────────────────────────────────────────────────────────────
@@ -2442,11 +2444,10 @@ func _on_scrape_accepted(rom_path: String, systemid: String, result: Dictionary)
 	# decoded art and forcing it all to be read again. Measured before this:
 	# 2.4 ms per wheel and 4.1 ms per label to re-decode, times every visible row.
 	var scraped_rom := rom_path
-	# LABEL is in this list because the row's thumbnail IS the label: a row with
-	# no RomM cover falls back to the scraped label, and leaving it out meant the
-	# one piece of art a freshly scraped game always has was the one piece that
-	# never appeared until the platform was closed and reopened. Box is not, since
-	# no row draws it.
+	# LABEL is in this list because the row's thumbnail IS the label: it beats
+	# the RomM cover once scraped, and leaving it out meant the one piece of art
+	# a freshly scraped game always has was the one piece that never appeared
+	# until the platform was closed and reopened. Box is not, since no row draws it.
 	_media_dl_refresh_cb = func(mtype: String, _path: String) -> void:
 		if mtype != "wheel" and mtype != "label" and mtype != "manual":
 			return
