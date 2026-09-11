@@ -4,15 +4,17 @@
 ## core lands in this table when we maintain a fork of it, because then the
 ## buildbot's build is not the one we want the player to have.
 ##
-## Eight of them, and four are here for the same reason: this room has cables in
+## Seven of them, and four are here for the same reason: this room has cables in
 ## it, and libretro has nowhere to put the far end of one. Dolphin, mGBA,
 ## gambatte and pcsx_rearmed each reach a link bus the frontend hosts.
 ##
-## Three more are hardware the core could always emulate and no frontend could
-## ever ask it to, because the libretro glue never surfaced it: azahar's stereo
-## 3D, the Satellaview's 8M Memory Pack in snes9x, and a cartridge-less 64DD
-## disk in mupen64plus_next. Play! is the odd one, and is here for two crashes
-## that stop the buildbot's build running on a Quest at all.
+## Two more are hardware the core could always emulate and no frontend could
+## ever ask it to, because the libretro glue never surfaced it: the
+## Satellaview's 8M Memory Pack in snes9x, and a cartridge-less 64DD disk in
+## mupen64plus_next. (Azahar's stereo 3D was a third until upstream merged it
+## in 2126.1; the buildbot's build now carries it, so it is back on that.)
+## Play! is the odd one, and is here for two crashes that stop the buildbot's
+## build running on a Quest at all.
 ##
 ## Dolphin is the one to read first if you want the shape of it. The buildbot
 ## build cannot do Wiimote IR passthrough — the frontend hands the emulated
@@ -64,28 +66,6 @@ const SOURCES := {
 		"assets": {
 			"Windows": "dolphin_libretro.dll.zip",
 			"Android": "dolphin_libretro_android.so.zip",
-		},
-	},
-	# Azahar, for the same shape of reason. The 3DS renders two eyes and always
-	# did — Settings::values.render_3d and factor_3d were honoured all the way
-	# down to the renderer — but the libretro glue was the one place that never
-	# surfaced them, so no frontend could ask for a side-by-side frame. Without
-	# that a 3DS in this room is flat, which is the one thing a 3DS is not.
-	#
-	# Upstream has the change as an open pull request (azahar-emu/azahar#2339).
-	# When it merges this entry can go, and the buildbot's build will do.
-	#
-	# Note the asset has no "_android" infix: azahar's CMake never set an Android
-	# OUTPUT_NAME, so its Android core is plain azahar_libretro.so and it is the
-	# only one on the buildbot like that. core_lib_suffixes() already accepts
-	# both spellings for exactly this core.
-	"azahar": {
-		"repo":  "XenuIsWatching/azahar",
-		"known_tag": "retroxr-azahar-libretro-v1",
-		"label": "Azahar (retroXR build)",
-		"assets": {
-			"Windows": "azahar_libretro.dll.zip",
-			"Android": "azahar_libretro.so.zip",
 		},
 	},
 	# mGBA, for the half of the link cable that is not the console.

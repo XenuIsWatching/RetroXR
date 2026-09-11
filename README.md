@@ -54,10 +54,11 @@ them from there.
 
 ### Forked cores
 
-Most cores come from libretro's buildbot unmodified. These eight are forks, because
+Most cores come from libretro's buildbot unmodified. These seven are forks, because
 RetroXR needs something the upstream core does not do — mostly carrying a link cable
 between two cores in one process, which has no upstream equivalent. Each links to the
-branch RetroXR builds from.
+branch RetroXR builds from. (Azahar used to be an eighth, for its stereoscopic 3D core
+options; upstream merged those in 2126.1, so the buildbot's build is used now.)
 
 | Core | Branch | What the fork adds |
 | --- | --- | --- |
@@ -65,7 +66,6 @@ branch RetroXR builds from.
 | [mGBA](https://github.com/XenuIsWatching/mgba/tree/retroxr) | `retroxr` | Link cable for its Game Boy driver as well as its GBA one (separate cores, separate serial ports), normal-mode multi-player, a GameCube port on the bus, and an RCNT/SIOCNT mirror that was stale at serialize time. |
 | [PCSX-ReARMed](https://github.com/XenuIsWatching/pcsx_rearmed/tree/retroxr) | `retroxr` | An emulated SIO1 serial port and the PlayStation link cable over the link bus, plus memory cards that can be ejected and reinserted while running. |
 | [Dolphin](https://github.com/XenuIsWatching/dolphin/tree/retroxr) | `retroxr` | GameCube-to-GBA over the link bus, Wiimote IR passthrough, gyroscope and Nunchuk accelerometer, deterministic mode for netplay, real memory cards per slot, and Vulkan semaphore propagation. |
-| [Azahar](https://github.com/XenuIsWatching/azahar/tree/libretro-stereo-options) | `libretro-stereo-options` | `render_3d` / `factor_3d` core options, so the 3DS core's stereoscopy can be driven from VR. |
 | [Play!](https://github.com/XenuIsWatching/Play-/tree/retroxr) | `retroxr` | Takes its data directory from the frontend instead of assuming `/sdcard` (which is not writable on a Quest), and covers the pixels the GS samples when rasterising a sprite, which left vertical seams. |
 | [Snes9x](https://github.com/XenuIsWatching/snes9x/tree/retroxr) | `retroxr` | The Satellaview's 8M Memory Pack as a memory region of its own rather than borrowing the BS-X cartridge's PSRAM id, an empty pack slot the shell can detect instead of always believing a pack is inserted, the ACCESS lamp through the LED interface, and a subsystem load that takes its directory from the cartridge — without which the BS-X looked for its satellite stream at the root of a drive and reported no signal. |
 | [mupen64plus-next](https://github.com/XenuIsWatching/mupen64plus-libretro-nx/tree/retroxr) | `retroxr` | Booting a bare 64DD disk with no cartridge, which the core could already do but no code path could reach — plus the NULL/`SIZE_MAX` memory descriptor a cartridge-less boot handed the frontend, and a block-number mix-up in the 64DD disk format scan. |
