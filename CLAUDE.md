@@ -1395,6 +1395,38 @@ when a refactor lifted the old slot-count test into a named predicate that said
 Dolphin alone. It asks `MemcardMounts` now, and `system_tests` pins it against
 that table rather than a second list.
 
+**A card can be swapped mid-game on pcee2 and cannot on pcsx2, and the reason is
+the core rather than RetroXR.** LRPS2 has the whole machinery —
+`VMManager::CheckForMemoryCardConfigChanges` does `FileMcd_EmuClose/EmuOpen` then
+`AutoEject::Set`, a real eject the guest sees, and the libretro layer reaches
+`ApplySettings()` on any option change. But it fires only when `Mcd[i].Enabled`,
+`.Filename` or `McdEnableEjection` differ, all three of which come from an
+in-memory settings interface, and LRPS2 declares exactly ONE memcard core option:
+`pcsx2_shared_memory_cards`. So no key a frontend can set reaches any trigger. It
+holds the card it opened at boot until the next power cycle, and nothing here can
+change that without forking the core. `_set_card_presence` is no help either —
+it is `pcsx_rearmed` only, because that is the core with a presence option.
+
+Two things follow for a non-live core, both of which cost a bug. **A pull while
+it runs must not delete the staged file or forget which card it belongs to**: the
+core is still holding that card and flushes it on the way out, so the file is the
+only route those writes have home. And **a staged copy belongs to the card that
+FILLED it, not to whatever is in the slot now** (`_scratch_owners`) — swap a card
+on one of these and the core goes on flushing the old one, so draining by the
+seated card would overwrite a card the console never read with another card's
+contents.
+
+**pcee2 hot-swaps, but only because the directory is seeded.** It registers
+`pcsx2_memcard_slot{1,2}_file` only when its scan found at least one card, and
+that scan runs once, before the core loads — so a console powered on with both
+slots empty leaves those keys unregistered for the whole session, and
+`OptionsHandler::SetVariable` drops an undeclared key without failing, so every
+later insert would be accepted and reach nothing. `_seed_card_directory` writes a
+placeholder card to prevent that. The value need not be one of the candidates:
+pcee2 says so in as many words — *"Runtime reads must not be gated by the
+registration-time candidate list"* — and queries both keys every frame, so a card
+first seated mid-game selects correctly though its name was never enumerated.
+
 **Every card event prints a line**, `[MemoryCard] <machine>: …` — a card seated
 or pulled, the route a mount took and what each slot resolved to, bytes staged
 into a core's directory, bytes drained back out, and an image seen to change.

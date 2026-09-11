@@ -1619,6 +1619,70 @@ func _test_memcard_presence() -> void:
 			"memcard/so does Dolphin, which takes a path instead")
 		_ok(not bool(ctl.call("_core_owns_card_files", "pcsx_rearmed")),
 			"memcard/while a published-card core does not")
+	# A staged copy belongs to the card that FILLED it, never to whatever is in
+	# the slot now. The two part company the moment a card is swapped on a core
+	# that cannot re-open one mid-game: it goes on holding and flushing the card
+	# it opened at boot, so draining that into the newly seated card would
+	# overwrite a card the console never read with another card's contents.
+	if ctl != null:
+		var scratch_dir := "user://__memcard_selftest"
+		DirAccess.make_dir_recursive_absolute(scratch_dir)
+		var owner_path := scratch_dir.path_join("owner.ps2")
+		var other_path := scratch_dir.path_join("other.ps2")
+		var scratch_path := scratch_dir.path_join("Mcd001.ps2")
+		var blank := PS2Card.blank_image()
+		for path: String in [owner_path, other_path]:
+			var f := FileAccess.open(path, FileAccess.WRITE)
+			f.store_buffer(blank)
+			f.close()
+		# The core's copy, deliberately different from both cards.
+		var written := PS2Card.blank_image()
+		written[0x100] = 0x5A
+		var sf := FileAccess.open(scratch_path, FileAccess.WRITE)
+		sf.store_buffer(written)
+		sf.close()
+
+		ctl.set("_scratch_paths", [scratch_path, ""] as Array[String])
+		ctl.set("_scratch_owners", [owner_path, ""] as Array[String])
+		ctl.set("_scratch_mtimes", [0, 0] as Array[int])
+		ctl.call("_drain_scratch", 0)
+		_eq(FileAccess.get_file_as_bytes(owner_path)[0x100], 0x5A,
+			"memcard/a drain lands in the card that filled the scratch")
+		_eq(FileAccess.get_file_as_bytes(other_path)[0x100], blank[0x100],
+			"memcard/and never in a card that merely occupies the slot")
+
+		# No owner recorded means nothing may be written anywhere.
+		var before := FileAccess.get_file_as_bytes(other_path)
+		ctl.set("_scratch_owners", ["", ""] as Array[String])
+		ctl.set("_scratch_mtimes", [0, 0] as Array[int])
+		ctl.call("_drain_scratch", 0)
+		_ok(FileAccess.get_file_as_bytes(other_path) == before,
+			"memcard/an unowned scratch drains nowhere at all")
+
+		# Seeding: a core that picks a card BY NAME builds that option by
+		# scanning this directory once, before it loads. An empty directory
+		# leaves the option unregistered for the whole session, so a card
+		# seated later could never be selected.
+		var seed_dir := "user://__memcard_seedtest"
+		DirAccess.make_dir_recursive_absolute(seed_dir)
+		for stale: String in DirAccess.get_files_at(seed_dir):
+			DirAccess.remove_absolute(seed_dir.path_join(stale))
+		ctl.call("_seed_card_directory", seed_dir, lrps2, "pcsx2")
+		_eq(DirAccess.get_files_at(seed_dir).size(), 0,
+			"memcard/a fixed-name core needs no seed and gets none")
+		ctl.call("_seed_card_directory", seed_dir, pcee2, "pcee2")
+		_eq(DirAccess.get_files_at(seed_dir).size(), 1,
+			"memcard/a name-choosing core gets one so its slot options register")
+		ctl.call("_seed_card_directory", seed_dir, pcee2, "pcee2")
+		_eq(DirAccess.get_files_at(seed_dir).size(), 1,
+			"memcard/and a directory that already holds a card is left alone")
+		for leftover: String in DirAccess.get_files_at(seed_dir):
+			DirAccess.remove_absolute(seed_dir.path_join(leftover))
+		DirAccess.remove_absolute(seed_dir)
+		for leftover: String in DirAccess.get_files_at(scratch_dir):
+			DirAccess.remove_absolute(scratch_dir.path_join(leftover))
+		DirAccess.remove_absolute(scratch_dir)
+
 	_ok(MemcardMounts.mount_dir("pcsx2").ends_with("pcsx2/memcards"),
 		"memcard/both look under their own system dir")
 	_ok(MemcardMounts.mount_dir("pcee2") != MemcardMounts.mount_dir("pcsx2"),

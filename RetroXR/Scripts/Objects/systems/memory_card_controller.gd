@@ -332,6 +332,19 @@ var _card_poll_until := 0.0
 ## when that copy last changed. Empty for every other core, which needs neither.
 var _scratch_paths: Array[String] = ["", ""]
 var _scratch_mtimes: Array[int] = [0, 0]
+## The player card each scratch was filled FROM, and therefore the only card its
+## bytes may ever be written back to.
+##
+## Not the same question as "what is in the slot now", and a core that cannot
+## re-open a card mid-game is exactly where the two part company: swap a card on
+## one of those and the core goes on holding, and flushing, the card it opened
+## at boot. Draining that into whatever is seated now would overwrite a card the
+## console never read with another card's contents.
+var _scratch_owners: Array[String] = ["", ""]
+
+## Name of the placeholder written by _seed_card_directory. Leading underscores
+## so it cannot collide with a card id, which is a uuid.
+const SEED_CARD_NAME := "__retroxr_slot"
 
 
 func start_card_polling() -> void:
@@ -370,8 +383,9 @@ func _poll_cards() -> void:
 		var path := SramPaths.find_card(str(card.get("card_id")), card_family())
 		if path.is_empty():
 			continue
-		# A core that owns its card files wrote to its own copy, not to this one.
-		_drain_scratch(slot, path)
+		# A core that owns its card files wrote to its own copy, not to this one,
+		# and the copy belongs to whichever card FILLED it — see _scratch_owners.
+		_drain_scratch(slot)
 		var mtime := FileAccess.get_modified_time(path)
 		if mtime == _card_mtimes[slot]:
 			continue
@@ -686,6 +700,8 @@ func _mirror_cards_in(resolved_core: String, row: Dictionary,
 
 	var file_keys: Array = row.get("file_keys", [])
 	var enable_keys: Array = row.get("enable_keys", [])
+	if not running:
+		_seed_card_directory(dir, row, resolved_core)
 	for slot in card_slot_count():
 		var src := paths[slot] if slot < paths.size() else ""
 		var card := get_snapped_memcard(slot)
@@ -704,7 +720,21 @@ func _mirror_cards_in(resolved_core: String, row: Dictionary,
 			# is not still presented as this one. A core with fixed names will
 			# then invent an unformatted card of its own, which is the one part
 			# of this nothing here can prevent.
+			#
+			# Except while such a core is RUNNING, where doing either is worse
+			# than doing nothing. It is still holding the card it opened at
+			# boot and will flush it on the way out, so the file is the only
+			# route those writes have home: deleting it drops them, and so does
+			# forgetting which card they belong to. Leave both standing and let
+			# the drain finish the card that is on its way out.
+			if running:
+				_log("slot %d emptied while %s runs: it keeps the card it "
+					% [slot, resolved_core]
+					+ "opened until the next power cycle, so %s stays"
+					% dst.get_file())
+				continue
 			_scratch_paths[slot] = ""
+			_scratch_owners[slot] = ""
 			if slot < enable_keys.size():
 				_host.set_core_option(str(enable_keys[slot]), "disabled")
 				_log("slot %d empty: told %s the slot is disabled"
@@ -728,8 +758,49 @@ func _mirror_cards_in(resolved_core: String, row: Dictionary,
 				% [card_id, resolved_core])
 			continue
 		_scratch_mtimes[slot] = FileAccess.get_modified_time(dst)
+		_scratch_owners[slot] = src
 		_log("staged slot %d: card %s -> %s (%d bytes)"
 			% [slot, card_id, dst, FileAccess.get_file_as_bytes(dst).size()])
+
+
+## Make sure a core that BUILDS its slot options by scanning this directory finds
+## something in it, even when the console is powered on with both slots empty.
+##
+## This is what makes a card swappable mid-game at all. pcee2 registers
+## pcsx2_memcard_slot{1,2}_file only when its scan found at least one card, and
+## that scan runs once, before the core loads. A console booted with no card in
+## it leaves those keys unregistered for the whole session — and RetroXR's own
+## option layer drops a key the core never declared without failing, so every
+## later insert would be accepted here and reach nothing.
+##
+## A placeholder card is enough: the keys exist from then on, and pcee2 reads
+## their value at runtime WITHOUT consulting the list it built at registration
+## ("Runtime reads must not be gated by the registration-time candidate list"),
+## so a card first seated mid-game selects correctly even though its name was
+## never among the candidates.
+##
+## Only for cores that choose a card by name. One with fixed names declares no
+## such option and has nothing to register.
+func _seed_card_directory(dir: String, row: Dictionary, resolved_core: String) -> void:
+	if row.get("file_keys", []).is_empty():
+		return
+	var fmt := CardFormats.for_system(card_family())
+	if fmt == null:
+		return
+	var suffix := "." + fmt.extension()
+	for name in DirAccess.get_files_at(dir):
+		if name.to_lower().ends_with(suffix):
+			return
+	var seed_path := dir.path_join(SEED_CARD_NAME + suffix)
+	var f := FileAccess.open(seed_path, FileAccess.WRITE)
+	if f == null:
+		push_warning("[RetroSystem] cannot seed the memory card directory %s" % dir)
+		return
+	f.store_buffer(fmt.blank_image())
+	f.close()
+	_log("seeded %s so %s registers its slot options; without one, a card "
+		% [seed_path.get_file(), resolved_core]
+		+ "seated later this session could not be selected")
 
 
 static func _copy_card(from: String, to: String) -> bool:
@@ -750,11 +821,14 @@ static func _copy_card(from: String, to: String) -> bool:
 ## reason: these cores rewrite a card in place with no atomic rename, so a tick
 ## can land mid-write. An image whose superblock does not parse is a half-written
 ## file, not a changed card.
-func _drain_scratch(slot: int, card_path: String) -> void:
+func _drain_scratch(slot: int) -> void:
 	if slot >= _scratch_paths.size():
 		return
 	var scratch := _scratch_paths[slot]
 	if scratch.is_empty() or not FileAccess.file_exists(scratch):
+		return
+	var card_path := _scratch_owners[slot]
+	if card_path.is_empty():
 		return
 	var mtime := FileAccess.get_modified_time(scratch)
 	if mtime == _scratch_mtimes[slot]:
