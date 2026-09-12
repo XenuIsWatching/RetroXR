@@ -33,6 +33,8 @@ var unit2_id := ""
 var cart_path := ""
 var disk_path := ""
 var _sys: RetroSystem
+var _led_edges := 0
+var _led_on := false
 
 
 func _ready() -> void:
@@ -129,11 +131,17 @@ func _run() -> void:
 
 	var spec := n64.expansion_boot()
 	print("[n64dd] core=%s cart=%s disk=%s" % [
-		n64.resolve_core_name(), n64._host_media_path(),
+		n64.resolve_core_name(), n64._expansion_launch.host_media_path(),
 		(dd.get_media_path() if dd != null else "-")])
 	print("[n64dd] subsystem=%s pairing=%s" % [
 		str(spec.get("subsystem", {}).get("ident", "-")),
-		str(n64._expansion_roms(spec.get("subsystem", {})))])
+		str(n64._expansion_launch.expansion_roms(spec.get("subsystem", {})))])
+
+	# The drive's ACCESS lamp, as the core publishes it and as the unit shows it.
+	# Members, not locals: a lambda captures a local by value.
+	var lib: Libretro = n64.get_libretro_node()
+	if lib != null:
+		lib.led_state.connect(_on_led)
 
 	n64.power_on()
 
@@ -150,11 +158,19 @@ func _run() -> void:
 			best_lit = maxf(best_lit, lit)
 			if not shot.is_empty():
 				img.save_png(shot.replace(".png", "_%02d.png" % int(at)))
-		print("[n64dd] t=%4.1f frames=%-6d lit=%s" % [
-			at, frames, ("%.4f" % lit) if lit >= 0.0 else "(no image)"])
+		print("[n64dd] t=%4.1f frames=%-6d lit=%s led=%s edges=%d lamp=%s" % [
+			at, frames, ("%.4f" % lit) if lit >= 0.0 else "(no image)",
+			"on" if _led_on else "off", _led_edges,
+			(("lit" if dd._led_on else "dark") if dd != null else "-")])
 
 	print("[n64dd] RESULT %s+%s frames=%d lit=%.4f" % [
 		host_id, unit_id, int(n64._libretro.GetFrameCount()), best_lit])
+
+
+func _on_led(led: int, on: bool) -> void:
+	if led == 0:
+		_led_edges += 1
+		_led_on = on
 
 
 func _lit_fraction(img: Image) -> float:
