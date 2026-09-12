@@ -3534,6 +3534,19 @@ func reapply_vmu(ctrl: Node) -> void:
 ## then falls back to cropping the overlay back out of the frame. See VmuStorage
 ## for both halves of that; this is only the lookup, which has to happen here
 ## because the card knows which pad it is in and nothing else does.
+## Whether this machine's core hands its VMU panels over rather than drawing
+## them into the picture.
+##
+## Load-bearing for the card, not a convenience. When this is true VmuStorage
+## has switched the core's overlay off, so there is no panel in the frame to
+## crop — and a card whose own panel has not arrived yet must go DARK rather
+## than fall back to that crop, which would show it the game's top-left corner.
+func vmu_hands_screens_over() -> bool:
+	if not is_instance_valid(_libretro) or not _libretro.has_method("HasVmuScreens"):
+		return false
+	return bool(_libretro.HasVmuScreens())
+
+
 func vmu_screen_texture(ctrl: Node, slot: int) -> Texture2D:
 	if slot < 0 or not is_instance_valid(_libretro) 			or not _libretro.has_method("HasVmuScreens") or not _libretro.HasVmuScreens():
 		return null

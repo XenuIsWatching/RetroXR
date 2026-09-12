@@ -85,6 +85,7 @@ var _lcd_off_mat: Material = null
 var _lcd_mat: ShaderMaterial = null
 var _last_tex: Texture2D = null
 var _last_frame := Vector2i.ZERO
+var _last_whole := false
 
 # --- The controls -------------------------------------------------------------
 #
@@ -465,6 +466,16 @@ func _picture() -> Dictionary:
 		var panel: Texture2D = sys.call("vmu_screen_texture", _pad, _slot)
 		if panel != null:
 			return {"tex": panel, "whole": true}
+		# Nothing yet, and on a core that hands panels over that means the card
+		# has not drawn rather than that the picture holds one. There is no
+		# overlay in the frame to fall back to — it was switched off the moment
+		# the core said it could do without it — so cropping here would put the
+		# game's top-left corner on the card. Dark is the honest answer, and it is
+		# what an untouched VMU looks like.
+		var dark: bool = sys.has_method("vmu_hands_screens_over") and bool(
+			sys.call("vmu_hands_screens_over"))
+		if dark:
+			return {}
 	var tex: Texture2D = sys.call("get_video_texture")
 	return {"tex": tex, "whole": false} if tex != null else {}
 
@@ -505,8 +516,12 @@ func _process(_delta: float) -> void:
 		_lcd_mat.set_shader_parameter("source_tex", tex)
 	var frame := tex.get_size()
 	var frame_i := Vector2i(int(frame.x), int(frame.y))
-	if frame_i != _last_frame:
+	# The KIND of source counts as a change too, not only its size: a whole
+	# panel and a window onto a frame can be the same number of pixels, and the
+	# rect for one is wrong for the other.
+	if frame_i != _last_frame or whole != _last_whole:
 		_last_frame = frame_i
+		_last_whole = whole
 		var r := Rect2(0, 0, 1, 1) if whole else VmuStorage.screen_rect(frame_i)
 		_lcd_mat.set_shader_parameter("source_rect",
 			Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
