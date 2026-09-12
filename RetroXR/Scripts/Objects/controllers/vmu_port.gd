@@ -53,28 +53,39 @@ const HOST_SYSTEMID := "dreamcast"
 ## 80 mm length with the connector on that end, and +Z the face carrying the
 ## screen (see vmu_card.tscn).
 ##
-## These go on the pad's UNDERSIDE, unrotated: connector up into the shell, body
-## hanging below, screen toward the pad's +Z — its near edge, the side a player
-## holding it is on. The pad is 152 x 26 x 64 mm, so the underside is y = -13 and
-## an 18 mm bite of the card sits inside the shell, which puts the connector at
-## y = +4..+11 with two millimetres to spare under the top face.
+## They go into the pad's TOP EDGE, which is where a Dreamcast's are, and they
+## RISE out of it at 30 degrees rather than lying flat. That angle is forced by
+## the shell, and both ways of not tilting were tried and measured:
 ##
-## Underneath is the only place on this shell it can go without skewering
-## something. Out of the FACE — where these were — the card comes up between the
-## sticks and the buttons with its lower half through the body and four
-## millimetres of it out the bottom, which reads as impaled rather than seated. A
-## VMU is 80 mm long and the pad is 26 mm thick, so it stands proud whichever
-## face it goes in, and that much is true of the real thing too.
+##   into the rear face   the shoulders are cylinders of r=5 at y=+7 and the
+##                        triggers are 26 mm blocks below them, together filling
+##                        x=16..46 on both sides. The clear span between them is
+##                        32 mm and a VMU is 47 across, so no card fits through
+##                        that row at any depth.
+##   flat along the top   clears the shoulders, and then covers the d-pad and the
+##                        X and Y buttons instead — the face buttons sit as far
+##                        back as z=-23.5 and the card is 80 mm long.
+##
+## Tilted, the connector end meets the top face at its rear corner and the body
+## climbs away behind the pad, over the shoulders and clear of every control. It
+## is also what the hardware does: a Dreamcast's cards stand up out of a housing
+## above the face rather than lying on it.
+##
+## The basis is a half turn about the axis between the card's +Y and +Z (which
+## sends the connector into the pad and turns the screen upward, flipping X with
+## them) and then 30 degrees about the pad's X. The origin follows from the
+## connector tip landing at y=+14, z=-30: the centre is 40 mm back along the
+## card, which is (0, +20, -34.6) from there.
 ##
 ## PLACEHOLDER GEOMETRY all the same, and deliberately labeled as such: the
 ## Dreamcast wears the primitive box, so there is no measured shell to seat these
 ## against. If a Dreamcast pad shell is ever authored, measure the seats then and
 ## author them as markers, the way a host with a scene does below.
 const PAD_SEATS: Array[Transform3D] = [
-	Transform3D(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1),
-		Vector3(-0.030, -0.035, 0.018)),
-	Transform3D(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1),
-		Vector3(0.030, -0.035, 0.018)),
+	Transform3D(Vector3(-1, 0, 0), Vector3(0, -0.5, 0.866), Vector3(0, 0.866, 0.5),
+		Vector3(-0.0245, 0.034, -0.0646)),
+	Transform3D(Vector3(-1, 0, 0), Vector3(0, -0.5, 0.866), Vector3(0, 0.866, 0.5),
+		Vector3(0.0245, 0.034, -0.0646)),
 ]
 
 const GRAB_DISTANCE := 0.05
