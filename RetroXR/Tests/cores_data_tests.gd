@@ -22,7 +22,7 @@ extends Node
 
 ## Cases in this file, NOT counting the guard below -- it is checked before
 ## it has recorded itself.
-const EXPECTED_CASES := 61
+const EXPECTED_CASES := 62
 
 var _passed := 0
 var _failed := 0
@@ -188,6 +188,10 @@ func _group_forced() -> void:
 		"parallel_n64", "nintendo_64", ["nintendo_64dd"], "")
 	_eq(by_expansion.get("parallel-n64-64dd-hardware"), "enabled",
 		"forced/and so does a console with the drive bolted under it")
+	var by_dev := ForcedCoreOptions.disk_drive(
+		"parallel_n64", "nintendo_64", ["nintendo_64dd_dev"], "")
+	_eq(by_dev.get("parallel-n64-64dd-hardware"), "enabled",
+		"forced/the development unit is the same drive")
 	_eq(ForcedCoreOptions.disk_drive("parallel_n64", "nintendo_64", [], ""), {},
 		"forced/a plain N64 is left alone")
 

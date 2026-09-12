@@ -59,6 +59,12 @@
 ##               is the one that needs it — it is how a player tells the
 ##               upgrade from the Jumper Pak it replaces at a glance, in a bay
 ##               where both are the same size and shape. Absent means plain.
+##   shell       a GLB the unit wears instead of the primitive box, scaled to
+##               `size`. Its markers, when it has them: SocketMarker (where a
+##               seated disk's centre sits), EjectButton and PowerLed meshes.
+##   shell_albedo
+##               a colour map swapped onto the shell's "shell" material, for a
+##               second unit that is the same casting in a different finish.
 ##   default_occupant
 ##               this unit comes pre-installed on a bare console — a Jumper
 ##               Pak, not something a player goes looking for. RetroSystem
@@ -94,6 +100,7 @@ const SAVE_OWNER_UNIT := ExpansionDefs.SAVE_OWNER_UNIT
 ## picodrive because of the 32X, so it lives in sega_32x.gd.
 const _UNITS: Array = [
 	preload("res://Scripts/Data/systems/expansions/nintendo_64dd.gd"),
+	preload("res://Scripts/Data/systems/expansions/nintendo_64dd_dev.gd"),
 	preload("res://Scripts/Data/systems/expansions/expansion_pak.gd"),
 	preload("res://Scripts/Data/systems/expansions/jumper_pak.gd"),
 	preload("res://Scripts/Data/systems/expansions/fds.gd"),
@@ -119,7 +126,7 @@ const _UNITS: Array = [
 ## lookup just misses. Assembly walks this list rather than either source, so a
 ## unit file reordered in _UNITS cannot change it.
 const _ORDER: Array = [
-	"nintendo_64dd", "expansion_pak", "jumper_pak", "fds", "satellaview",
+	"nintendo_64dd", "nintendo_64dd_dev", "expansion_pak", "jumper_pak", "fds", "satellaview",
 	"bsx_cart", "sufami_turbo", "super_game_boy", "super_game_boy_2",
 	"sega_cd", "sega_32x", "power_base_converter", "fm_sound_unit",
 	"pc_engine_cd", "jaguar_cd", "ereader", "ereader_plus", "ereader_usa",
@@ -269,6 +276,15 @@ static func media_in_host(id: String) -> bool:
 ## machine's face is named beside the machine instead of branched on elsewhere.
 static func panel_of(id: String) -> String:
 	return str(row(id).get("panel", ""))
+
+
+## The GLB this unit wears, or "" for the primitive box.
+static func shell_of(id: String) -> String:
+	return str(row(id).get("shell", ""))
+
+
+static func shell_albedo_of(id: String) -> String:
+	return str(row(id).get("shell_albedo", ""))
 
 
 ## Media systemids a console's OWN cartridge slot must take on top of its own,

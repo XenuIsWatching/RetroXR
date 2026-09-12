@@ -2,6 +2,7 @@
 ##
 ## One of the eleven expansion units; see ExpansionCatalog for how a unit file
 ## is assembled into the catalog, and expansion_defs.gd for the MOUNT_* values.
+class_name Nintendo64DD
 extends RefCounted
 
 const ID := "nintendo_64dd"
@@ -25,7 +26,27 @@ const ROW := {
 	"mount": ExpansionDefs.MOUNT_BELOW,
 	"size": Vector3(0.26, 0.0787, 0.19),
 	"loader": MediaDimensions.LOADER_SLOT,
+	"shell": SHELL,
 }
+
+const SHELL := "res://imported-assets/consoles/nintendo_64dd/n64dd_drive.glb"
+const DISK_MODEL := "res://imported-assets/carts/nintendo_64dd/n64dd_disk.glb"
+const DISK_DEV_ALBEDO := "res://imported-assets/carts/nintendo_64dd/n64dd_disk_color_blue.png"
+
+## Development disks were blue; retail ones grey. Dumps of the dev disks are
+## named by their system-area strings (DDDiskD-DMTJ0-0, NUD-TEST-JPN) rather
+## than by a title, which is what these match. "Randnet" alone is retail.
+const _DEV_DISK_MARKS: Array[String] = [
+	"dddiskd", "nud-", "drdj", "dmtj", "(dev)", "development", "blue disk", "devkit", "dev kit",
+]
+
+
+static func is_dev_disk(rom_path: String) -> bool:
+	var stem := rom_path.get_file().get_basename().to_lower()
+	for mark in _DEV_DISK_MARKS:
+		if stem.contains(mark):
+			return true
+	return false
 
 
 # VERIFIED against mupen64plus-libretro-nx source. Two quite different cases,

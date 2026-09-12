@@ -207,7 +207,7 @@ static func eject_x(s: Vector3, mount: int, drawer: bool, media: String) -> floa
 ## the body is a measured box and everything on it is placed from ExpansionCatalog
 ## dimensions. Same widget the consoles use, so it highlights, depresses and
 ## takes a trigger press identically.
-static func build_eject_button(parent: Node3D, pos: Vector3, on_press: Callable, text: String = "OPEN") -> void:
+static func build_eject_button(parent: Node3D, pos: Vector3, on_press: Callable, text: String = "OPEN") -> VRButton:
 	var eject := VRButton.new()
 	eject.name = "EjectButton"
 	eject.position = pos
@@ -256,6 +256,7 @@ static func build_eject_button(parent: Node3D, pos: Vector3, on_press: Callable,
 
 	parent.add_child(eject)
 	eject.button_pressed.connect(on_press)
+	return eject
 
 
 ## The hinged lid over a disc well, and the pivot MediaTray swings it on.

@@ -68,6 +68,14 @@ static func removable_media(core: String, card_family: String,
 	return out
 
 
+## Any unit whose bay takes 64DD disks: the retail drive or the development unit.
+static func _has_disk_drive(expansions: Array) -> bool:
+	for id in expansions:
+		if ExpansionCatalog.media_of(str(id)) == "nintendo_64dd":
+			return true
+	return false
+
+
 static func disk_drive(core: String, systemid: String, expansions: Array,
 		media_path: String) -> Dictionary:
 	# A 64DD reaches a machine two ways, and the systemid only says one of them.
@@ -76,7 +84,7 @@ static func disk_drive(core: String, systemid: String, expansions: Array,
 	# expansion, and asking only about the systemid misses it entirely -- which
 	# left the assembled machine running with its drive switched off, on the one
 	# machine that visibly has one.
-	if systemid != "nintendo_64dd" and not expansions.has("nintendo_64dd"):
+	if systemid != "nintendo_64dd" and not _has_disk_drive(expansions):
 		return {}
 	if core == "parallel_n64":
 		return {"parallel-n64-64dd-hardware": "enabled"}

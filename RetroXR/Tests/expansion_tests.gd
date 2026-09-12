@@ -20,6 +20,8 @@
 ##            cartridges that make them different machines, and the BIOS gate
 ##   sufami/  the Sufami Turbo: two bays that do not alias, wells that line up
 ##            with the holes cut for them, and the Multi-Cart Link pairing
+##   disk/    the 64DD's real shells: drive, development unit and disk, and which
+##            dumps get the blue development shell
 extends Node
 
 const SYSTEM_SCENE := preload("res://Scenes/Objects/system.tscn")
@@ -781,6 +783,21 @@ func _group_launch() -> void:
 	await _wait(5)
 	n64._expansion_launch.apply_expansion_launch()
 	_ok(n64.rom_path == "/roms/n64dd/disk.ndd", "launch/ and boots from the disk")
+	# An Expansion Pak in the roof does not take the drive away: no recipe names
+	# the pak, so it is left out of the key rather than spoiling the lookup.
+	var dd_recipe := ExpansionCatalog.boot_for("nintendo_64", ["nintendo_64dd"])
+	_ok(ExpansionCatalog.boot_for("nintendo_64", ["nintendo_64dd", "expansion_pak"]) == dd_recipe
+			and not dd_recipe.is_empty(),
+		"launch/ a 64DD with an Expansion Pak beside it resolves to the drive's recipe")
+	_ok(ExpansionCatalog.boot_for("nintendo_64", ["nintendo_64dd", "jumper_pak", "expansion_pak"]) == dd_recipe,
+		"launch/ and with the Jumper Pak too")
+	var pak := await _unit("expansion_pak")
+	await _bolt(n64, pak)
+	_ok(n64.expansion_ids().has("expansion_pak") and n64.expansion_ids().has("nintendo_64dd"),
+		"launch/ the assembled stack carries both units")
+	var stack := n64.expansion_boot()
+	_ok(not stack.is_empty() and stack.get("subsystem") == dd_recipe.get("subsystem"),
+		"launch/ and still boots through the drive")
 
 	# The cart+disk core is named per platform, because the buildbot publishes it
 	# under one name on Windows and another on Android. The row must carry both,
@@ -1343,6 +1360,235 @@ func _run() -> void:
 		await _group_sufami()
 	if _want("slot2"):
 		await _group_slot2()
+	if _want("disk"):
+		await _group_disk()
+
+
+# ── disk/ — the 64DD's real shells: the drive, the development unit, the disk ─
+
+const _DEV_DISK_STEMS := [
+	"DDDiskD-DMTJ0-0", "DDDiskD", "NUD-TEST-JPN", "NUD-4567-JPN",
+	"DB-104_DDDiskD-DRDJ0-0", "H0000819_DDDiskD-DRDJ0-0_1", "T0000017_DDDiskD-DRDJ0-0_2",
+]
+const _RETAIL_DISK_STEMS := [
+	"Dezaemon DD (Japan) (Proto)", "F-Zero X - Expansion Kit (Japan)",
+	"Kyojin no Doshin - Kaihou Sensen Chibikko Chikko Daishuugou (Japan) [b]",
+	"Kyojin no Doshin (Japan) (Demo) (Kiosk) [b]", "Kyojin no Doshin (Japan)",
+	"Mario Artist - Communication Kit (Japan)",
+	"Mario Artist - Paint Studio (Japan) (Beta) (1999-02-11)",
+	"Mario Artist - Paint Studio (Japan)", "Mario Artist - Polygon Studio (Japan)",
+	"Mario Artist - Talent Studio (Japan)", "Nihon Pro Golf Tour 64 (Japan) [b]",
+	"Randnet Disk (Japan) (Rev 1) [b]", "Randnet Disk (Japan) [b]", "SimCity 64 (Japan)",
+	"Super Mario 64 - Disk Version (Japan) (Proto)",
+]
+
+
+## What the desktop pointer resolves when aimed straight at `button` on `unit`
+## from 40 cm in front of it.
+func _beam_at(unit: RetroExpansion, button: VRButton, hand: Node3D) -> InteractionTarget:
+	return InteractionResolver.resolve_desktop(unit.get_world_3d().direct_space_state,
+		unit.to_global(button.position + Vector3(0.0, 0.0, 0.4)),
+		unit.to_global(button.position - Vector3(0.0, 0.0, 0.2)), hand)
+
+
+## A 64DD disk in the library that has scraped label art, or the retail stem
+## when none has (the placement cases then report themselves skipped).
+func _labelled_disk_path() -> String:
+	var root := RomLibrary.rom_dir_for_system("nintendo_64dd")
+	var labels := root.path_join("media").path_join("label")
+	var d := DirAccess.open(labels)
+	if d != null:
+		for f in d.get_files():
+			if f.get_extension().to_lower() in ["png", "jpg", "jpeg", "webp"]:
+				return root.path_join(f.get_basename() + ".ndd")
+	return "/roms/nintendo_64dd/Mario Artist - Paint Studio (Japan).ndd"
+
+
+func _group_disk() -> void:
+	for stem in _DEV_DISK_STEMS:
+		_ok(Nintendo64DD.is_dev_disk("/roms/nintendo_64dd/%s.ndd" % stem),
+			"disk/ a development dump is a dev disk: %s" % stem)
+	for stem in _RETAIL_DISK_STEMS:
+		_ok(not Nintendo64DD.is_dev_disk("/roms/nintendo_64dd/%s.ndd" % stem),
+			"disk/ a retail title is not: %s" % stem)
+
+	# The development unit is the retail drive in another case: same bay, same
+	# media, same recipe, offered from the same tile.
+	_ok(ExpansionCatalog.has("nintendo_64dd_dev"), "disk/ the development unit is a unit")
+	_ok(ExpansionCatalog.card_systemid("nintendo_64dd_dev") == "nintendo_64dd",
+		"disk/ offered from the 64DD tile")
+	_ok(ExpansionCatalog.shell_of("nintendo_64dd") == ExpansionCatalog.shell_of("nintendo_64dd_dev")
+			and not ExpansionCatalog.shell_of("nintendo_64dd").is_empty(),
+		"disk/ both units wear the same shell")
+	_ok(not ExpansionCatalog.shell_albedo_of("nintendo_64dd_dev").is_empty()
+			and ExpansionCatalog.shell_albedo_of("nintendo_64dd").is_empty(),
+		"disk/ and only the development unit swaps its colour map")
+	_ok(ExpansionCatalog.boot_for("nintendo_64", ["nintendo_64dd_dev"])
+			== ExpansionCatalog.boot_for("nintendo_64", ["nintendo_64dd"])
+			and not ExpansionCatalog.boot_for("nintendo_64", ["nintendo_64dd_dev"]).is_empty(),
+		"disk/ a console on the development unit boots by the retail recipe")
+	var spawns: Array = []
+	for item: Dictionary in SpawnCatalog.items_for("nintendo_64dd"):
+		spawns.append(item.get("spawn", ""))
+	_ok(spawns.has("expansion:nintendo_64dd") and spawns.has("expansion:nintendo_64dd_dev"),
+		"disk/ the 64DD tile offers both units")
+
+	# The shell replaces the box, and the mouth moves to where the shell's socket
+	# marker says a seated disk sits rather than a fraction of the box's height.
+	var dd := await _unit("nintendo_64dd")
+	var shell := dd.get_node_or_null("Shell") as Node3D
+	_ok(shell != null, "disk/ the drive wears its shell")
+	_ok(shell == null or not (dd.get_node("Body") as Node3D).visible, "disk/ and the box is hidden")
+	_ok(shell == null or not (dd.get_node("NameLabel") as Node3D).visible,
+		"disk/ and so is the nameplate")
+	_ok(shell == null or dd.get_node_or_null("Body/SlitMouth") == null,
+		"disk/ no slit is cut into a shell with its own mouth")
+	_ok(shell == null or dd.get_node_or_null("ExpansionSocket/ConnectorPlate") == null,
+		"disk/ nor a connector plate laid on a shell with its own port")
+	var plain := await _unit("sega_cd")
+	_ok(plain.get_node_or_null("ExpansionSocket/ConnectorPlate") != null,
+		"disk/ while the primitive box keeps its plate")
+	var marker := dd.get_node_or_null("Shell/SocketMarker") as Node3D
+	var bay := dd.get_node("MediaBay") as Node3D
+	_ok(marker != null and absf(bay.position.y - dd.to_local(marker.global_position).y) < 0.001,
+		"disk/ the bay sits at the socket marker's height")
+	_ok(bay.position.z > 0.09, "disk/ on the front face")
+	var eject := dd.get_node_or_null("EjectButton") as VRButton
+	_ok(eject != null and eject._mesh != null and eject._mesh.name == "EjectButton",
+		"disk/ the shell's own button is the eject cap")
+	# The desktop beam walks past a pickable's own pointer box to a control only
+	# within ENCLOSURE_DEPTH of it; the modelled cap is recessed 16 mm, so the
+	# hit box has to sit at the face plane or the beam stops on the box.
+	if eject != null:
+		await _wait(2)
+		var hand := Node3D.new()
+		add_child(hand)
+		var t := _beam_at(dd, eject, hand)
+		_ok(t.kind == InteractionTarget.KIND_BUTTON and t.action_node == eject,
+			"disk/ a desktop beam aimed at the button reaches it through the unit's pointer box")
+		var cd_unit := await _unit("sega_cd")
+		var cd_eject := cd_unit.get_node("EjectButton") as VRButton
+		var t2 := _beam_at(cd_unit, cd_eject, hand)
+		_ok(t2.kind == InteractionTarget.KIND_BUTTON and t2.action_node == cd_eject,
+			"disk/ as it does on a primitive unit")
+		hand.queue_free()
+	var dev := await _unit("nintendo_64dd_dev")
+	var dev_shell := dev.get_node_or_null("Shell") as Node3D
+	_ok(dev_shell != null, "disk/ the development unit wears the shell too")
+	if dev_shell != null:
+		var mi := dev_shell.find_child("Shell", true, false) as MeshInstance3D
+		var mat: BaseMaterial3D = mi.get_active_material(0) as BaseMaterial3D if mi != null else null
+		_ok(mat != null and mat.albedo_texture != null
+				and mat.albedo_texture.resource_path.ends_with("n64dd_drive_color_dev.png"),
+			"disk/ in the dev kit's colour")
+
+	# The disk: a real shell in place of the black floppy dress, blue for a
+	# development dump.
+	var retail := await _cart("nintendo_64dd", "/roms/nintendo_64dd/Mario Artist - Paint Studio (Japan).ndd")
+	_ok(retail.has_node("CartModel"), "disk/ a disk wears the model")
+	_ok(not retail.has_node("Shutter"), "disk/ and not the floppy dress")
+	# The physics box is what the disk rests on and what a hand closes on, so it
+	# has to be the model's own bounds and nothing looser.
+	var col := retail.get_node("CollisionShape3D") as CollisionShape3D
+	var box := col.shape as BoxShape3D
+	var model := retail.get_node("CartModel") as Node3D
+	var mb: AABB = retail._cart_model_aabb(model)
+	var to_cart: Transform3D = retail.global_transform.affine_inverse() * model.global_transform
+	var world_lo: Vector3 = to_cart * mb.position
+	var world_hi: Vector3 = to_cart * mb.end
+	var mlo := Vector3(minf(world_lo.x, world_hi.x), minf(world_lo.y, world_hi.y), minf(world_lo.z, world_hi.z))
+	var mhi := Vector3(maxf(world_lo.x, world_hi.x), maxf(world_lo.y, world_hi.y), maxf(world_lo.z, world_hi.z))
+	print("[exp] disk collision %s at %s; model %s..%s" % [box.size, col.position, mlo, mhi])
+	_ok((mhi - mlo).is_equal_approx(box.size) or (mhi - mlo - box.size).length() < 0.0005,
+		"disk/ the collision box is the model's size")
+	_ok(((mlo + mhi) * 0.5 - col.position).length() < 0.0005,
+		"disk/ and sits where the model sits")
+	var size := MediaDimensions.cart_size("nintendo_64dd")
+	_ok(size.is_equal_approx(Vector3(0.101, 0.104, 0.0103)), "disk/ sized as a 64DD disk, not a floppy")
+	var shell_mi := retail.find_child("Shell", true, false) as MeshInstance3D
+	var retail_mat: BaseMaterial3D = shell_mi.get_active_material(0) as BaseMaterial3D if shell_mi != null else null
+	_ok(retail_mat != null and retail_mat.albedo_texture != null
+			and retail_mat.albedo_texture.resource_path.ends_with("n64dd_disk_color.png"),
+		"disk/ a retail disk is grey")
+	# The scraped art covers the lower half of the top face -- where the paper
+	# label is -- not the model's placeholder plate over the hub window.
+	var art_disk := await _cart("nintendo_64dd", _labelled_disk_path())
+	var art := art_disk.get_node_or_null("ModelLabelArt") as MeshInstance3D
+	if art != null:
+		var q := art.mesh as QuadMesh
+		_ok(art.position.y + q.size.y * 0.5 < -0.004 and art.position.y - q.size.y * 0.5 > -0.05,
+			"disk/ the label art sits in the lower half of the top face")
+		_ok(art.position.z > 0.005, "disk/ on top of the shell")
+		_ok(not (art_disk._model_label as MeshInstance3D).visible,
+			"disk/ and the model's placeholder label plate stays hidden")
+	else:
+		print("[exp] (no scraped label on disk for this machine; art placement not exercised)")
+	var devdisk := await _cart("nintendo_64dd", "/roms/nintendo_64dd/NUD-TEST-JPN.ndd")
+	var dev_mi := devdisk.find_child("Shell", true, false) as MeshInstance3D
+	var dev_mat: BaseMaterial3D = dev_mi.get_active_material(0) as BaseMaterial3D if dev_mi != null else null
+	_ok(dev_mat != null and dev_mat.albedo_texture != null
+			and dev_mat.albedo_texture.resource_path.ends_with("n64dd_disk_color_blue.png"),
+		"disk/ a development disk is blue")
+
+	# And it still goes in: the retail unit takes it and reports it.
+	dd.restore_media(retail)
+	await _wait(5)
+	_ok(dd.get_media_path().ends_with("Mario Artist - Paint Studio (Japan).ndd"),
+		"disk/ the shelled drive seats a disk")
+	await _wait(60)
+	var proud := dd.to_local(retail.global_position).z + size.y * 0.5 - dd.size().z * 0.5
+	print("[exp] seated disk proud of the face by %.1f mm" % (proud * 1000.0))
+	_ok(proud > -0.012 and proud < -0.004, "disk/ swallowed past the face, not left a third out")
+
+	# The model's own button is what a hand or a beam presses: the cap travels
+	# into the case for the press, comes back on release, and the disk comes out.
+	if eject != null and eject._mesh != null:
+		var cap: MeshInstance3D = eject._mesh
+		var rest := cap.position
+		var at := eject.global_position
+		eject.pointer_event(XRToolsPointerEvent.new(XRToolsPointerEvent.Type.PRESSED, null, eject, at, at))
+		var pressed_z := dd.to_local(cap.global_transform * cap.get_aabb().get_center()).z
+		var rest_z := dd.to_local(cap.global_transform.translated_local(rest - cap.position)
+			* cap.get_aabb().get_center()).z
+		_ok(pressed_z < rest_z - 0.001, "disk/ a press sinks the model's button into the case")
+		_ok(rest_z - pressed_z < 0.006, "disk/ but not through it")
+		eject.pointer_event(XRToolsPointerEvent.new(XRToolsPointerEvent.Type.RELEASED, null, eject, at, at))
+		_ok(cap.position.is_equal_approx(rest), "disk/ and it comes back on release")
+		await _wait(3)
+		_ok(retail.enabled, "disk/ which hands the disk back")
+		eject.pointer_event(XRToolsPointerEvent.new(XRToolsPointerEvent.Type.PRESSED, null, eject, at, at))
+		eject.pointer_event(XRToolsPointerEvent.new(XRToolsPointerEvent.Type.RELEASED, null, eject, at, at))
+		await _wait(3)
+
+	# The ACCESS lamp is the drive's own: it follows the core's LED interface
+	# through the console standing on the unit, as the Satellaview's does, and
+	# stops listening when that console is lifted off.
+	var led := dd.get_node_or_null("Shell/AccessLed") as MeshInstance3D
+	var led_mat: BaseMaterial3D = led.get_active_material(0) as BaseMaterial3D if led != null else null
+	_ok(led_mat != null and not led_mat.emission_enabled, "disk/ the lamp is dark with no console")
+	var n64 := await _console("nintendo_64")
+	await _bolt(n64, dd)
+	var core: Libretro = n64.get_libretro_node()
+	_ok(core != null and core.led_state.is_connected(dd._on_core_led),
+		"disk/ a console on the unit puts its core's lamp on the watch")
+	_ok(led_mat != null and not led_mat.emission_enabled, "disk/ still dark with no activity")
+	if core != null:
+		core.led_state.emit(0, true)
+		await _wait(1)
+		_ok(led_mat != null and led_mat.emission_enabled, "disk/ lit when the core reports access")
+		core.led_state.emit(1, false)
+		await _wait(1)
+		_ok(led_mat != null and led_mat.emission_enabled, "disk/ and another lamp's state is not this one's")
+		core.led_state.emit(0, false)
+		await _wait(1)
+		_ok(led_mat != null and not led_mat.emission_enabled, "disk/ dark again when the access ends")
+		core.led_state.emit(0, true)
+		await _wait(1)
+	await _unbolt(dd.get_socket(), n64)
+	_ok(led_mat != null and not led_mat.emission_enabled
+			and (core == null or not core.led_state.is_connected(dd._on_core_led)),
+		"disk/ lifting the console off darkens the lamp and drops the watch")
+	await _clear()
 
 
 # ── slot2/ — the DS's GBA slot, a second slot moulded into the console ─────────

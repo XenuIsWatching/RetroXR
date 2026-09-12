@@ -1,0 +1,34 @@
+Model Information:
+* title:	64DD Disk / 64DD Disk (Blue)
+* source:	the author's .ugc bundles 64DD_Disk_9ff9560b.ugc and
+		64DD_Disk_(Blue)_17117013.ugc, shared by the author at
+		https://drive.google.com/drive/folders/1EzqWXCf_Glu7mQgmq9-PfCynKpAvhAs3
+* author:	Mickemoose
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+* grant:	"I license my N64DD disk and case models under CC BY 4.0" --
+		Mickemoose, Discord, 2026-09-11.
+
+Credit, in the author's own wording:
+Modeled by: Mickemoose
+
+			------------------------------
+
+MODIFICATIONS (CC-BY-4.0 requires these be indicated)
+
+Adapted for RetroXR as n64dd_disk.glb by Tools/glb/prepare_64dd.py:
+
+  * Converted from a Unity AssetBundle to glTF with ugc-to-gltf
+    (https://github.com/XenuIsWatching/ugc-to-gltf).
+  * The two bundles are the same mesh with different colour maps, so one GLB
+    is shipped with the plain map bound (n64dd_disk_color.png) and the blue
+    one beside it (n64dd_disk_color_blue.png) for a runtime swap.
+  * REMOVED the "Desync" sticker quad and its texture, and the socket empty.
+  * Rotated into RetroXR's floppy frame: label +Z, shutter +Y.
+  * Node 64disk renamed Shell; media_label is kept as the swappable label face
+    RetroXR lays scraped art onto (see cartridge.gd).
+  * Textures written as PNGs beside the GLB.
+
+Nothing here is affiliated with, endorsed by, or sponsored by Nintendo.

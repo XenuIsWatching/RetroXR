@@ -41,12 +41,21 @@ var _pack_panel: BsxPackPanel = null
 const _CART_MODELS := {
 	"nes": "res://imported-assets/carts/nes/nes_cart.glb",
 	"atari_2600": "res://imported-assets/carts/atari_2600/atari_2600_cart.glb",
+	"nintendo_64dd": Nintendo64DD.DISK_MODEL,
 }
 
 ## Name of the model's swappable label face, which _apply_label_art covers with
 ## the scraped art. Kept as a constant so a model that names it something else
 ## can be special-cased without touching the lookup.
 const _LABEL_MESH := "media_label"
+
+## Where the scraped art goes on a model whose label face is not the flat
+## quad the art should cover, as a rect on the +Z face in cart space. The
+## 64DD disk's label mesh is a strip round the hub window; the paper label
+## the art stands for is the lower half of the top face.
+const _LABEL_RECTS := {
+	"nintendo_64dd": Rect2(-0.044, -0.049, 0.088, 0.044),
+}
 
 ## The model's own label face, when a real cart model is in use.
 var _model_label: MeshInstance3D = null
@@ -172,12 +181,18 @@ func _apply_cart_model() -> void:
 	# Moulded plastic exported with a high metallicFactor reads as a dark mirror
 	# rather than a grey shell — the NES cart ships metallic 0.76.
 	ModelMaterialFix.demetal(glb)
+	if systemid == "nintendo_64dd" and Nintendo64DD.is_dev_disk(rom_path):
+		ModelMaterialFix.retexture(glb, "shell", Nintendo64DD.DISK_DEV_ALBEDO)
 	_model_label = glb.find_child(_LABEL_MESH, true, false) as MeshInstance3D
 	# The procedural stand-ins are replaced by the real shell.
 	for nm in ["CartridgeMesh", "LabelMesh", "GameLabel"]:
 		var n := get_node_or_null(nm) as Node3D
 		if n != null:
 			n.visible = false
+	# The floppy dress is applied by the sizing pass, which runs first.
+	var shutter := get_node_or_null("Shutter")
+	if shutter != null:
+		shutter.queue_free()
 
 
 ## Bounds of a cart model, in the GLB root's own space.
@@ -333,7 +348,7 @@ func _apply_system_size() -> void:
 ## Fresh materials, never the scene's: cartridge.tscn's Mat_cart and Mat_label are
 ## shared sub_resources, so tinting one would repaint every cartridge in the room.
 func _apply_floppy_shell() -> void:
-	if not MediaDimensions.uses_floppy(systemid):
+	if not MediaDimensions.uses_floppy(systemid) or has_node("CartModel"):
 		return
 	var s := MediaDimensions.cart_size(systemid, rom_path)
 
@@ -530,6 +545,12 @@ func _apply_label_art() -> void:
 	# right for models not imported yet.
 	if _model_label != null:
 		var ab := _label_face_bounds(_model_label)
+		var placed := _LABEL_RECTS.has(systemid)
+		if placed:
+			var r: Rect2 = _LABEL_RECTS[systemid]
+			var model := get_node_or_null("CartModel") as Node3D
+			var top := _cart_model_aabb(model).end.z if model != null else ab.end.z
+			ab = AABB(Vector3(r.position.x, r.position.y, top), Vector3(r.size.x, r.size.y, 0.0))
 		if ab.size.x > 0.0001 and ab.size.y > 0.0001:
 			_model_label.visible = false
 			var art := MeshInstance3D.new()

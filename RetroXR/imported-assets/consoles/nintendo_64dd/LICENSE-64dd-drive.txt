@@ -1,0 +1,42 @@
+Model Information:
+* title:	Nintendo 64 Disk Drive / Nintendo 64 Disk Drive (Dev Kit)
+* source:	the authors' .ugc bundles Nintendo_64_Disk_Drive_a77d0ed5.ugc and
+		Nintendo_64_Disk_Drive_(Dev_Kit)_bb88589e.ugc, shared by the
+		commissioner at
+		https://drive.google.com/drive/folders/1EzqWXCf_Glu7mQgmq9-PfCynKpAvhAs3
+* author:	ArilcedT (https://ko-fi.com/ariicedt), commissioned by Mickemoose
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+* grant:	"I license my N64DD console model under CC BY 4.0" -- ArilcedT,
+		Discord, 2026-09-11, on being asked directly for a licence the
+		project could ship under.
+
+Credit, in the commissioner's own wording:
+Modeled by: ArilcedT, Model Commissioned by: Mickemoose
+
+			------------------------------
+
+MODIFICATIONS (CC-BY-4.0 requires these be indicated)
+
+Adapted for RetroXR as n64dd_drive.glb by Tools/glb/prepare_64dd.py:
+
+  * Converted from a Unity AssetBundle to glTF with ugc-to-gltf
+    (https://github.com/XenuIsWatching/ugc-to-gltf).
+  * The two bundles are the same mesh with different colour bakes, so one GLB
+    is shipped with the retail colour map bound (n64dd_drive_color.png) and
+    the dev kit's beside it (n64dd_drive_color_dev.png) for a runtime swap.
+  * REMOVED the RCA cable bundle and its three plugs, the three finger-gesture
+    empties, the two highlight empties and the three socket animations.
+    RetroXR animates the disk and the leads itself.
+  * Yawed 180 degrees so the slot faces +Z.
+  * Nodes renamed: 64DD -> Shell, default (1) -> PowerLed, default -> LedLens
+    and EjectButton, System Socket -> SocketMarker (moved to its seated pose).
+  * The occlusion / roughness / metallic map was rebuilt from the bundle's own
+    ao, roughness and metallic textures. The LED's emission is zeroed and
+    switched on by the room with the console's power.
+  * Colour, normal and ORM maps resized from 4096 to 2048 and written as PNGs
+    beside the GLB.
+
+Nothing here is affiliated with, endorsed by, or sponsored by Nintendo.

@@ -75,6 +75,11 @@ var _media: Array[Node3D] = []
 
 var _body: MeshInstance3D = null
 var _label: Label3D = null
+## The GLB a row's `shell` names, worn instead of the box. Null on a plain unit.
+var _shell: Node3D = null
+var _led_mat: BaseMaterial3D = null
+var _led_on := false
+var _watched_host: RetroSystem = null
 
 ## The glyph height expansion.tscn was authored at (font_size x pixel_size =
 ## 20 x 0.001). _fit_label never exceeds it, so it is also the ceiling.
@@ -83,6 +88,12 @@ const _LABEL_MAX_GLYPH := 0.02
 ## The top plate a row's cap_color paints — see _build_cap.
 const _CAP_THICKNESS := 0.003
 const _CAP_PROUD := 0.0002
+## Where a seated disk's trailing edge sits against a shelled drive's face:
+## negative is inside the mouth.
+const _SHELL_DISK_PROUD := -0.008
+## How far the shell's own eject cap travels; the modelled cap is small and
+## already recessed, so the widget's default 8 mm pushed it through the case.
+const _SHELL_EJECT_TRAVEL := 0.004
 
 func _ready() -> void:
 	super._ready()
@@ -117,6 +128,7 @@ func _build_body() -> void:
 	mat.roughness = 0.7
 	_body.set_surface_override_material(0, mat)
 	_build_cap(s)
+	_build_shell(s)
 
 	var shape := $CollisionShape3D as CollisionShape3D
 	var box := BoxShape3D.new()
@@ -145,6 +157,97 @@ func _build_body() -> void:
 	var label_z := (-s.z * 0.5 - 0.001) if cartridge else (s.z * 0.5 + 0.001)
 	_label.position = Vector3(0.0, label_y, label_z)
 	_label.rotation = Vector3(0.0, PI, 0.0) if cartridge else Vector3.ZERO
+	# A real shell carries its own markings.
+	_label.visible = _shell == null
+
+
+## The GLB a row names, scaled per axis to the catalog size and centred on the
+## box it replaces, so every socket, mouth and button placed from `size` still
+## lands on it.
+func _build_shell(s: Vector3) -> void:
+	var path := ExpansionCatalog.shell_of(expansion_id)
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return
+	var packed := load(path) as PackedScene
+	if packed == null:
+		return
+	var shell := packed.instantiate() as Node3D
+	shell.name = "Shell"
+	add_child(shell)
+	var ab := _mesh_bounds(shell)
+	if ab.size.x <= 0.0001 or ab.size.y <= 0.0001 or ab.size.z <= 0.0001:
+		shell.queue_free()
+		return
+	var k := Vector3(s.x / ab.size.x, s.y / ab.size.y, s.z / ab.size.z)
+	shell.scale = k
+	shell.position = -(ab.position + ab.size * 0.5) * k
+	_shell = shell
+	_body.visible = false
+	var albedo := ExpansionCatalog.shell_albedo_of(expansion_id)
+	if not albedo.is_empty():
+		ModelMaterialFix.retexture(shell, "shell", albedo)
+
+	var led := shell.find_child("AccessLed", true, false) as MeshInstance3D
+	if led != null and led.get_active_material(0) is BaseMaterial3D:
+		_led_mat = (led.get_active_material(0) as BaseMaterial3D).duplicate()
+		_led_mat.emission_enabled = false
+		_led_mat.emission = Color(1.0, 0.12, 0.05)
+		_led_mat.emission_energy_multiplier = 2.5
+		led.set_surface_override_material(0, _led_mat)
+		host_changed.connect(_watch_access_led)
+
+
+## Bounds of every mesh under `root`, in `root`'s own space.
+static func _mesh_bounds(root: Node3D) -> AABB:
+	var to_root := root.global_transform.affine_inverse()
+	var acc := AABB()
+	var first := true
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var ab: AABB = (to_root * mi.global_transform) * mi.get_aabb()
+		acc = ab if first else acc.merge(ab)
+		first = false
+	return acc
+
+
+## A named node of the shell, or null on a plain unit.
+func _shell_node(name: String) -> Node3D:
+	if _shell == null:
+		return null
+	return _shell.find_child(name, true, false) as Node3D
+
+
+## The ACCESS lamp is the drive's, so it follows the core's LED interface
+## through the console standing on the unit, as the Satellaview's does.
+const CORE_LED_ACCESS := 0
+
+
+func _watch_access_led(sys: RetroSystem) -> void:
+	if _watched_host != null and is_instance_valid(_watched_host):
+		var old: Libretro = _watched_host.get_libretro_node()
+		if old != null and old.led_state.is_connected(_on_core_led):
+			old.led_state.disconnect(_on_core_led)
+	_watched_host = sys
+	_set_led(false)
+	if sys == null:
+		return
+	var node: Libretro = sys.get_libretro_node()
+	if node != null and not node.led_state.is_connected(_on_core_led):
+		node.led_state.connect(_on_core_led)
+
+
+func _on_core_led(led: int, on: bool) -> void:
+	if led == CORE_LED_ACCESS:
+		_set_led(on)
+
+
+func _set_led(on: bool) -> void:
+	if on == _led_on or _led_mat == null:
+		return
+	_led_on = on
+	_led_mat.emission_enabled = on
 
 
 ## The coloured plate across a unit's top face, for a row that names one. The
@@ -270,7 +373,7 @@ func _build_connector() -> void:
 		# The console stands on us: we hold the socket, and only the console this
 		# unit was made for is allowed into it.
 		_socket = ExpansionPort.build_socket(self, s.y * 0.5, span,
-			ExpansionPort.GROUP_SYSTEM, _accepts_host)
+			ExpansionPort.GROUP_SYSTEM, _accepts_host, _shell == null)
 		_socket.has_picked_up.connect(_on_host_seated)
 		_socket.has_dropped.connect(_on_host_lifted)
 	else:
@@ -435,9 +538,16 @@ func _build_media_bay() -> void:
 ## Media that SLIDES IN through a slit in the front face: a 64DD disk, an FDS
 ## disk. MediaSlot runs the ride in and out.
 func _build_slot_bay(s: Vector3, media: String) -> void:
-	# At the mouth of the slit, a third of the way up the front face.
+	# At the mouth of the slit, a third of the way up the front face -- or where
+	# the shell's socket marker says a seated disk sits.
 	_bays[0].position = Vector3(0.0, -s.y * 0.2, s.z * 0.5)
-	ExpansionShell.build_slit(_body, s, media)
+	var socket := _shell_node("SocketMarker")
+	var seated := Vector3.ZERO
+	if socket != null:
+		seated = to_local(socket.global_position)
+		_bays[0].position = Vector3(seated.x, seated.y, s.z * 0.5)
+	if _shell == null:
+		ExpansionShell.build_slit(_body, s, media)
 	# The ride in and out, the grab hand-off and the collision exception, all
 	# from the same component the slot-loading consoles use. Its `host` is
 	# typed PhysicsBody3D rather than RetroSystem precisely so a second kind
@@ -466,6 +576,10 @@ func _build_slot_bay(s: Vector3, media: String) -> void:
 	# what a loaded 64DD looks like and what a hand needs to pull it
 	# back out.
 	_slot.insert_depth = media_size.y * 0.2
+	# A real drive swallows the disk to a lip; the eject button is what brings
+	# it back within reach.
+	if socket != null:
+		_slot.insert_depth = media_size.y * 0.5 - _SHELL_DISK_PROUD
 	add_child(_slot)
 	_slot.inserted.connect(_on_media_in)
 	_slot.removed.connect(_on_media_out)
@@ -706,9 +820,24 @@ func _build_eject_button(s: Vector3, media: String) -> void:
 		ExpansionShell.eject_x(s, mount, drawer, media),
 		ExpansionShell.eject_y(s, mount, drawer),
 		s.z * 0.5 + 0.004)
-	ExpansionShell.build_eject_button(self, pos, func() -> void:
+	var cap := _shell_node("EjectButton") as MeshInstance3D
+	if cap != null:
+		# The hit box stays at the face plane, proud of the unit's own pointer
+		# box, even though the modelled cap is recessed behind it; a box inside
+		# that volume is never the first thing a beam reaches.
+		var centre := to_local(cap.global_transform * cap.get_aabb().get_center())
+		pos = Vector3(centre.x, centre.y, pos.z)
+	var eject := ExpansionShell.build_eject_button(self, pos, func() -> void:
 		if _tray != null:
 			_tray.toggle_open()
 		elif _slot != null:
 			_slot.toggle_eject(),
 		"OPEN" if _tray != null else "EJECT")
+	# The shell's own button is the cap; the built one and its legend go.
+	if cap != null:
+		eject.set_button_mesh(cap)
+		eject.set_depress_axis_world(-global_transform.basis.z)
+		eject.depress_depth = _SHELL_EJECT_TRAVEL
+		for child in eject.get_children():
+			if child is Label3D:
+				child.visible = false

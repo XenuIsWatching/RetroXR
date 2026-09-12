@@ -40,7 +40,7 @@ const CART_SIZES: Dictionary = {
 	"game_gear":        Vector3(0.068, 0.047, 0.012),
 	"wonderswan":       Vector3(0.048, 0.052, 0.008),
 	"neo_geo_pocket":   Vector3(0.048, 0.052, 0.008),
-	"nintendo_64dd":    Vector3(0.098, 0.079, 0.017),   # 64DD magnetic disk
+	"nintendo_64dd":    Vector3(0.101, 0.104, 0.0103),  # 64DD magnetic disk
 	# The 8M Memory Pack, which is NOT a Super Famicom cartridge -- it is a small
 	# pack that goes into a well in the top of the BS-X cart and stands proud of
 	# it. Approximate: proportioned from photographs against the SFC shell it
@@ -283,7 +283,8 @@ static func cart_size(systemid: String, rom_path := "") -> Vector3:
 			return FLOPPY_SIZE
 		if m.has("cart_size"):
 			return m["cart_size"] as Vector3
-	if FLOPPY_SYSTEMS.has(systemid):
+	# A floppy system with a row of its own (the 64DD) is sized by that row.
+	if FLOPPY_SYSTEMS.has(systemid) and not CART_SIZES.has(systemid):
 		return FLOPPY_SIZE
 	if systemid == "satellaview" and not rom_path.is_empty():
 		var ext := rom_path.get_extension().to_lower()

@@ -66,7 +66,7 @@ const _PIN_COLOUR := Color(0.72, 0.62, 0.28)
 ## finer test on top of it (a Mega-CD's socket takes a Mega Drive and no other
 ## console). The zone is placed in GROUP so only a foot answers it.
 static func build_socket(host: Node3D, top_y: float, span: Vector2,
-		accept_group: String, filter: Callable) -> XRToolsSnapZone:
+		accept_group: String, filter: Callable, plate: bool = true) -> XRToolsSnapZone:
 	var zone := SNAP_ZONE_SCENE.instantiate() as XRToolsSnapZone
 	zone.name = "ExpansionSocket"
 	zone.snap_require = accept_group
@@ -77,7 +77,9 @@ static func build_socket(host: Node3D, top_y: float, span: Vector2,
 	zone.add_to_group(GROUP)
 	host.add_child(zone)
 	zone.position = Vector3(0.0, top_y, 0.0)
-	_add_plate(zone, span, false)
+	# A shell moulds its own port; the plate is for the primitive box.
+	if plate:
+		_add_plate(zone, span, false)
 	return zone
 
 

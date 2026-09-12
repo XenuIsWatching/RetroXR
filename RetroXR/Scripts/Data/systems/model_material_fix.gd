@@ -43,6 +43,19 @@ static func demetal(root: Node, value: float = 0.0) -> int:
 		return true)
 
 
+## Swap the albedo of every surface whose material is named `material_name`
+## for the texture at `path`. Returns surfaces changed.
+static func retexture(root: Node, material_name: String, path: String) -> int:
+	var tex := load(path) as Texture2D
+	if tex == null:
+		return 0
+	return _walk(root, func(m: BaseMaterial3D) -> bool:
+		if m.resource_name != material_name:
+			return false
+		m.albedo_texture = tex
+		return true)
+
+
 ## Turn on alpha cutout for textured decal quads whose texture actually carries
 ## alpha. Converted models routinely leave these OPAQUE, so a logo authored as
 ## art-on-transparent renders as art on a solid black rectangle — the NES
