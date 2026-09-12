@@ -255,12 +255,17 @@ func _run() -> void:
 
 	_card.power_off()
 	_ok(not _card.is_running_standalone(), "and powers back down")
-	# Sixty PROCESS FRAMES before quitting, and both halves of that matter.
+	# Sixty process frames before quitting, so the core's teardown has run on
+	# its own thread before the process goes.
 	#
-	# The extension's audio playback comes back through a chain rather than in
-	# one step, so a probe that exits promptly after powering a core down dies
-	# with an access violation and prints no crash-handler output at all — every
-	# check green, then the process gone. A wall-clock timer does not fix it
-	# (tried at 1.5 s, still died); the reclaim is counted in frames.
+	# EXPECT AN ACCESS VIOLATION HERE ANYWAY, after every check has passed. It
+	# is the core's, not ours: vemulator never initialises its flash object's
+	# file handle, only opens one for a .bin with flash writes on, and closes
+	# it unconditionally in the destructor — so retro_unload_game's reset()
+	# or retro_deinit's delete dies in rfclose. Read at source after
+	# vmu_play_probe took the process down on its stop button; the earlier
+	# theory here, an audio playback outliving the extension, was wrong. The
+	# fix is one line in the core's fork (flashWriter = NULL in the
+	# VE_VMS_FLASH constructor); nothing on this side can reach it.
 	for i in range(60):
 		await get_tree().process_frame

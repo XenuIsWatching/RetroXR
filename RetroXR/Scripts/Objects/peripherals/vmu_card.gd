@@ -136,8 +136,16 @@ const IDLE_FRAMES_TO_STOP := 24
 
 const STANDALONE_CORE := "vemulator"
 
+## Where a game lifted off a card is written for the core to boot from.
+const PLAY_DIR := "user://vmu_play"
+
 var _lib: Node = null
 var _running := false
+## What the running game is called, for the panel's "playing" row. Empty when
+## nothing runs.
+var _game_title := ""
+## The hand's buttons reaching the core — see VmuInput.
+var _input: VmuInput = null
 
 
 func _ready() -> void:
@@ -168,6 +176,7 @@ func _ready() -> void:
 		# does on a shelf.
 		_lcd_off_mat = _lcd.get_surface_override_material(0)
 	_bind_controls()
+	_input = VmuInput.attach(self)
 	set_process(false)
 
 
@@ -269,19 +278,67 @@ func _show_off() -> void:
 ## Power the card up as its own machine, running one minigame.
 ##
 ## `vms_path` is a .vms, .dci or .bin — the file a Dreamcast game downloaded into
-## the card, or one out of a library. Returns false when the core is not
-## installed or the file is missing, which is the difference between "nothing
-## happened" and "it silently played nothing".
-func power_on(vms_path: String) -> bool:
+## the card, or one out of a library. `title` is what to call it while it runs;
+## the file name stands in when none is given. Returns false when the core is
+## not installed, the file is missing or the card is seated, which is the
+## difference between "nothing happened" and "it silently played nothing".
+func power_on(vms_path: String, title := "") -> bool:
 	if _running:
 		return true
 	if vms_path.is_empty() or not FileAccess.file_exists(vms_path):
 		push_warning("[VmuCard] no such minigame: %s" % vms_path)
 		return false
-	var root := CoreDownloadManager.default_core_root()
-	if CoreDownloadManager.installed_core_lib(STANDALONE_CORE).is_empty():
-		push_warning("[VmuCard] the %s core is not installed" % STANDALONE_CORE)
+	var image := _flash_image_for(FileAccess.get_file_as_bytes(vms_path), vms_path)
+	if image.is_empty():
+		push_warning("[VmuCard] %s is not a VMU game, save or card" % vms_path.get_file())
 		return false
+	return _boot(image, title if not title.is_empty() else vms_path.get_file().get_basename())
+
+
+## The 128 KiB flash image the core is handed, whatever the file was.
+##
+## A card image is taken as it is. A .dci or a .vms is put at block 0 of a
+## blank card — where a game must sit, since with no BIOS the core runs the
+## flash from its first byte.
+func _flash_image_for(bytes: PackedByteArray, path: String) -> PackedByteArray:
+	if VMUCard.is_card_image(bytes):
+		return bytes
+	var dci := bytes
+	if not VMUCard.is_dci(dci):
+		var stem := path.get_file().get_basename().to_upper()
+		dci = VMUCard.dci_from_vms(bytes, stem if not stem.is_empty() else "GAME")
+	if dci.is_empty():
+		return PackedByteArray()
+	return VMUCard.insert_save(VMUCard.blank_image(), dci)
+
+
+## Boot the core on a flash image written to this card's scratch file.
+##
+## ALWAYS a .bin, never the .vms or .dci the game arrived as, and the reason
+## is a crash in the core rather than a preference. vemulator's flash object
+## opens a file handle only for a .bin with enable_flash_write on, and its
+## destructor closes that handle unconditionally — but the member is never
+## initialised, so on a .vms or .dci the handle is garbage and reset() dies in
+## rfclose the moment the game is unloaded. Read at source (flash.cpp,
+## flash.h, main.cpp) after the stop button took the process down with it. A
+## .bin with writing on gives it a real handle to close, and the writes land
+## in this scratch copy, never in the card. (The .dci path is also simply
+## broken: a real one runs zero frames.)
+func _boot(image: PackedByteArray, title: String) -> bool:
+	var why := standalone_blocker()
+	if not why.is_empty():
+		push_warning("[VmuCard] cannot run %s: %s" % [title, why])
+		return false
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(PLAY_DIR))
+	var scratch := play_scratch_path()
+	var f := FileAccess.open(scratch, FileAccess.WRITE)
+	if f == null:
+		push_warning("[VmuCard] could not write %s" % scratch)
+		return false
+	f.store_buffer(image)
+	f.close()
+	var root := CoreDownloadManager.default_core_root()
+	CoreOptionsStore.merge_values(root, STANDALONE_CORE, {"enable_flash_write": "enabled"})
 
 	# Made once and KEPT. Freeing a Libretro node whose emulation thread is still
 	# unwinding is how a clean run ends in an access violation on the way out —
@@ -296,14 +353,63 @@ func power_on(vms_path: String) -> bool:
 			return false
 		_lib.name = "VmuLibretro"
 		add_child(_lib)
-	_lib.StartContent(root, STANDALONE_CORE, vms_path)
+	_lib.StartContent(root, STANDALONE_CORE, ProjectSettings.globalize_path(scratch))
 	_running = true
+	_game_title = title
 	# Its own screen now, not a window into a Dreamcast's frame.
 	_last_tex = null
 	_last_frame = Vector2i.ZERO
 	set_process(true)
-	print("[VmuCard] %s running %s" % [card_label, vms_path.get_file()])
+	if _hint != null:
+		_hint.add_row(&"vmu_ab", HeldHint.PLATFORM_VR,
+			["quest_button_a_outline", "quest_button_b_outline"], "A and B — stick is the d-pad")
+		_hint.add_row(&"vmu_mode", HeldHint.PLATFORM_VR,
+			["quest_stick_{s}_press"], "MODE")
+	print("[VmuCard] %s running %s" % [card_label, title])
 	return true
+
+
+## Run one of this card's own game entries, the loop the hardware is remembered
+## for: a Dreamcast game put it there, and the card plays it on its own.
+##
+## The entry is lifted off as a .dci — the form that carries its directory
+## entry — and put at block 0 of a fresh image for the core, one scratch per
+## card, overwritten each time. The card's own image is never touched, and
+## nothing comes back to it: whatever the game writes lands in the scratch.
+## `block` is the entry's first block, as list_saves reports it.
+func play_save(block: int, title := "") -> bool:
+	var path := SramPaths.find_card(card_id, FAMILY)
+	if path.is_empty():
+		push_warning("[VmuCard] %s has no image to play from" % card_label)
+		return false
+	var dci := VMUCard.extract_save(FileAccess.get_file_as_bytes(path), block)
+	if dci.is_empty():
+		push_warning("[VmuCard] no game at block %d on %s" % [block, card_label])
+		return false
+	var image := VMUCard.insert_save(VMUCard.blank_image(), dci)
+	if image.is_empty():
+		push_warning("[VmuCard] the game at block %d would not go onto a blank card" % block)
+		return false
+	return _boot(image, title)
+
+
+## Where the image the core boots from is written. A .bin, see _boot.
+func play_scratch_path() -> String:
+	return PLAY_DIR.path_join("%s.bin" % card_id)
+
+
+## Why this card cannot run a minigame right now, or "" when it can.
+func standalone_blocker() -> String:
+	if _slot >= 0:
+		return "seated in a controller — pull it out first"
+	if CoreDownloadManager.installed_core_lib(STANDALONE_CORE).is_empty():
+		return "the %s core is not installed" % STANDALONE_CORE
+	return ""
+
+
+## The running game's name, or "" when the card is not running one.
+func playing_title() -> String:
+	return _game_title if _running else ""
 
 
 func power_off() -> void:
@@ -323,6 +429,10 @@ func power_off() -> void:
 	if _lib != null and _lib.has_method("StopContent"):
 		_lib.StopContent()
 	_btn = 0
+	_game_title = ""
+	if _hint != null:
+		_hint.remove_row(&"vmu_ab")
+		_hint.remove_row(&"vmu_mode")
 	set_process(_slot == 0)
 	_show_off()
 

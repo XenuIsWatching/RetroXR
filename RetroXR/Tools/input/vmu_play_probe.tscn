@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://vmu_play_probe_0001"]
+
+[ext_resource type="Script" path="res://Tools/input/vmu_play_probe.gd" id="1_vmuplay"]
+
+[node name="VmuPlayProbe" type="Node"]
+script = ExtResource("1_vmuplay")

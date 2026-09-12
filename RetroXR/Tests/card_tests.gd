@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 370
+const EXPECTED_CASES := 393
 
 var _pass := 0
 var _fail := 0
@@ -56,6 +56,7 @@ func _ready() -> void:
 	_test_vmu_dci()
 	_test_vmu_roundtrip()
 	_test_vmu_icons()
+	_test_vmu_play()
 	_test_shared_contract()
 	_test_ops()
 	_test_format_registry()
@@ -562,6 +563,142 @@ func _test_n64_contract() -> void:
 
 
 # --- What every format must do ------------------------------------------------
+
+## Selecting a game to play off a VMU: the hand-to-button map, the card's own
+## refusals, and the panel row that offers it. None of it needs the core —
+## power_on is exercised only on a path that does not exist, which it must
+## refuse — so the half that boots vemulator stays in vmu_standalone_probe.
+func _test_vmu_play() -> void:
+	# The map, pure.
+	_eq(VmuInput.mask_from(true, false, false, false, Vector2.ZERO),
+		1 << ControllerBindings.JOYPAD_A, "vmu_play/A is A")
+	_eq(VmuInput.mask_from(false, true, false, false, Vector2.ZERO),
+		1 << ControllerBindings.JOYPAD_B, "vmu_play/B is B")
+	_eq(VmuInput.mask_from(false, false, true, false, Vector2.ZERO),
+		1 << ControllerBindings.JOYPAD_START, "vmu_play/MODE rides START, as vemulator reads it")
+	_eq(VmuInput.mask_from(false, false, false, true, Vector2.ZERO),
+		1 << ControllerBindings.JOYPAD_SELECT, "vmu_play/SLEEP rides SELECT")
+	_eq(VmuInput.mask_from(false, false, false, false, Vector2(0, 1)),
+		1 << ControllerBindings.JOYPAD_UP, "vmu_play/stick up is d-pad UP")
+	_eq(VmuInput.mask_from(false, false, false, false, Vector2.ZERO), 0,
+		"vmu_play/nothing held is nothing")
+
+	# The map read off a controller, through the latch.
+	var origin := XROrigin3D.new()
+	add_child(origin)
+	var ctrl := XRController3D.new()
+	ctrl.tracker = &"right_hand"
+	ctrl.pose = &"default"
+	origin.add_child(ctrl)
+	var tracker := XRControllerTracker.new()
+	tracker.name = &"right_hand"
+	XRServer.add_tracker(tracker)
+	var input := VmuInput.new()
+	add_child(input)
+	tracker.set_input(&"ax_button", 1.0)
+	_eq(input.mask_for(ctrl) & (1 << ControllerBindings.JOYPAD_A),
+		1 << ControllerBindings.JOYPAD_A, "vmu_play/the hand's A reaches the mask")
+	tracker.set_input(&"ax_button", 0.0)
+	tracker.set_input(&"primary", Vector2(1, 0))
+	_eq(input.mask_for(ctrl), 1 << ControllerBindings.JOYPAD_RIGHT,
+		"vmu_play/the stick is the d-pad")
+	tracker.set_input(&"primary", Vector2.ZERO)
+	_eq(input.mask_for(ctrl), 0, "vmu_play/and released is released")
+	XRServer.remove_tracker(tracker)
+	input.free()
+	origin.free()
+
+	# A library .vms wrapped as the .dci a card holds, and back: the inverse of
+	# extract_save, checked as a round trip rather than against its own
+	# fields. Six blocks plus a partial seventh, so the padding is exercised.
+	var vms := PackedByteArray()
+	vms.resize(6 * VMUCard.BLOCK_SIZE + 100)
+	for i in range(vms.size()):
+		vms[i] = (i * 7 + 3) & 0xFF
+	var dci := VMUCard.dci_from_vms(vms, "WRAP____VMU")
+	_ok(VMUCard.is_dci(dci), "vmu_play/a .vms wraps as a well-formed .dci",
+		"%d bytes" % dci.size())
+	var image := VMUCard.insert_save(VMUCard.blank_image(), dci)
+	var back := VMUCard.extract_save(image, int(VMUCard.list_saves(image, false)[0]["block"]))
+	_ok(back == dci, "vmu_play/and comes off a card as the same .dci")
+	_ok(VMUCard._word_swap(back.slice(VMUCard.DCI_HEADER)).slice(0, vms.size()) == vms,
+		"vmu_play/whose body is the .vms it started as")
+
+	# The card's own answers.
+	var scene: PackedScene = load("res://Scenes/Objects/controllers/dreamcast/vmu_card.tscn")
+	var card: Node3D = scene.instantiate()
+	add_child(card)
+	card.set("freeze", true)
+	_ok(card.get_node_or_null("VmuInput") != null, "vmu_play/a card carries its input")
+	_eq(str(card.call("playing_title")), "", "vmu_play/an idle card plays nothing")
+	_ok(not bool(card.call("power_on", "user://no_such_game.vms")),
+		"vmu_play/a game that is not there is refused")
+	card.call("seated_in", self, 1)
+	_ok(str(card.call("standalone_blocker")).begins_with("seated"),
+		"vmu_play/a seated card cannot run a game")
+	card.call("unseated")
+	_ok(not str(card.call("standalone_blocker")).begins_with("seated"),
+		"vmu_play/and can again once pulled")
+	card.free()
+
+	# The panel row.
+	var fmt := CardFormats.for_family("vmu")
+	var game := {"name": "GAME____VMU", "title": "A Game", "blocks": 2, "block": 0,
+		"icons": [], "serial": "", "is_game": true}
+	var data := {"name": "DATA____VMU", "title": "Some Data", "blocks": 1, "block": 2,
+		"icons": [], "serial": "", "is_game": false}
+	var ui := MemoryCard2D.new()
+	add_child(ui)
+	ui.show_play_action = true
+	ui.populate("VMU 1", [game, data], 197, 200, fmt)
+	_eq(_count_glyph(ui, MenuIcons.PLAY), 1, "vmu_play/play is offered on the game, not the data")
+	ui.show_play_action = false
+	ui.populate("VMU 1", [game, data], 197, 200, fmt)
+	_eq(_count_glyph(ui, MenuIcons.PLAY), 0, "vmu_play/and not at all on a card that only stores")
+	ui.show_play_action = true
+	ui.playing_title = "A Game"
+	ui.populate("VMU 1", [game, data], 197, 200, fmt)
+	_eq(_count_glyph(ui, MenuIcons.PLAY), 0, "vmu_play/a running card offers no second game")
+	_eq(_count_glyph(ui, MenuIcons.STOP), 1, "vmu_play/but one way to stop")
+	_ok(_has_label(ui, "Playing A Game"), "vmu_play/and says what is running")
+	ui.playing_title = ""
+	ui.play_blocked = "seated in a controller"
+	ui.populate("VMU 1", [game, data], 197, 200, fmt)
+	var btn := _find_glyph(ui, MenuIcons.PLAY)
+	_ok(btn != null and btn.disabled, "vmu_play/a blocked play is shown and cannot be pressed")
+	ui.free()
+
+
+func _find_glyph(root: Node, glyph: int) -> Button:
+	var b := root as Button
+	if b != null and b.text == String.chr(glyph):
+		return b
+	for c in root.get_children():
+		var hit := _find_glyph(c, glyph)
+		if hit != null:
+			return hit
+	return null
+
+
+func _count_glyph(root: Node, glyph: int) -> int:
+	var n := 0
+	var b := root as Button
+	if b != null and b.text == String.chr(glyph):
+		n += 1
+	for c in root.get_children():
+		n += _count_glyph(c, glyph)
+	return n
+
+
+func _has_label(root: Node, text: String) -> bool:
+	var l := root as Label
+	if l != null and l.text == text:
+		return true
+	for c in root.get_children():
+		if _has_label(c, text):
+			return true
+	return false
+
 
 func _test_shared_contract() -> void:
 	for fmt: CardFormat in CardFormats.all():

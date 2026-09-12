@@ -29,6 +29,12 @@ signal restore_requested
 signal restore_picked(save: Dictionary)
 ## Leave the restore list for the card's own saves.
 signal restore_closed
+## Run this save on the card itself. Only a VMU offers it, and only for an
+## entry that is a GAME rather than data — the flag comes from the card's own
+## directory, so the list never has to guess.
+signal save_play_requested(save: Dictionary)
+## Power the running minigame off.
+signal play_stop_requested
 signal close_requested
 
 const COLOR_BG := Color(0.08, 0.08, 0.16, 0.96)
@@ -73,6 +79,16 @@ var backed_up_slots: Dictionary = {}
 ## Why the actions are unavailable, shown in place of the buttons. Empty when
 ## they work — a card being played is the case that matters.
 var actions_blocked := ""
+## Offer "play" on game entries. On for a card that is a machine of its own — a
+## VMU — and off for every card that only stores.
+var show_play_action := false
+## Why a game cannot be run right now, shown on the play button's tooltip and
+## disabling it. Empty when it can.
+var play_blocked := ""
+## The minigame the card is running, or "". A card running one shows it above
+## the list with a stop button, and its rows lose their play buttons — a VMU
+## runs one game at a time.
+var playing_title := ""
 
 ## The family the current listing came from, for the words the rows use. Set by
 ## populate(); null only before the first one.
@@ -217,6 +233,9 @@ func populate(card_name: String, saves: Array, free: int, total: int,
 		why.add_theme_color_override("font_color", Color(0.85, 0.62, 0.4))
 		_list.add_child(why)
 
+	if not playing_title.is_empty():
+		_list.add_child(_playing_row())
+
 	if saves.is_empty():
 		var empty := Label.new()
 		# A card whose image is gone is NOT an empty card. Saying "empty" would
@@ -314,6 +333,41 @@ func _restore_row(s: Dictionary) -> Control:
 	return row
 
 
+## The game the card is running, above its saves, with the one control a
+## running VMU needs from a panel: off.
+func _playing_row() -> Control:
+	var row := _row_panel()
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 10)
+	row.add_child(h)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 1)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(col)
+
+	var t := Label.new()
+	t.text = "Playing %s" % playing_title
+	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	t.add_theme_font_size_override("font_size", 19)
+	t.add_theme_color_override("font_color", MenuIcons.TINT_OK)
+	col.add_child(t)
+
+	var sub := Label.new()
+	# The core's own limits, said where a player would otherwise look for a
+	# menu or expect progress to come back: vemulator writes nothing to the
+	# card and has no VMU shell.
+	sub.text = "on the card's own screen   ·   progress is not saved back"
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.add_theme_font_size_override("font_size", 15)
+	sub.add_theme_color_override("font_color", COLOR_DIM)
+	col.add_child(sub)
+
+	h.add_child(_action(MenuIcons.STOP, "Power the game off", MenuIcons.TINT_WARN,
+		func() -> void: play_stop_requested.emit()))
+	return row
+
+
 func _clear_list() -> void:
 	_animated.clear()
 	for c in _list.get_children():
@@ -395,6 +449,19 @@ func _make_row(s: Dictionary) -> Control:
 	sub.add_theme_font_size_override("font_size", 15)
 	sub.add_theme_color_override("font_color", COLOR_DIM)
 	col.add_child(sub)
+
+	# Play is not an edit, so it is not gated on actions_blocked: what stops it is
+	# the card being seated or already running, which play_blocked and
+	# playing_title carry. A row that is not a game gets no button at all — a
+	# VMU cannot run a data file, and a disabled button there would only ask
+	# why.
+	if show_play_action and bool(s.get("is_game", false)) and playing_title.is_empty():
+		var play := _action(MenuIcons.PLAY,
+			"Play this on the card" if play_blocked.is_empty() else play_blocked,
+			MenuIcons.TINT_OK if play_blocked.is_empty() else MenuIcons.TINT_MUTED,
+			func() -> void: save_play_requested.emit(s))
+		play.disabled = not play_blocked.is_empty()
+		h.add_child(play)
 
 	# actions_blocked is a fact about the card, said once above the list rather
 	# than repeated on every row.

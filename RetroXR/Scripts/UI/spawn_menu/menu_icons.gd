@@ -54,6 +54,8 @@ const BACKSPACE := 0xF006E   # md-backspace       — on-menu keypad
 const LOCK      := 0xF033E   # md-lock            — pinned where it stands
 const LOCK_OPEN := 0xF033F   # md-lock_open       — free to be picked up
 const NETPLAY   := 0xF06F3   # md-network         — this core can hold a session
+const PLAY      := 0xF04B    # fa-play            — run a minigame off a VMU
+const STOP      := 0xF04D    # fa-stop            — power that minigame off
 const BSX_MEMORY_PACK := 0xEF5F  # fa-satellite   — a Satellaview pack we minted
 const BSX_PACK_CONTENTS := 0xEF60 # fa-satellite-dish — what is written on a pack
 

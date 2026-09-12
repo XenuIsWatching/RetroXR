@@ -257,6 +257,32 @@ static func extract_save(data: PackedByteArray, first_block: int) -> PackedByteA
 	return out
 
 
+## A library .vms as the .dci a card would hold it as: the directory entry a
+## Dreamcast would have written — type, a 12-char name, the block count, the
+## header offset (1 for a game, whose header sits at 0x200; 0 for data) — then
+## the body block-padded and word-swapped. The inverse of extract_save, for a
+## file that never went through a card.
+static func dci_from_vms(body: PackedByteArray, name: String, is_game := true) -> PackedByteArray:
+	if body.is_empty():
+		return PackedByteArray()
+	var blocks := ceili(float(body.size()) / BLOCK_SIZE)
+	if blocks > USER_BLOCKS:
+		return PackedByteArray()
+	var padded := body.duplicate()
+	padded.resize(blocks * BLOCK_SIZE)
+	var out := PackedByteArray()
+	out.resize(DCI_HEADER)
+	out.fill(0)
+	out[E_TYPE] = TYPE_GAME if is_game else TYPE_DATA
+	var n := name.to_ascii_buffer().slice(0, E_NAME_LEN)
+	for i in range(E_NAME_LEN):
+		out[E_NAME + i] = n[i] if i < n.size() else 0x20
+	_put_u16(out, E_BLOCKS, blocks)
+	_put_u16(out, E_HDROFF, 1 if is_game else 0)
+	out.append_array(_word_swap(padded))
+	return out
+
+
 ## Does this look like a .dci of THIS family?
 static func is_dci(bytes: PackedByteArray) -> bool:
 	if bytes.size() <= DCI_HEADER or (bytes.size() - DCI_HEADER) % BLOCK_SIZE != 0:

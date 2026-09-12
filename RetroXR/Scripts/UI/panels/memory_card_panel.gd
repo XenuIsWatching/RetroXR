@@ -68,6 +68,8 @@ func _ensure_ui_connected() -> void:
 	ui.restore_requested.connect(_on_restore_requested)
 	ui.restore_picked.connect(_on_restore_picked)
 	ui.restore_closed.connect(_populate)
+	ui.save_play_requested.connect(_on_play_requested)
+	ui.play_stop_requested.connect(_on_stop_requested)
 	# The stack lifts itself onto its own quad in front of whichever Viewport2Din3D
 	# hosts it — this panel's, here — so it needs to live in the 2D tree.
 	_toasts = MenuToasts.create()
@@ -136,6 +138,13 @@ func _populate() -> void:
 	ui.backed_up_slots = CardSaveOps.backed_up_slots(path, saves) if not path.is_empty() else {}
 	ui.armed_slot = _armed_slot
 	ui.actions_blocked = CardSaveOps.in_use_reason(get_tree(), _card.card_id)
+	# A card that is a machine of its own — a VMU — can run a game entry off
+	# itself. Asked of the card rather than of the family, because it is the
+	# OBJECT that has the screen and the buttons.
+	var playable := _card.has_method("power_on")
+	ui.show_play_action = playable
+	ui.play_blocked = str(_card.call("standalone_blocker")) if playable else ""
+	ui.playing_title = str(_card.call("playing_title")) if playable else ""
 	ui.populate(_card.card_label, saves, free, total, fmt)
 
 
@@ -253,6 +262,34 @@ func _on_restore_picked(s: Dictionary) -> void:
 			else:
 				_notice(problem, MenuToasts.DWELL_FAIL)
 			_populate())
+
+
+## Run one game entry on the card itself. The lift and the boot are the card's
+## own (VmuCard.play_save); this only reports how it went. The image is never
+## touched, which is also why nothing comes back: vemulator writes no saves,
+## and the panel's playing row says so.
+func _on_play_requested(s: Dictionary) -> void:
+	if not (_card and is_instance_valid(_card) and _card.has_method("play_save")):
+		return
+	var title := CardSaveOps.title_of(s)
+	var why := str(_card.call("standalone_blocker"))
+	if not why.is_empty():
+		_notice("Cannot play %s — %s" % [title, why], MenuToasts.DWELL_FAIL)
+		return
+	if not bool(_card.call("play_save", int(s["block"]), title)):
+		_notice("%s would not start" % title, MenuToasts.DWELL_FAIL)
+		_populate()
+		return
+	_notice("Playing %s on the card" % title)
+	_populate()
+
+
+func _on_stop_requested() -> void:
+	if not (_card and is_instance_valid(_card) and _card.has_method("power_off")):
+		return
+	_card.call("power_off")
+	_notice("Powered off")
+	_populate()
 
 
 ## A card's name IS its filename, so renaming moves the image on disk. Refused
