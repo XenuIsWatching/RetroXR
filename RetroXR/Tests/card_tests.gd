@@ -20,7 +20,7 @@ extends Node
 
 ## How many cases this file contains, NOT counting the guard below — it is
 ## checked before it has recorded itself.
-const EXPECTED_CASES := 393
+const EXPECTED_CASES := 395
 
 var _pass := 0
 var _fail := 0
@@ -623,6 +623,32 @@ func _test_vmu_play() -> void:
 	_ok(back == dci, "vmu_play/and comes off a card as the same .dci")
 	_ok(VMUCard._word_swap(back.slice(VMUCard.DCI_HEADER)).slice(0, vms.size()) == vms,
 		"vmu_play/whose body is the .vms it started as")
+
+	# Titles are Shift-JIS. A Western game's full-width letters decode; a
+	# Japanese game's kana do not, and must fall back to the on-card name
+	# rather than to the low byte of every pair (Ikaruga listed as "ij").
+	var sj := VMUCard.insert_save(VMUCard.blank_image(),
+		_vmu_dci(VMUCard.TYPE_DATA, 0, 2, "SJIS____VMU", "PLACEHOLDER", 1))
+	var at := VMUCard.block_of(sj, "SJIS____VMU") * VMUCard.BLOCK_SIZE
+	for i in range(16):
+		sj[at + VMUCard.V_DESC + i] = 0
+	for i in range(32):
+		sj[at + VMUCard.V_DC_DESC + i] = 0
+	var wide := PackedByteArray([0x82, 0x60, 0x82, 0x61, 0x82, 0x62, 0x81, 0x40, 0x82, 0x4F])
+	for i in range(wide.size()):
+		sj[at + VMUCard.V_DESC + i] = wide[i]
+	_eq(str(VMUCard.list_saves(sj, false)[0]["title"]), "ABC 0",
+		"vmu_play/a full-width Shift-JIS description reads as its letters")
+	# Kana inside full-width brackets, the way a Japanese title is written:
+	# the brackets decode and the kana do not, and "()" alone is not a title.
+	var kana := PackedByteArray([0x81, 0x69, 0x83, 0x43, 0x83, 0x4A, 0x83, 0x8B, 0x83, 0x4B, 0x81, 0x6A])
+	for i in range(kana.size()):
+		sj[at + VMUCard.V_DESC + i] = kana[i]
+		sj[at + VMUCard.V_DC_DESC + i] = kana[i]
+	for i in range(kana.size(), 16):
+		sj[at + VMUCard.V_DESC + i] = 0
+	_eq(str(VMUCard.list_saves(sj, false)[0]["title"]), "SJIS____VMU",
+		"vmu_play/and kana fall back to the on-card name, never to mojibake or bare brackets")
 
 	# The card's own answers.
 	var scene: PackedScene = load("res://Scenes/Objects/controllers/dreamcast/vmu_card.tscn")

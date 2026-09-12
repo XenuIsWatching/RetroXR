@@ -178,11 +178,17 @@ static func list_saves(data: PackedByteArray, with_icons := true) -> Array[Dicti
 		var title := name
 		var icons: Array = []
 		if body.size() >= hdr + V_ICON_DATA:
-			var desc := _read_ascii(body, hdr + V_DESC, 16)
+			# Both descriptions are Shift-JIS, like a PlayStation save's title,
+			# and a Japanese game writes real kana and kanji there. Read as
+			# ASCII those came out as the low byte of every pair — Ikaruga's
+			# listed as "ij" — so they go through the same decoder the Sony
+			# cards use, which carries the full-width forms and drops what
+			# ASCII cannot hold, leaving the on-card name to stand in.
+			var desc := _sjis_title(body.slice(hdr + V_DESC, hdr + V_DESC + 16))
 			if not desc.is_empty():
 				title = desc
 			else:
-				var dc := _read_ascii(body, hdr + V_DC_DESC, 32)
+				var dc := _sjis_title(body.slice(hdr + V_DC_DESC, hdr + V_DC_DESC + 32))
 				if not dc.is_empty():
 					title = dc
 			if with_icons:
@@ -438,6 +444,21 @@ static func _word_swap(body: PackedByteArray) -> PackedByteArray:
 
 static func _read_name(d: PackedByteArray, entry_at: int) -> String:
 	return _read_ascii(d, entry_at + E_NAME, E_NAME_LEN)
+
+
+## A Shift-JIS description as a title, or "" when nothing of it survives.
+##
+## The decoder keeps punctuation and drops kana and kanji, so a Japanese title
+## in full-width brackets comes back as "()" — Ikaruga did — which is worse
+## than no title, because the on-card name behind it is at least the game's.
+## Only a decode with a letter or digit in it counts.
+static func _sjis_title(raw: PackedByteArray) -> String:
+	var s := Sjis.to_ascii(raw)
+	for i in range(s.length()):
+		var c := s.unicode_at(i)
+		if (c >= 0x30 and c <= 0x39) or (c >= 0x41 and c <= 0x5A) or (c >= 0x61 and c <= 0x7A):
+			return s
+	return ""
 
 
 static func _read_ascii(d: PackedByteArray, at: int, length: int) -> String:
