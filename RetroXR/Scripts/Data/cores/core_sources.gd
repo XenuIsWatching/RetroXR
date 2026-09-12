@@ -4,7 +4,7 @@
 ## core lands in this table when we maintain a fork of it, because then the
 ## buildbot's build is not the one we want the player to have.
 ##
-## Seven of them, and four are here for the same reason: this room has cables in
+## Eight of them, and four are here for the same reason: this room has cables in
 ## it, and libretro has nowhere to put the far end of one. Dolphin, mGBA,
 ## gambatte and pcsx_rearmed each reach a link bus the frontend hosts.
 ##
@@ -194,6 +194,33 @@ const SOURCES := {
 	#
 	# snes9x is non-commercial rather than GPL, so the tag beside the binary is
 	# not an obligation here; it is where the build comes from all the same.
+	# flycast, so a VMU's screen can be on the VMU.
+	#
+	# Stock flycast has no second video output. Its only way of showing a VMU
+	# screen is to composite the 48 x 32 panel into the finished frame at a
+	# corner, so a frontend that wants that screen on the card in the room has to
+	# crop it back out — and the game's pixels underneath it are gone before the
+	# frame is ever handed over. Our build exports flycast_get_vmu_screen and
+	# gives the panel up directly, which costs no emulation work at all: the data
+	# was already maintained whether or not an overlay was drawn.
+	#
+	# It also carries the reason flycast has never run on a Quest. posix_vmem.cpp
+	# asks for ASharedMemory_create and falls back to /dev/ashmem when the symbol
+	# is null; Android 11 took that device away from apps, and the libretro build
+	# linked no libandroid, so the symbol was ALWAYS null. nvmem was disabled, the
+	# dynarec's fastmem had nothing behind it, and the core died one frame in.
+	# Measured on a Quest 3: dead at frame 1 before, 1375 frames at 60 fps after.
+	#
+	# flycast is GPLv2, so the source for these binaries sits on the tag.
+	"flycast": {
+		"repo":  "XenuIsWatching/flycast",
+		"known_tag": "retroxr-flycast-libretro-v1",
+		"label": "Flycast (retroXR build)",
+		"assets": {
+			"Windows": "flycast_libretro.dll.zip",
+			"Android": "flycast_libretro_android.so.zip",
+		},
+	},
 	"snes9x": {
 		"repo":  "XenuIsWatching/snes9x",
 		"known_tag": "retroxr-snes9x-libretro-v1",
