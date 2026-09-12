@@ -29,6 +29,7 @@ static func all(core: String, systemid: String, rom_path: String,
 	out.merge(expansion_pak(core, expansions), true)
 	out.merge(fm_sound_unit(core, systemid, expansions), true)
 	out.merge(bios_pinned(core, systemid, rom_path), true)
+	out.merge(declared_frame_rate(core), true)
 	return out
 
 
@@ -186,3 +187,39 @@ static func bios_pinned(core: String, systemid: String, rom_path: String) -> Dic
 		return {}
 	var empty := rom_path.is_empty() and BiosBoot.can_boot_empty(core, systemid)
 	return BiosBoot.pinned_options(core, systemid, empty)
+
+## Make flycast say when a game's frame rate changes, because with threaded
+## rendering on it decides how much time a retro_run covers.
+##
+## MEASURED against Goin' Quackers, which runs at double speed without this.
+## flycast's retro_run, under config::ThreadedRendering, is
+##
+##     for (int i = 0; i < 5 && is_dupe; i++)
+##         is_dupe = !emu.render();
+##
+## — it keeps emulating until a frame comes out that is not a duplicate. A game
+## locked to 30 fps renders every OTHER vblank, so one call advances two of them.
+## Call that sixty times a second, as a core declaring 59.94 invites, and the
+## machine lives 120 vblanks per second. Twice as fast, and only in the parts
+## that are locked below 60: Goin' Quackers' menus and gameplay run at double
+## speed while its FMV, which does render every vblank, is perfect.
+##
+## The option is how the core tells the frontend, through SET_SYSTEM_AV_INFO,
+## that the rate has changed. Measured with Tools/cores/pacing_probe: at 35 s
+## the core announced 29.972650 and the call rate fell from 60.00/s to 30.00/s
+## inside a second, because Wrapper stores the new fps and the emulation loop
+## re-reads it every pass. With the option off that announcement never comes and
+## the call rate stays pinned at the stale 59.9453.
+##
+## Forced rather than recommended, and the trade is deliberate. flycast's own
+## text says to disable it for games whose frame rate is UNLOCKED (it names Ecco
+## the Dolphin and Unreal Tournament), where the rate wobbles and the
+## renegotiation wobbles with it. That costs smoothness. Leaving it off costs
+## correct speed, on every locked-30 game there is, and a player cannot be
+## expected to know that a menu running at double speed is a frontend option.
+## The core ignores the key when Auto Skip Frame is on, which is its own
+## documented interaction and harmless here.
+static func declared_frame_rate(core: String) -> Dictionary:
+	if not core.begins_with("flycast"):
+		return {}
+	return {"reicast_detect_vsync_swap_interval": "enabled"}

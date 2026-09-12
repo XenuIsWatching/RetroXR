@@ -22,7 +22,7 @@ extends Node
 
 ## Cases in this file, NOT counting the guard below -- it is checked before
 ## it has recorded itself.
-const EXPECTED_CASES := 62
+const EXPECTED_CASES := 65
 
 var _passed := 0
 var _failed := 0
@@ -228,6 +228,22 @@ func _group_forced() -> void:
 	_eq(ForcedCoreOptions.fm_sound_unit("genesis_plus_gx", "mega_drive",
 			["fm_sound_unit"]), {},
 		"forced/a Mega Drive on the same core is untouched")
+
+	# Frame-rate detection is pinned on for flycast, and it is a speed fix rather
+	# than a preference. With threaded rendering the core keeps emulating until a
+	# frame is not a duplicate, so one retro_run covers two vblanks of a game
+	# locked to 30 fps — and a frontend still calling sixty times a second runs
+	# that game at double speed. The option is how the core says the rate moved.
+	_eq(ForcedCoreOptions.declared_frame_rate("flycast")
+			.get("reicast_detect_vsync_swap_interval"), "enabled",
+		"forced/flycast is made to announce a frame-rate change")
+	_eq(ForcedCoreOptions.declared_frame_rate("fceumm"), {},
+		"forced/and no other core is handed a reicast key")
+	# It has to survive the merge, not merely exist: all() is what RetroSystem
+	# calls, and a layer left out of it is a function nothing runs.
+	_eq(ForcedCoreOptions.all("flycast", "dreamcast", "", [], "", [], "")
+			.get("reicast_detect_vsync_swap_interval"), "enabled",
+		"forced/and it reaches the set a machine actually pins")
 
 
 # ── manifest/ ─────────────────────────────────────────────────────────────────
