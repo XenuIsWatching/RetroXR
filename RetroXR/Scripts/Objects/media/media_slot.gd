@@ -109,14 +109,28 @@ func _on_slot_captured(media: Node3D) -> void:
 
 ## Programmatic insert for save / net restore: seat the media immediately with no
 ## ride and no zone involvement (bypasses the zone's snap filter, on purpose).
-func restore(media: Node3D) -> void:
-	_accept(media, true)
+## `yaw` is the spin the media was seated at when it was saved or when the
+## remote hand put it in (see seat_yaw), so a round disc comes back — and shows
+## on every peer — the way it went in rather than squared to the authored seat.
+func restore(media: Node3D, yaw: float = 0.0) -> void:
+	_accept(media, true, yaw)
+
+
+## The spin of the seated media about its platter axis, relative to the authored
+## seat, in radians. Zero when empty or seated as authored. What a save and an
+## insert event carry so restore() can put it back. Read off the media itself
+## rather than from _seat_basis: the host spins a playing disc in place, and the
+## spin it stopped at is the one a save should keep.
+func seat_yaw() -> float:
+	if _media == null:
+		return 0.0
+	return RetroDisc.spin_of(media_local_basis, _media.transform.basis)
 
 
 ## Assume ownership of `media`: drop the zone's grab (if any), reparent it under the
 ## holder as a frozen rigid child, add the collision exception, and either ride it
-## in (`seated_now == false`) or place it seated at once (restore).
-func _accept(media: Node3D, seated_now: bool) -> void:
+## in (`seated_now == false`) or place it seated at once (restore, at `yaw`).
+func _accept(media: Node3D, seated_now: bool, yaw: float = 0.0) -> void:
 	if not is_instance_valid(media) or _media != null:
 		return
 	slot.enabled = false
@@ -130,8 +144,9 @@ func _accept(media: Node3D, seated_now: bool) -> void:
 		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		rb.freeze = true
 	media.reparent(_holder)
-	_seat_basis = media_local_basis
-	if not seated_now:
+	if seated_now:
+		_seat_basis = media_local_basis * Basis(Vector3.UP, yaw)
+	else:
 		_seat_basis = RetroDisc.seat_basis(media_local_basis, media, _holder)
 	# Not grabbable while it's inside the unit — only once ejected (see eject()).
 	_set_media_interactive(media, false)

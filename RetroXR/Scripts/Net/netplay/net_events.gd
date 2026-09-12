@@ -20,7 +20,7 @@ class_name NetEvents
 extends RefCounted
 
 enum Event {
-	EV_CART_INSERT,      # {sys, cart}
+	EV_CART_INSERT,      # {sys, cart, yaw}  yaw = spin a disc was seated at
 	EV_CART_REMOVE,      # {sys}
 	EV_TAPE_INSERT,      # {vcr, tape}
 	EV_TAPE_REMOVE,      # {vcr}
@@ -45,10 +45,10 @@ enum Event {
 	EV_MEMCARD_REMOVE,   # {sys, slot}
 	EV_TRAY,             # {sys, open}   disc tray lid opened/closed
 	EV_DISK_OP,          # {sys, op, md5, index}  client disc-swap intent -> host schedules
-	EV_DVD_INSERT,       # {dvd, disc}
+	EV_DVD_INSERT,       # {dvd, disc, yaw}
 	EV_DVD_REMOVE,       # {dvd}
 	EV_DVD_CMD,          # {dvd, cmd}    client intent -> host transport/menu
-	EV_AUDIO_INSERT,     # {player, media}   CD / cassette media inserted
+	EV_AUDIO_INSERT,     # {player, media, yaw}   CD / cassette media inserted
 	EV_AUDIO_REMOVE,     # {player}
 	EV_AUDIO_CMD,        # {player, cmd, index?}  client intent -> host transport
 	EV_TV_STEREO,        # {tv, mode}    stereo presentation (0 stereo / 1 left / 2 right)

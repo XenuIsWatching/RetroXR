@@ -159,9 +159,23 @@ func _on_slot_captured(media: Node3D) -> void:
 	call_deferred("_accept", media, true)
 
 
-## Programmatic seat for save / net restore (no zone, filter bypassed).
-func restore(media: Node3D) -> void:
-	_accept(media, false)
+## Programmatic seat for save / net restore (no zone, filter bypassed). `yaw` is
+## the spin the disc was seated at when it was saved or when the remote hand
+## put it in (see seat_yaw), so it comes back the way it went in rather than
+## squared to the authored seat.
+func restore(media: Node3D, yaw: float = 0.0) -> void:
+	_accept(media, false, yaw)
+
+
+## The spin of the seated disc about its platter axis, relative to the authored
+## seat, in radians. Zero when empty or seated as authored. What a save and an
+## insert event carry so restore() can put it back. Read off the disc itself
+## rather than remembered: the host spins a playing disc in place, and the spin
+## it stopped at is the one a save should keep.
+func seat_yaw() -> float:
+	if _media == null:
+		return 0.0
+	return RetroDisc.spin_of(media_local_basis, _media.transform.basis)
 
 
 ## Unseat with no hand involved — a net event, or a scripted eject. The mirror of
@@ -173,7 +187,7 @@ func release() -> void:
 		_on_media_taken(_media)
 
 
-func _accept(media: Node3D, by_hand: bool = false) -> void:
+func _accept(media: Node3D, by_hand: bool = false, yaw: float = 0.0) -> void:
 	if not is_instance_valid(media) or _media != null:
 		return
 	if slot.has_snapped_object():
@@ -185,7 +199,7 @@ func _accept(media: Node3D, by_hand: bool = false) -> void:
 		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		rb.freeze = true
 	media.reparent(_holder)
-	var seat := media_local_basis
+	var seat := media_local_basis * Basis(Vector3.UP, yaw)
 	if by_hand:
 		seat = RetroDisc.seat_basis(media_local_basis, media, _holder)
 	media.transform = Transform3D(seat, seat_offset)

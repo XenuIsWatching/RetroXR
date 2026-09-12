@@ -259,18 +259,34 @@ var preview_offset: Vector3 = Vector3.ZERO
 var preview_basis: Basis = Basis.IDENTITY
 
 
+## LOCAL PATCH (RetroXR): "no hand" for preview_pose_for's `held`. A zero
+## basis rather than identity, because identity is a pose a hand can hold.
+const NO_HAND := Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO)
+
+
 ## LOCAL PATCH (RetroXR): the pose the ghost draws — `snap_pose_for` offset by
 ## `preview_offset`. Kept apart from snap_pose_for because that one also RANKS
 ## which of several sockets wins a release; moving the ranking pose would change
 ## which socket catches a plug dropped between two.
 ## [param amount] scales the stand-off, so a caller can ease between the seat (0)
 ## and the offer (1) rather than jumping the object the whole way.
-func preview_pose_for(obj: Node3D, amount: float = 1.0) -> Transform3D:
+## [param held] is the world basis the HAND wants the object at, before any
+## preview blend, for an object whose seat keeps something of the hand's pose:
+## a round disc is seated at the spin it was offered at, so its ghost has to
+## show that spin or the disc turns on release. An object with no
+## preview_basis_for, or a caller with no hand (a restore, a test), gets the
+## authored pose.
+func preview_pose_for(obj: Node3D, amount: float = 1.0,
+		held: Basis = NO_HAND) -> Transform3D:
 	var t := snap_pose_for(obj)
 	# In the ZONE's frame, not the object's: the seat is written as a slot-local
 	# pose, so the ghost has to be turned the same way about the same origin.
 	if preview_basis != Basis.IDENTITY:
 		t.basis = t.basis * preview_basis
+	# A zero basis, not identity, is "no hand": a disc held at exactly the
+	# world identity is still held at SOME spin relative to its seat.
+	if held.determinant() != 0.0 and obj.has_method("preview_basis_for"):
+		t.basis = obj.preview_basis_for(t.basis, held)
 	if preview_offset != Vector3.ZERO and amount > 0.0:
 		t.origin += global_transform.basis * (preview_offset * amount)
 	return t

@@ -219,7 +219,9 @@ class MockEventObject extends Node3D:
 	func set_page(state: int, leaf: int) -> void:
 		pages.append([state, leaf])
 		applying_seen = sync != null and sync.is_applying()
-	func restore_cartridge(obj: Node) -> void: restored["cart"] = obj
+	func restore_cartridge(obj: Node, yaw := 0.0) -> void:
+		restored["cart"] = obj
+		restored["cart_yaw"] = yaw
 	func restore_tape(obj: Node) -> void: restored["tape"] = obj
 
 	# The removal half of the same contract. object_sync asks the owner to give
@@ -237,8 +239,8 @@ class MockEventObject extends Node3D:
 	func restore_memory_card(obj: Node, slot := 0) -> void:
 		restored["card"] = obj
 		restored["card_slot"] = slot
-	func restore_disc(obj: Node) -> void: restored["disc"] = obj
-	func restore_media(obj: Node) -> void: restored["media"] = obj
+	func restore_disc(obj: Node, _yaw := 0.0) -> void: restored["disc"] = obj
+	func restore_media(obj: Node, _yaw := 0.0) -> void: restored["media"] = obj
 	## An audio deck unseats through its own loader now, rather than the event
 	## reaching into get_node("MediaSlot").drop_object(). That reach only ever
 	## worked for a SLOT deck: a tray deck's media is not held by the snap zone at
@@ -1129,7 +1131,7 @@ func _test_events(p: Pair) -> void:
 	# Insert/eject and cable/port button effects use matching registered objects
 	# on each peer, never the originating peer's Node pointer.
 	p.host_os.report_event(NetEvents.Event.EV_CART_INSERT,
-		{"sys": host_obj, "cart": host_aux})
+		{"sys": host_obj, "cart": host_aux, "yaw": 0.75})
 	p.host_os.report_event(NetEvents.Event.EV_TAPE_INSERT,
 		{"vcr": host_obj, "tape": host_aux})
 	p.host_os.report_event(NetEvents.Event.EV_MEMCARD_INSERT,
@@ -1145,6 +1147,8 @@ func _test_events(p: Pair) -> void:
 			and client_obj.restored.get("disc") == client_aux \
 			and client_obj.restored.get("media") == client_aux),
 		"events/cartridge, tape, memory-card, DVD and audio insertion take effect")
+	_ok(is_equal_approx(float(client_obj.restored.get("cart_yaw", 0.0)), 0.75),
+		"events/a disc's seat spin rides the insert event to the peer")
 	p.host_os.report_event(NetEvents.Event.EV_CART_REMOVE, {"sys": host_obj})
 	p.host_os.report_event(NetEvents.Event.EV_TAPE_REMOVE, {"vcr": host_obj})
 	p.host_os.report_event(NetEvents.Event.EV_MEMCARD_REMOVE, {"sys": host_obj})

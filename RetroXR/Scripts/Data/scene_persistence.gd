@@ -1328,7 +1328,7 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 				sys.restore_cable_connection(ch_tv, i + 1, _tv_input(tv_inputs, i + 1))
 		var cart := _resolve_ref(root, spawned, d.get("cartridge")) as RetroCartridge
 		if cart:
-			sys.restore_cartridge(cart)
+			sys.restore_cartridge(cart, float(d.get("cartridge_yaw", 0.0)))
 		var cart_b := _resolve_ref(root, spawned, d.get("cartridge_b")) as RetroCartridge
 		if cart_b:
 			sys.restore_slot2_cartridge(cart_b)
@@ -1389,11 +1389,12 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 	elif obj is DVDPlayer:
 		var disc := _resolve_ref(root, spawned, d.get("disc")) as DVDDisc
 		if disc:
-			(obj as DVDPlayer).restore_disc(disc)
+			(obj as DVDPlayer).restore_disc(disc, float(d.get("disc_yaw", 0.0)))
 	elif obj is RetroAudioPlayer:
 		var media := _resolve_ref(root, spawned, d.get("media"))
 		if media is AudioDisc or media is AudioCassette or media is VinylRecord:
-			(obj as RetroAudioPlayer).restore_media(media as Node3D)
+			(obj as RetroAudioPlayer).restore_media(
+				media as Node3D, float(d.get("media_yaw", 0.0)))
 	elif obj is SpeakerPair:
 		var pair := obj as SpeakerPair
 		pair.set_volume(float(d.get("volume", 0.75)))
@@ -1464,6 +1465,15 @@ func _restore_entry(root: Node, id: int, spawned: Dictionary, entries: Dictionar
 
 
 # ── Serialization ──────────────────────────────────────────────────────────────
+
+## `{key: yaw}` when a seated disc is turned from its authored seat, else empty,
+## so the field is only in the file when it says something. A load reads a
+## missing key as 0.0, which is what every room saved before it had.
+func _yaw_field(key: String, yaw: float) -> Dictionary:
+	if absf(yaw) < 0.0005:
+		return {}
+	return {key: yaw}
+
 
 ## id, type and pose — the four fields every entry carries. Each branch of
 ## _serialize_node() merges its own fields onto this.
@@ -1670,6 +1680,9 @@ func _serialize_system(sys: RetroSystem, id: int, n3d: Node3D,
 		tv_inputs.append(input)
 	if any_input:
 		result["tv_inputs"] = tv_inputs
+	# The spin a disc was seated at, so it comes back the way the hand put it
+	# in. Omitted while square, so a room of cartridges writes nothing new.
+	result.merge(_yaw_field("cartridge_yaw", sys.cartridge_seat_yaw()))
 	return result
 
 
@@ -1814,9 +1827,10 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 			"video_label": tape.video_label,
 		})
 	elif node is DVDPlayer:
+		var dvdp := node as DVDPlayer
 		return _base(id, "dvd_player", n3d).merged({
-			"disc": _ref(node_to_id, (node as DVDPlayer).get_snapped_disc()),
-		})
+			"disc": _ref(node_to_id, dvdp.get_snapped_disc()),
+		}).merged(_yaw_field("disc_yaw", dvdp.disc_seat_yaw()))
 	elif node is DVDDisc:
 		var dvd := node as DVDDisc
 		return _base(id, "dvd_disc", n3d).merged({
@@ -1832,7 +1846,7 @@ func _serialize_node(node: Node, id: int, node_to_id: Dictionary) -> Dictionary:
 		# rather than another deck's.
 		return _base(id, ap.deck_save_type(), n3d).merged({
 			"media": _ref(node_to_id, ap.get_snapped_media()),
-		})
+		}).merged(_yaw_field("media_yaw", ap.media_seat_yaw()))
 	elif node is AudioDisc:
 		var adisc := node as AudioDisc
 		return _base(id, "audio_disc", n3d).merged({

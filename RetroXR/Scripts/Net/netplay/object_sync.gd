@@ -1122,7 +1122,9 @@ func _dispatch_event(kind: NetEvents.Event, a: Dictionary) -> void:
 		return
 	match kind:
 		NetEvents.Event.EV_CART_INSERT:
-			a["sys"].restore_cartridge(a["cart"])
+			# "yaw" is the spin the sender's hand seated a disc at. Absent from a
+			# peer on a build that did not send it, so it defaults to square.
+			a["sys"].restore_cartridge(a["cart"], float(a.get("yaw", 0.0)))
 		NetEvents.Event.EV_CART_REMOVE:
 			a["sys"].net_release_cartridge()
 		NetEvents.Event.EV_SLOT2_INSERT:
@@ -1239,7 +1241,7 @@ func _dispatch_event(kind: NetEvents.Event, a: Dictionary) -> void:
 				_nm.netplay_schedule_disk(a["sys"], int(a.get("op", 0)),
 					str(a.get("md5", "")), int(a.get("index", 0)))
 		NetEvents.Event.EV_DVD_INSERT:
-			a["dvd"].restore_disc(a["disc"])
+			a["dvd"].restore_disc(a["disc"], float(a.get("yaw", 0.0)))
 		NetEvents.Event.EV_DVD_REMOVE:
 			a["dvd"].net_release_disc()
 		NetEvents.Event.EV_DVD_CMD:
@@ -1250,7 +1252,7 @@ func _dispatch_event(kind: NetEvents.Event, a: Dictionary) -> void:
 			if _nm.is_host():
 				_unsuppressed(_host_dvd_cmd.bind(a["dvd"], str(a.get("cmd", ""))))
 		NetEvents.Event.EV_AUDIO_INSERT:
-			a["player"].restore_media(a["media"])
+			a["player"].restore_media(a["media"], float(a.get("yaw", 0.0)))
 		NetEvents.Event.EV_AUDIO_REMOVE:
 			# Through the deck's own loader, not the snap zone. A seated item is
 			# NOT held by the zone — MediaSlot/MediaTray both drop it and reparent

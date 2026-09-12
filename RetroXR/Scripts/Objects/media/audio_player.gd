@@ -224,7 +224,8 @@ func _media_loaded(media: Node3D) -> void:
 		album_path = media.get_album_path()
 	_track_idx = 0
 	_rebuild_tracks()
-	NetworkManager.report_event(NetEvents.Event.EV_AUDIO_INSERT, {"player": self, "media": media})
+	NetworkManager.report_event(NetEvents.Event.EV_AUDIO_INSERT,
+		{"player": self, "media": media, "yaw": media_seat_yaw()})
 	if _autoplay_on_load() and not NetworkManager.is_active():
 		play()
 	_update_status()
@@ -256,9 +257,17 @@ func get_snapped_media() -> Node3D:
 
 
 ## Seat a media item programmatically (event / save restore). Each deck seats it
-## through its own loader (MediaSlot / MediaTray).
-func restore_media(_media: Node3D) -> void:
+## through its own loader (MediaSlot / MediaTray). `yaw` is the spin a round
+## disc was seated at (media_seat_yaw) when saved or inserted remotely; a tape
+## deck ignores it.
+func restore_media(_media: Node3D, _yaw: float = 0.0) -> void:
 	pass
+
+
+## The spin the seated media is at, relative to the authored seat, in radians.
+## Zero on a deck whose loader has nothing seated, and always for a tape.
+func media_seat_yaw() -> float:
+	return 0.0
 
 
 ## Unseat whatever is loaded, through this deck's own loader. The net layer used to

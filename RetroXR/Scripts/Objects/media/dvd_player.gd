@@ -238,7 +238,8 @@ func _on_menu_pressed() -> void:
 func _on_media_inserted(disc: Node3D) -> void:
 	if disc.has_method("get_dvd_path"):
 		dvd_path = disc.get_dvd_path()
-	NetworkManager.report_event(NetEvents.Event.EV_DVD_INSERT, {"dvd": self, "disc": disc})
+	NetworkManager.report_event(NetEvents.Event.EV_DVD_INSERT,
+		{"dvd": self, "disc": disc, "yaw": disc_seat_yaw()})
 
 
 ## MediaSlot reports the disc left (ejected, or pulled straight out). Stop playback
@@ -662,9 +663,15 @@ func get_snapped_disc() -> Node3D:
 	return _slot.get_media()
 
 
+## The spin the seated disc is at, relative to the authored seat (MediaSlot.seat_yaw).
+func disc_seat_yaw() -> float:
+	return _slot.seat_yaw()
+
+
 ## Seat a disc programmatically (event/save restore) — no ride, bypasses the filter.
-func restore_disc(disc: Node3D) -> void:
-	_slot.restore(disc)
+## `yaw` is the spin it was seated at (disc_seat_yaw) when saved or inserted remotely.
+func restore_disc(disc: Node3D, yaw: float = 0.0) -> void:
+	_slot.restore(disc, yaw)
 
 
 ## The counterpart to restore_disc, for a remote peer taking the disc out.

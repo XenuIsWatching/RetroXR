@@ -44,7 +44,8 @@ func _setup_loader() -> void:
 		eject.set_color(Color(0.8, 0.8, 0.85))
 
 
-func restore_media(media: Node3D) -> void:
+## A tape has no spin to keep; `_yaw` is accepted for the shared deck contract.
+func restore_media(media: Node3D, _yaw: float = 0.0) -> void:
 	if _slot:
 		_slot.restore(media)
 

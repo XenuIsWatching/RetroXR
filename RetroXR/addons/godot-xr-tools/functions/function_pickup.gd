@@ -1231,7 +1231,7 @@ func _apply_socket_preview(want: Transform3D, delta: float) -> Transform3D:
 		return want
 
 	var w := smoothstep(0.0, 1.0, _ray_preview_blend)
-	var seated := _seated_transform(_ray_preview_zone)
+	var seated := _seated_transform(_ray_preview_zone, want.basis)
 	return Transform3D(
 		Basis(want.basis.get_rotation_quaternion().slerp(
 			seated.basis.get_rotation_quaternion(), w)).scaled(want.basis.get_scale()),
@@ -1241,9 +1241,10 @@ func _apply_socket_preview(want: Transform3D, delta: float) -> Transform3D:
 ## Where the object will actually sit once `zone` captures it: grab-point-
 ## corrected (without it a plug would appear to go in backwards) and offset by
 ## whatever stand-off the zone presents its media at, so the beam's ghost and
-## the hand-held ghost agree.
-func _seated_transform(zone: XRToolsSnapZone) -> Transform3D:
-	return zone.preview_pose_for(_ray_grab_object)
+## the hand-held ghost agree. `held` is the beam's own pose for the object, for
+## a disc that seats at the spin it was offered at.
+func _seated_transform(zone: XRToolsSnapZone, held: Basis) -> Transform3D:
+	return zone.preview_pose_for(_ray_grab_object, 1.0, held)
 
 
 func _get_ray_preview_radius() -> float:

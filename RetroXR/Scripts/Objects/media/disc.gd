@@ -160,6 +160,34 @@ func release_basis_in(bay: Node3D) -> Basis:
 	return bay.global_basis.orthonormalized().inverse() * _release_basis
 
 
+## The spin of `held` about the platter axis of `seat`, in radians. Both are
+## bases in the same frame; the platter axis is the disc's local Y.
+##
+## Swing-twist, not a projected X axis: the delta from seat to held is split
+## into a swing (whatever tilt the hand holds the disc at) and a twist about
+## the platter axis, and only the twist is kept. A projected axis reads the
+## same thing when the disc is flat and drifts as it tips; this stays put.
+##
+## A disc offered label-down is righted first: a half turn about its own X,
+## which keeps the rim point under the hand's thumb where it is and puts the
+## label back up. The swing-twist split is undefined for a pure flip (the delta
+## has no twist component to read), and a bay seats label-up anyway.
+static func spin_of(seat: Basis, held: Basis) -> float:
+	var d := (seat.orthonormalized().inverse() * held.orthonormalized()).orthonormalized()
+	if d.y.y < 0.0:
+		d = d * Basis(Vector3.RIGHT, PI)
+	var q := d.get_rotation_quaternion()
+	# The twist component about Y is (0, q.y, 0, q.w) normalised, and its angle
+	# is 2*atan2(y, w). Wrapped, so a seat 350 degrees round reads as -10.
+	return wrapf(2.0 * atan2(q.y, q.w), -PI, PI)
+
+
+## `seat` turned by the spin the hand holds the disc at: flat in the seat, label
+## up, and the same rim point toward the same wall as in the hand.
+static func spin_basis(seat: Basis, held: Basis) -> Basis:
+	return seat * Basis(Vector3.UP, spin_of(seat, held))
+
+
 ## The basis a bay should seat `media` at, given its authored seat basis `seat`
 ## and the basis the hand released it at, in the bay's own frame. A round platter
 ## is symmetric about its spin axis, so it is seated with the spin the hand was
@@ -169,5 +197,16 @@ static func seat_basis(seat: Basis, media: Node3D, bay: Node3D) -> Basis:
 	var disc := media as RetroDisc
 	if disc == null or not disc.can_visually_spin():
 		return seat
-	var m := (seat.inverse() * disc.release_basis_in(bay)).orthonormalized()
-	return seat * Basis(Vector3.UP, atan2(-m.x.z, m.x.x))
+	return spin_basis(seat, disc.release_basis_in(bay))
+
+
+## How the socket preview should show this disc: `seat` is the pose the zone
+## would seat it at, `held` the pose the hand wants it at, both in world space.
+## The ghost lies flat in the seat but keeps the hand's spin, so what the player
+## sees while hovering is what the bay will seat: turning the wrist turns the
+## label in the well, and nothing jumps on release. Called from
+## XRToolsSnapZone.preview_pose_for when the driver hands it the hand's pose.
+func preview_basis_for(seat: Basis, held: Basis) -> Basis:
+	if not can_visually_spin():
+		return seat
+	return spin_basis(seat, held)

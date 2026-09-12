@@ -751,24 +751,38 @@ func _group_lid() -> void:
 
 ## A disc is round, so the well can seat it at any spin and still be right. It
 ## takes the one the hand let go at, rather than snapping every disc to the same
-## heading. The trap this group exists for: the snap zone re-poses the body to
-## its own grab point BEFORE the well ever hears about it, so a well reading the
-## disc's pose when it accepts one reads the zone's heading and always comes up
-## square — which is what shipped first.
+## heading. Two traps this group exists for, both of which shipped once:
+##   * the snap zone re-poses the body to its own grab point BEFORE the well ever
+##     hears about it, so a well reading the disc's pose when it accepts one
+##     reads the zone's heading;
+##   * the socket PREVIEW re-poses the body onto the zone while the hand is still
+##     holding it, so even the pose at let-go is the zone's, and a test that
+##     hands the disc straight to the zone without a grab driver never sees it.
+## So the by-hand path here holds the disc over the well through a real grab
+## driver, lets the preview engage and blend all the way, and only then lets go.
 const DISC_SCENE := preload("res://Scenes/Objects/media/disc.tscn")
 
+## The spin the well reported for the last disc _seat_disc seated, in radians.
+var _last_seat_yaw := 0.0
 
-## Put a disc into `sys`'s open well at `yaw_deg` and hand back where it ended up.
-## `by_hand` false takes the restore path instead, which is the control.
-func _seat_disc(sys: Node3D, yaw_deg: float, by_hand: bool) -> Basis:
+
+## Put a disc into `sys`'s open well and hand back where it ended up. `offer` is
+## the hand's pose for the disc relative to a square, flat seat: a yaw, or a yaw
+## with a tilt or a flip on top of it. `by_hand` false takes the restore path
+## instead, at `restore_yaw`.
+func _seat_disc(sys: Node3D, offer: Basis, by_hand: bool,
+		restore_yaw: float = 0.0) -> Basis:
 	var disc: Node3D = DISC_SCENE.instantiate()
 	disc.systemid = sys.systemid
 	add_child(disc)
 	_spawned.append(disc)
 	await _wait(5)
-	var pose := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)),
-		sys.global_position + Vector3(0.0, 0.3, 0.0))
+	var zone := sys.get_node("CartridgeSlot") as XRToolsSnapZone
 	if by_hand:
+		# Over the well, inside the zone's reach, so the preview engages; a
+		# little above the seat so it has a blend to run rather than seeding.
+		var pose := Transform3D(zone.global_basis.orthonormalized() * offer,
+			zone.global_position + Vector3(0.0, 0.04, 0.0))
 		var hand := Node3D.new()
 		hand.set_script(load("res://Scripts/Desktop/desktop_hand_pivot.gd"))
 		add_child(hand)
@@ -776,14 +790,20 @@ func _seat_disc(sys: Node3D, yaw_deg: float, by_hand: bool) -> Basis:
 		hand.global_transform = pose
 		disc.global_transform = pose
 		disc.pick_up(hand)
-		await _wait(20)
+		# PREVIEW_BLEND_SPEED is 8/s: well past a full blend at 60 Hz.
+		await _wait(40)
 		disc.let_go(hand, Vector3.ZERO, Vector3.ZERO)
-		(sys.get_node("CartridgeSlot") as XRToolsSnapZone).pick_up_object(disc)
+		# The zone's own dropped hook captures it; if the filter turned it away
+		# the zone is handed it directly, which reads the same recorded pose.
+		await _wait(5)
+		if not sys._tray.has_media():
+			zone.pick_up_object(disc)
 	else:
-		disc.global_transform = pose
-		sys._tray.restore(disc)
+		disc.global_transform = Transform3D(offer, sys.global_position + Vector3.UP * 0.3)
+		sys._tray.restore(disc, restore_yaw)
 	await _wait(10)
 	var got := disc.global_basis.orthonormalized()
+	_last_seat_yaw = sys.cartridge_seat_yaw()
 	sys._tray.release()
 	await _wait(5)
 	disc.queue_free()
@@ -793,11 +813,30 @@ func _seat_disc(sys: Node3D, yaw_deg: float, by_hand: bool) -> Basis:
 
 ## The spin from `a` to `b` about the disc's own axis, in degrees.
 func _spin_between(a: Basis, b: Basis) -> float:
-	var m := (a.inverse() * b).orthonormalized()
-	return rad_to_deg(atan2(-m.x.z, m.x.x))
+	return rad_to_deg(RetroDisc.spin_of(a, b))
 
 
 func _group_seat() -> void:
+	# The math on its own first: a yaw reads back whether the disc is flat,
+	# tipped or flipped, and the seat it builds is always flat and label-up.
+	var seat := Basis(Vector3.UP, 0.4) * Basis(Vector3.RIGHT, 0.2)
+	var yaw := deg_to_rad(55.0)
+	var flat := seat * Basis(Vector3.UP, yaw)
+	var tipped := flat * Basis(Vector3.RIGHT, deg_to_rad(40.0))
+	var flipped := flat * Basis(Vector3.RIGHT, PI)
+	_ok(absf(RetroDisc.spin_of(seat, flat) - yaw) < 0.001,
+		"seat/spin_of reads a flat disc's yaw")
+	_ok(absf(RetroDisc.spin_of(seat, tipped) - yaw) < 0.001,
+		"seat/spin_of reads the same yaw off a disc tipped 40 degrees")
+	_ok(absf(RetroDisc.spin_of(seat, flipped) - yaw) < 0.001,
+		"seat/spin_of reads the same yaw off a disc offered label-down")
+	var built := RetroDisc.spin_basis(seat, tipped)
+	_ok(built.y.dot(seat.y) > 0.9999 and built.is_equal_approx(flat),
+		"seat/spin_basis lies flat in the seat at that yaw")
+	_ok(absf(RetroDisc.spin_of(seat, seat * Basis(Vector3.UP, deg_to_rad(350.0)))
+		- deg_to_rad(-10.0)) < 0.001,
+		"seat/spin_of wraps: 350 degrees round is -10")
+
 	var gc := await _console("gamecube_primitive", "gamecube")
 	gc._on_eject_pressed()
 	await _wait(80)
@@ -806,25 +845,72 @@ func _group_seat() -> void:
 		await _clear()
 		return
 
-	var square := await _seat_disc(gc, 0.0, true)
-	for yaw: float in [55.0, -110.0]:
-		var turned := await _seat_disc(gc, yaw, true)
+	var square := await _seat_disc(gc, Basis.IDENTITY, true)
+	for deg: float in [55.0, -110.0]:
+		var turned := await _seat_disc(gc, Basis(Vector3.UP, deg_to_rad(deg)), true)
 		_ok(absf(angle_difference(deg_to_rad(_spin_between(square, turned)),
-			deg_to_rad(yaw))) < 0.02,
-			"seat/a disc handed in at %+.0f seats at %+.0f" % [yaw, yaw])
+			deg_to_rad(deg))) < 0.02,
+			"seat/a disc handed in at %+.0f seats at %+.0f" % [deg, deg])
 		# ...and it is no less flat in the well for it. A seat that took the
 		# whole hand pose would pass the line above and leave the disc tilted.
 		_ok(turned.y.dot(square.y) > 0.9999,
 			"seat/and lies exactly as flat as a square one")
+		_ok(absf(angle_difference(_last_seat_yaw, deg_to_rad(deg))) < 0.02,
+			"seat/and the console reports that spin for the save")
 
-	# The control. A restore is a state the room was already in, not a hand, so
-	# it keeps the authored heading — and without this every check above would
-	# pass on a well that simply never squares anything.
-	var r0 := await _seat_disc(gc, 0.0, false)
-	var r1 := await _seat_disc(gc, 55.0, false)
+	# Held tipped: the yaw still comes through, and the seat is still flat.
+	var tipped_in := await _seat_disc(gc,
+		Basis(Vector3.UP, deg_to_rad(55.0)) * Basis(Vector3.RIGHT, deg_to_rad(40.0)), true)
+	_ok(absf(angle_difference(deg_to_rad(_spin_between(square, tipped_in)),
+		deg_to_rad(55.0))) < 0.02 and tipped_in.y.dot(square.y) > 0.9999,
+		"seat/a disc handed in tipped 40 degrees seats flat at its yaw")
+	# Offered label-down: righted, at the same yaw.
+	var flipped_in := await _seat_disc(gc,
+		Basis(Vector3.UP, deg_to_rad(55.0)) * Basis(Vector3.RIGHT, PI), true)
+	_ok(absf(angle_difference(deg_to_rad(_spin_between(square, flipped_in)),
+		deg_to_rad(55.0))) < 0.02 and flipped_in.y.dot(square.y) > 0.9999,
+		"seat/a disc handed in label-down seats label-up at its yaw")
+
+	# A restore seats at the yaw it is GIVEN, not the pose the disc happens to
+	# have: that is what a save and a peer's insert event carry.
+	var r0 := await _seat_disc(gc, Basis.IDENTITY, false)
+	var r1 := await _seat_disc(gc, Basis(Vector3.UP, deg_to_rad(20.0)), false)
 	_ok(absf(_spin_between(r0, r1)) < 0.02,
-		"seat/a restore ignores the pose and seats as authored")
+		"seat/a restore ignores the disc's own pose")
+	var r2 := await _seat_disc(gc, Basis.IDENTITY, false, deg_to_rad(55.0))
+	_ok(absf(angle_difference(deg_to_rad(_spin_between(r0, r2)), deg_to_rad(55.0))) < 0.02
+		and absf(angle_difference(_last_seat_yaw, deg_to_rad(55.0))) < 0.02,
+		"seat/a restore at 55 degrees seats there and reads back 55")
+
+	# And the spin survives a room save: the console writes it, the load seats
+	# the disc back at it. Left seated for the save, unlike every disc above.
+	var kept: Node3D = DISC_SCENE.instantiate()
+	kept.systemid = gc.systemid
+	add_child(kept)
+	kept.add_to_group("spawned")
+	_spawned.append(kept)
+	await _wait(5)
+	gc._tray.restore(kept, deg_to_rad(-70.0))
+	await _wait(5)
+	var sp := ScenePersistence.new(LID_ROOM)
+	sp.save_slot(self, LID_SLOT)
+	ScenePersistence.flush_pending_writes()
+	await _wait(10)
 	await _clear()
+	sp.load_slot_async(self, LID_SLOT)
+	await _wait(150)
+	var back: RetroSystem = null
+	for n in get_tree().get_nodes_in_group("spawned"):
+		_spawned.append(n)
+		if n is RetroSystem:
+			back = n
+	_ok(back != null and back.get_snapped_cartridge() != null,
+		"seat/the saved room comes back with its disc in the well")
+	if back != null:
+		_ok(absf(angle_difference(back.cartridge_seat_yaw(), deg_to_rad(-70.0))) < 0.02,
+			"seat/and the disc is at the spin it was saved at")
+	await _clear()
+	_drop_lid_room()
 
 
 func _run() -> void:

@@ -157,7 +157,9 @@ func _on_arm_lifted() -> void:
 		stop()
 
 
-func restore_media(media: Node3D) -> void:
+## A record is not a RetroDisc, so the well seats it as authored by hand too;
+## `_yaw` is accepted for the shared deck contract.
+func restore_media(media: Node3D, _yaw: float = 0.0) -> void:
 	if _tray:
 		_tray.restore(media)
 

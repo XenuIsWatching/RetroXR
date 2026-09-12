@@ -186,7 +186,10 @@ func _physics_process(delta : float) -> void:
 			# The zone's own preview pose: grab-point-corrected (without it the
 			# ghost shows the raw zone orientation, e.g. a plug backwards) and
 			# offset by whatever stand-off the zone presents its media at.
-			var zt := _preview_zone.preview_pose_for(target, _perch_ease)
+			# `destination` here is still where the HAND wants the object; a
+			# disc keeps that pose's spin in its seat, so the zone is given it.
+			var zt := _preview_zone.preview_pose_for(
+				target, _perch_ease, destination.basis)
 			var w := smoothstep(0.0, 1.0, _preview_blend)
 			var scale := destination.basis.get_scale()
 			var q := destination.basis.get_rotation_quaternion().slerp(

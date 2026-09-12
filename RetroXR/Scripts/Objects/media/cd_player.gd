@@ -58,9 +58,13 @@ func _on_lid_opened() -> void:
 		stop()
 
 
-func restore_media(media: Node3D) -> void:
+func restore_media(media: Node3D, yaw: float = 0.0) -> void:
 	if _tray:
-		_tray.restore(media)
+		_tray.restore(media, yaw)
+
+
+func media_seat_yaw() -> float:
+	return _tray.seat_yaw() if _tray else 0.0
 
 
 ## Lift the lid and take the disc out — a top loader has no eject that hands it back.
