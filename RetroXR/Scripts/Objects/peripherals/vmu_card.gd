@@ -443,10 +443,12 @@ func is_running_standalone() -> bool:
 
 ## Whichever picture belongs on this card's face, and the window into it.
 ##
-## Two sources, and they crop differently. Standalone, the core IS a VMU and its
-## frame is the whole 48 x 32 screen, so the window is everything. Seated, the
-## picture is a Dreamcast's frame with the LCD burned into one corner, so the
-## window is that corner — see VmuStorage.screen_rect.
+## Three sources, and they crop differently. Standalone, the core IS a VMU and
+## its frame is the whole 48 x 32 screen, so the window is everything. Seated on
+## a core that publishes its VMU panels separately, the same holds for the
+## opposite reason: the panel arrives as a texture of its own. Seated on a core
+## that cannot, the picture is a Dreamcast frame with the LCD burned into one
+## corner, and the window is that corner — see VmuStorage.screen_rect.
 func _picture() -> Dictionary:
 	if _running and _lib != null:
 		var own: Texture2D = _lib.GetVideoTexture()
@@ -456,6 +458,13 @@ func _picture() -> Dictionary:
 	var sys := host_system()
 	if sys == null or not sys.has_method("get_video_texture"):
 		return {}
+	# The core's own panel, when the core will hand one over. Then this is a
+	# texture in its own right rather than a corner of somebody else's, and the
+	# television keeps every pixel of the game — nothing was drawn over it.
+	if sys.has_method("vmu_screen_texture"):
+		var panel: Texture2D = sys.call("vmu_screen_texture", _pad, _slot)
+		if panel != null:
+			return {"tex": panel, "whole": true}
 	var tex: Texture2D = sys.call("get_video_texture")
 	return {"tex": tex, "whole": false} if tex != null else {}
 

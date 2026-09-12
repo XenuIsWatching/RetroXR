@@ -1,0 +1,72 @@
+diff --git a/shell/libretro/libretro.cpp b/shell/libretro/libretro.cpp
+index a4444c9a6..864ba4dd2 100644
+--- a/shell/libretro/libretro.cpp
++++ b/shell/libretro/libretro.cpp
+@@ -2461,6 +2461,58 @@ size_t retro_get_memory_size(unsigned type)
+    return 0;
+ }
+ 
++// The VMU LCDs, handed over instead of drawn on top of the game
++//
++// The only way this build has ever shown a VMU screen is the overlay in
++// vmu_xhair.cpp, which composites the 48 x 32 panel into the finished
++// framebuffer at a corner the player picks. That is right for a flat screen and
++// wrong for a frontend with somewhere better to put it -- a model of the card in
++// a VR room, a second window, a phone -- because such a frontend has to crop the
++// panel back out of the picture, and the pixels it covered are gone for good.
++// libretro has no second video output to publish it on instead.
++//
++// So publish it out of band. push_vmu_screen() already maintains vmu_lcd_data
++// for all eight VMUs from MapleConfigMap::SetImage whenever a card redraws, and
++// it does that whether or not any overlay is drawn -- as do the colour and
++// opacity options, which are read unconditionally. So a frontend can leave every
++// _vmu<N>_screen_display option disabled, get an untouched frame, and read the
++// screens from here.
++//
++// `vmu` is bus * 2 + port, indexing vmu_lcd_data: 0..7, where an even index is
++// the slot-1 card whose screen shows through the window in a real controller's
++// shell. `pixels` receives VMU_SCREEN_WIDTH * VMU_SCREEN_HEIGHT words as
++// 0xAABBGGRR, already coloured by that port's pixel_on_color / pixel_off_color /
++// screen_opacity. `count` is that buffer's length in words and must be at least
++// the panel's size. `changed`, when not null, receives the millisecond stamp of
++// the last update.
++//
++// A null `pixels` with a `count` of zero asks for the stamp alone. That is the
++// cheap poll: a VMU redraws far less often than the Dreamcast does, so a caller
++// that copies eight panels every frame is copying the same pixels back most of
++// the time.
++//
++// Returns false and writes nothing for an out-of-range index, or for a buffer
++// too small to hold a panel. Call it from the thread that calls retro_run,
++// between frames: vmu_lcd_data is written by the emulation thread under no lock,
++// and reading it from another thread can tear across an update.
++extern "C" RETRO_API bool flycast_get_vmu_screen(unsigned vmu, u32 *pixels, size_t count, u64 *changed)
++{
++	constexpr size_t panel = (size_t)VMU_SCREEN_WIDTH * VMU_SCREEN_HEIGHT;
++	if (vmu >= std::size(vmu_lcd_data))
++		return false;
++	if (pixels != nullptr)
++	{
++		if (count < panel)
++			return false;
++		memcpy(pixels, &vmu_lcd_data[vmu][0], panel * sizeof(u32));
++	}
++	else if (count != 0)
++		return false;
++	if (changed != nullptr)
++		*changed = vmuLastChanged[vmu];
++	return true;
++}
++
+ size_t retro_serialize_size()
+ {
+ 	DEBUG_LOG(SAVESTATE, "retro_serialize_size");
+diff --git a/shell/libretro/libretro.osx.def b/shell/libretro/libretro.osx.def
+index 53a556a60..3449e1779 100644
+--- a/shell/libretro/libretro.osx.def
++++ b/shell/libretro/libretro.osx.def
+@@ -25,3 +25,4 @@ _retro_unload_game
+ _retro_get_region
+ _retro_get_memory_data
+ _retro_get_memory_size
++_flycast_get_vmu_screen

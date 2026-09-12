@@ -3527,6 +3527,29 @@ func reapply_vmu(ctrl: Node) -> void:
 	_vmu.reapply(ctrl)
 
 
+## One seated VMU's own screen, when the core hands its panels over rather than
+## drawing them into the picture the television shows.
+##
+## Null on a core that cannot — every build but our flycast fork — and the card
+## then falls back to cropping the overlay back out of the frame. See VmuStorage
+## for both halves of that; this is only the lookup, which has to happen here
+## because the card knows which pad it is in and nothing else does.
+func vmu_screen_texture(ctrl: Node, slot: int) -> Texture2D:
+	if slot < 0 or not is_instance_valid(_libretro) 			or not _libretro.has_method("HasVmuScreens") or not _libretro.HasVmuScreens():
+		return null
+	for i in range(_port_controllers.size()):
+		if _port_controllers[i] != ctrl:
+			continue
+		var dev: int = ctrl.get("device_type") if "device_type" in ctrl else 1
+		var port := _libretro_port_for(dev, i)
+		if port < 0:
+			return null
+		# The core indexes its eight panels bus * 2 + port, the same arithmetic
+		# the vmu_save_<Port><Slot>.bin names use.
+		return _libretro.GetVmuScreenTexture(port * 2 + slot)
+	return null
+
+
 ## Re-announce the pak on one controller's port. Called when a pak is pushed into
 ## or pulled out of an expansion port, which the system cannot see for itself —
 ## the port belongs to the controller, two objects away.

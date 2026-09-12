@@ -50,10 +50,26 @@ const SLOT_EMPTY := "None"
 
 # --- The VMU's own screen -----------------------------------------------------
 #
-# flycast has no second video output: it burns each VMU's 48 x 32 LCD into the
-# main framebuffer at a chosen corner, size and opacity. RetroXR crops it back
-# out onto the card's own face with screen_window.gdshader, the same way the 3DS
-# bottom screen is cut out of a composite frame.
+# Two ways, and the better one needs our fork of the core.
+#
+# Stock flycast has no second video output: it burns each VMU's 48 x 32 LCD into
+# the main framebuffer at a chosen corner, size and opacity, and RetroXR crops it
+# back out onto the card's own face with screen_window.gdshader, the same way the
+# 3DS bottom screen is cut out of a composite frame. It works, and it costs the
+# television a 48 x 32 badge in the corner of every picture — those pixels are
+# overwritten before the frame ever reaches us, so no crop can give them back.
+#
+# Our fork exports flycast_get_vmu_screen and hands the panels over instead, out
+# of band. The data was always there — push_vmu_screen fills vmu_lcd_data from
+# MapleConfigMap::SetImage whether or not an overlay is drawn — so the fork adds
+# no emulation work, only a way to ask. Then every screen option stays off, the
+# core draws nothing over the game, and the card gets a texture of its own.
+#
+# Which one is in play cannot be known at staging time: the symbol is resolved
+# when the core loads, which is after the options are written. So the overlay is
+# staged ON as it always was, and switched off in nudge_slots_after_start once
+# the core has answered. A player on the buildbot's build keeps the crop and
+# notices nothing.
 #
 # The screen options are indexed per PORT, not per slot, and flycast gates them
 # on MapleExpansionDevices[i][0] — so only the card in SLOT 1 has a screen. That
@@ -243,6 +259,28 @@ func nudge_slots_after_start() -> void:
 		var key := SLOT_KEY % [int(entry["port"]) + 1, int(entry["slot"]) + 1]
 		lib.SetCoreOption(key, str(entry["value"]))
 	print("[VmuStorage] re-asserted the slot options so the core reads them")
+	_stop_burning_in_the_screen(lib)
+
+
+## Take the VMU panel off the television, on a core that can hand it over.
+##
+## Here rather than in stage_before_start because the answer is not known until
+## the core has loaded: the symbol is resolved at load, and the options are
+## written before it. The badge is therefore on for the first frames of a boot,
+## where a Dreamcast is showing its own swirl and nobody is looking at a corner.
+##
+## Only the display key is cleared. Position, size and opacity are left as they
+## were, because they also colour vmu_lcd_data, which is what the fork hands over
+## — turning the overlay off must not turn the card's picture monochrome.
+func _stop_burning_in_the_screen(lib: Node) -> void:
+	if not lib.has_method("HasVmuScreens") or not lib.HasVmuScreens():
+		return
+	for entry: Dictionary in _seated():
+		if int(entry["slot"]) != 0:
+			continue
+		lib.SetCoreOption(SCREEN_DISPLAY_KEY % (int(entry["port"]) + 1), "disabled")
+	print("[VmuStorage] the core hands its VMU screens over, so the overlay is off"
+		+ " and the television keeps the whole picture")
 
 
 ## One card's image, creating it only for a card this session invented.

@@ -1,0 +1,256 @@
+--- a/src/Core.hpp
++++ b/src/Core.hpp
+@@ -60,6 +60,20 @@
+     decltype(&::retro_get_memory_data) retro_get_memory_data                       = nullptr;
+     decltype(&::retro_get_memory_size) retro_get_memory_size                       = nullptr;
+ 
++    /// The VMU LCDs, out of band. OPTIONAL, and only our flycast fork exports
++    /// it: stock flycast can publish a VMU screen only by compositing it into
++    /// the finished frame at a corner, which means a frontend that wants the
++    /// screen somewhere of its own has to crop it back out and the game loses
++    /// those pixels for good. Null on every other core and on a stock build,
++    /// which is not an error -- the caller falls back to the crop.
++    ///
++    /// (vmu = bus * 2 + port, 0..7; pixels = 48 * 32 words of 0xAABBGGRR;
++    /// count = that buffer's length in words; a null pixels with count 0 asks
++    /// for the change stamp alone.) Call it only from the thread that calls
++    /// retro_run: the core writes it from its emulation thread under no lock.
++    using FlycastGetVmuScreen = bool(RETRO_CALLCONV*)(unsigned, uint32_t*, size_t, uint64_t*);
++    FlycastGetVmuScreen flycast_get_vmu_screen                                     = nullptr;
++
+     bool SetSupportsNoGame(bool* supports);
+     bool GetLibretroPath(const char** path) const;
+ 
+@@ -78,6 +92,15 @@
+ 
+     bool LoadHandle();
+ 
++    /// A symbol the core is allowed not to have. Silent when it is missing,
++    /// which is the whole difference from LoadFunction_: an absent optional
++    /// symbol is a core without that extension, not a core that failed to load.
++    template<typename T>
++    void LoadOptionalFunction_(T& function_ptr, const std::string& function_name)
++    {
++        function_ptr = reinterpret_cast<T>(DynLib_Sym(m_handle, function_name.c_str()));
++    }
++
+     template<typename T>
+     bool LoadFunction_(T& function_ptr, const std::string& function_name)
+     {
+--- a/src/Core.cpp
++++ b/src/Core.cpp
+@@ -187,6 +187,10 @@
+     LoadFunction(retro_get_memory_data);
+     LoadFunction(retro_get_memory_size);
+ 
++    // Optional, so no LoadFunction: a core without it is every core but our own
++    // flycast build, and that has to keep working.
++    LoadOptionalFunction_(flycast_get_vmu_screen, "flycast_get_vmu_screen");
++
+     // Cache need_fullpath before retro_init: it decides whether Wrapper hands the
+     // core a byte buffer or just a path. Disc cores set it and open the image
+     // themselves (VFS), so filling a multi-GB buffer for them is pure waste.
+--- a/src/Wrapper.hpp
++++ b/src/Wrapper.hpp
+@@ -99,6 +99,15 @@
+     godot::Ref<godot::ImageTexture> GetVideoTexture() const;
+     /// The same frame CPU-side. See VideoHandler::GetImage.
+     godot::Ref<godot::Image> GetVideoImage() const;
++
++    /// Whether this core can hand its VMU screens over separately, rather than
++    /// drawing them into the picture the television shows. Only our flycast
++    /// fork can; see Core::flycast_get_vmu_screen.
++    bool HasVmuScreens() const;
++    /// One VMU's 48 x 32 LCD as a texture of its own, or null when this core
++    /// publishes none or that card has never drawn. `index` is bus * 2 + port,
++    /// so an even one is the slot-1 card. MAIN THREAD: it builds a texture.
++    godot::Ref<godot::ImageTexture> GetVmuScreenTexture(int index);
+     /// Whether the core's sound is heard at all. Used to be a side effect of
+     /// SetScreenMesh — a machine with nowhere to put its picture was muted — which
+     /// only worked while the picture went somewhere by being PAINTED there.
+@@ -801,6 +810,26 @@
+         std::vector<uint8_t> shadow;
+     };
+     std::array<SramRegion, RETRO_TRANSFER_PAK_PORTS> m_sram_regions;
++    // --- The VMU screens a Dreamcast core hands over out of band -------------
++    //
++    // Read on the emulation thread straight after each retro_run, because the
++    // core writes them from that thread with no lock of its own; turned into a
++    // texture on the main thread, where textures may be made at all. The stamp
++    // is the core's own millisecond mark, and it is what keeps this cheap: a VMU
++    // redraws a few times a second where the Dreamcast redraws sixty, so almost
++    // every frame's poll copies nothing.
++    static constexpr int VMU_SCREEN_COUNT = 8;
++    static constexpr int VMU_SCREEN_W = 48;
++    static constexpr int VMU_SCREEN_H = 32;
++    std::mutex m_vmu_screen_mutex;
++    std::vector<uint32_t> m_vmu_screen_pixels[VMU_SCREEN_COUNT];
++    uint64_t m_vmu_screen_stamp[VMU_SCREEN_COUNT] = {};
++    /// Main thread only: which stamp each texture was last built from.
++    uint64_t m_vmu_screen_seen[VMU_SCREEN_COUNT] = {};
++    godot::Ref<godot::ImageTexture> m_vmu_screen_tex[VMU_SCREEN_COUNT];
++    /// Emulation thread, after a frame. No-op on a core without the symbol.
++    void PublishVmuScreens();
++
+     std::mutex m_sram_region_mutex;
+     // A pak seated by hand must take effect now, not at the next 600-frame
+     // flush tick, so the binding is staged here and adopted by the emulation
+--- a/src/Wrapper.cpp
++++ b/src/Wrapper.cpp
+@@ -5,6 +5,8 @@
+ #include <godot_cpp/classes/global_constants.hpp>
+ #include <godot_cpp/classes/os.hpp>
+ #include <godot_cpp/classes/audio_stream_player3d.hpp>
++#include <godot_cpp/classes/image.hpp>
++#include <godot_cpp/classes/image_texture.hpp>
+ 
+ #include <filesystem>
+ #include <fstream>
+@@ -269,6 +271,77 @@
+     return m_video_handler ? m_video_handler->GetImage() : Ref<Image>();
+ }
+ 
++bool Wrapper::HasVmuScreens() const
++{
++    return m_core != nullptr && m_core->flycast_get_vmu_screen != nullptr;
++}
++
++Ref<ImageTexture> Wrapper::GetVmuScreenTexture(int index)
++{
++    if (index < 0 || index >= VMU_SCREEN_COUNT)
++        return Ref<ImageTexture>();
++
++    PackedByteArray bytes;
++    uint64_t stamp = 0;
++    {
++        std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
++        // Never drawn. Not the same as an all-off screen, which is a card that
++        // is present and dark, so there is nothing to hand back rather than a
++        // black texture that would read as one.
++        if (m_vmu_screen_pixels[index].empty())
++            return Ref<ImageTexture>();
++        stamp = m_vmu_screen_stamp[index];
++        if (m_vmu_screen_tex[index].is_valid() && stamp == m_vmu_screen_seen[index])
++            return m_vmu_screen_tex[index];
++        const size_t size = m_vmu_screen_pixels[index].size() * sizeof(uint32_t);
++        bytes.resize(static_cast<int64_t>(size));
++        std::memcpy(bytes.ptrw(), m_vmu_screen_pixels[index].data(), size);
++    }
++
++    // The core packs R | G << 8 | B << 16 | A << 24, which on a little-endian
++    // machine is R, G, B, A in memory order -- so RGBA8 and no swizzle.
++    Ref<Image> image = Image::create_from_data(
++        VMU_SCREEN_W, VMU_SCREEN_H, false, Image::FORMAT_RGBA8, bytes);
++    if (image.is_null())
++        return Ref<ImageTexture>();
++
++    if (m_vmu_screen_tex[index].is_valid())
++        m_vmu_screen_tex[index]->update(image);
++    else
++        m_vmu_screen_tex[index] = ImageTexture::create_from_image(image);
++    m_vmu_screen_seen[index] = stamp;
++    return m_vmu_screen_tex[index];
++}
++
++void Wrapper::PublishVmuScreens()
++{
++    if (m_core == nullptr || m_core->flycast_get_vmu_screen == nullptr)
++        return;
++
++    for (int i = 0; i < VMU_SCREEN_COUNT; ++i)
++    {
++        // Stamp first. Copying eight panels every frame would be 48 KB of the
++        // same pixels sixty times a second; the stamp says which of them moved.
++        uint64_t changed = 0;
++        if (!m_core->flycast_get_vmu_screen(
++                static_cast<unsigned>(i), nullptr, 0, &changed))
++            continue;
++        {
++            std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
++            if (!m_vmu_screen_pixels[i].empty() && changed == m_vmu_screen_stamp[i])
++                continue;
++        }
++
++        uint32_t pixels[VMU_SCREEN_W * VMU_SCREEN_H] = {};
++        if (!m_core->flycast_get_vmu_screen(
++                static_cast<unsigned>(i), pixels, std::size(pixels), &changed))
++            continue;
++        std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
++        m_vmu_screen_stamp[i] = changed;
++        m_vmu_screen_pixels[i].assign(pixels, pixels + std::size(pixels));
++    }
++}
++
+ void Wrapper::SetAudioPlaying(bool playing)
+ {
+     if (m_audio_handler)
+--- a/src/WrapperEmuThread.cpp
++++ b/src/WrapperEmuThread.cpp
+@@ -720,6 +720,11 @@
+             m_core_ran_frame = true;
+             m_frame_counter.fetch_add(1, std::memory_order_relaxed);
+ 
++            // Here, on this thread, because the core writes its VMU panels from
++            // it with no lock. Costs a stamp read per card on a frame where
++            // nothing redrew, which is most of them.
++            PublishVmuScreens();
++
+             // Achievements. Emulation thread, strictly after the frame the core
+             // just produced, and only ever on a frame that is final; the rollback
+             // paths deliberately do not call this (see NetplayRollbackIteration).
+@@ -781,6 +786,7 @@
+         m_core->retro_run();
+         m_core_ran_frame = true;
+         int64_t frame_done = m_frame_counter.fetch_add(1, std::memory_order_relaxed) + 1;
++        PublishVmuScreens();
+         accumulator -= frame_duration_ms;
+ 
+         // Lockstep netplay frames are final (every peer has confirmed the inputs
+--- a/src/Libretro.hpp
++++ b/src/Libretro.hpp
+@@ -190,6 +190,17 @@
+     /// resolution, so read it per frame instead of caching it.
+     godot::Ref<godot::ImageTexture> GetVideoTexture() const;
+ 
++    /// Whether this core hands its VMU screens over separately instead of
++    /// drawing them into the picture. Only our flycast fork does; a frontend
++    /// that gets false must fall back to cropping the overlay out of the frame,
++    /// and to switching that overlay on in the first place.
++    bool HasVmuScreens() const;
++    /// One VMU's own 48 x 32 LCD, or null when this core publishes none or that
++    /// card has not drawn yet. `index` is bus * 2 + port, so an even index is
++    /// the slot-1 card -- the one whose screen a real controller has a window
++    /// for.
++    godot::Ref<godot::ImageTexture> GetVmuScreenTexture(int index);
++
+     /// The same frame as a CPU-side Image — the buffer the texture was uploaded
+     /// FROM, so reading it costs no GPU readback. A savestate thumbnail wants
+     /// this and never get_image() on the texture, which syncs the GPU.
+--- a/src/Libretro.cpp
++++ b/src/Libretro.cpp
+@@ -91,6 +91,16 @@
+     return m_wrapper ? m_wrapper->GetVideoTexture() : Ref<ImageTexture>();
+ }
+ 
++bool Libretro::HasVmuScreens() const
++{
++    return m_wrapper ? m_wrapper->HasVmuScreens() : false;
++}
++
++Ref<ImageTexture> Libretro::GetVmuScreenTexture(int index)
++{
++    return m_wrapper ? m_wrapper->GetVmuScreenTexture(index) : Ref<ImageTexture>();
++}
++
+ Ref<Image> Libretro::GetVideoImage() const
+ {
+     return m_wrapper ? m_wrapper->GetVideoImage() : Ref<Image>();
+@@ -571,6 +581,8 @@
+     ClassDB::bind_method(D_METHOD("LinkTraffic", "port"), &Libretro::LinkTraffic, DEFVAL(0u));
+     ClassDB::bind_method(D_METHOD("LinkSent", "port"), &Libretro::LinkSent, DEFVAL(0u));
+     ClassDB::bind_method(D_METHOD("GetVideoTexture"), &Libretro::GetVideoTexture);
++    ClassDB::bind_method(D_METHOD("HasVmuScreens"), &Libretro::HasVmuScreens);
++    ClassDB::bind_method(D_METHOD("GetVmuScreenTexture", "index"), &Libretro::GetVmuScreenTexture);
+     ClassDB::bind_method(D_METHOD("GetVideoImage"), &Libretro::GetVideoImage);
+     ClassDB::bind_method(D_METHOD("SetAudioPlaying", "playing"), &Libretro::SetAudioPlaying);
+     ClassDB::bind_method(D_METHOD("SetCoreOption", "key", "value"), &Libretro::SetCoreOption);
