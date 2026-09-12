@@ -61,7 +61,7 @@
 ##               where both are the same size and shape. Absent means plain.
 ##   shell       a GLB the unit wears instead of the primitive box, scaled to
 ##               `size`. Its markers, when it has them: SocketMarker (where a
-##               seated disk's centre sits), EjectButton and PowerLed meshes.
+##               seated disk's centre sits), EjectButton and AccessLed meshes.
 ##   shell_albedo
 ##               a colour map swapped onto the shell's "shell" material, for a
 ##               second unit that is the same casting in a different finish.
@@ -638,8 +638,23 @@ static func save_owner_of(id: String) -> String:
 static func boot_for(host: String, ids: Array) -> Dictionary:
 	var key := host
 	for id in _sorted_ids_excluding_defaults(ids):
-		key += "|" + id
+		if _names_a_recipe(id):
+			key += "|" + id
 	return BOOT.get(key, {})
+
+
+## Ids some BOOT key names. A unit named by none (an Expansion Pak, whose whole
+## effect is a forced core option) cannot change which recipe a stack resolves
+## to, so it is left out of the key rather than making every recipe spell it
+## out: an N64 on a 64DD with the pak in its roof still boots by the drive's.
+static var _recipe_ids: Dictionary = {}
+
+static func _names_a_recipe(id: String) -> bool:
+	if _recipe_ids.is_empty():
+		for key: String in BOOT:
+			for part: String in key.split("|").slice(1):
+				_recipe_ids[part] = true
+	return _recipe_ids.has(id)
 
 
 ## sorted_ids with any default_occupant id (a Jumper Pak) filtered back out.
