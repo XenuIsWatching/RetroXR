@@ -51,6 +51,12 @@ var _device: int = -1
 # authors an ExpansionPort node -- see N64PakPort.
 var _pak_port := N64PakPort.new()
 
+# And the Dreamcast VMU slot in the same boss, for the same player. Unlike the
+# pak port this one comes and goes with the console: it is built when the dongle
+# is plugged into a Dreamcast and removed when it is unplugged, so the seat is
+# authored in the scene (VmuSeat1) and the socket is not -- see VmuPort.
+var _vmu_port := VmuPort.new()
+
 
 func _ready() -> void:
 	device_type = RETRO_DEVICE_JOYPAD
@@ -58,6 +64,7 @@ func _ready() -> void:
 	add_to_group(ControllerBindings.CONSUMER_GROUP)
 	reload_bindings()
 	_pak_port.attach(self)
+	_vmu_port.attach(self)
 
 
 # ── The expansion port ────────────────────────────────────────────────────────
@@ -86,6 +93,38 @@ func restore_pak(pak: N64Pak) -> void:
 ## at all, which is not the same as an empty one -- see N64PakPort.
 func pak_option_value() -> String:
 	return _pak_port.pak_option_value()
+
+
+# ── The VMU slot ──────────────────────────────────────────────────────────────
+
+## A Dreamcast's cards are reached the same way the N64's paks are, and for the
+## same reason: the only other socket that takes one is on a virtual pad the
+## player using a real gamepad is not holding. RetroSystem duck types all of it
+## through VmuStorage, which asks a port controller for `vmu_slot_count` and then
+## `get_vmu` and `vmu_slot_option_value` per slot, so these three forwards are the
+## whole of the wiring on the system side.
+
+
+## How many VMU slots this dongle has right now: one on a Dreamcast, none
+## anywhere else.
+func vmu_slot_count() -> int:
+	return _vmu_port.slot_count()
+
+
+## The card in one slot, or null.
+func get_vmu(slot: int) -> VmuCard:
+	return _vmu_port.get_card(slot)
+
+
+## What flycast's per-slot device option should take. "" would mean no slot at
+## all, which is not the same as an empty one -- see VmuPort.
+func vmu_slot_option_value(slot: int) -> String:
+	return _vmu_port.slot_option_value(slot)
+
+
+## Put a card back into a slot after a load.
+func restore_vmu(card: VmuCard, slot: int) -> void:
+	_vmu_port.restore_card(card, slot)
 
 
 func receiver_glyph() -> String:
@@ -164,9 +203,13 @@ func reload_bindings() -> void:
 func on_plugged_in(system: RetroSystem, port_index: int) -> void:
 	super.on_plugged_in(system, port_index)
 	reload_bindings()
+	# The VMU slot grows here rather than in _ready, so a dongle moved between
+	# machines never carries a Dreamcast's socket onto a NES.
+	_vmu_port.sync_to_system(system)
 
 
 func on_unplugged() -> void:
+	_vmu_port.sync_to_system(null)
 	super.on_unplugged()
 	reload_bindings()
 

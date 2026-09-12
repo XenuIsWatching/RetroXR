@@ -115,6 +115,40 @@ transform = Transform3D(-1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0.042, 0.0105)
 grab_distance = 0.035
 snap_require = "controller_plug"
 
+; Where a Dreamcast VMU seats, read by VmuPort when this dongle is plugged into
+; a Dreamcast and ignored otherwise. A marker rather than a snap zone: the zone
+; is built and torn down with the console, so a dongle on a NES carries no
+; Dreamcast socket around, and only the SEAT is a property of this shell.
+;
+; ONE, where a controller has two, and the reason is width. A VMU is 47 mm
+; across and this case is 70, so a second one beside it would hang 13 mm over
+; each end; the boss is 20 mm deep, so a second one behind it would have no boss
+; under its connector either. Slot 1 is the half that matters -- it is the one
+; with the window on real hardware, and the one flycast fits a VMU to by
+; default. VmuPort already allowed for a host with one (a Light Gun and a Twin
+; Stick each create only [0]), so a short count needs nothing on the system side.
+;
+; It shares the pak boss, which is what a boss is: the block with the expansion
+; socket in it. The two can never both matter -- a pak is an N64's and a VMU is a
+; Dreamcast's -- so they are 20 mm apart on the same centre rather than given a
+; boss each.
+;
+; TURNED A HALF TURN ABOUT X, for the reason the pak port is turned about Z: the
+; card is authored to be pushed UP into the underside of a controller, connector
+; on +Y and screen on +Z, and here it is pushed DOWN into a box on a table. So +Y
+; goes to -Y and the connector points into the boss, and +Z goes to -Z so the
+; screen faces the front -- the face with the LED and the name on it, which is
+; the side you stand on.
+;
+; y=68: the card's origin is its body centre and its body is 80 mm long, so the
+; end carrying the connector lands at y=28, twelve millimetres down inside the
+; boss's 40 mm top face, with the connector itself reaching y=22. Deep enough to
+; read as seated rather than perched on the lid, and shallow enough that the
+; screen clears the boss: the LCD spans y=42..73 and the lid is at 40. Six
+; millimetres lower and the boss eats the bottom of the picture.
+[node name="VmuSeat1" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0.068, 0.0105)
+
 [node name="Led" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.026, 0.014, -0.0228)
 mesh = SubResource("BoxMesh_led")

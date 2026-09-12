@@ -1,7 +1,7 @@
-## VmuPort — the TWO expansion slots on a Dreamcast controller.
+## VmuPort — the expansion slots a Dreamcast controller carries.
 ##
 ## Shaped after N64PakPort, and different from it in the one way that matters:
-## there are two, and they are not interchangeable.
+## there is more than one, and they are not interchangeable.
 ##
 ## Researched rather than recalled, because nobody here grew up with the
 ## hardware. From flycast's own createDreamcastDevices(): the pad is created at
@@ -21,11 +21,17 @@
 ## and Racing Controller each create only [0]. Hence a slot COUNT rather than an
 ## assumption of two.
 ##
-## Unlike the N64's, these zones are BUILT rather than authored. The Dreamcast
-## has no controller scene — it wears the primitive box, as its console does — so
-## there is no shell to hang an authored node off. They appear when the pad is
-## plugged into a Dreamcast and go when it is unplugged, which also means a pad
-## moved between machines never carries another console's sockets around.
+## Unlike the N64's, these zones are BUILT rather than authored, because the
+## Dreamcast has no controller scene — it wears the primitive box, as its console
+## does — so there is no shell to hang an authored node off. They appear when the
+## host is plugged into a Dreamcast and go when it is unplugged, which also means
+## a pad moved between machines never carries another console's sockets around.
+##
+## A host that DOES have a scene says where its seats are in that scene, as
+## "VmuSeat1", "VmuSeat2", ... markers — see authored_seats(). The pad receiver is
+## the one such host: a player on a real gamepad holds no virtual pad, so without
+## a socket on the dongle a VMU had nowhere to go that player could reach, which
+## is the same gap N64PakPort was lifted out of RetroController to close.
 class_name VmuPort
 extends RefCounted
 
@@ -39,20 +45,36 @@ const VMU_GROUP := &"vmu"
 ## The console whose pads have these.
 const HOST_SYSTEMID := "dreamcast"
 
-## How many slots a standard Dreamcast pad has.
-const SLOTS := 2
-
 ## Where the two sockets sit on the primitive pad, in its local space.
 ##
-## PLACEHOLDER GEOMETRY, and deliberately labelled as such. The Dreamcast wears
-## the primitive box (152 x 26 x 64 mm), so there is no measured shell to seat
-## these against and their position is a design choice rather than a fidelity
-## claim. A VMU is 80 mm long, so it stands proud of a 26 mm pad whatever is
-## done — which is also true of the real thing. If a Dreamcast pad shell is ever
-## authored, measure the seats then and move these onto authored markers.
-const SLOT_POSITIONS := [
-	Vector3(-0.030, 0.023, -0.005),
-	Vector3(0.030, 0.023, -0.005),
+## A seat is a whole TRANSFORM rather than a position, because the card bakes in
+## no insertion offset of its own: its grab point is the identity at the body
+## centre, so the seat is the entire seating geometry. The card's axes are +Y the
+## 80 mm length with the connector on that end, and +Z the face carrying the
+## screen (see vmu_card.tscn).
+##
+## These go on the pad's UNDERSIDE, unrotated: connector up into the shell, body
+## hanging below, screen toward the pad's +Z — its near edge, the side a player
+## holding it is on. The pad is 152 x 26 x 64 mm, so the underside is y = -13 and
+## an 18 mm bite of the card sits inside the shell, which puts the connector at
+## y = +4..+11 with two millimetres to spare under the top face.
+##
+## Underneath is the only place on this shell it can go without skewering
+## something. Out of the FACE — where these were — the card comes up between the
+## sticks and the buttons with its lower half through the body and four
+## millimetres of it out the bottom, which reads as impaled rather than seated. A
+## VMU is 80 mm long and the pad is 26 mm thick, so it stands proud whichever
+## face it goes in, and that much is true of the real thing too.
+##
+## PLACEHOLDER GEOMETRY all the same, and deliberately labeled as such: the
+## Dreamcast wears the primitive box, so there is no measured shell to seat these
+## against. If a Dreamcast pad shell is ever authored, measure the seats then and
+## author them as markers, the way a host with a scene does below.
+const PAD_SEATS: Array[Transform3D] = [
+	Transform3D(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1),
+		Vector3(-0.030, -0.035, 0.018)),
+	Transform3D(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1),
+		Vector3(0.030, -0.035, 0.018)),
 ]
 
 const GRAB_DISTANCE := 0.05
@@ -60,7 +82,8 @@ const GRAB_DISTANCE := 0.05
 var _owner: Node = null
 var _on_change: Callable = Callable()
 var _zones: Array[XRToolsSnapZone] = []
-var _cards: Array = [null, null]
+var _seats: Array[Transform3D] = []
+var _cards: Array = []
 
 
 ## Bind to a host. No sockets exist yet — they appear when the host is plugged
@@ -68,6 +91,31 @@ var _cards: Array = [null, null]
 func attach(owner: Node, on_change: Callable = Callable()) -> void:
 	_owner = owner
 	_on_change = on_change
+	_seats = authored_seats(owner)
+	if _seats.is_empty():
+		_seats = PAD_SEATS.duplicate()
+
+
+## The seats a host's SCENE authors, as "VmuSeat1", "VmuSeat2", ... taken in
+## order until one is missing.
+##
+## The primitive pad has no scene, which is the whole reason PAD_SEATS exists; a
+## host that does have one authors its seats there instead, so the numbers sit
+## beside the geometry they were measured against rather than in a script that
+## cannot see it. The slot COUNT comes from the same place — a pad receiver is
+## 70 mm wide and a VMU is 47, so it seats one where a pad seats two, and that is
+## a shape this already had to allow for: a Light Gun, Twin Stick, Ascii Stick
+## and Racing Controller each create only [0].
+static func authored_seats(owner: Node) -> Array[Transform3D]:
+	var out: Array[Transform3D] = []
+	if not is_instance_valid(owner):
+		return out
+	var seat := owner.get_node_or_null(NodePath("VmuSeat1")) as Node3D
+	while seat != null:
+		out.append(seat.transform)
+		seat = owner.get_node_or_null(
+			NodePath("VmuSeat%d" % (out.size() + 1))) as Node3D
+	return out
 
 
 ## Build the sockets when this pad is on a Dreamcast, tear them down otherwise.
@@ -94,18 +142,22 @@ func slot_count() -> int:
 func _build() -> void:
 	if _owner == null or not is_instance_valid(_owner):
 		return
-	for slot in range(SLOTS):
+	for slot in range(_seats.size()):
 		var zone := SNAP_ZONE_SCENE.instantiate() as XRToolsSnapZone
 		zone.name = "VmuSlot%d" % (slot + 1)
 		zone.snap_require = "controller_plug"
 		zone.snap_filter = _accepts
 		zone.grab_distance = GRAB_DISTANCE
 		_owner.add_child(zone)
-		(zone as Node3D).position = SLOT_POSITIONS[slot]
+		# The whole transform, not the position: a seat says which way up the
+		# card goes in as well as where, and a dongle's is a half turn from a
+		# pad's.
+		(zone as Node3D).transform = _seats[slot]
 		zone.has_picked_up.connect(_on_seated.bind(slot))
 		zone.has_dropped.connect(_on_removed.bind(slot))
 		_zones.append(zone)
-	_cards = [null, null]
+	_cards.resize(_seats.size())
+	_cards.fill(null)
 
 
 func _teardown() -> void:
@@ -121,7 +173,7 @@ func _teardown() -> void:
 				zone.drop_object()
 			zone.queue_free()
 	_zones.clear()
-	_cards = [null, null]
+	_cards.clear()
 
 
 ## The systemid sentinel is what narrows a socket that would otherwise take any

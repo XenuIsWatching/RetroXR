@@ -11,11 +11,19 @@
 ## kind of pad into each, and checks that only the Dreamcast grows slots — a pad
 ## that carried another console's sockets around would be the obvious bug.
 ##
+## A PAD RECEIVER is driven through the same route, because the player using a
+## real gamepad holds no virtual pad and reaches a card only through the dongle.
+## Its seat is authored in its scene rather than built from VmuPort's constants,
+## so the probe reads the seated card's BASIS back as well as counting sockets:
+## a .tscn transform is written by rows and constructed by columns, and a card
+## seated upside down would still count as one card.
+##
 ## Exits non-zero on failure.
 extends Node
 
 const SYSTEM_SCENE := preload("res://Scenes/Objects/system.tscn")
 const PAD_SCENE := preload("res://Scenes/Objects/controllers/retro_controller.tscn")
+const DONGLE_SCENE := preload("res://Scenes/Objects/controllers/pad_receiver.tscn")
 const VMU_SCENE := preload("res://Scenes/Objects/controllers/dreamcast/vmu_card.tscn")
 
 var _fail := 0
@@ -103,3 +111,70 @@ func _run() -> void:
 		% VmuStorage.core_vmu_path("<root>", "flycast", 0, 0))
 	print("[probe] core file B2: %s"
 		% VmuStorage.core_vmu_path("<root>", "flycast", 1, 1))
+
+	# --- The dongle ---------------------------------------------------------
+	#
+	# Same rules, different host: a seat authored in a scene rather than one of
+	# VmuPort's constants, and one slot rather than two because a 47 mm card does
+	# not go twice across a 70 mm case.
+	var rx_dc := DONGLE_SCENE.instantiate() as PadReceiver
+	var rx_nes := DONGLE_SCENE.instantiate() as PadReceiver
+	add_child(rx_dc)
+	add_child(rx_nes)
+	# A RigidBody with no floor falls, and every measurement below is taken in the
+	# dongle's own frame anyway -- but a still bench is one less thing to explain.
+	rx_dc.freeze = true
+	rx_nes.freeze = true
+	for i in range(4):
+		await get_tree().process_frame
+
+	_ok(rx_dc.vmu_slot_count() == 0, "a loose dongle has no VMU slot")
+	rx_dc.on_plugged_in(dc, 1)
+	rx_nes.on_plugged_in(nes, 1)
+	await get_tree().process_frame
+	_ok(rx_dc.vmu_slot_count() == 1, "a dongle on a Dreamcast grows one",
+		"got %d" % rx_dc.vmu_slot_count())
+	_ok(rx_nes.vmu_slot_count() == 0, "a dongle on a NES grows none",
+		"got %d" % rx_nes.vmu_slot_count())
+	_ok(rx_dc.vmu_slot_option_value(0) == "None", "its empty slot reads None",
+		rx_dc.vmu_slot_option_value(0))
+	# There is no slot 2, which is not the same as an empty one: "" is what tells
+	# flycast to leave its own default alone rather than pulling a card out.
+	_ok(rx_dc.vmu_slot_option_value(1) == "", "and it has no slot 2 at all",
+		"'%s'" % rx_dc.vmu_slot_option_value(1))
+
+	var rx_card := VMU_SCENE.instantiate() as VmuCard
+	add_child(rx_card)
+	await get_tree().process_frame
+	rx_dc.restore_vmu(rx_card, 0)
+	for i in range(3):
+		await get_tree().process_frame
+	_ok(rx_dc.get_vmu(0) == rx_card, "a VMU seats in the dongle")
+	_ok(rx_dc.vmu_slot_option_value(0) == "VMU", "and the slot then reads VMU",
+		rx_dc.vmu_slot_option_value(0))
+
+	# Which way up it went in. The card's +Y is its connector and its +Z is the
+	# screen; seated, the connector must point DOWN into the boss and the screen
+	# must face the dongle's front, the face with the LED and the name on it.
+	# Counting sockets cannot tell an upside-down card from a right way up one.
+	# Read in the DONGLE's frame, so a bench that lets the body move measures the
+	# same thing a bolted-down one would.
+	var rel := rx_dc.global_transform.affine_inverse() * rx_card.global_transform
+	print("[probe] seated card basis y=%s z=%s"
+		% [str(rel.basis.y.snappedf(0.001)), str(rel.basis.z.snappedf(0.001))])
+	_ok(rel.basis.y.dot(Vector3.DOWN) > 0.99, "with its connector pointing into the boss",
+		"y=%s" % str(rel.basis.y.snappedf(0.001)))
+	_ok(rel.basis.z.dot(Vector3.FORWARD) > 0.99, "and its screen facing the dongle's front",
+		"z=%s" % str(rel.basis.z.snappedf(0.001)))
+	# And how deep. The end of the card that carries the connector has to finish
+	# INSIDE the boss -- below its 40 mm lid, above the 20 mm case top -- or the
+	# card is either perched on the lid or swallowed. "It is in the slot" cannot
+	# tell those apart; the card counts as seated in all three.
+	var tip: Vector3 = rel * Vector3(0, 0.040, 0)
+	_ok(tip.y > 0.020 and tip.y < 0.040, "up to its connector in the boss",
+		"card ends at y=%.1f mm, boss is 20.0..40.0" % (tip.y * 1000.0))
+
+	rx_dc.on_unplugged()
+	await get_tree().process_frame
+	_ok(rx_dc.vmu_slot_count() == 0, "unplugging the dongle removes its slot",
+		"got %d" % rx_dc.vmu_slot_count())
